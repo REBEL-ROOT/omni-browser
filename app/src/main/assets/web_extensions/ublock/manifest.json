@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "Omni Ad Blocker",
+  "version": "1.0.0",
+  "description": "Pre-bundled high-speed ad and tracker blocker extension for Omni Browser.",
+  "permissions": [
+    "<all_urls>",
+    "webRequest",
+    "webRequestBlocking"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  }
+}
