@@ -17,6 +17,7 @@ import com.omni.browser.browser.BrowserViewModel
 import com.omni.browser.media.DownloadManagerScreen
 import com.omni.browser.media.player.VideoPlayerScreen
 import com.omni.browser.settings.SettingsScreen
+import com.omni.browser.history.HistoryScreen
 import com.omni.browser.tools.locker.PrivateLockerScreen
 import com.omni.browser.tools.qrcode.QrToolsScreen
 import com.omni.browser.tools.scanner.DocumentScannerScreen
@@ -39,7 +40,7 @@ class MainActivity : FragmentActivity() {
                     val navController = rememberNavController()
 
                     // Ensure GeckoRuntime and engines are loaded immediately on app start
-                    val runtime = browserViewModel.getGeckoRuntime(this)
+                    browserViewModel.getGeckoRuntime(this)
 
                     NavHost(
                         navController = navController,
@@ -54,6 +55,7 @@ class MainActivity : FragmentActivity() {
                                 onOpenQrTools = { navController.navigate("qr_tools") },
                                 onOpenDownloads = { navController.navigate("downloads") },
                                 onOpenSettings = { navController.navigate("settings") },
+                                onOpenHistory = { navController.navigate("history") },
                                 onPlayOnlineStream = { url ->
                                     val encodedPath = java.net.URLEncoder.encode(url, "UTF-8")
                                     navController.navigate("video_player/$encodedPath")
@@ -115,7 +117,33 @@ class MainActivity : FragmentActivity() {
                             SettingsScreen(
                                 viewModel = browserViewModel,
                                 ffmpegLoader = browserViewModel.ffmpegLoader,
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = {
+                                    if (navController.previousBackStackEntry != null) {
+                                        navController.popBackStack()
+                                    } else {
+                                        navController.navigate("browser") {
+                                            popUpTo("browser") { inclusive = true }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        // Browser History Screen
+                        composable("history") {
+                            HistoryScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onOpenUrl = { url ->
+                                    browserViewModel.loadUrl(url)
+                                    if (navController.previousBackStackEntry != null) {
+                                        navController.popBackStack("browser", inclusive = false)
+                                    } else {
+                                        navController.navigate("browser") {
+                                            popUpTo("browser") { inclusive = true }
+                                        }
+                                    }
+                                }
                             )
                         }
                     }

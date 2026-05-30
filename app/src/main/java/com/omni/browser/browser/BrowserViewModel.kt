@@ -24,13 +24,28 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.json.JSONArray
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.WebExtension
+import java.io.File
 
 private val Context.dataStore by preferencesDataStore(name = "omni_settings")
+
+data class TabState(
+    val id: String,
+    val session: GeckoSession,
+    val title: String,
+    val url: String
+)
+
+data class HistoryEntry(
+    val title: String,
+    val url: String,
+    val timestamp: Long
+)
 
 class BrowserViewModel : ViewModel() {
 
@@ -49,6 +64,14 @@ class BrowserViewModel : ViewModel() {
     var isIncognitoMode by mutableStateOf(false)
         private set
     private var geckoRuntime: GeckoRuntime? = null
+
+    // Real Tab System
+    val tabs = mutableStateListOf<TabState>()
+    var activeTabId by mutableStateOf<String?>(null)
+        private set
+
+    // Browser History System
+    val historyList = mutableStateListOf<HistoryEntry>()
 
     // Feature Modules
     val mediaInterceptor = MediaInterceptor()
@@ -75,18 +98,105 @@ class BrowserViewModel : ViewModel() {
     
     val userExtensions = mutableStateListOf<WebExtension>()
 
-    init {
-        setupSessionListeners()
+    // --- Tab Management ---
+    fun initTabs(context: Context) {
+        if (tabs.isEmpty()) {
+            createNewTab(context, "https://google.com")
+        }
     }
 
-    private fun setupSessionListeners() {
-        geckoSession.contentDelegate = object : GeckoSession.ContentDelegate {
+    fun createNewTab(context: Context, url: String) {
+        val runtime = getGeckoRuntime(context)
+        val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+            .usePrivateMode(isIncognitoMode)
+            .build()
+        val session = GeckoSession(settings)
+        val tabId = java.util.UUID.randomUUID().toString()
+        val newTab = TabState(
+            id = tabId,
+            session = session,
+            title = "New Tab",
+            url = url
+        )
+        
+        setupTabSessionListeners(newTab, context)
+        tabs.add(newTab)
+        selectTab(newTab.id)
+        
+        session.open(runtime)
+        loadUrlInTab(newTab, url)
+    }
+
+    fun selectTab(tabId: String) {
+        val tab = tabs.find { it.id == tabId } ?: return
+        activeTabId = tabId
+        geckoSession = tab.session
+        currentUrl = tab.url
+        
+        // Reset/update canGoBack & canGoForward dynamically based on active tab properties
+        // Wait, since compose binds to viewModel state variables, we should sync them here.
+        // GeckoView session doesn't let us read history length synchronously, but we can query canGoBack/canGoForward
+        // by checking if navigationDelegate had fired. But to be safe, GeckoView's navigationDelegate will fire
+        // again or we can simply let Compose handle it dynamically.
+    }
+
+    fun closeTab(tabId: String, context: Context) {
+        val tabIndex = tabs.indexOfFirst { it.id == tabId }
+        if (tabIndex == -1) return
+        
+        val tabToClose = tabs[tabIndex]
+        try {
+            tabToClose.session.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing tab session", e)
+        }
+        tabs.removeAt(tabIndex)
+        
+        if (tabs.isEmpty()) {
+            createNewTab(context, "https://google.com")
+        } else if (activeTabId == tabId) {
+            val nextSelectIndex = if (tabIndex < tabs.size) tabIndex else tabs.size - 1
+            selectTab(tabs[nextSelectIndex].id)
+        }
+    }
+
+    private fun loadUrlInTab(tab: TabState, url: String) {
+        var formattedUrl = url.trim()
+        if (formattedUrl.isEmpty()) return
+
+        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+            formattedUrl = if (formattedUrl.contains(".") && !formattedUrl.contains(" ")) {
+                "https://$formattedUrl"
+            } else {
+                "https://www.google.com/search?q=${formattedUrl.replace(" ", "+")}"
+            }
+        }
+        tab.session.loadUri(formattedUrl)
+    }
+
+    private fun setupTabSessionListeners(tab: TabState, context: Context) {
+        tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
             override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
-                isFullscreen = fullScreen
+                if (tab.id == activeTabId) {
+                    isFullscreen = fullScreen
+                }
+            }
+
+            override fun onTitleChange(session: GeckoSession, title: String?) {
+                title?.let {
+                    val idx = tabs.indexOfFirst { it.id == tab.id }
+                    if (idx != -1) {
+                        val currentUrl = tabs[idx].url
+                        tabs[idx] = tabs[idx].copy(title = it)
+                        if (!isIncognitoMode) {
+                            addToHistory(it, currentUrl)
+                        }
+                    }
+                }
             }
         }
 
-        geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
+        tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(
                 session: GeckoSession,
                 url: String?,
@@ -94,30 +204,38 @@ class BrowserViewModel : ViewModel() {
                 hasUserGesture: Boolean
             ) {
                 url?.let {
-                    currentUrl = it
-                    // Clear grabbed assets on new domain visits
-                    mediaInterceptor.clear()
+                    val idx = tabs.indexOfFirst { it.id == tab.id }
+                    if (idx != -1) {
+                        tabs[idx] = tabs[idx].copy(url = it)
+                    }
+                    if (tab.id == activeTabId) {
+                        currentUrl = it
+                        mediaInterceptor.clear()
+                    }
                 }
             }
 
             override fun onCanGoBack(session: GeckoSession, canGoBackValue: Boolean) {
-                canGoBack = canGoBackValue
+                if (tab.id == activeTabId) {
+                    canGoBack = canGoBackValue
+                }
             }
 
             override fun onCanGoForward(session: GeckoSession, canGoForwardValue: Boolean) {
-                canGoForward = canGoForwardValue
+                if (tab.id == activeTabId) {
+                    canGoForward = canGoForwardValue
+                }
             }
 
-            // GeckoView network request sniffing fallback
             override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
                 val uri = request.uri
-                mediaInterceptor.onMediaRequestDetected(uri)
+                if (tab.id == activeTabId) {
+                    mediaInterceptor.onMediaRequestDetected(uri)
+                }
                 
                 if (uri.endsWith(".xpi") || uri.contains("/firefox/downloads/file/")) {
                     Log.d(TAG, "Intercepted addon install click: $uri")
-                    appContext?.let { ctx ->
-                        installExtensionFromUrl(uri, ctx)
-                    }
+                    installExtensionFromUrl(uri, context)
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
                 
@@ -125,15 +243,21 @@ class BrowserViewModel : ViewModel() {
             }
         }
 
-        geckoSession.progressDelegate = object : GeckoSession.ProgressDelegate {
+        tab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
-                isLoading = true
+                if (tab.id == activeTabId) {
+                    isLoading = true
+                }
             }
 
             override fun onPageStop(session: GeckoSession, success: Boolean) {
-                isLoading = false
+                if (tab.id == activeTabId) {
+                    isLoading = false
+                }
                 if (success) {
-                    injectZoomEnabler()
+                    if (tab.id == activeTabId) {
+                        injectZoomEnabler()
+                    }
                 }
             }
 
@@ -141,10 +265,86 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    // --- Persistent Browser History ---
+    private fun loadHistory(context: Context) {
+        val file = File(context.filesDir, "browser_history.json")
+        if (!file.exists()) return
+        try {
+            val jsonStr = file.readText()
+            val jsonArray = JSONArray(jsonStr)
+            val temp = mutableListOf<HistoryEntry>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                temp.add(
+                    HistoryEntry(
+                        title = obj.getString("title"),
+                        url = obj.getString("url"),
+                        timestamp = obj.getLong("timestamp")
+                    )
+                )
+            }
+            temp.sortByDescending { it.timestamp }
+            historyList.clear()
+            historyList.addAll(temp)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading history", e)
+        }
+    }
+
+    private fun saveHistory(context: Context) {
+        val file = File(context.filesDir, "browser_history.json")
+        try {
+            val jsonArray = JSONArray()
+            historyList.forEach { entry ->
+                val obj = JSONObject().apply {
+                    put("title", entry.title)
+                    put("url", entry.url)
+                    put("timestamp", entry.timestamp)
+                }
+                jsonArray.put(obj)
+            }
+            file.writeText(jsonArray.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving history", e)
+        }
+    }
+
+    fun addToHistory(title: String, url: String) {
+        val context = appContext ?: return
+        if (url == "about:blank" || url.trim().isEmpty()) return
+        
+        // Prevent duplicate spam
+        historyList.removeAll { it.url == url }
+        historyList.add(0, HistoryEntry(title, url, System.currentTimeMillis()))
+        
+        // Cap history at 500 items for memory safety
+        if (historyList.size > 500) {
+            historyList.removeAt(historyList.lastIndex)
+        }
+        
+        saveHistory(context)
+    }
+
+    fun deleteHistoryEntry(entry: HistoryEntry) {
+        val context = appContext ?: return
+        historyList.remove(entry)
+        saveHistory(context)
+    }
+
+    fun clearAllHistory() {
+        val context = appContext ?: return
+        historyList.clear()
+        saveHistory(context)
+    }
+
     fun getGeckoRuntime(context: Context): GeckoRuntime {
         if (geckoRuntime == null) {
             val appCtx = context.applicationContext
             appContext = appCtx
+            
+            // Load persistent history
+            loadHistory(appCtx)
+            
             geckoRuntime = GeckoRuntime.create(appCtx)
             
             // Set up extension prompt delegate for native third-party installations
@@ -168,6 +368,9 @@ class BrowserViewModel : ViewModel() {
             // Sync user extensions on start
             syncUserExtensions()
 
+            // Initialize multi-tabs
+            initTabs(appCtx)
+
             // Load saved settings
             viewModelScope.launch {
                 getAdblockPreference(appCtx).collect { isEnabled ->
@@ -188,6 +391,7 @@ class BrowserViewModel : ViewModel() {
         }
         return geckoRuntime!!
     }
+
 
     private fun loadMediaGrabberExtension() {
         val runtime = geckoRuntime ?: return
@@ -344,28 +548,39 @@ class BrowserViewModel : ViewModel() {
 
     fun toggleIncognitoMode(context: Context) {
         isIncognitoMode = !isIncognitoMode
-        recreateSession(context)
-    }
-
-    private fun recreateSession(context: Context) {
+        
+        val activeTab = tabs.find { it.id == activeTabId } ?: return
         val runtime = getGeckoRuntime(context)
         
         try {
-            geckoSession.close()
+            activeTab.session.close()
         } catch (e: Exception) {
-            Log.e(TAG, "Error closing session", e)
+            Log.e(TAG, "Error closing tab session", e)
         }
 
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
             .usePrivateMode(isIncognitoMode)
             .build()
         
-        geckoSession = GeckoSession(settings)
-        setupSessionListeners()
+        val newSession = GeckoSession(settings)
+        val updatedTab = activeTab.copy(
+            session = newSession,
+            url = if (isIncognitoMode) "about:blank" else activeTab.url
+        )
         
-        geckoSession.open(runtime)
-        loadUrl(if (isIncognitoMode) "about:blank" else currentUrl)
+        val idx = tabs.indexOf(activeTab)
+        if (idx != -1) {
+            tabs[idx] = updatedTab
+        }
+        
+        setupTabSessionListeners(updatedTab, context)
+        geckoSession = newSession
+        currentUrl = updatedTab.url
+        
+        newSession.open(runtime)
+        loadUrl(updatedTab.url)
     }
+
 
     private fun injectZoomEnabler() {
         val js = "javascript:(function() {" +

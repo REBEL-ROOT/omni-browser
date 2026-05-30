@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +49,64 @@ import org.mozilla.geckoview.GeckoView
 import com.omni.browser.media.MediaInterceptor
 import com.omni.browser.privacy.FireButton
 
+@Composable
+fun TabItem(
+    title: String,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    onClose: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 3.dp, vertical = 3.dp)
+            .height(32.dp)
+            .widthIn(max = 120.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                BorderStroke(
+                    0.5.dp,
+                    if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                ),
+                RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() },
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Language,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.size(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Close Tab",
+                    modifier = Modifier.size(8.dp),
+                    tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BrowserScreen(
@@ -56,6 +116,7 @@ fun BrowserScreen(
     onOpenQrTools: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onPlayOnlineStream: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -129,6 +190,44 @@ fun BrowserScreen(
                         shadowElevation = 0.dp
                     ) {
                         Column {
+                            // Premium Chrome-like Tab Bar
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                LazyRow(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    items(viewModel.tabs) { tab ->
+                                        TabItem(
+                                            title = tab.title,
+                                            isActive = tab.id == viewModel.activeTabId,
+                                            onClick = { viewModel.selectTab(tab.id) },
+                                            onClose = { viewModel.closeTab(tab.id, context) }
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.width(4.dp))
+                                
+                                IconButton(
+                                    onClick = { viewModel.createNewTab(context, "https://google.com") },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Add,
+                                        contentDescription = "New Tab",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -280,10 +379,15 @@ fun BrowserScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        val runtime = viewModel.getGeckoRuntime(ctx)
-                        setSession(viewModel.geckoSession)
+                    }
+                },
+                update = { geckoView ->
+                    val runtime = viewModel.getGeckoRuntime(context)
+                    if (geckoView.session != viewModel.geckoSession) {
+                        geckoView.setSession(viewModel.geckoSession)
+                    }
+                    if (!viewModel.geckoSession.isOpen) {
                         viewModel.geckoSession.open(runtime)
-                        viewModel.loadUrl(viewModel.currentUrl)
                     }
                 }
             )
@@ -349,6 +453,38 @@ fun BrowserScreen(
                         leadingIcon = { Icon(Icons.Rounded.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                         text = { Text("Web Extensions") },
                         onClick = { showMenu = false; showExtensionsSheet = true }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Browser History") },
+                        onClick = { showMenu = false; onOpenHistory() }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        text = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Private / Incognito")
+                                Switch(
+                                    checked = viewModel.isIncognitoMode,
+                                    onCheckedChange = null,
+                                    modifier = Modifier.scale(0.8f)
+                                )
+                            }
+                        },
+                        onClick = {
+                            showMenu = false
+                            viewModel.toggleIncognitoMode(context)
+                        }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     DropdownMenuItem(
