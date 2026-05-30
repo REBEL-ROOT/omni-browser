@@ -6,6 +6,7 @@ import android.os.Environment
 import android.util.Log
 import com.omni.browser.tools.locker.PrivateLockerManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,22 +72,16 @@ class StreamDownloadEngine(
         _jobs.update { it + job }
 
         // Launch asynchronous downloader in Coroutine Dispatcher context
-        kotlinx.coroutines.GlobalScope.also {
-            // Background dispatch to avoid blocking
-            kotlin.runCatching {
-                val dispatcher = Dispatchers.IO
-                kotlinx.coroutines.launch(dispatcher) {
-                    try {
-                        if (type == MediaInterceptor.MediaType.HLS) {
-                            downloadHLS(url, filename, saveToLocker, progressFlow)
-                        } else {
-                            downloadDirect(url, filename, saveToLocker, progressFlow)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("DownloadEngine", "Download failed for job $jobId", e)
-                        progressFlow.value = DownloadProgress.Error(e.message ?: "Unknown download error")
-                    }
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                if (type == MediaInterceptor.MediaType.HLS) {
+                    downloadHLS(url, filename, saveToLocker, progressFlow)
+                } else {
+                    downloadDirect(url, filename, saveToLocker, progressFlow)
                 }
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Download failed for job $jobId", e)
+                progressFlow.value = DownloadProgress.Error(e.message ?: "Unknown download error")
             }
         }
 
@@ -183,7 +178,7 @@ class StreamDownloadEngine(
         // 4. Download Segments concurrently (limit to 5 streams to optimize battery/resource usage)
         val semaphore = Semaphore(5)
         val jobs = segmentUrls.mapIndexed { index, segUrl ->
-            kotlinx.coroutines.launch(Dispatchers.IO) {
+            this@withContext.launch {
                 semaphore.withPermit {
                     try {
                         val segmentFile = File(tempDir, "seg-$index.ts")

@@ -3,6 +3,8 @@ package com.omni.browser.browser
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -42,7 +44,10 @@ class BrowserViewModel : ViewModel() {
     }
 
     // Engine Session & Runtime
-    val geckoSession = GeckoSession()
+    var geckoSession by mutableStateOf(GeckoSession())
+        private set
+    var isIncognitoMode by mutableStateOf(false)
+        private set
     private var geckoRuntime: GeckoRuntime? = null
 
     // Feature Modules
@@ -53,6 +58,7 @@ class BrowserViewModel : ViewModel() {
     lateinit var vpnManager: VpnManager
     val translationManager = com.omni.browser.tools.TranslationManager()
     private var copyManager: UniversalCopyManager? = null
+    private var appContext: Context? = null
 
     // UI States
     var currentUrl by mutableStateOf("https://google.com")
@@ -66,14 +72,27 @@ class BrowserViewModel : ViewModel() {
     // Extensions References
     private var uBlockExtension: WebExtension? = null
     private var grabberExtension: WebExtension? = null
+    
+    val userExtensions = mutableStateListOf<WebExtension>()
 
     init {
         setupSessionListeners()
     }
 
     private fun setupSessionListeners() {
+        geckoSession.contentDelegate = object : GeckoSession.ContentDelegate {
+            override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
+                isFullscreen = fullScreen
+            }
+        }
+
         geckoSession.navigationDelegate = object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(session: GeckoSession, url: String?) {
+            override fun onLocationChange(
+                session: GeckoSession,
+                url: String?,
+                perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
+                hasUserGesture: Boolean
+            ) {
                 url?.let {
                     currentUrl = it
                     // Clear grabbed assets on new domain visits
@@ -81,11 +100,11 @@ class BrowserViewModel : ViewModel() {
                 }
             }
 
-            override fun onCanGoBackChange(session: GeckoSession, canGoBackValue: Boolean) {
+            override fun onCanGoBack(session: GeckoSession, canGoBackValue: Boolean) {
                 canGoBack = canGoBackValue
             }
 
-            override fun onCanGoForwardChange(session: GeckoSession, canGoForwardValue: Boolean) {
+            override fun onCanGoForward(session: GeckoSession, canGoForwardValue: Boolean) {
                 canGoForward = canGoForwardValue
             }
 
@@ -93,7 +112,16 @@ class BrowserViewModel : ViewModel() {
             override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
                 val uri = request.uri
                 mediaInterceptor.onMediaRequestDetected(uri)
-                return GeckoResult.ALLOW
+                
+                if (uri.endsWith(".xpi") || uri.contains("/firefox/downloads/file/")) {
+                    Log.d(TAG, "Intercepted addon install click: $uri")
+                    appContext?.let { ctx ->
+                        installExtensionFromUrl(uri, ctx)
+                    }
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+                
+                return GeckoResult.fromValue(AllowOrDeny.ALLOW)
             }
         }
 
@@ -104,6 +132,9 @@ class BrowserViewModel : ViewModel() {
 
             override fun onPageStop(session: GeckoSession, success: Boolean) {
                 isLoading = false
+                if (success) {
+                    injectZoomEnabler()
+                }
             }
 
             override fun onProgressChange(session: GeckoSession, progress: Int) {}
@@ -113,7 +144,18 @@ class BrowserViewModel : ViewModel() {
     fun getGeckoRuntime(context: Context): GeckoRuntime {
         if (geckoRuntime == null) {
             val appCtx = context.applicationContext
+            appContext = appCtx
             geckoRuntime = GeckoRuntime.create(appCtx)
+            
+            // Set up extension prompt delegate for native third-party installations
+            geckoRuntime!!.webExtensionController.setPromptDelegate(object : org.mozilla.geckoview.WebExtensionController.PromptDelegate {
+                override fun onInstallPrompt(
+                    extension: org.mozilla.geckoview.WebExtension
+                ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
+                    Log.d(TAG, "Auto-approving install prompt for extension: ${extension.id}")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.ALLOW)
+                }
+            })
 
             // Initialize dependency engines
             ffmpegLoader = FFmpegLoader(appCtx)
@@ -122,6 +164,9 @@ class BrowserViewModel : ViewModel() {
             streamDownloadEngine = StreamDownloadEngine(appCtx, ffmpegBridge, locker)
             vpnManager = VpnManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
+            
+            // Sync user extensions on start
+            syncUserExtensions()
 
             // Load saved settings
             viewModelScope.launch {
@@ -153,8 +198,10 @@ class BrowserViewModel : ViewModel() {
         ).accept(
             { ext ->
                 grabberExtension = ext
-                runtime.webExtensionController.enable(ext)
-                setupNativeAppMessageDelegate(ext)
+                ext?.let {
+                    runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
+                    setupNativeAppMessageDelegate(it)
+                }
                 Log.i(TAG, "Aggressive Media Grabber active.")
             },
             { error ->
@@ -197,11 +244,13 @@ class BrowserViewModel : ViewModel() {
                 UBLOCK_ID
             ).accept { ext ->
                 uBlockExtension = ext
-                runtime.webExtensionController.enable(ext)
+                ext?.let {
+                    runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
+                }
             }
         } else {
             uBlockExtension?.let { ext ->
-                runtime.webExtensionController.disable(ext)
+                runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
             }
         }
     }
@@ -291,6 +340,116 @@ class BrowserViewModel : ViewModel() {
                 "document.write(cleanHtml);" +
                 "document.close();" +
                 "})();")
+    }
+
+    fun toggleIncognitoMode(context: Context) {
+        isIncognitoMode = !isIncognitoMode
+        recreateSession(context)
+    }
+
+    private fun recreateSession(context: Context) {
+        val runtime = getGeckoRuntime(context)
+        
+        try {
+            geckoSession.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing session", e)
+        }
+
+        val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+            .usePrivateMode(isIncognitoMode)
+            .build()
+        
+        geckoSession = GeckoSession(settings)
+        setupSessionListeners()
+        
+        geckoSession.open(runtime)
+        loadUrl(if (isIncognitoMode) "about:blank" else currentUrl)
+    }
+
+    private fun injectZoomEnabler() {
+        val js = "javascript:(function() {" +
+                 "  var meta = document.querySelector('meta[name=viewport]');" +
+                 "  if (meta) {" +
+                 "    var content = meta.getAttribute('content');" +
+                 "    if (content) {" +
+                 "      content = content.replace(/user-scalable\\s*=\\s*no/g, 'user-scalable=yes');" +
+                 "      content = content.replace(/maximum-scale\\s*=\\s*[0-9.]+/g, 'maximum-scale=5.0');" +
+                 "      meta.setAttribute('content', content);" +
+                 "    }" +
+                 "  } else {" +
+                 "    meta = document.createElement('meta');" +
+                 "    meta.name = 'viewport';" +
+                 "    meta.content = 'width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0';" +
+                 "    document.getElementsByTagName('head')[0].appendChild(meta);" +
+                 "  }" +
+                 "  document.body.style.touchAction = 'pan-x pan-y';" +
+                 "})();"
+        geckoSession.loadUri(js)
+    }
+
+    fun installExtensionFromUrl(url: String, context: Context) {
+        val runtime = geckoRuntime ?: return
+        Log.d(TAG, "Installing external extension from URL: $url")
+        
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            Toast.makeText(context, "Installing extension...", Toast.LENGTH_SHORT).show()
+        }
+
+        runtime.webExtensionController.install(url)
+            .accept(
+                { ext ->
+                    Log.i(TAG, "Successfully installed extension: ${ext?.id}")
+                    syncUserExtensions()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(context, "🧩 Extension installed: ${ext?.id}", Toast.LENGTH_LONG).show()
+                    }
+                },
+                { error ->
+                    Log.e(TAG, "Failed to install extension from: $url", error)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(context, "❌ Installation failed: ${error?.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+    }
+
+    fun syncUserExtensions() {
+        val runtime = geckoRuntime ?: return
+        runtime.webExtensionController.list()
+            .accept(
+                { list ->
+                    val coreIds = listOf(UBLOCK_ID, GRABBER_ID, "omni-universal-copy@omnibrowser.app")
+                    val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        userExtensions.clear()
+                        userExtensions.addAll(filtered)
+                    }
+                },
+                { error ->
+                    Log.e(TAG, "Failed to list extensions", error)
+                }
+            )
+    }
+
+    fun uninstallUserExtension(extension: WebExtension, context: Context) {
+        val runtime = geckoRuntime ?: return
+        runtime.webExtensionController.uninstall(extension)
+            .accept(
+                {
+                    Log.i(TAG, "Successfully uninstalled extension: ${extension.id}")
+                    syncUserExtensions()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(context, "🗑️ Extension removed: ${extension.id}", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                { error ->
+                    Log.e(TAG, "Failed to uninstall extension: ${extension.id}", error)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(context, "❌ Uninstallation failed: ${error?.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
     }
 
     override fun onCleared() {

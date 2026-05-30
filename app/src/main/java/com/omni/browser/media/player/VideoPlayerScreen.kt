@@ -12,6 +12,7 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -40,17 +41,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 
-@OptIn(UnstableApi::class)
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
-    videoFile: java.io.File,
+    videoPath: String,
+    videoTitle: String = "",
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
-    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(true) }
     var playbackPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -81,9 +83,14 @@ fun VideoPlayerScreen(
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(videoPath) {
+        val uri = if (videoPath.startsWith("http://") || videoPath.startsWith("https://")) {
+            Uri.parse(videoPath)
+        } else {
+            Uri.fromFile(java.io.File(videoPath))
+        }
         val exoPlayer = ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(Uri.fromFile(videoFile)))
+            setMediaItem(MediaItem.fromUri(uri))
             prepare()
             playWhenReady = true
             
@@ -98,7 +105,7 @@ fun VideoPlayerScreen(
                 }
             })
         }
-        player = exoPlayer
+        exoPlayerInstance = exoPlayer
 
         onDispose {
             exoPlayer.release()
@@ -108,7 +115,7 @@ fun VideoPlayerScreen(
     // Progress updates tracking
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
-            player?.let {
+            exoPlayerInstance?.let {
                 playbackPosition = it.currentPosition
             }
             delay(1000)
@@ -132,7 +139,7 @@ fun VideoPlayerScreen(
                 }
             },
             update = { playerView ->
-                playerView.player = player
+                playerView.player = exoPlayerInstance
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -244,8 +251,17 @@ fun VideoPlayerScreen(
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
+                    val displayName = remember(videoPath, videoTitle) {
+                        if (videoTitle.isNotEmpty()) {
+                            videoTitle
+                        } else if (videoPath.startsWith("http://") || videoPath.startsWith("https://")) {
+                            Uri.parse(videoPath).lastPathSegment ?: "Online Stream"
+                        } else {
+                            java.io.File(videoPath).name
+                        }
+                    }
                     Text(
-                        text = videoFile.name,
+                        text = displayName,
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -279,10 +295,10 @@ fun VideoPlayerScreen(
                     // Rewind 10s
                     IconButton(
                         onClick = {
-                            player?.let { it.seekTo((it.currentPosition - 10_000).coerceAtLeast(0L)) }
+                            exoPlayerInstance?.let { it.seekTo((it.currentPosition - 10_000).coerceAtLeast(0L)) }
                         },
                         colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f)),
-                        modifier = Modifier.size(48dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Text("◀◀", color = Color.White, fontSize = 11.sp)
                     }
@@ -290,12 +306,12 @@ fun VideoPlayerScreen(
                     // Play/Pause Toggle
                     IconButton(
                         onClick = {
-                            player?.let {
+                            exoPlayerInstance?.let {
                                 if (isPlaying) it.pause() else it.play()
                             }
                         },
                         colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.size(64dp)
+                        modifier = Modifier.size(64.dp)
                     ) {
                         Text(
                             text = if (isPlaying) "⏸" else "▶",
@@ -307,10 +323,10 @@ fun VideoPlayerScreen(
                     // Forward 10s
                     IconButton(
                         onClick = {
-                            player?.let { it.seekTo((it.currentPosition + 10_000).coerceAtMost(duration)) }
+                            exoPlayerInstance?.let { it.seekTo((it.currentPosition + 10_000).coerceAtMost(duration)) }
                         },
                         colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f)),
-                        modifier = Modifier.size(48dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Text("▶▶", color = Color.White, fontSize = 11.sp)
                     }
@@ -333,7 +349,7 @@ fun VideoPlayerScreen(
                     Slider(
                         value = if (duration > 0) playbackPosition.toFloat() / duration else 0f,
                         onValueChange = { percent ->
-                            player?.seekTo((percent * duration).toLong())
+                            exoPlayerInstance?.seekTo((percent * duration).toLong())
                         },
                         colors = SliderDefaults.colors(
                             activeTrackColor = MaterialTheme.colorScheme.primary,

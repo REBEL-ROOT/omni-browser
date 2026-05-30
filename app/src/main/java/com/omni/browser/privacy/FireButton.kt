@@ -29,8 +29,8 @@ class FireButton(
                         StorageController.ClearFlags.NETWORK_CACHE or
                         StorageController.ClearFlags.IMAGE_CACHE or
                         StorageController.ClearFlags.DOM_STORAGES or
-                        StorageController.ClearFlags.SITES_DATA or
-                        StorageController.ClearFlags.AUTH_TOKENS
+                        StorageController.ClearFlags.SITE_DATA or
+                        StorageController.ClearFlags.AUTH_SESSIONS
 
             // storageController requires executing on main thread sometimes,
             // but we run it safely via a thread-safe GeckoResult block

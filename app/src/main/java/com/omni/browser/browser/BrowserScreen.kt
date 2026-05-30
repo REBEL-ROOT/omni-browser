@@ -10,8 +10,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -30,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -51,7 +55,8 @@ fun BrowserScreen(
     onOpenScanner: () -> Unit,
     onOpenQrTools: () -> Unit,
     onOpenDownloads: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onPlayOnlineStream: (String) -> Unit
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -65,6 +70,7 @@ fun BrowserScreen(
     val detectedMedia by viewModel.mediaInterceptor.detectedMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
     var selectedMediaItem by remember { mutableStateOf<MediaInterceptor.DetectedMedia?>(null) }
+    var showExtensionsSheet by remember { mutableStateOf(false) }
 
     // Offline Translation states
     var showTranslationDialog by remember { mutableStateOf(false) }
@@ -106,6 +112,7 @@ fun BrowserScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .statusBarsPadding()
                             .hazeChild(state = hazeState)
                             .border(
                                 BorderStroke(
@@ -128,20 +135,20 @@ fun BrowserScreen(
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Logo with biometric Locker long-press
+                                // Premium brand globe logo with click-to-tools and long-press-to-locker
                                 Box(
                                     modifier = Modifier
-                                        .size(36dp)
+                                        .size(36.dp)
                                         .clip(RoundedCornerShape(8.dp))
                                         .combinedClickable(
-                                            onClick = { showTabGroupsSheet = true }, // Opens Smart Tab Group switch tray
+                                            onClick = { showMenu = true }, // Unify left Brand logo click to trigger tools menu
                                             onLongClick = { onOpenLocker() }
                                         )
                                         .padding(4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Rounded.Menu,
+                                        imageVector = Icons.Rounded.Language, // premium brand globe logo
                                         contentDescription = "Omni Logo",
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -150,7 +157,7 @@ fun BrowserScreen(
                                 IconButton(
                                     onClick = { viewModel.goBack() },
                                     enabled = viewModel.canGoBack,
-                                    modifier = Modifier.size(36dp)
+                                    modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -162,7 +169,7 @@ fun BrowserScreen(
                                 IconButton(
                                     onClick = { viewModel.goForward() },
                                     enabled = viewModel.canGoForward,
-                                    modifier = Modifier.size(36dp)
+                                    modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
@@ -176,7 +183,7 @@ fun BrowserScreen(
                                     onValueChange = { inputUrl = it },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(42dp)
+                                        .height(42.dp)
                                         .padding(horizontal = 4.dp),
                                     singleLine = true,
                                     textStyle = MaterialTheme.typography.bodyMedium,
@@ -193,7 +200,7 @@ fun BrowserScreen(
                                         Icon(
                                             imageVector = Icons.Rounded.Search,
                                             contentDescription = "Search icon",
-                                            modifier = Modifier.size(16dp),
+                                            modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                         )
                                     },
@@ -201,7 +208,7 @@ fun BrowserScreen(
                                         if (inputUrl.isNotEmpty()) {
                                             IconButton(
                                                 onClick = { inputUrl = "" },
-                                                modifier = Modifier.size(16dp)
+                                                modifier = Modifier.size(16.dp)
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Rounded.Close,
@@ -212,16 +219,19 @@ fun BrowserScreen(
                                         }
                                     },
                                     shape = RoundedCornerShape(12.dp),
-                                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                                     )
                                 )
 
                                 IconButton(
                                     onClick = { viewModel.reload() },
-                                    modifier = Modifier.size(36dp)
+                                    modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Refresh,
@@ -232,10 +242,10 @@ fun BrowserScreen(
 
                                 IconButton(
                                     onClick = { showMenu = true },
-                                    modifier = Modifier.size(36dp)
+                                    modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Rounded.MoreVert,
+                                        imageVector = Icons.Rounded.Menu, // Combined unified tools burger menu
                                         contentDescription = "Browser Tools",
                                         tint = MaterialTheme.colorScheme.onBackground
                                     )
@@ -296,7 +306,7 @@ fun BrowserScreen(
                         imageVector = Icons.Rounded.ArrowDropDown,
                         contentDescription = "Download Video",
                         tint = Color.White,
-                        modifier = Modifier.size(32dp)
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             }
@@ -311,28 +321,44 @@ fun BrowserScreen(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                         .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(8.dp))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("📄 Document Scanner") },
+                        leadingIcon = { Icon(Icons.Rounded.DocumentScanner, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Document Scanner") },
                         onClick = { showMenu = false; onOpenScanner() }
                     )
                     DropdownMenuItem(
-                        text = { Text("📱 QR & Barcode Tools") },
+                        leadingIcon = { Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("QR & Barcode Tools") },
                         onClick = { showMenu = false; onOpenQrTools() }
                     )
                     DropdownMenuItem(
-                        text = { Text("🔒 Private Locker Room") },
+                        leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Private Locker Room") },
                         onClick = { showMenu = false; onOpenLocker() }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     DropdownMenuItem(
-                        text = { Text("⬇️ Downloads Dashboard") },
+                        leadingIcon = { Icon(Icons.Rounded.Layers, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Smart Tab Groups") },
+                        onClick = { showMenu = false; showTabGroupsSheet = true }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Web Extensions") },
+                        onClick = { showMenu = false; showExtensionsSheet = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Downloads Dashboard") },
                         onClick = { showMenu = false; onOpenDownloads() }
                     )
                     DropdownMenuItem(
-                        text = { Text("📖 Reader Mode") },
+                        leadingIcon = { Icon(Icons.Rounded.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Reader Mode") },
                         onClick = {
                             showMenu = false
                             try {
@@ -342,14 +368,15 @@ fun BrowserScreen(
                             }
                         }
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     DropdownMenuItem(
-                        text = { Text("🌐 Offline Translation") },
+                        leadingIcon = { Icon(Icons.Rounded.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Offline Translation") },
                         onClick = { showMenu = false; showTranslationDialog = true }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     DropdownMenuItem(
-                        text = { Text("🔥 Burn All Data") },
+                        leadingIcon = { Icon(Icons.Rounded.LocalFireDepartment, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Burn All Data") },
                         onClick = {
                             showMenu = false
                             coroutineScope.launch {
@@ -361,7 +388,8 @@ fun BrowserScreen(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("⚙️ Settings Panel") },
+                        leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        text = { Text("Settings Panel") },
                         onClick = { showMenu = false; onOpenSettings() }
                     )
                 }
@@ -392,51 +420,71 @@ fun BrowserScreen(
                             maxLines = 2
                         )
                         
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
                                 onClick = {
                                     showDownloadSheet = false
-                                    coroutineScope.launch {
-                                        viewModel.streamDownloadEngine.startDownload(
-                                            url = selectedMediaItem!!.url,
-                                            suggestedName = "Video-${System.currentTimeMillis()}",
-                                            type = selectedMediaItem!!.type,
-                                            saveToLocker = false
-                                        )
-                                        Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
-                                    }
+                                    onPlayOnlineStream(selectedMediaItem!!.url)
                                 },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Rounded.PlayArrow, contentDescription = "Download")
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Download", fontSize = 13.sp)
+                                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play Online Stream")
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Play in Premium Video Player", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
 
-                            Button(
-                                onClick = {
-                                    showDownloadSheet = false
-                                    coroutineScope.launch {
-                                        viewModel.streamDownloadEngine.startDownload(
-                                            url = selectedMediaItem!!.url,
-                                            suggestedName = "SecureVideo-${System.currentTimeMillis()}",
-                                            type = selectedMediaItem!!.type,
-                                            saveToLocker = true
-                                        )
-                                        Toast.makeText(context, "Secure Locker download started...", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(Icons.Rounded.Lock, contentDescription = "Secure")
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Download Privately", fontSize = 13.sp)
+                                OutlinedButton(
+                                    onClick = {
+                                        showDownloadSheet = false
+                                        coroutineScope.launch {
+                                            viewModel.streamDownloadEngine.startDownload(
+                                                url = selectedMediaItem!!.url,
+                                                suggestedName = "Video-${System.currentTimeMillis()}",
+                                                type = selectedMediaItem!!.type,
+                                                saveToLocker = false
+                                            )
+                                            Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Rounded.Download, contentDescription = "Download")
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Download", fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        showDownloadSheet = false
+                                        coroutineScope.launch {
+                                            viewModel.streamDownloadEngine.startDownload(
+                                                url = selectedMediaItem!!.url,
+                                                suggestedName = "SecureVideo-${System.currentTimeMillis()}",
+                                                type = selectedMediaItem!!.type,
+                                                saveToLocker = true
+                                            )
+                                            Toast.makeText(context, "Secure Locker download started...", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Rounded.Lock, contentDescription = "Secure")
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Download Privately", fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -469,7 +517,7 @@ fun BrowserScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16dp))
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
                                     Text("Processing offline model...", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
@@ -556,7 +604,7 @@ fun BrowserScreen(
                                     }
                                     Spacer(modifier = Modifier.height(6.dp))
                                     
-                                    group.tabs.forEach { tab ->
+                                    for (tab in group.tabs) {
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -573,7 +621,7 @@ fun BrowserScreen(
                                                 modifier = Modifier.padding(10.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(Icons.Rounded.Search, contentDescription = "Tab Icon", modifier = Modifier.size(16dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                                Icon(Icons.Rounded.Search, contentDescription = "Tab Icon", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Column {
                                                     Text(tab.title, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -587,6 +635,241 @@ fun BrowserScreen(
                         }
                     }
                 }
+            }
+
+            // 3. Web Extensions Manager Bottom Sheet
+            if (showExtensionsSheet) {
+                LaunchedEffect(showExtensionsSheet) {
+                    viewModel.syncUserExtensions()
+                }
+                ModalBottomSheet(
+                    onDismissRequest = { showExtensionsSheet = false },
+                    sheetState = rememberModalBottomSheetState()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .navigationBarsPadding(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "🧩 Web Extensions Manager",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Manage GeckoView WebExtensions. Enhance your privacy and control.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+
+                        Button(
+                            onClick = {
+                                showExtensionsSheet = false
+                                viewModel.loadUrl("https://addons.mozilla.org/android/")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Rounded.Language, contentDescription = "Extension Store")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Browse Official Firefox Add-ons Store", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
+                        // Extension Item 1: uBlock Origin
+                        ExtensionItemCard(
+                            icon = Icons.Rounded.Shield,
+                            name = "uBlock Origin",
+                            author = "Raymond Hill (gorhill)",
+                            description = "An efficient wide-spectrum content blocker. Easy on CPU and memory.",
+                            checked = viewModel.isAdblockerEnabled,
+                            onCheckedChange = { viewModel.toggleAdblock(context) }
+                        )
+
+                        // Extension Item 2: Universal Text Copy
+                        ExtensionItemCard(
+                            icon = Icons.Rounded.FileCopy,
+                            name = "Universal Text Copy",
+                            author = "Omni Browser Team",
+                            description = "Bypass website restrictions to force-enable text selection and copying.",
+                            checked = viewModel.isUniversalCopyEnabled,
+                            onCheckedChange = { viewModel.toggleUniversalCopy(context) }
+                        )
+
+                        // Extension Item 3: Media Grabber
+                        ExtensionItemCard(
+                            icon = Icons.Rounded.Download,
+                            name = "Aggressive Media Grabber",
+                            author = "Omni Browser Team",
+                            description = "Sniff and capture offline dynamic HLS/DASH dynamic segments and streams.",
+                            checked = true,
+                            enabled = false, // always active
+                            onCheckedChange = {}
+                        )
+
+                        // User-installed Extensions Title and Cards
+                        if (viewModel.userExtensions.isNotEmpty()) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                            Text(
+                                text = "⬇️ Installed Web Extensions",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            for (ext in viewModel.userExtensions) {
+                                UserExtensionItemCard(
+                                    extension = ext,
+                                    onUninstall = { viewModel.uninstallUserExtension(ext, context) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExtensionItemCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    author: String,
+    description: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(text = name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (!enabled) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "CORE",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = "by $author",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    lineHeight = 14.sp
+                )
+            }
+
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                enabled = enabled
+            )
+        }
+    }
+}
+
+@Composable
+fun UserExtensionItemCard(
+    extension: org.mozilla.geckoview.WebExtension,
+    onUninstall: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Extension,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                val displayName = remember(extension.id) {
+                    extension.id.substringBefore("@").replace("-", " ")
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
+                }
+                Text(text = displayName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    text = "ID: ${extension.id}",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+            }
+
+            IconButton(
+                onClick = onUninstall,
+                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Delete,
+                    contentDescription = "Uninstall"
+                )
             }
         }
     }

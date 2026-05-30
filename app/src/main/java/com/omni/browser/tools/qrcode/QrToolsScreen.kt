@@ -14,17 +14,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -62,8 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import com.google.android.gms.code.scanner.GmsBarcodeScannerOptions
-import com.google.android.gms.code.scanner.GmsBarcodeScanning
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
@@ -164,6 +154,7 @@ fun QrToolsScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .hazeChild(state = hazeState)
                     .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
@@ -378,7 +369,7 @@ fun QrToolsScreen(
                         Spacer(Modifier.height(24.dp))
                         Card(
                             modifier = Modifier
-                                .size(240dp)
+                                .size(240.dp)
                                 .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(16.dp)),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surface

@@ -102,6 +102,25 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.toggleUniversalCopy(context) }
                     )
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("🕵️ Private / Incognito Mode", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text("Keep history, search, and cookies isolated", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    }
+                    Switch(
+                        checked = viewModel.isIncognitoMode,
+                        onCheckedChange = { viewModel.toggleIncognitoMode(context) }
+                    )
+                }
             }
 
             // Section 2: Media Remuxing (FFmpeg binaries)

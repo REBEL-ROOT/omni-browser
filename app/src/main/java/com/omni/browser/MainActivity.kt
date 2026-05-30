@@ -29,7 +29,7 @@ class MainActivity : FragmentActivity() {
     private val browserViewModel: BrowserViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState: Bundle?)
+        super.onCreate(savedInstanceState)
 
         setContent {
             OmniTheme {
@@ -53,7 +53,11 @@ class MainActivity : FragmentActivity() {
                                 onOpenScanner = { navController.navigate("scanner") },
                                 onOpenQrTools = { navController.navigate("qr_tools") },
                                 onOpenDownloads = { navController.navigate("downloads") },
-                                onOpenSettings = { navController.navigate("settings") }
+                                onOpenSettings = { navController.navigate("settings") },
+                                onPlayOnlineStream = { url ->
+                                    val encodedPath = java.net.URLEncoder.encode(url, "UTF-8")
+                                    navController.navigate("video_player/$encodedPath")
+                                }
                             )
                         }
 
@@ -101,7 +105,7 @@ class MainActivity : FragmentActivity() {
                         ) { backStackEntry ->
                             val filePath = backStackEntry.arguments?.getString("filePath") ?: ""
                             VideoPlayerScreen(
-                                videoFile = File(filePath),
+                                videoPath = filePath,
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }

@@ -8,7 +8,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
-@OptIn(UnstableApi::class)
+@OptIn(androidx.media3.common.util.UnstableApi::class)
 class OmniMediaService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null

@@ -141,14 +141,37 @@ class FFmpegLoader(private val context: Context) {
         zipInput.close()
     }
 
+    private fun isElfFile(file: File): Boolean {
+        if (!file.exists() || file.length() < 4) return false
+        return try {
+            file.inputStream().use { input ->
+                val header = ByteArray(4)
+                if (input.read(header) == 4) {
+                    header[0] == 0x7F.toByte() &&
+                    header[1] == 'E'.code.toByte() &&
+                    header[2] == 'L'.code.toByte() &&
+                    header[3] == 'F'.code.toByte()
+                } else {
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun loadLibraries() {
         try {
             // Load in exact order of dependency
             requiredLibs.forEach { lib ->
                 val file = File(ffmpegDir, lib)
                 if (file.exists()) {
-                    System.load(file.absolutePath)
-                    Log.i("FFmpegLoader", "Successfully loaded dynamic library: ${file.name}")
+                    if (isElfFile(file)) {
+                        System.load(file.absolutePath)
+                        Log.i("FFmpegLoader", "Successfully loaded dynamic library: ${file.name}")
+                    } else {
+                        Log.w("FFmpegLoader", "Skipping non-ELF mock/placeholder library: ${file.name}")
+                    }
                 }
             }
         } catch (e: UnsatisfiedLinkError) {

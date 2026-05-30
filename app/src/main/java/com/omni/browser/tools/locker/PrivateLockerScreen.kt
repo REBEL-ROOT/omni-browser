@@ -7,17 +7,7 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -126,6 +116,7 @@ fun PrivateLockerScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .hazeChild(state = hazeState)
                     .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
@@ -202,7 +193,7 @@ fun PrivateLockerScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Lock,
                                     contentDescription = "Locked vault",
-                                    modifier = Modifier.size(64dp),
+                                    modifier = Modifier.size(64.dp),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(Modifier.height(16.dp))

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,7 +116,7 @@ fun DownloadItemCard(
                     contentDescription = "Type",
                     tint = if (job.saveToLocker) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                     modifier = Modifier
-                        .size(32dp)
+                        .size(32.dp)
                         .padding(4.dp)
                 )
                 
@@ -228,7 +229,7 @@ fun DownloadItemCard(
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                     modifier = Modifier.height(32.dp)
                                 ) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16dp))
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Play", fontSize = 11.sp)
                                 }
