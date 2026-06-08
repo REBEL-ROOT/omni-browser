@@ -57,3 +57,7 @@ secrets.properties
 
 # Local gradle cache directory
 gradle-user-home/
+
+# Local documents
+APK_SIZE_OPTIMIZATION_PLAN.md
+
