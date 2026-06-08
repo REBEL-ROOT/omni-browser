@@ -65,8 +65,6 @@ fun SettingsScreen(
         }
     }
 
-    var defaultHomepageText by remember { mutableStateOf("https://omni.app/home") }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -525,35 +523,125 @@ fun SettingsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Default homepage", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Default Search Engine", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         
-                        OutlinedTextField(
-                            value = defaultHomepageText,
-                            onValueChange = { defaultHomepageText = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Language, contentDescription = null, tint = Color(0xFF8E9AA8))
-                            },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF0088FF),
-                                unfocusedBorderColor = Color(0xFF23374A),
-                                focusedContainerColor = Color(0xFF070A0F),
-                                unfocusedContainerColor = Color(0xFF070A0F)
+                        var expanded by remember { mutableStateOf(false) }
+                        val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
+                        val currentEngine = viewModel.selectedSearchEngine
+                        
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .background(Color(0xFF070A0F), RoundedCornerShape(12.dp))
+                                    .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(12.dp))
+                                    .clickable { expanded = true }
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    val icon = when (currentEngine) {
+                                        "Google" -> Icons.Rounded.Search
+                                        "DuckDuckGo" -> Icons.Rounded.Security
+                                        "Brave" -> Icons.Rounded.Security
+                                        "Bing" -> Icons.Rounded.Language
+                                        else -> Icons.Rounded.Settings
+                                    }
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = Color(0xFF0088FF)
+                                    )
+                                    Text(
+                                        text = currentEngine,
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = Color(0xFF8E9AA8)
+                                )
+                            }
+                            
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .background(Color(0xFF16222F))
+                                    .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(8.dp))
+                            ) {
+                                engines.forEach { engine ->
+                                    DropdownMenuItem(
+                                        text = { Text(engine, color = Color.White) },
+                                        onClick = {
+                                            viewModel.saveSearchEngine(context, engine)
+                                            expanded = false
+                                        },
+                                        colors = MenuDefaults.itemColors(
+                                            textColor = Color.White,
+                                            trailingIconColor = Color(0xFF0088FF)
+                                        ),
+                                        trailingIcon = {
+                                            if (currentEngine == engine) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Check,
+                                                    contentDescription = "Selected",
+                                                    tint = Color(0xFF0088FF)
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (currentEngine == "Custom") {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Custom Query Template URL",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
-                        )
-                        
-                        Button(
-                            onClick = {
-                                Toast.makeText(context, "Homepage saved!", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0088FF)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Save Changes", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                            
+                            var customUrlText by remember(viewModel.customSearchUrl) { mutableStateOf(viewModel.customSearchUrl) }
+                            
+                            OutlinedTextField(
+                                value = customUrlText,
+                                onValueChange = {
+                                    customUrlText = it
+                                    viewModel.saveCustomSearchUrl(context, it)
+                                },
+                                placeholder = {
+                                    Text("https://example.com/search?q=%s", color = Color(0xFF8E9AA8))
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Build, contentDescription = null, tint = Color(0xFF8E9AA8))
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFF0088FF),
+                                    unfocusedBorderColor = Color(0xFF23374A),
+                                    focusedContainerColor = Color(0xFF070A0F),
+                                    unfocusedContainerColor = Color(0xFF070A0F)
+                                )
+                            )
+                            Text(
+                                text = "Use %s as a placeholder for the search query.",
+                                color = Color(0xFF8E9AA8),
+                                fontSize = 11.sp
+                            )
                         }
                     }
                 }

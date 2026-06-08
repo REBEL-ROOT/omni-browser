@@ -86,6 +86,8 @@ class BrowserViewModel : ViewModel() {
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
+        val SEARCH_ENGINE_KEY = stringPreferencesKey("default_search_engine")
+        val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
 
         @Volatile
         private var geckoRuntime: GeckoRuntime? = null
@@ -126,6 +128,8 @@ class BrowserViewModel : ViewModel() {
     var isNativePlayerEnabled by mutableStateOf(true)
     var pendingVideoUrl: String? = null
     var customVpnConfig by mutableStateOf<String?>(null)
+    var selectedSearchEngine by mutableStateOf("Google")
+    var customSearchUrl by mutableStateOf("")
 
     fun isDirectVideoUrl(url: String): Boolean {
         val clean = url.trim().lowercase()
@@ -383,7 +387,7 @@ class BrowserViewModel : ViewModel() {
             formattedUrl = if (formattedUrl.contains(".") && !formattedUrl.contains(" ")) {
                 "https://$formattedUrl"
             } else {
-                "https://www.google.com/search?q=${formattedUrl.replace(" ", "+")}"
+                getSearchUrlForQuery(formattedUrl)
             }
         }
         val idx = tabs.indexOfFirst { it.id == tab.id }
@@ -846,6 +850,11 @@ class BrowserViewModel : ViewModel() {
                 customVpnConfig = getCustomVpnConfig(appCtx).first()
             }
 
+            viewModelScope.launch {
+                selectedSearchEngine = getSearchEnginePreference(appCtx).first()
+                customSearchUrl = getCustomSearchUrlPreference(appCtx).first()
+            }
+
             // Auto load MSE Aggressive Grabber Extension on Engine initialization
             loadMediaGrabberExtension()
         }
@@ -1141,6 +1150,36 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun getSearchEnginePreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[SEARCH_ENGINE_KEY] ?: "Google"
+        }
+    }
+
+    fun getCustomSearchUrlPreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_SEARCH_URL_KEY] ?: ""
+        }
+    }
+
+    fun saveSearchEngine(context: Context, engine: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[SEARCH_ENGINE_KEY] = engine
+            }
+            selectedSearchEngine = engine
+        }
+    }
+
+    fun saveCustomSearchUrl(context: Context, url: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_SEARCH_URL_KEY] = url
+            }
+            customSearchUrl = url
+        }
+    }
+
     fun toggleMediaGrabber(context: Context) {
         viewModelScope.launch {
             val newState = !isMediaGrabberEnabled
@@ -1199,6 +1238,28 @@ class BrowserViewModel : ViewModel() {
         vpnManager.disconnect()
     }
 
+    fun getSearchUrlForQuery(query: String): String {
+        val encodedQuery = try {
+            java.net.URLEncoder.encode(query, "UTF-8")
+        } catch (e: java.io.UnsupportedEncodingException) {
+            query.replace(" ", "+")
+        }
+        return when (selectedSearchEngine) {
+            "DuckDuckGo" -> "https://duckduckgo.com/?q=$encodedQuery"
+            "Brave" -> "https://search.brave.com/search?q=$encodedQuery"
+            "Bing" -> "https://www.bing.com/search?q=$encodedQuery"
+            "Custom" -> {
+                val customUrl = customSearchUrl
+                if (!customUrl.isNullOrBlank() && customUrl.contains("%s")) {
+                    customUrl.replace("%s", encodedQuery)
+                } else {
+                    "https://duckduckgo.com/?q=$encodedQuery"
+                }
+            }
+            else -> "https://www.google.com/search?q=$encodedQuery"
+        }
+    }
+
     // --- Browser Navigation ---
     fun loadUrl(url: String) {
         var formattedUrl = url.trim()
@@ -1208,7 +1269,7 @@ class BrowserViewModel : ViewModel() {
             formattedUrl = if (formattedUrl.contains(".") && !formattedUrl.contains(" ")) {
                 "https://$formattedUrl"
             } else {
-                "https://www.google.com/search?q=${formattedUrl.replace(" ", "+")}"
+                getSearchUrlForQuery(formattedUrl)
             }
         }
 
