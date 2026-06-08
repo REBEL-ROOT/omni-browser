@@ -161,20 +161,65 @@ fun HomeScreenContent(
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search or type web address", color = Color(0xFF8E9AA8), fontSize = 14.sp) },
             leadingIcon = {
-                // Colored G icon on a white circle background
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "G",
-                        color = Color(0xFF0088FF),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                var expanded by remember { mutableStateOf(false) }
+                val currentEngine = viewModel.selectedSearchEngine
+                
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .clickable { expanded = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val (char, color) = when (currentEngine) {
+                            "DuckDuckGo" -> "D" to Color(0xFFDE5833)
+                            "Brave" -> "B" to Color(0xFFFF1A1A)
+                            "Bing" -> "b" to Color(0xFF00A4EF)
+                            "Custom" -> "C" to Color(0xFF8E9AA8)
+                            else -> "G" to Color(0xFF0088FF)
+                        }
+                        Text(
+                            text = char,
+                            color = color,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier
+                            .background(Color(0xFF16222F))
+                            .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(8.dp))
+                    ) {
+                        val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
+                        engines.forEach { engine ->
+                            DropdownMenuItem(
+                                text = { Text(engine, color = Color.White, fontSize = 14.sp) },
+                                onClick = {
+                                    viewModel.saveSearchEngine(context, engine)
+                                    expanded = false
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = Color.White,
+                                    trailingIconColor = Color(0xFF0088FF)
+                                ),
+                                trailingIcon = {
+                                    if (currentEngine == engine) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color(0xFF0088FF),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             },
             trailingIcon = {
