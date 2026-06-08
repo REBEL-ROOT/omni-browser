@@ -342,6 +342,168 @@ fun SettingsScreen(
                 }
             }
 
+            // WireGuard VPN Section
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "WIREGUARD VPN",
+                    color = Color(0xFF0088FF),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+
+                val vpnState by viewModel.vpnManager.state.collectAsState()
+                val hasConfig = !viewModel.customVpnConfig.isNullOrBlank()
+
+                val filePickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.GetContent()
+                ) { uri ->
+                    uri?.let {
+                        try {
+                            val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader -> reader.readText() }
+                            if (!content.isNullOrBlank()) {
+                                viewModel.saveCustomVpnConfig(context, content)
+                                Toast.makeText(context, "WireGuard configuration imported successfully!", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Failed to parse file: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    color = Color(0xFF16222F),
+                    border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // VPN Status indicator row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.VpnLock,
+                                    contentDescription = "VPN Lock",
+                                    tint = Color(0xFF0088FF)
+                                )
+                                Column {
+                                    Text("VPN Tunnel Status", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    val statusText = when (vpnState) {
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> "Connected"
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> "Connecting..."
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> "Disconnected"
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> "Error: ${(vpnState as com.rebelroot.omni.privacy.VpnManager.VpnState.Error).message}"
+                                    }
+                                    val statusColor = when (vpnState) {
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> Color(0xFF30D158) // Lime green
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> Color(0xFFFF9500) // Orange
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> Color(0xFF8E9AA8) // Grey
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> Color(0xFFFF453A) // Red
+                                    }
+                                    Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // Switch to quickly toggle connection state
+                            if (hasConfig) {
+                                Switch(
+                                    checked = vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected,
+                                    onCheckedChange = { isChecked ->
+                                        if (isChecked) {
+                                            viewModel.connectCustomVpn()
+                                        } else {
+                                            viewModel.disconnectVpn()
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color(0xFF0088FF)
+                                    )
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f))
+
+                        // Configuration actions
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    filePickerLauncher.launch("*/*")
+                                },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF243647)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.UploadFile,
+                                    contentDescription = "Upload Config",
+                                    tint = Color(0xFF0A84FF),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Import .conf", color = Color(0xFF0A84FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            if (hasConfig) {
+                                Button(
+                                    onClick = {
+                                        viewModel.connectCustomVpn()
+                                    },
+                                    enabled = vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected || vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Error,
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0088FF)),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayArrow,
+                                        contentDescription = "Start",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Connect", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        if (hasConfig && vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
+                            Button(
+                                onClick = {
+                                    viewModel.disconnectVpn()
+                                },
+                                modifier = Modifier.fillMaxWidth().height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Stop,
+                                    contentDescription = "Stop",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Disconnect VPN", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // 3. SEARCH ENGINE Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(

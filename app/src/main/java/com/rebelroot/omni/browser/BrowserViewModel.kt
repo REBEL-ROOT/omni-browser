@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
@@ -84,6 +85,7 @@ class BrowserViewModel : ViewModel() {
         val UNIVERSAL_COPY_ENABLED_KEY = booleanPreferencesKey("universal_copy_enabled")
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
+        val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
 
         @Volatile
         private var geckoRuntime: GeckoRuntime? = null
@@ -123,6 +125,7 @@ class BrowserViewModel : ViewModel() {
     var isMediaGrabberEnabled by mutableStateOf(true)
     var isNativePlayerEnabled by mutableStateOf(true)
     var pendingVideoUrl: String? = null
+    var customVpnConfig by mutableStateOf<String?>(null)
 
     fun isDirectVideoUrl(url: String): Boolean {
         val clean = url.trim().lowercase()
@@ -839,6 +842,10 @@ class BrowserViewModel : ViewModel() {
                 syncMediaGrabberState(shouldReload = false)
             }
 
+            viewModelScope.launch {
+                customVpnConfig = getCustomVpnConfig(appCtx).first()
+            }
+
             // Auto load MSE Aggressive Grabber Extension on Engine initialization
             loadMediaGrabberExtension()
         }
@@ -1119,6 +1126,21 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun getCustomVpnConfig(context: Context): Flow<String?> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_VPN_CONFIG_KEY]
+        }
+    }
+
+    fun saveCustomVpnConfig(context: Context, config: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_VPN_CONFIG_KEY] = config
+            }
+            customVpnConfig = config
+        }
+    }
+
     fun toggleMediaGrabber(context: Context) {
         viewModelScope.launch {
             val newState = !isMediaGrabberEnabled
@@ -1166,6 +1188,11 @@ class BrowserViewModel : ViewModel() {
 
     fun connectVpn(context: Context, serverIp: String, clientKey: String, serverKey: String) {
         vpnManager.connectContaboVps(serverIp, clientKey, serverKey)
+    }
+
+    fun connectCustomVpn() {
+        val config = customVpnConfig ?: return
+        vpnManager.connect(config)
     }
 
     fun disconnectVpn() {

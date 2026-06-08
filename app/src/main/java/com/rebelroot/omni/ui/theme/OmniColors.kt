@@ -15,7 +15,7 @@ val LightTextPrimary = Color(0xFF202124)  // Modern off-black
 val LightTextSec = Color(0xFF606266)
 val LightBorder = Color(0x1F000000)       // 12% thin divider
 
-val DarkBg = Color(0xFF0D0E11)            // Deep void black
+val DarkBg = Color(0xFF000000)            // Pure OLED Black
 val DarkSurface = Color(0xFF16181D)       // Dark anthracite gray
 val DarkSurfaceVar = Color(0xFF1E2028)
 val DarkPrimary = Color(0xFF0A84FF)       // Vibrant electric blue

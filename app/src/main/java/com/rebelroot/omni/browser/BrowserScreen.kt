@@ -11,7 +11,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -507,6 +509,7 @@ fun BrowserScreen(
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
+    var dragAmountAccumulated by remember { mutableStateOf(0f) }
 
     
     var showMenu by remember { mutableStateOf(false) }
@@ -807,7 +810,31 @@ fun BrowserScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .height(56.dp)
+                            .pointerInput(Unit) {
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (dragAmountAccumulated > 100f) {
+                                            // Swiped right -> select previous tab
+                                            val currentIndex = viewModel.tabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                            if (currentIndex > 0) {
+                                                viewModel.selectTab(viewModel.tabs[currentIndex - 1].id)
+                                            }
+                                        } else if (dragAmountAccumulated < -100f) {
+                                            // Swiped left -> select next tab
+                                            val currentIndex = viewModel.tabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                            if (currentIndex != -1 && currentIndex < viewModel.tabs.size - 1) {
+                                                viewModel.selectTab(viewModel.tabs[currentIndex + 1].id)
+                                            }
+                                        }
+                                        dragAmountAccumulated = 0f
+                                    },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragAmountAccumulated += dragAmount
+                                    }
+                                )
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Left: Tabs counter
