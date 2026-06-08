@@ -315,6 +315,34 @@ class BrowserViewModel : ViewModel() {
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
         
+        if (tabs.size <= 1) {
+            // Keep at least one tab open, reset it to the Home screen
+            val tab = tabs[0]
+            val idx = tabs.indexOfFirst { it.id == tab.id }
+            if (idx != -1) {
+                tabs[idx] = tabs[idx].copy(
+                    url = "about:blank",
+                    title = "New Tab",
+                    canGoBack = false,
+                    canGoForward = false,
+                    loadError = null
+                )
+            }
+            if (tab.id == activeTabId) {
+                currentUrl = "about:blank"
+                canGoBack = false
+                canGoForward = false
+            }
+            try {
+                tab.session.stop()
+                tab.session.loadUri("about:blank")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error resetting last tab session", e)
+            }
+            saveTabs()
+            return
+        }
+
         val tabToClose = tabs[tabIndex]
         try {
             tabToClose.session.close()

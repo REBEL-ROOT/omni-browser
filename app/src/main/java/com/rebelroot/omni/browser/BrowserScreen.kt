@@ -22,8 +22,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -441,11 +443,11 @@ fun ToolCard(
     title: String,
     subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier.width(136.dp),
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .width(136.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() },
         color = Color(0xFF16222F),
@@ -666,58 +668,76 @@ fun BrowserScreen(
                                     }
                                 }
 
-                                OutlinedTextField(
-                                    value = if (inputUrl == "about:blank") "" else inputUrl,
-                                    onValueChange = { inputUrl = it },
+                                Box(
                                     modifier = Modifier
                                         .weight(1f)
+                                        .height(40.dp)
                                         .padding(horizontal = 4.dp)
-                                        .focusRequester(focusRequester)
-                                        .onFocusChanged { isInputFocused = it.isFocused },
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodyMedium,
-                                    keyboardOptions = KeyboardOptions(
-                                        imeAction = ImeAction.Go
-                                    ),
-                                    keyboardActions = KeyboardActions(
-                                        onGo = {
-                                            viewModel.loadUrl(inputUrl)
-                                            focusManager.clearFocus()
-                                            keyboardController?.hide()
-                                        }
-                                    ),
-                                    leadingIcon = {
+                                        .background(
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Search,
                                             contentDescription = "Search icon",
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                         )
-                                    },
-                                    trailingIcon = {
+
+                                        BasicTextField(
+                                            value = if (inputUrl == "about:blank") "" else inputUrl,
+                                            onValueChange = { inputUrl = it },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .focusRequester(focusRequester)
+                                                .onFocusChanged { isInputFocused = it.isFocused },
+                                            singleLine = true,
+                                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            keyboardOptions = KeyboardOptions(
+                                                imeAction = ImeAction.Go
+                                            ),
+                                            keyboardActions = KeyboardActions(
+                                                onGo = {
+                                                    viewModel.loadUrl(inputUrl)
+                                                    focusManager.clearFocus()
+                                                    keyboardController?.hide()
+                                                }
+                                            ),
+                                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                                        )
+
                                         if (inputUrl.isNotEmpty() && inputUrl != "about:blank") {
-                                            IconButton(
-                                                onClick = { inputUrl = "" },
-                                                modifier = Modifier.size(16.dp)
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .clickable { inputUrl = "" },
+                                                contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Rounded.Close,
                                                     contentDescription = "Clear",
+                                                    modifier = Modifier.size(16.dp),
                                                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                                                 )
                                             }
                                         }
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                    )
-                                )
+                                    }
+                                }
 
                                 AnimatedVisibility(visible = isInputFocused) {
                                     TextButton(
@@ -778,45 +798,69 @@ fun BrowserScreen(
             ) {
                 // Flat minimal bottom bar persisting exactly as requested in screenshots
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
                     color = Color(0xFF0D1620),
                     border = BorderStroke(0.5.dp, Color(0xFF16222F).copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .height(56.dp)
-                            .padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly
+                            .height(56.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Tabs counter
+                        // Left: Tabs counter
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .border(1.5.dp, Color.White, RoundedCornerShape(5.dp))
+                                .weight(1f)
                                 .clickable { showTabGroupsSheet = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = viewModel.tabs.size.toString(),
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .border(1.5.dp, Color.White, RoundedCornerShape(5.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = viewModel.tabs.size.toString(),
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                        // Tools
-                        IconButton(onClick = { showToolsSheet = true }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Build,
-                                contentDescription = "Tools",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
+
+                        // Center: Tools
+                        Box(
+                            modifier = Modifier
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(
+                                onClick = { showToolsSheet = true },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Build,
+                                    contentDescription = "Tools",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
+
+                        // Right: Menu
+                        Box(
+                            modifier = Modifier
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.size(48.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Menu,
                                     contentDescription = "Menu",
@@ -1796,7 +1840,7 @@ fun BrowserScreen(
                             
                             for (ext in userExts) {
                                 val isEnabled = ext.metaData.enabled
-                                val optionsUrl = try { ext.metaData?.optionsPage } catch (e: Exception) { null }
+                                val optionsUrl = try { ext.metaData?.optionsPageUrl } catch (e: Exception) { null }
                                 UserExtensionItemCard(
                                     extension = ext,
                                     checked = isEnabled,
@@ -1808,6 +1852,135 @@ fun BrowserScreen(
                                             viewModel.loadUrl(optionsUrl)
                                         }
                                     } else null
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+            }
+
+            // 5. Quick Tools Bottom Sheet
+            if (showToolsSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showToolsSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = Color(0xFF0D1620)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .navigationBarsPadding(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "🛠️ Quick Tools",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = Color(0xFF0088FF)
+                        )
+                        Text(
+                            text = "Access offline ML-powered scanner, translation utilities, secure encrypted locker, and system tools.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8E9AA8)
+                        )
+
+                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f))
+
+                        // Row 1
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                ToolCard(
+                                    title = "Doc Scanner",
+                                    subtitle = "ML Edge Detector",
+                                    icon = Icons.Rounded.DocumentScanner,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showToolsSheet = false
+                                        onOpenScanner()
+                                    }
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                ToolCard(
+                                    title = "QR Tools",
+                                    subtitle = "Scan & Generate",
+                                    icon = Icons.Rounded.QrCodeScanner,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showToolsSheet = false
+                                        onOpenQrTools()
+                                    }
+                                )
+                            }
+                        }
+
+                        // Row 2
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                ToolCard(
+                                    title = "Safe Locker",
+                                    subtitle = "Secure Vault",
+                                    icon = Icons.Rounded.Lock,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showToolsSheet = false
+                                        onOpenLocker()
+                                    }
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                ToolCard(
+                                    title = "Translator",
+                                    subtitle = "On-Device ML",
+                                    icon = Icons.Rounded.Translate,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showToolsSheet = false
+                                        translationSourceText = ""
+                                        translationResultText = ""
+                                        showTranslationDialog = true
+                                    }
+                                )
+                            }
+                        }
+
+                        // Row 3
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                ToolCard(
+                                    title = "Downloads",
+                                    subtitle = "Manage Files",
+                                    icon = Icons.Rounded.Download,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showToolsSheet = false
+                                        onOpenDownloads()
+                                    }
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                ToolCard(
+                                    title = "Extensions",
+                                    subtitle = "Web Addons",
+                                    icon = Icons.Rounded.Extension,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        showToolsSheet = false
+                                        showExtensionsSheet = true
+                                    }
                                 )
                             }
                         }
