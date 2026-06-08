@@ -4,6 +4,29 @@
     <!-- Permissions required for web browsing and locker biometrics -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- WebRTC Permissions for in-browser video/audio conferencing -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Geolocation Permissions for maps and delivery websites -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Storage and Media Permissions for Locker & Downloader -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- Notifications for download progress on Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Haptic feedback vibration permission -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="false"
@@ -12,11 +35,18 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.OmniBrowser">
+
+        <!-- Opt out of ML Kit telemetry for Google Play Data Safety compliance -->
+        <meta-data
+            android:name="com.google.mlkit.telemetry.opt_out"
+            android:value="true" />
         
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.OmniBrowser"
+            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,7 +57,7 @@
         <!-- Secure file provider to allow temporary viewing of decrypted PDFs or downloads -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.omni.browser.fileprovider"
+            android:authorities="com.rebelroot.omni.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

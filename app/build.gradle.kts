@@ -1,19 +1,23 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.kapt")
+    id("com.google.devtools.ksp")
 }
 
 android {
-    namespace = "com.omni.browser"
-    compileSdk = 35
+    namespace = "com.rebelroot.omni"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.omni.browser"
+        applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -29,7 +33,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -55,8 +61,25 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            // Only include arm64-v8a native libs in release (already filtered by ndk abiFilters,
+            // but this ensures no stray .so files from transitive dependencies)
+            pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
+        }
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += listOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "/META-INF/DEPENDENCIES",
+                "/META-INF/LICENSE",
+                "/META-INF/LICENSE.txt",
+                "/META-INF/NOTICE",
+                "/META-INF/NOTICE.txt",
+                "/META-INF/*.kotlin_module",
+                "/*.kotlin_metadata",
+                "/kotlin/**",
+                "/kotlinx/**"
+            )
         }
     }
 }
@@ -69,7 +92,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
 
     // === Mozilla GeckoView Engine ===
-    implementation("org.mozilla.geckoview:geckoview:130.0.20240913135723")
+    implementation("org.mozilla.geckoview:geckoview-arm64-v8a:145.0.20251124145406")
 
     // === Jetpack Compose ===
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
@@ -101,12 +124,12 @@ dependencies {
     // === Room Database with SQLCipher Encryption ===
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
+    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
     // === WireGuard VPN SDK ===
-    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    implementation("com.wireguard.android:tunnel:1.0.20260102")
 
     // === ML Kit Translation ===
     implementation("com.google.mlkit:translate:17.0.3")
@@ -119,7 +142,20 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
 
     // === Fonts ===
-    implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
+    // NOTE: Removed ui-text-google-fonts (saved ~8MB) — app only uses FontFamily.SansSerif/Monospace
+    // If Google Fonts are needed later, add individual font files to res/font/ instead
 }
+
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24")
+        force("org.jetbrains.kotlin:kotlin-stdlib-common:1.9.24")
+    }
+}
+

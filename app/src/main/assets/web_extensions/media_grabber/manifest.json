@@ -1,8 +1,13 @@
 {
     "manifest_version": 2,
     "name": "Omni Media Grabber",
-    "version": "1.0.0",
-    "description": "Intercepts video stream playlists, blobs, and MSE buffer data for offline download.",
+    "version": "2.1.0",
+    "description": "Passively detects video stream URLs for download without blocking playback.",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "omni-media-grabber@omnibrowser.app"
+        }
+    },
     "background": {
         "scripts": ["background.js"]
     },
@@ -16,6 +21,10 @@
     ],
     "permissions": [
         "webRequest",
+        "nativeMessaging",
+        "nativeMessagingFromContent",
+        "geckoViewAddons",
         "<all_urls>"
-    ]
+    ],
+    "web_accessible_resources": ["inject.js"]
 }

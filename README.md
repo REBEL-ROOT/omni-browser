@@ -1,27 +1,56 @@
 # 🌐 Omni Browser
 
-Omni Browser is a premium, open-source, mobile web browser for Android built entirely on **Jetpack Compose** and the high-performance **Mozilla GeckoView** engine. It combines advanced custom browser features with strict privacy guards, on-device machine learning capabilities, and a media playback suite.
+<p align="center">
+  <img src="app/src/main/res/drawable-nodpi/omni_home_logo.webp" alt="Omni Browser Logo" width="160" height="160" />
+</p>
+
+<p align="center">
+  <strong>A premium, privacy-first mobile web browser for Android. Built with Jetpack Compose & GeckoView.</strong>
+</p>
+
+<p align="center">
+  <a href="https://kotlinlang.org/"><img src="https://img.shields.io/badge/Kotlin-1.9.24-blue.svg?style=flat&logo=kotlin" alt="Kotlin" /></a>
+  <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Compose-Material%203-green.svg?style=flat" alt="Jetpack Compose" /></a>
+  <a href="https://mozilla.github.io/geckoview/"><img src="https://img.shields.io/badge/Engine-GeckoView%20v145-orange.svg?style=flat&logo=firefox" alt="GeckoView" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-purple.svg?style=flat" alt="License" /></a>
+</p>
 
 ---
 
-## 🚀 Key Features
+## 📖 Overview
 
-* **💻 Desktop Chrome-like Multi-Tabs**: A horizontal, scrollable tab strip at the top left of the screen allowing users to easily open, switch, and close active tabs. Scoped progress and location listeners isolate background loading events from clobbering active tab state.
-* **📜 On-Device Persistent History**: A lightweight, robust JSON-based file store containing visited page titles, URLs, and timestamps with full regex SearchBar filtering and clean deletion delegates.
-* **🛡️ Built-in Adblocker (uBlock Origin)**: Deeply integrated uBlock Origin extension with nativeCompose toggling to dynamically block ads and malicious trackers.
-* **🕵️ Safe Private / Incognito Mode**: Fully reactive incognito toggling directly from the browser tools dropdown. Toggling private mode immediately closes the active session and spawns a new isolated session emulated in private memory.
-* **🎥 Media3 Gesture Video Player**: Intercepts HLS (m3u8)/HTTP video streams using dynamic content sniffing and injects full gesture control brightness/volume, PiP (Picture-in-Picture), and background audio playback using Google's modern Media3 ExoPlayer.
-* **🔒 Encrypted Private Locker Vault**: A biometric-secured sandboxed container to download files privately, encrypted via Keystore AES.
-* **🌐 Device-Local Offline Translator**: A 100% private, on-device machine learning translation box backed by Google ML Kit.
-* **🔌 Military-Grade WireGuard VPN**: Integrated Go-backend WireGuard interface configured for Contabo VPS preset, enabling secure single-tap VPN connections.
-* **🔍 Google ML Kit Document Scanner**: Native auto-perspective scanner that cleans and processes paper copies with high visual accuracy.
-* **📱 16 KB Page Size NDK Alignment**: Enforces packaging boundaries (via AGP 8.5.1+) supporting modern Android 15/16 devices with 16 KB page size kernel compatibility.
+**Omni Browser** is a state-of-the-art web browser developed by **RebelRoot**, a collective of independent developers dedicated to building secure, open-source software that solves the root problems of digital surveillance, bloat, and restrictions. 
+
+Powered by the robust **Mozilla GeckoView** engine and designed with **Jetpack Compose (Material 3)**, Omni Browser delivers desktop-grade performance, native WebExtension support, offline machine-learning tools, and secure media engines in a unified, premium Obsidian-dark layout.
 
 ---
 
-## 📐 Architecture Overview
+## ⚡ Core Features
 
-Omni Browser uses a completely decoupled architecture, binding Compose state components directly to GeckoView's asynchronous delegates:
+### 🛡️ Privacy & Security
+* **Built-in Ad & Tracker Blocker**: Deep integration with pre-bundled **uBlock Origin** to strip advertising networks, track scripts, and cookie prompts.
+* **Incognito Sandbox**: Toggling Private Browsing immediately closes active session contexts, isolated from persistent storage.
+* **Instant Burn**: A one-tap "Burn" button that uses GeckoRuntime garbage-collection loops to wipe current history, cache, tabs, and session cookies from memory.
+* **Keystore-Encrypted Locker**: Pin-code and biometric-protected local vault to store private downloads, protected using hardware-backed AES encryption.
+
+### 🔌 Extensibility
+* **Firefox WebExtensions Support**: Direct compatibility with Firefox Android `.xpi` add-ons (like Dark Reader, Privacy Badger, etc.).
+* **Native Options Router**: Directly navigate to custom extension settings pages (e.g. configuration dashboards) in standard browser tabs via the Extensions Manager.
+
+### 🎥 Playback & Media Sniffing
+* **Aggressive Stream Sniffer**: Background service that intercepts online video packets (HLS, DASH, Blob, and MSE streams), rendering a unified download action card.
+* **ExoPlayer Media Integration**: Custom hardware-decoded video player featuring gesture swipe volume/brightness, playback speeds, picture-in-picture (PiP), and background audio.
+
+### 🧠 On-Device Smart Tools
+* **Device-Local Offline Translator**: 100% private page translation powered on-device by Google ML Kit models.
+* **Smart Document Scanner**: Document edge detection and image perspective cleaning.
+* **QR & Barcode Utilities**: Integrated ML-powered scanner to extract URLs, Wi-Fi networks, and contact files.
+
+---
+
+## 📐 Architecture & Data Flow
+
+Omni Browser utilizes a clean, unidirectional architecture, binding declarative Jetpack Compose components directly to the asynchronous callback loops of GeckoView:
 
 ```mermaid
 graph TD
@@ -40,34 +69,75 @@ graph TD
 
 ---
 
-## 🛠️ Build & Setup Instructions
+## 📁 Repository Structure
+
+```
+omni-browser/
+├── app/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── assets/              # Pre-bundled WebExtensions (uBlock, Media Sniffer)
+│   │   │   ├── java/com/rebelroot/omni/
+│   │   │   │   ├── browser/          # Main Compose layouts, Screens & ViewModels
+│   │   │   │   ├── history/          # Dynamic JSON-based History Store
+│   │   │   │   ├── media/            # ExoPlayer playback & MSE Interceptor Engine
+│   │   │   │   ├── privacy/          # Private Locker vault & Session Incineration
+│   │   │   │   ├── tools/            # ML Kit Scanner, QR Tools & Translators
+│   │   │   │   └── vpn/              # WireGuard VPN tunnel interfaces
+│   │   │   └── res/                  # Visual themes, vectors & assets
+│   │   ├── proguard-rules.pro        # Code shrinking & obfuscation configurations
+│   │   └── build.gradle.kts          # Application build dependencies & target definitions
+```
+
+---
+
+## 🛠️ Build & Installation
 
 ### Prerequisites
-* **Android Studio JBR** or standard JDK 17+
-* **Android SDK** with target API 34/35
-* Support for physical or emulated ARM64-v8a devices
+* **Android Studio Ladybug+** (or command-line tools matching Gradle 8.13+)
+* **JDK 17** (Ensure your `JAVA_HOME` environment variable points to your JDK directory)
+* **Android SDK** (Target API 34/35)
+* Support for physical or emulated `arm64-v8a` device architectures
 
-### Compilation
-Ensure your `JAVA_HOME` points to your JDK directory, then run:
+### Build Steps
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/rebelroot/omni-browser.git
+   cd omni-browser
+   ```
 
-```bash
-./gradlew compileDebugKotlin
-```
+2. **Verify target code compilation:**
+   ```bash
+   ./gradlew compileDebugKotlin
+   ```
 
-To assemble the debug APK:
-
-```bash
-./gradlew assembleDebug
-```
+3. **Assemble the Debug APK:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+   The output APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the open-source community! Whether you are fixing bugs, optimizing GeckoView JNI boundaries, or refining the styling, please feel free to fork this repository and submit a Pull Request. Refer to our [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
+We welcome code audits, optimizations, and additions from the open-source community. If you would like to contribute:
+1. Fork the project repository.
+2. Create your feature branch (`git checkout -b feature/NewAwesomeFeature`).
+3. Commit your changes (`git commit -m 'Add awesome feature'`).
+4. Push to the branch (`git push origin feature/NewAwesomeFeature`).
+5. Open a **Pull Request**.
+
+Please review our [CONTRIBUTING.md](CONTRIBUTING.md) and security guidelines before submitting code.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  Made with 💻 and ☕ by independent developers @ <strong>RebelRoot</strong>.
+</p>

@@ -54,3 +54,6 @@ Thumbs.db
 *.p12
 *.pem
 secrets.properties
+
+# Local gradle cache directory
+gradle-user-home/

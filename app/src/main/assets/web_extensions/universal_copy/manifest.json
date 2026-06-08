@@ -3,6 +3,11 @@
     "name": "Omni Universal Copy",
     "version": "1.0.0",
     "description": "Bypasses CSS and JS copy event blocks, forcing universal selection of any page content.",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "omni-universal-copy@omnibrowser.app"
+        }
+    },
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
