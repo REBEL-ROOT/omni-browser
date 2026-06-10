@@ -40,7 +40,20 @@ fun SettingsScreen(
         onNavigateBack()
     }
     val context = LocalContext.current
-    var isDarkMode by remember { mutableStateOf(true) }
+    val isDarkMode = viewModel.isDarkThemeEnabled
+    
+    val bgColor = if (isDarkMode) Color(0xFF070A0F) else Color(0xFFF8F9FA)
+    val cardColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFFFFFFF)
+    val cardBorderColor = if (isDarkMode) Color(0xFF23374A) else Color(0x1F000000)
+    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF202124)
+    val textSecondaryColor = if (isDarkMode) Color(0xFF8E9AA8) else Color(0xFF606266)
+    val dividerColor = if (isDarkMode) Color(0xFF23374A).copy(alpha = 0.5f) else Color(0x1F000000)
+    val navBgColor = if (isDarkMode) Color(0xFF0D1620) else Color(0xFFFFFFFF)
+    val navBorderColor = if (isDarkMode) Color(0xFF16222F).copy(alpha = 0.5f) else Color(0x1F000000)
+    val navContentColor = if (isDarkMode) Color.White else Color(0xFF202124)
+    val navContentMutedColor = if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color(0xFF202124).copy(alpha = 0.2f)
+    val inputBgColor = if (isDarkMode) Color(0xFF070A0F) else Color(0xFFF2F3F5)
+
     var isNotificationsEnabled by remember {
         mutableStateOf(
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -68,21 +81,21 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = { Text("Settings", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = textPrimaryColor
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF070A0F)
+                    containerColor = bgColor
                 ),
                 modifier = Modifier.border(
-                    BorderStroke(0.5.dp, Color(0xFF16222F).copy(alpha = 0.2f))
+                    BorderStroke(0.5.dp, cardBorderColor.copy(alpha = 0.2f))
                 )
             )
         },
@@ -90,8 +103,8 @@ fun SettingsScreen(
             // Flat minimal bottom bar persisting exactly as requested in screenshots
             Surface(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                color = Color(0xFF0D1620),
-                border = BorderStroke(0.5.dp, Color(0xFF16222F).copy(alpha = 0.5f))
+                color = navBgColor,
+                border = BorderStroke(0.5.dp, navBorderColor)
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -102,7 +115,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = navContentColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -110,7 +123,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = "Forward",
-                            tint = Color.White.copy(alpha = 0.2f),
+                            tint = navContentMutedColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -118,20 +131,20 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Refresh",
-                            tint = Color.White.copy(alpha = 0.2f),
+                            tint = navContentMutedColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     Box(
                         modifier = Modifier
                             .size(24.dp)
-                            .border(1.5.dp, Color.White, RoundedCornerShape(4.dp))
+                            .border(1.5.dp, navContentColor, RoundedCornerShape(4.dp))
                             .clickable { onNavigateBack() },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = viewModel.tabs.size.toString(),
-                            color = Color.White,
+                            color = navContentColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -140,7 +153,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Rounded.Menu,
                             contentDescription = "Menu",
-                            tint = Color.White,
+                            tint = navContentColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -152,7 +165,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Color(0xFF070A0F)) // Obsidian black background
+                .background(bgColor) // Dynamic background
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -165,8 +178,8 @@ fun SettingsScreen(
                     .clickable {
                         Toast.makeText(context, "Profile settings", Toast.LENGTH_SHORT).show()
                     },
-                color = Color(0xFF16222F), // Slate-navy
-                border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                color = cardColor,
+                border = BorderStroke(0.5.dp, cardBorderColor)
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -177,7 +190,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF243647)),
+                            .background(if (isDarkMode) Color(0xFF243647) else Color(0xFFE2E8F0)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -191,13 +204,13 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Alex Morgan",
-                            color = Color.White,
+                            color = textPrimaryColor,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "alex.morgan@omni.app",
-                            color = Color(0xFF8E9AA8),
+                            color = textSecondaryColor,
                             fontSize = 11.sp
                         )
                     }
@@ -205,7 +218,7 @@ fun SettingsScreen(
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = Color(0xFF8E9AA8)
+                        tint = textSecondaryColor
                     )
                 }
             }
@@ -224,8 +237,8 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp)),
-                    color = Color(0xFF16222F),
-                    border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                    color = cardColor,
+                    border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         // Row 1: Dark Mode
@@ -238,12 +251,12 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Rounded.DarkMode, contentDescription = null, tint = Color(0xFF0088FF))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Dark Mode", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Use dark theme across the app", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                                Text("Dark Mode", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Use dark theme across the app", color = textSecondaryColor, fontSize = 11.sp)
                             }
                             Switch(
                                 checked = isDarkMode,
-                                onCheckedChange = { isDarkMode = it },
+                                onCheckedChange = { viewModel.saveDarkTheme(context, it) },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = Color(0xFF0088FF)
@@ -251,7 +264,7 @@ fun SettingsScreen(
                             )
                         }
                         
-                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                         
                         // Row 2: Notifications
                         Row(
@@ -263,8 +276,8 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Rounded.Notifications, contentDescription = null, tint = Color(0xFF0088FF))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Notifications", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Enable push notifications", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                                Text("Notifications", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Enable push notifications", color = textSecondaryColor, fontSize = 11.sp)
                             }
                             Switch(
                                 checked = isNotificationsEnabled,
@@ -287,7 +300,7 @@ fun SettingsScreen(
                             )
                         }
                         
-                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                         
                         // Row 3: Private Browsing (Incognito Mode)
                         Row(
@@ -299,8 +312,8 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Rounded.Security, contentDescription = null, tint = Color(0xFF0088FF))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Private Browsing", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Block trackers and cookies", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                                Text("Private Browsing", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Block trackers and cookies", color = textSecondaryColor, fontSize = 11.sp)
                             }
                             Switch(
                                 checked = viewModel.isIncognitoMode,
@@ -312,7 +325,7 @@ fun SettingsScreen(
                             )
                         }
                         
-                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                         
                         // Row 4: Native Video Player
                         Row(
@@ -324,8 +337,8 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Rounded.PlayCircle, contentDescription = null, tint = Color(0xFF0088FF))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Native Video Player", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Open videos in Omni Player with download", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                                Text("Native Video Player", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Open videos in Omni Player with download", color = textSecondaryColor, fontSize = 11.sp)
                             }
                             Switch(
                                 checked = viewModel.isNativePlayerEnabled,
@@ -373,8 +386,8 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp)),
-                    color = Color(0xFF16222F),
-                    border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                    color = cardColor,
+                    border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -396,7 +409,7 @@ fun SettingsScreen(
                                     tint = Color(0xFF0088FF)
                                 )
                                 Column {
-                                    Text("VPN Tunnel Status", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("VPN Tunnel Status", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                     val statusText = when (vpnState) {
                                         is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> "Connected"
                                         is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> "Connecting..."
@@ -406,7 +419,7 @@ fun SettingsScreen(
                                     val statusColor = when (vpnState) {
                                         is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> Color(0xFF30D158) // Lime green
                                         is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> Color(0xFFFF9500) // Orange
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> Color(0xFF8E9AA8) // Grey
+                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> textSecondaryColor
                                         is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> Color(0xFFFF453A) // Red
                                     }
                                     Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -432,7 +445,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f))
+                        HorizontalDivider(color = dividerColor)
 
                         // Configuration actions
                         Row(
@@ -444,17 +457,17 @@ fun SettingsScreen(
                                     filePickerLauncher.launch("*/*")
                                 },
                                 modifier = Modifier.weight(1f).height(40.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF243647)),
+                                colors = ButtonDefaults.buttonColors(containerColor = if (isDarkMode) Color(0xFF243647) else Color(0xFFE2E8F0)),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.UploadFile,
                                     contentDescription = "Upload Config",
-                                    tint = Color(0xFF0A84FF),
+                                    tint = Color(0xFF0088FF),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Import .conf", color = Color(0xFF0A84FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Import .conf", color = Color(0xFF0088FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
 
                             if (hasConfig) {
@@ -516,14 +529,14 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp)),
-                    color = Color(0xFF16222F),
-                    border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                    color = cardColor,
+                    border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Default Search Engine", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Default Search Engine", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         
                         var expanded by remember { mutableStateOf(false) }
                         val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
@@ -534,8 +547,8 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
-                                    .background(Color(0xFF070A0F), RoundedCornerShape(12.dp))
-                                    .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(12.dp))
+                                    .background(inputBgColor, RoundedCornerShape(12.dp))
+                                    .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(12.dp))
                                     .clickable { expanded = true }
                                     .padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -559,14 +572,14 @@ fun SettingsScreen(
                                     )
                                     Text(
                                         text = currentEngine,
-                                        color = Color.White,
+                                        color = textPrimaryColor,
                                         fontSize = 14.sp
                                     )
                                 }
                                 Icon(
                                     imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
                                     contentDescription = null,
-                                    tint = Color(0xFF8E9AA8)
+                                    tint = textSecondaryColor
                                 )
                             }
                             
@@ -575,18 +588,18 @@ fun SettingsScreen(
                                 onDismissRequest = { expanded = false },
                                 modifier = Modifier
                                     .fillMaxWidth(0.9f)
-                                    .background(Color(0xFF16222F))
-                                    .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(8.dp))
+                                    .background(cardColor)
+                                    .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))
                             ) {
                                 engines.forEach { engine ->
                                     DropdownMenuItem(
-                                        text = { Text(engine, color = Color.White) },
+                                        text = { Text(engine, color = textPrimaryColor) },
                                         onClick = {
                                             viewModel.saveSearchEngine(context, engine)
                                             expanded = false
                                         },
                                         colors = MenuDefaults.itemColors(
-                                            textColor = Color.White,
+                                            textColor = textPrimaryColor,
                                             trailingIconColor = Color(0xFF0088FF)
                                         ),
                                         trailingIcon = {
@@ -607,7 +620,7 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Custom Query Template URL",
-                                color = Color.White,
+                                color = textPrimaryColor,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -621,25 +634,25 @@ fun SettingsScreen(
                                     viewModel.saveCustomSearchUrl(context, it)
                                 },
                                 placeholder = {
-                                    Text("https://example.com/search?q=%s", color = Color(0xFF8E9AA8))
+                                    Text("https://example.com/search?q=%s", color = textSecondaryColor)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
                                 leadingIcon = {
-                                    Icon(Icons.Rounded.Build, contentDescription = null, tint = Color(0xFF8E9AA8))
+                                    Icon(Icons.Rounded.Build, contentDescription = null, tint = textSecondaryColor)
                                 },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
+                                    focusedTextColor = textPrimaryColor,
+                                    unfocusedTextColor = textPrimaryColor,
                                     focusedBorderColor = Color(0xFF0088FF),
-                                    unfocusedBorderColor = Color(0xFF23374A),
-                                    focusedContainerColor = Color(0xFF070A0F),
-                                    unfocusedContainerColor = Color(0xFF070A0F)
+                                    unfocusedBorderColor = cardBorderColor,
+                                    focusedContainerColor = inputBgColor,
+                                    unfocusedContainerColor = inputBgColor
                                 )
                             )
                             Text(
                                 text = "Use %s as a placeholder for the search query.",
-                                color = Color(0xFF8E9AA8),
+                                color = textSecondaryColor,
                                 fontSize = 11.sp
                             )
                         }
@@ -661,8 +674,8 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp)),
-                    color = Color(0xFF16222F),
-                    border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                    color = cardColor,
+                    border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Row(
@@ -672,12 +685,12 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Rounded.Info, contentDescription = null, tint = Color(0xFF8E9AA8))
-                            Text("App Version", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Text("2.4.1", color = Color(0xFF8E9AA8), fontSize = 13.sp)
+                            Icon(Icons.Rounded.Info, contentDescription = null, tint = textSecondaryColor)
+                            Text("App Version", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Text("2.4.1", color = textSecondaryColor, fontSize = 13.sp)
                         }
                         
-                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                         
                         Row(
                             modifier = Modifier

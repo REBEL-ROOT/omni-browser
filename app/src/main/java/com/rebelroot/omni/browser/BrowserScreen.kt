@@ -135,7 +135,7 @@ fun HomeScreenContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070A0F)) // Obsidian black background
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -159,7 +159,7 @@ fun HomeScreenContent(
             value = searchText,
             onValueChange = { searchText = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search or type web address", color = Color(0xFF8E9AA8), fontSize = 14.sp) },
+            placeholder = { Text("Search or type web address", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
             leadingIcon = {
                 var expanded by remember { mutableStateOf(false) }
                 val currentEngine = viewModel.selectedSearchEngine
@@ -192,19 +192,19 @@ fun HomeScreenContent(
                         expanded = expanded,
                         onDismissRequest = { expanded = false },
                         modifier = Modifier
-                            .background(Color(0xFF16222F))
-                            .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(8.dp))
                     ) {
                         val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
                         engines.forEach { engine ->
                             DropdownMenuItem(
-                                text = { Text(engine, color = Color.White, fontSize = 14.sp) },
+                                text = { Text(engine, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp) },
                                 onClick = {
                                     viewModel.saveSearchEngine(context, engine)
                                     expanded = false
                                 },
                                 colors = MenuDefaults.itemColors(
-                                    textColor = Color.White,
+                                    textColor = MaterialTheme.colorScheme.onSurface,
                                     trailingIconColor = Color(0xFF0088FF)
                                 ),
                                 trailingIcon = {
@@ -226,7 +226,7 @@ fun HomeScreenContent(
                 Icon(
                     imageVector = Icons.Rounded.Mic,
                     contentDescription = "Voice Search",
-                    tint = Color.White.copy(alpha = 0.8f)
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             keyboardOptions = KeyboardOptions(
@@ -242,12 +242,12 @@ fun HomeScreenContent(
             shape = RoundedCornerShape(24.dp),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedBorderColor = Color(0xFF16222F),
-                unfocusedBorderColor = Color(0xFF16222F),
-                focusedContainerColor = Color(0xFF16222F),
-                unfocusedContainerColor = Color(0xFF16222F)
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
             )
         )
 
@@ -294,7 +294,7 @@ fun HomeScreenContent(
         ) {
             Text(
                 text = "Quick Tools",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 4.dp)
@@ -351,7 +351,7 @@ fun HomeScreenContent(
             ) {
                 Text(
                     text = "Discover",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -368,8 +368,8 @@ fun HomeScreenContent(
 
             Surface(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
-                color = Color(0xFF16222F),
-                border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column {
                     DiscoverRowItem(
@@ -378,7 +378,7 @@ fun HomeScreenContent(
                         subtitle = "Trending now",
                         onClick = { onNavigateTo("https://nova.app/blog/future-web") }
                     )
-                    HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 16.dp))
                     DiscoverRowItem(
                         icon = Icons.Rounded.LocalFireDepartment,
                         title = "Top Stories Today",
@@ -408,8 +408,8 @@ fun ShortcutItem(
                 .size(60.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .clickable { onClick() },
-            color = if (isAccented) Color(0xFF0066FF) else Color(0xFF16222F),
-            border = if (isAccented) null else BorderStroke(0.5.dp, Color(0xFF23374A))
+            color = if (isAccented) Color(0xFF0066FF) else MaterialTheme.colorScheme.surface,
+            border = if (isAccented) null else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -418,14 +418,14 @@ fun ShortcutItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = Color.White,
+                    tint = if (isAccented) Color.White else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
             }
         }
         Text(
             text = title,
-            color = Color(0xFF8E9AA8),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -452,7 +452,7 @@ fun DiscoverRowItem(
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF243647)),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -466,13 +466,13 @@ fun DiscoverRowItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = subtitle,
-                color = Color(0xFF8E9AA8),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp
             )
         }
@@ -480,7 +480,7 @@ fun DiscoverRowItem(
         Icon(
             imageVector = Icons.Rounded.KeyboardArrowRight,
             contentDescription = null,
-            tint = Color(0xFF8E9AA8)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -497,8 +497,8 @@ fun ToolCard(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() },
-        color = Color(0xFF16222F),
-        border = BorderStroke(0.5.dp, Color(0xFF23374A))
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -508,7 +508,7 @@ fun ToolCard(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF243647)),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -521,7 +521,7 @@ fun ToolCard(
             Column {
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -529,7 +529,7 @@ fun ToolCard(
                 )
                 Text(
                     text = subtitle,
-                    color = Color(0xFF8E9AA8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -845,12 +845,18 @@ fun BrowserScreen(
                 exit = fadeOut()
             ) {
                 // Flat minimal bottom bar persisting exactly as requested in screenshots
+                val isDark = viewModel.isDarkThemeEnabled
+                val navBg = if (isDark) Color(0xFF0D1620) else Color(0xFFFFFFFF)
+                val navBorder = if (isDark) Color(0xFF16222F).copy(alpha = 0.5f) else Color(0x1F000000)
+                val navContent = if (isDark) Color.White else Color(0xFF202124)
+                val navContentMuted = if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF202124).copy(alpha = 0.2f)
+
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding(),
-                    color = Color(0xFF0D1620),
-                    border = BorderStroke(0.5.dp, Color(0xFF16222F).copy(alpha = 0.5f))
+                    color = navBg,
+                    border = BorderStroke(0.5.dp, navBorder)
                 ) {
                     Row(
                         modifier = Modifier
@@ -892,12 +898,12 @@ fun BrowserScreen(
                             Box(
                                 modifier = Modifier
                                     .size(28.dp)
-                                    .border(1.5.dp, Color.White, RoundedCornerShape(5.dp)),
+                                    .border(1.5.dp, navContent, RoundedCornerShape(5.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = viewModel.tabs.size.toString(),
-                                    color = Color.White,
+                                    color = navContent,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -917,7 +923,7 @@ fun BrowserScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Build,
                                     contentDescription = "Tools",
-                                    tint = Color.White,
+                                    tint = navContent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -936,7 +942,7 @@ fun BrowserScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Menu,
                                     contentDescription = "Menu",
-                                    tint = Color.White,
+                                    tint = navContent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -952,7 +958,7 @@ fun BrowserScreen(
         ModalBottomSheet(
             onDismissRequest = { showMenu = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF0D1620),
+            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White,
             dragHandle = {
                 Box(
                     modifier = Modifier
@@ -1174,7 +1180,7 @@ fun BrowserScreen(
                             Card(
                                 shape = RoundedCornerShape(16.dp),
                                 border = BorderStroke(1.dp, Color(0xFF16222F)),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1620)),
+                                colors = CardDefaults.cardColors(containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White),
                                 modifier = Modifier
                                     .fillMaxWidth(0.85f)
                                     .padding(16.dp)
@@ -1757,7 +1763,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showConsoleSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = Color(0xFF0D1620)
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
                 ) {
                     Column(
                         modifier = Modifier
@@ -1820,7 +1826,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showExtensionsSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = Color(0xFF0D1620)
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
                 ) {
                     // Sync user extensions safely when sheet opens
                     LaunchedEffect(Unit) {
@@ -1938,7 +1944,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showToolsSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = Color(0xFF0D1620)
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
                 ) {
                     Column(
                         modifier = Modifier
@@ -2064,12 +2070,12 @@ fun BrowserScreen(
             
             // Site permission prompt overlay
             viewModel.activePermissionPrompt?.let { prompt ->
-                PermissionPromptDialog(prompt = prompt)
+                PermissionPromptDialog(prompt = prompt, isDarkThemeEnabled = viewModel.isDarkThemeEnabled)
             }
 
             // Site WebRTC media permission prompt overlay
             viewModel.activeMediaPermissionPrompt?.let { prompt ->
-                MediaPermissionPromptDialog(prompt = prompt)
+                MediaPermissionPromptDialog(prompt = prompt, isDarkThemeEnabled = viewModel.isDarkThemeEnabled)
             }
         }
     }
@@ -2239,7 +2245,10 @@ fun UserExtensionItemCard(
 }
 
 @Composable
-fun PermissionPromptDialog(prompt: com.rebelroot.omni.browser.ContentPermissionPrompt) {
+fun PermissionPromptDialog(
+    prompt: com.rebelroot.omni.browser.ContentPermissionPrompt,
+    isDarkThemeEnabled: Boolean
+) {
     val icon = when (prompt.permissionType) {
         1 -> Icons.Rounded.LocationOn // PERMISSION_GEOLOCATION
         3 -> Icons.Rounded.CameraAlt  // PERMISSION_CAMERA
@@ -2267,6 +2276,11 @@ fun PermissionPromptDialog(prompt: com.rebelroot.omni.browser.ContentPermissionP
         else -> "is requesting access to permissions."
     }
 
+    val textPrimary = if (isDarkThemeEnabled) Color.White else Color(0xFF202124)
+    val textSecondary = if (isDarkThemeEnabled) Color(0xFF8E9AA8) else Color(0xFF606266)
+    val cardColor = if (isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+    val borderCol = if (isDarkThemeEnabled) Color(0xFF16222F) else Color(0x1F000000)
+
     AlertDialog(
         onDismissRequest = { prompt.onDeny() },
         title = {
@@ -2290,7 +2304,7 @@ fun PermissionPromptDialog(prompt: com.rebelroot.omni.browser.ContentPermissionP
                 }
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -2306,7 +2320,7 @@ fun PermissionPromptDialog(prompt: com.rebelroot.omni.browser.ContentPermissionP
                 )
                 Text(
                     text = description,
-                    color = Color(0xFF8E9AA8),
+                    color = textSecondary,
                     fontSize = 13.sp,
                     lineHeight = 18.sp
                 )
@@ -2326,23 +2340,26 @@ fun PermissionPromptDialog(prompt: com.rebelroot.omni.browser.ContentPermissionP
         dismissButton = {
             OutlinedButton(
                 onClick = { prompt.onDeny() },
-                border = BorderStroke(0.5.dp, Color(0xFF16222F)),
+                border = BorderStroke(0.5.dp, borderCol),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF8E9AA8)
+                    contentColor = textSecondary
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Deny", fontWeight = FontWeight.SemiBold)
             }
         },
-        containerColor = Color(0xFF0D1620),
+        containerColor = cardColor,
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.border(BorderStroke(0.5.dp, Color(0xFF16222F)), RoundedCornerShape(16.dp))
+        modifier = Modifier.border(BorderStroke(0.5.dp, borderCol), RoundedCornerShape(16.dp))
     )
 }
 
 @Composable
-fun MediaPermissionPromptDialog(prompt: com.rebelroot.omni.browser.MediaPermissionPrompt) {
+fun MediaPermissionPromptDialog(
+    prompt: com.rebelroot.omni.browser.MediaPermissionPrompt,
+    isDarkThemeEnabled: Boolean
+) {
     val title = when {
         prompt.hasVideo && prompt.hasAudio -> "Camera & Microphone"
         prompt.hasVideo -> "Camera Access"
@@ -2360,6 +2377,11 @@ fun MediaPermissionPromptDialog(prompt: com.rebelroot.omni.browser.MediaPermissi
         prompt.hasVideo -> Icons.Rounded.CameraAlt
         else -> Icons.Rounded.Mic
     }
+
+    val textPrimary = if (isDarkThemeEnabled) Color.White else Color(0xFF202124)
+    val textSecondary = if (isDarkThemeEnabled) Color(0xFF8E9AA8) else Color(0xFF606266)
+    val cardColor = if (isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+    val borderCol = if (isDarkThemeEnabled) Color(0xFF16222F) else Color(0x1F000000)
 
     AlertDialog(
         onDismissRequest = { prompt.onDeny() },
@@ -2384,7 +2406,7 @@ fun MediaPermissionPromptDialog(prompt: com.rebelroot.omni.browser.MediaPermissi
                 }
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = textPrimary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -2400,7 +2422,7 @@ fun MediaPermissionPromptDialog(prompt: com.rebelroot.omni.browser.MediaPermissi
                 )
                 Text(
                     text = description,
-                    color = Color(0xFF8E9AA8),
+                    color = textSecondary,
                     fontSize = 13.sp,
                     lineHeight = 18.sp
                 )
@@ -2420,18 +2442,18 @@ fun MediaPermissionPromptDialog(prompt: com.rebelroot.omni.browser.MediaPermissi
         dismissButton = {
             OutlinedButton(
                 onClick = { prompt.onDeny() },
-                border = BorderStroke(0.5.dp, Color(0xFF16222F)),
+                border = BorderStroke(0.5.dp, borderCol),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF8E9AA8)
+                    contentColor = textSecondary
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Deny", fontWeight = FontWeight.SemiBold)
             }
         },
-        containerColor = Color(0xFF0D1620),
+        containerColor = cardColor,
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.border(BorderStroke(0.5.dp, Color(0xFF16222F)), RoundedCornerShape(16.dp))
+        modifier = Modifier.border(BorderStroke(0.5.dp, borderCol), RoundedCornerShape(16.dp))
     )
 }
 

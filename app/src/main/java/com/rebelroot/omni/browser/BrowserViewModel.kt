@@ -88,6 +88,7 @@ class BrowserViewModel : ViewModel() {
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
         val SEARCH_ENGINE_KEY = stringPreferencesKey("default_search_engine")
         val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
+        val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
 
         @Volatile
         private var geckoRuntime: GeckoRuntime? = null
@@ -130,6 +131,7 @@ class BrowserViewModel : ViewModel() {
     var customVpnConfig by mutableStateOf<String?>(null)
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
+    var isDarkThemeEnabled by mutableStateOf(true)
 
     fun isDirectVideoUrl(url: String): Boolean {
         val clean = url.trim().lowercase()
@@ -855,6 +857,16 @@ class BrowserViewModel : ViewModel() {
                 customSearchUrl = getCustomSearchUrlPreference(appCtx).first()
             }
 
+            viewModelScope.launch {
+                val darkThemePref = getDarkThemePreference(appCtx).first()
+                isDarkThemeEnabled = darkThemePref
+                geckoRuntime?.settings?.preferredColorScheme = if (darkThemePref) {
+                    GeckoRuntimeSettings.COLOR_SCHEME_DARK
+                } else {
+                    GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
+                }
+            }
+
             // Auto load MSE Aggressive Grabber Extension on Engine initialization
             loadMediaGrabberExtension()
         }
@@ -1177,6 +1189,27 @@ class BrowserViewModel : ViewModel() {
                 preferences[CUSTOM_SEARCH_URL_KEY] = url
             }
             customSearchUrl = url
+        }
+    }
+
+    fun getDarkThemePreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DARK_THEME_ENABLED_KEY] ?: true
+        }
+    }
+
+    fun saveDarkTheme(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DARK_THEME_ENABLED_KEY] = enabled
+            }
+            isDarkThemeEnabled = enabled
+            
+            geckoRuntime?.settings?.preferredColorScheme = if (enabled) {
+                GeckoRuntimeSettings.COLOR_SCHEME_DARK
+            } else {
+                GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
+            }
         }
     }
 

@@ -41,7 +41,7 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            OmniTheme {
+            OmniTheme(darkTheme = browserViewModel.isDarkThemeEnabled) {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {

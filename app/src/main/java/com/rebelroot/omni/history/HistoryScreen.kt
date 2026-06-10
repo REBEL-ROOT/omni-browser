@@ -41,6 +41,22 @@ fun HistoryScreen(
     }
     var searchQuery by remember { mutableStateOf("") }
     
+    val isDarkMode = viewModel.isDarkThemeEnabled
+    
+    val bgColor = if (isDarkMode) Color(0xFF070A0F) else Color(0xFFF8F9FA)
+    val cardColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFFFFFFF)
+    val cardBorderColor = if (isDarkMode) Color(0xFF23374A) else Color(0x1F000000)
+    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF202124)
+    val textSecondaryColor = if (isDarkMode) Color(0xFF8E9AA8) else Color(0xFF606266)
+    val dividerColor = if (isDarkMode) Color(0xFF23374A).copy(alpha = 0.5f) else Color(0x1F000000)
+    
+    val navBgColor = if (isDarkMode) Color(0xFF0D1620) else Color(0xFFFFFFFF)
+    val navBorderColor = if (isDarkMode) Color(0xFF16222F).copy(alpha = 0.5f) else Color(0x1F000000)
+    val navContentColor = if (isDarkMode) Color.White else Color(0xFF202124)
+    val navContentMutedColor = if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color(0xFF202124).copy(alpha = 0.2f)
+    val inputBgColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFF2F3F5)
+    val inputBorderColor = if (isDarkMode) Color(0xFF16222F) else Color(0x1F000000)
+
     // Filter history based on search query
     val filteredHistory = viewModel.historyList.filter {
         it.title.contains(searchQuery, ignoreCase = true) ||
@@ -65,13 +81,13 @@ fun HistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("History", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = { Text("History", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = textPrimaryColor
                         )
                     }
                 },
@@ -81,10 +97,10 @@ fun HistoryScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF070A0F)
+                    containerColor = bgColor
                 ),
                 modifier = Modifier.border(
-                    BorderStroke(0.5.dp, Color(0xFF16222F).copy(alpha = 0.2f))
+                    BorderStroke(0.5.dp, cardBorderColor.copy(alpha = 0.2f))
                 )
             )
         },
@@ -92,8 +108,8 @@ fun HistoryScreen(
             // Flat minimal bottom bar persisting exactly as requested in screenshots
             Surface(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                color = Color(0xFF0D1620),
-                border = BorderStroke(0.5.dp, Color(0xFF16222F).copy(alpha = 0.5f))
+                color = navBgColor,
+                border = BorderStroke(0.5.dp, navBorderColor)
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -104,7 +120,7 @@ fun HistoryScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = navContentColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -112,7 +128,7 @@ fun HistoryScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = "Forward",
-                            tint = Color.White.copy(alpha = 0.2f),
+                            tint = navContentMutedColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -120,20 +136,20 @@ fun HistoryScreen(
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "Refresh",
-                            tint = Color.White.copy(alpha = 0.2f),
+                            tint = navContentMutedColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     Box(
                         modifier = Modifier
                             .size(24.dp)
-                            .border(1.5.dp, Color.White, RoundedCornerShape(4.dp))
+                            .border(1.5.dp, navContentColor, RoundedCornerShape(4.dp))
                             .clickable { onNavigateBack() },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = viewModel.tabs.size.toString(),
-                            color = Color.White,
+                            color = navContentColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -142,7 +158,7 @@ fun HistoryScreen(
                         Icon(
                             imageVector = Icons.Rounded.Menu,
                             contentDescription = "Menu",
-                            tint = Color.White,
+                            tint = navContentColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -154,7 +170,7 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Color(0xFF070A0F)) // Obsidian black background
+                .background(bgColor) // Obsidian black background
         ) {
             // Interactive Slate Search box with filter icon on the right
             OutlinedTextField(
@@ -163,12 +179,12 @@ fun HistoryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                placeholder = { Text("Search history", color = Color(0xFF8E9AA8)) },
+                placeholder = { Text("Search history", color = textSecondaryColor) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
-                        tint = Color(0xFF8E9AA8)
+                        tint = textSecondaryColor
                     )
                 },
                 trailingIcon = {
@@ -176,19 +192,19 @@ fun HistoryScreen(
                         Icon(
                             imageVector = Icons.Rounded.FilterList,
                             contentDescription = "Filter",
-                            tint = Color(0xFF8E9AA8)
+                            tint = textSecondaryColor
                         )
                     }
                 },
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
+                    focusedTextColor = textPrimaryColor,
+                    unfocusedTextColor = textPrimaryColor,
                     focusedBorderColor = Color(0xFF0088FF),
-                    unfocusedBorderColor = Color(0xFF16222F),
-                    focusedContainerColor = Color(0xFF16222F),
-                    unfocusedContainerColor = Color(0xFF16222F)
+                    unfocusedBorderColor = inputBorderColor,
+                    focusedContainerColor = inputBgColor,
+                    unfocusedContainerColor = inputBgColor
                 )
             )
 
@@ -203,7 +219,7 @@ fun HistoryScreen(
                         text = "No history records found",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF8E9AA8)
+                        color = textSecondaryColor
                     )
                 }
             } else {
@@ -222,7 +238,7 @@ fun HistoryScreen(
                             item(key = category) {
                                 Text(
                                     text = category,
-                                    color = Color(0xFF8E9AA8),
+                                    color = textSecondaryColor,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 8.dp)
@@ -232,6 +248,11 @@ fun HistoryScreen(
                             items(itemsInCategory, key = { it.timestamp }) { entry ->
                                 HistoryRowItem(
                                     entry = entry,
+                                    isDarkMode = isDarkMode,
+                                    textPrimaryColor = textPrimaryColor,
+                                    textSecondaryColor = textSecondaryColor,
+                                    cardColor = cardColor,
+                                    cardBorderColor = cardBorderColor,
                                     onClick = { onOpenUrl(entry.url) },
                                     onDelete = { viewModel.deleteHistoryEntry(entry) }
                                 )
@@ -247,6 +268,11 @@ fun HistoryScreen(
 @Composable
 fun HistoryRowItem(
     entry: HistoryEntry,
+    isDarkMode: Boolean,
+    textPrimaryColor: Color,
+    textSecondaryColor: Color,
+    cardColor: Color,
+    cardBorderColor: Color,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -255,8 +281,8 @@ fun HistoryRowItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() },
-        color = Color(0xFF16222F),
-        border = BorderStroke(0.5.dp, Color(0xFF23374A))
+        color = cardColor,
+        border = BorderStroke(0.5.dp, cardBorderColor)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -267,13 +293,13 @@ fun HistoryRowItem(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF243647)),
+                    .background(if (isDarkMode) Color(0xFF243647) else Color(0xFFE2E8F0)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Language,
                     contentDescription = null,
-                    tint = Color(0xFF8E9AA8),
+                    tint = textSecondaryColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -285,12 +311,12 @@ fun HistoryRowItem(
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = Color.White
+                    color = textPrimaryColor
                 )
                 Text(
                     text = entry.url,
                     fontSize = 11.sp,
-                    color = Color(0xFF8E9AA8),
+                    color = textSecondaryColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -301,12 +327,12 @@ fun HistoryRowItem(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF243647).copy(alpha = 0.5f))
+                    .background((if (isDarkMode) Color(0xFF243647) else Color(0xFFE2E8F0)).copy(alpha = 0.5f))
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Delete entry",
-                    tint = Color(0xFF8E9AA8),
+                    tint = textSecondaryColor,
                     modifier = Modifier.size(12.dp)
                 )
             }

@@ -24,7 +24,7 @@ fun OmniTheme(
             window.statusBarColor = statusBarColor.toArgb()
             
             // Set navigation bar color to match the bottom bar (Color(0xFF0D1620)) in dark mode
-            val navigationBarColor = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0D1620) else colorScheme.background
+            val navigationBarColor = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0D1620) else androidx.compose.ui.graphics.Color(0xFFFFFFFF)
             window.navigationBarColor = navigationBarColor.toArgb()
 
             val insetsController = WindowCompat.getInsetsController(window, view)
