@@ -1264,7 +1264,7 @@ fun BrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding(),
-                        shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
+                        shape = androidx.compose.ui.graphics.RectangleShape,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         shadowElevation = 8.dp,
                         tonalElevation = 2.dp
