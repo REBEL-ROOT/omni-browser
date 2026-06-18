@@ -24,7 +24,7 @@ Omni Browser requests permissions only when necessary to perform core browser an
 |------------|---------|---------------------|
 | **INTERNET** | Core web browsing, loading websites, and downloading web resources. | No URL requests or browsing traffic are logged or shared by RebelRoot. |
 | **USE_BIOMETRIC** | Authenticating user access to the secure Locker feature. | Handled via Android's Secure Biometric API. Biometric credentials are stored securely in the device's hardware (TEE/StrongBox) and are never accessible to the app. |
-| **CAMERA** | Allowing websites to access the camera for in-browser video calls (WebRTC), and scanning QR codes or document scanning. | Processing is local. Video frames are only streamed to web destinations explicitly approved by the user. |
+| **CAMERA** | Allowing websites to access the camera for in-browser video calls (WebRTC), and scanning QR codes. | Processing is local. Video frames are only streamed to web destinations explicitly approved by the user. |
 | **RECORD_AUDIO** | Allowing websites to capture audio for voice calls (WebRTC) and audio recordings. | Streams are peer-to-peer or sent directly to websites explicitly authorized by the user. |
 | **ACCESS_FINE_LOCATION** & **ACCESS_COARSE_LOCATION** | Sharing your device location with websites that request it (e.g., maps, local delivery). | Geolocation coordinates are only accessed after explicit user prompt approvals and are sent directly to the requesting site. RebelRoot never collects location history. |
 | **READ / WRITE STORAGE** & **READ_MEDIA_** | Accessing the device storage to save file downloads or import/export files from/into the secure Locker. | Uses MediaStore and Scoped Storage APIs to restrict permission scopes to media folders only. |
@@ -34,7 +34,7 @@ Omni Browser requests permissions only when necessary to perform core browser an
 Omni Browser incorporates open-source and Google libraries for local utilities:
 - **Mozilla GeckoView Engine:** Renders web pages. It operates locally and adheres to standard Web API protocols.
 - **WireGuard VPN:** Operates locally to encrypt external web traffic. Omni Browser does not monitor, route, or decrypt network traffic passing through the tunnel.
-- **Google Play Services (Code & Document Scanners):** Utilizes zero-permission clients where Google Play Services handles OCR and scanning operations locally on-device.
+- **Google Play Services (Code Scanner):** Utilizes zero-permission clients where Google Play Services handles barcode/QR scanning operations locally on-device.
 
 ### 1.4 Data Deletion
 All local data can be incinerated instantly using the built-in **Fire Button** (data incinerator), which executes clean database and memory wipes. Uninstalling the application completely deletes all browser records, encrypted lockers, and database files.

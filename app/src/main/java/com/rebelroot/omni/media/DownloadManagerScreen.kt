@@ -40,7 +40,7 @@ fun DownloadManagerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Downloads", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.downloads_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -67,7 +67,7 @@ fun DownloadManagerScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No downloads found",
+                        text = androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.downloads_empty),
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
                         fontSize = 16.sp
                     )
@@ -250,7 +250,7 @@ fun DownloadItemCard(
                                 ) {
                                     Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Play", fontSize = 11.sp)
+                                    Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.play_text), fontSize = 11.sp)
                                 }
                             }
                         }

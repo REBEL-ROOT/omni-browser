@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -12,8 +13,8 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 8
+        versionName = "1.0.7"
 
         ndk {
             abiFilters.add("arm64-v8a")
@@ -24,22 +25,48 @@ android {
             useSupportLibrary = true
         }
 
-        // Configure aaptOptions to ensure WebExtension files starting with underscores (e.g. _locales)
-        // are not ignored or excluded by the Android packaging process.
+        // Ensure WebExtension files starting with underscores (e.g. _locales)
+        // are not excluded by the Android packaging process.
         aaptOptions {
             ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+        }
+
+        // Restrict bundled translations to only the languages the app actively
+        // supports — removes ~2MB of unused locale data from AAPT.
+        resourceConfigurations += listOf(
+            "en", "hi", "es", "fr", "de", "pt", "ru", "ja", "zh", "ar"
+        )
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = ""
+            keyAlias = "omni-release"
+            keyPassword = ""
         }
     }
 
     buildTypes {
-        release {
+        debug {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // R8 full mode: more aggressive dead-code removal and class merging
+            // than classic ProGuard — safe for Compose + GeckoView when keep
+            // rules are in place.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -50,112 +77,114 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // Strip runtime-only Kotlin metadata to save ~200 KB from dex
+        freeCompilerArgs += listOf("-Xno-param-assertions")
     }
 
     buildFeatures {
         compose = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14" // Highly stable compiler version matching Kotlin 1.9.24
+        // Disable features we don't use — each one adds overhead
+        buildConfig = false
+        aidl       = false
+        renderScript = false
     }
 
     packaging {
         jniLibs {
+            // true = compress native libs inside APK (smaller download for direct APK installs).
+            // Play Store AAB delivery automatically uses extracted libs anyway.
             useLegacyPackaging = true
-            // Only include arm64-v8a native libs in release (already filtered by ndk abiFilters,
-            // but this ensures no stray .so files from transitive dependencies)
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
         }
         resources {
             excludes += listOf(
+                // License / legal metadata nobody reads at runtime
                 "/META-INF/{AL2.0,LGPL2.1}",
                 "/META-INF/DEPENDENCIES",
                 "/META-INF/LICENSE",
                 "/META-INF/LICENSE.txt",
                 "/META-INF/NOTICE",
                 "/META-INF/NOTICE.txt",
+                "/META-INF/LICENSE.md",
+                "/META-INF/NOTICE.md",
+                // Kotlin compiler metadata (not needed at runtime)
                 "/META-INF/*.kotlin_module",
                 "/*.kotlin_metadata",
                 "/kotlin/**",
-                "/kotlinx/**"
+                "/kotlinx/**",
+                // Unused test runner classes that leak into release builds
+                "**/junit/**",
+                "**/androidx/test/**",
+                // Duplicated version files from transitive deps
+                "**/VERSION.txt",
+                "**/version.txt",
+                "**/*.proto",
+                "**/*.bin",
             )
         }
     }
+
+    // ndk.abiFilters already restricts to arm64-v8a — no splits needed.
 }
 
 dependencies {
     // === Core Android & Lifecycle ===
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("com.google.android.material:material:1.12.0") // Required for Theme.Material3.DayNight.NoActionBar
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
-    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.activity:activity-compose:1.9.3")
 
-    // === Mozilla GeckoView Engine ===
+    // === Mozilla GeckoView Engine (arm64-v8a only — matches ndk abiFilters) ===
     implementation("org.mozilla.geckoview:geckoview-arm64-v8a:145.0.20251124145406")
 
     // === Jetpack Compose ===
-    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.8.4")
+    // ui-tooling-preview only needed in debug — never include in release APK
+    debugImplementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
 
     // === Haze Glassmorphism Backdrop Blur ===
     implementation("dev.chrisbanes.haze:haze:0.7.3")
 
-
-    // === ML Kit Document Scanner (Zero Permission) ===
-    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
-
-    // === Google Play Code Scanner (Zero Permission) ===
+    // === QR / Barcode ===
+    // Play Code Scanner: zero-permission, dynamically loaded via Play Services
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-
-    // === ZXing QR Generator ===
+    // Bundled ML Kit for offline / screenshot QR scanning
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    // ZXing: QR code generator only (tiny, no scanner runtime)
     implementation("com.google.zxing:core:3.5.3")
 
-    // === Biometrics & Modern Encryption ===
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06") // EncryptedFile
-    implementation("androidx.datastore:datastore-preferences:1.1.1")   // Preferences storage
+    // === Google Sign-In ===
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
-    // === Room Database with SQLCipher Encryption ===
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    // === Security & Storage ===
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // === Room + SQLCipher Encrypted DB ===
+    implementation("androidx.room:room-runtime:2.7.1")
+    implementation("androidx.room:room-ktx:2.7.1")
+    ksp("androidx.room:room-compiler:2.7.1")
     implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
-    // === WireGuard VPN SDK ===
+    // === WireGuard VPN ===
     implementation("com.wireguard.android:tunnel:1.0.20260102")
 
-    // === ML Kit Translation ===
-    implementation("com.google.mlkit:translate:17.0.3")
-
-    // === Coil (Image Loader) ===
+    // === Image Loading ===
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // === AndroidX Media3 (ExoPlayer & Session) ===
+    // === AndroidX Media3 / ExoPlayer ===
     val media3Version = "1.3.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
-
-    // === Fonts ===
-    // NOTE: Removed ui-text-google-fonts (saved ~8MB) — app only uses FontFamily.SansSerif/Monospace
-    // If Google Fonts are needed later, add individual font files to res/font/ instead
 }
-
-configurations.all {
-    resolutionStrategy {
-        force("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24")
-        force("org.jetbrains.kotlin:kotlin-stdlib-common:1.9.24")
-    }
-}
-

@@ -43,7 +43,6 @@ Powered by the robust **Mozilla GeckoView** engine and designed with **Jetpack C
 
 ### 🧠 On-Device Smart Tools
 * **Device-Local Offline Translator**: 100% private page translation powered on-device by Google ML Kit models.
-* **Smart Document Scanner**: Document edge detection and image perspective cleaning.
 * **QR & Barcode Utilities**: Integrated ML-powered scanner to extract URLs, Wi-Fi networks, and contact files.
 
 ---
@@ -82,7 +81,7 @@ omni-browser/
 │   │   │   │   ├── history/          # Dynamic JSON-based History Store
 │   │   │   │   ├── media/            # ExoPlayer playback & MSE Interceptor Engine
 │   │   │   │   ├── privacy/          # Private Locker vault & Session Incineration
-│   │   │   │   ├── tools/            # ML Kit Scanner, QR Tools & Translators
+│   │   │   │   ├── tools/            # QR Tools & Translators
 │   │   │   │   └── vpn/              # WireGuard VPN tunnel interfaces
 │   │   │   └── res/                  # Visual themes, vectors & assets
 │   │   ├── proguard-rules.pro        # Code shrinking & obfuscation configurations

@@ -14,10 +14,10 @@ interface LockerFileDao {
     fun getAllFiles(): Flow<List<LockerFile>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(file: LockerFile)
+    suspend fun insert(file: LockerFile): Long
 
     @Query("DELETE FROM locker_files WHERE id = :id")
-    suspend fun deleteById(id: String)
+    suspend fun deleteById(id: String): Int
 
     @Query("SELECT * FROM locker_files WHERE id = :id LIMIT 1")
     suspend fun getFileById(id: String): LockerFile?
