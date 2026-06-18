@@ -56,11 +56,48 @@ class PrivateLockerManager(private val context: Context) {
     }
 
     /**
+     * Helper to get category subfolder name for sorting locker items
+     */
+    private fun getSubfolderForMimeType(mimeType: String, filename: String): String {
+        val mime = mimeType.lowercase()
+        val name = filename.lowercase()
+        return when {
+            mime.startsWith("image") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif") || name.endsWith(".webp") || name.endsWith(".bmp") -> "images"
+            mime.startsWith("video") || name.endsWith(".mp4") || name.endsWith(".mkv") || name.endsWith(".webm") || name.endsWith(".avi") || name.endsWith(".3gp") -> "videos"
+            mime.equals("application/pdf") || mime.contains("msword") || mime.contains("officedocument") || name.endsWith(".pdf") || name.endsWith(".docx") || name.endsWith(".doc") || name.endsWith(".xls") || name.endsWith(".xlsx") || name.endsWith(".ppt") || name.endsWith(".pptx") -> "docs"
+            mime.equals("application/epub+zip") || name.endsWith(".epub") -> "epub"
+            mime.startsWith("text") || name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".json") || name.endsWith(".csv") || name.endsWith(".xml") -> "txt"
+            else -> "others"
+        }
+    }
+
+    /**
+     * Find the location of an encrypted file inside the locker sandbox.
+     * Checks subfolders first, then falls back to the root lockerDir.
+     */
+    fun getFileLocation(secureId: String): File {
+        val subDirs = listOf("videos", "music", "images", "documents", "docs", "epub", "txt", "others")
+        for (subDir in subDirs) {
+            val file = File(File(lockerDir, subDir), secureId)
+            if (file.exists()) {
+                return file
+            }
+        }
+        return File(lockerDir, secureId)
+    }
+
+    /**
      * Encrypts and saves a Uri resource (e.g. download or scan) into the secure sandbox.
      */
-    suspend fun saveUriToLocker(uri: Uri, originalName: String, mimeType: String) {
+    suspend fun saveUriToLocker(uri: Uri, originalName: String, mimeType: String): String {
         val secureId = UUID.randomUUID().toString()
-        val targetFile = File(lockerDir, secureId)
+        val subDirName = getSubfolderForMimeType(mimeType, originalName)
+        val subDir = File(lockerDir, subDirName).apply {
+            if (!exists()) {
+                mkdirs()
+            }
+        }
+        val targetFile = File(subDir, secureId)
 
         // CRITICAL gotcha: EncryptedFile builder will crash if target already exists.
         // We delete it beforehand to ensure absolute safety.
@@ -96,19 +133,20 @@ class PrivateLockerManager(private val context: Context) {
                 createdAt = System.currentTimeMillis()
             )
             database.fileDao().insert(fileRecord)
-            Log.i(TAG, "File encrypted and saved to sandbox: $secureId ($originalName)")
+            Log.i(TAG, "File encrypted and saved to sandbox: $secureId ($originalName) under $subDirName")
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write encrypted file to locker sandbox", e)
             throw e
         }
+        return secureId
     }
 
     /**
      * Decrypts and retrieves the InputStream for a secure file, enabling in-memory viewing.
      */
     fun decryptFileStream(secureId: String): InputStream {
-        val targetFile = File(lockerDir, secureId)
+        val targetFile = getFileLocation(secureId)
         val encryptedFile = EncryptedFile.Builder(
             context,
             targetFile,
@@ -147,7 +185,7 @@ class PrivateLockerManager(private val context: Context) {
                     Log.d(TAG, "Deleted decrypted cache file on deletion: ${it.displayName}")
                 }
             }
-            val targetFile = File(lockerDir, secureId)
+            val targetFile = getFileLocation(secureId)
             if (targetFile.exists()) {
                 targetFile.delete()
             }

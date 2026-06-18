@@ -12,9 +12,10 @@ import androidx.core.view.WindowCompat
 @Composable
 fun OmniTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    accentTheme: String = "Ocean Blue",
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) OmniDarkScheme else OmniLightScheme
+    val colorScheme = getColorScheme(accentTheme, darkTheme)
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -23,7 +24,7 @@ fun OmniTheme(
             val statusBarColor = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF070A0F) else colorScheme.background
             window.statusBarColor = statusBarColor.toArgb()
             
-            // Set navigation bar color to match the bottom bar (Color(0xFF0D1620)) in dark mode
+            // Set navigation bar color to match the bottom bar in dark mode
             val navigationBarColor = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0D1620) else androidx.compose.ui.graphics.Color(0xFFFFFFFF)
             window.navigationBarColor = navigationBarColor.toArgb()
 

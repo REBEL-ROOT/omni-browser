@@ -1,10 +1,12 @@
 package com.rebelroot.omni.browser
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,6 +17,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rebelroot.omni.browser.extensions.UniversalCopyManager
+import com.rebelroot.omni.browser.extensions.AiBlockerManager
 import com.rebelroot.omni.media.FFmpegBridge
 import com.rebelroot.omni.media.FFmpegLoader
 import com.rebelroot.omni.media.MediaInterceptor
@@ -25,6 +28,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.json.JSONArray
 import org.mozilla.geckoview.AllowOrDeny
@@ -32,10 +36,23 @@ import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebExtension
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
+import java.lang.ref.WeakReference
 import java.io.File
+import android.content.Intent
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import android.speech.tts.TextToSpeech
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 
-private val Context.dataStore by preferencesDataStore(name = "omni_settings")
+val Context.dataStore by preferencesDataStore(name = "omni_settings")
 
 data class TabState(
     val id: String,
@@ -44,7 +61,32 @@ data class TabState(
     val url: String,
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
-    val loadError: String? = null
+    val loadError: String? = null,
+    val isEditModeEnabled: Boolean = false,
+    val settingsVersion: Int = 0,
+    val isUriLoaded: Boolean = true
+)
+
+data class BookmarkEntry(
+    val title: String,
+    val url: String,
+    val timestamp: Long
+)
+
+data class HomeShortcut(
+    val id: String,
+    val title: String,
+    val url: String,
+    val isFeature: Boolean = false,
+    val isPermanent: Boolean = false
+)
+
+data class NewsArticle(
+    val title: String,
+    val link: String,
+    val source: String,
+    val pubDate: String,
+    val imageUrl: String
 )
 
 data class HistoryEntry(
@@ -80,15 +122,36 @@ class BrowserViewModel : ViewModel() {
         private const val TAG = "BrowserViewModel"
         private const val UBLOCK_ID = "uBlock0@raymondhill.net"
         private const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
+        private const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
         
         val UBLOCK_ENABLED_KEY = booleanPreferencesKey("ublock_adblocker_enabled")
         val UNIVERSAL_COPY_ENABLED_KEY = booleanPreferencesKey("universal_copy_enabled")
+        val AI_BLOCKER_ENABLED_KEY = booleanPreferencesKey("ai_blocker_enabled")
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
         val SEARCH_ENGINE_KEY = stringPreferencesKey("default_search_engine")
         val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
+        val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
+        val PDF_EXPORT_THEME_KEY = stringPreferencesKey("pdf_export_theme")
+        val SELECTED_LANGUAGE_KEY = stringPreferencesKey("selected_language")
+        val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
+        val QR_OVERVIEW_SEEN_KEY = booleanPreferencesKey("qr_overview_seen")
+        val PDF_OVERVIEW_SEEN_KEY = booleanPreferencesKey("pdf_overview_seen")
+        val VIDEO_OVERVIEW_SEEN_KEY = booleanPreferencesKey("video_overview_seen")
+        val EXTENSIONS_OVERVIEW_SEEN_KEY = booleanPreferencesKey("extensions_overview_seen")
+        val EDIT_PAGE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("edit_page_overview_seen")
+        val CONSOLE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("console_overview_seen")
+
+        // Native Player Settings Keys
+        val PLAYER_DEFAULT_QUALITY_KEY = stringPreferencesKey("player_default_quality")
+        val PLAYER_AUTOPLAY_KEY = booleanPreferencesKey("player_autoplay")
+        val PLAYER_LOOP_KEY = booleanPreferencesKey("player_loop")
+        val PLAYER_BRIGHTNESS_GESTURE_KEY = booleanPreferencesKey("player_brightness_gesture")
+        val PLAYER_VOLUME_GESTURE_KEY = booleanPreferencesKey("player_volume_gesture")
+        val PLAYER_RESUME_PLAYBACK_KEY = booleanPreferencesKey("player_resume_playback")
+        val PLAYER_BACKGROUND_PLAYBACK_KEY = booleanPreferencesKey("player_background_playback")
 
         @Volatile
         private var geckoRuntime: GeckoRuntime? = null
@@ -99,11 +162,51 @@ class BrowserViewModel : ViewModel() {
         private set
     var isIncognitoMode by mutableStateOf(false)
         private set
+
+    val runtime: GeckoRuntime? get() = geckoRuntime
+
+    // Extension Action System (Compose-friendly maps & states)
+    val extensionActions = mutableStateMapOf<String, WebExtension.Action>()
+    var activeExtensionPopupSession by mutableStateOf<GeckoSession?>(null)
+    var activeExtensionPopupName by mutableStateOf("")
+
+    fun registerExtensionAction(id: String, action: WebExtension.Action) {
+        extensionActions[id] = action
+    }
+
+    fun handleExtensionOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession> {
+        val result = GeckoResult<GeckoSession>()
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            val run = geckoRuntime
+            if (run == null) {
+                result.completeExceptionally(IllegalStateException("GeckoRuntime not ready"))
+                return@post
+            }
+            activeExtensionPopupSession?.close() // close previous popup session to avoid leaks
+            val session = GeckoSession()
+            session.open(run)
+            activeExtensionPopupSession = session
+            activeExtensionPopupName = extension.metaData?.name ?: extension.id
+            result.complete(session)
+        }
+        return result
+    }
+
+    fun dismissExtensionPopup() {
+        activeExtensionPopupSession?.close()
+        activeExtensionPopupSession = null
+        activeExtensionPopupName = ""
+    }
     var pendingIntentUrl: String? = null
+    private var isViewModelInitialized = false
 
     // Real Tab System
     val tabs = mutableStateListOf<TabState>()
     var activeTabId by mutableStateOf<String?>(null)
+        private set
+
+    // Context Menu State
+    var activeContextMenu by mutableStateOf<ContextMenuElement?>(null)
         private set
 
     // Browser History System
@@ -117,7 +220,32 @@ class BrowserViewModel : ViewModel() {
     lateinit var vpnManager: VpnManager
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     private var copyManager: UniversalCopyManager? = null
+    private var aiBlockerManager: AiBlockerManager? = null
     private var appContext: Context? = null
+
+    // GeckoView Reference for capturePixels
+    private var activeGeckoViewRef: WeakReference<GeckoView>? = null
+
+    fun setActiveGeckoView(geckoView: GeckoView) {
+        activeGeckoViewRef = WeakReference(geckoView)
+    }
+
+    fun clearActiveGeckoView() {
+        activeGeckoViewRef = null
+    }
+
+    // QR Page Scan States
+    var isQrScanning by mutableStateOf(false)
+    var qrScanResults by mutableStateOf<List<String>>(emptyList())
+    var qrScanError by mutableStateOf<String?>(null)
+
+    // Feature Overview Seen States
+    var hasSeenQrOverview by mutableStateOf(false)
+    var hasSeenPdfOverview by mutableStateOf(false)
+    var hasSeenVideoOverview by mutableStateOf(false)
+    var hasSeenExtensionsOverview by mutableStateOf(false)
+    var hasSeenEditPageOverview by mutableStateOf(false)
+    var hasSeenConsoleOverview by mutableStateOf(false)
 
     // UI States
     var currentUrl by mutableStateOf("about:blank")
@@ -125,6 +253,7 @@ class BrowserViewModel : ViewModel() {
     var isVideoPlayingInPage by mutableStateOf(false)
     var isAdblockerEnabled by mutableStateOf(true)
     var isUniversalCopyEnabled by mutableStateOf(false)
+    var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
     var isNativePlayerEnabled by mutableStateOf(true)
     var pendingVideoUrl: String? = null
@@ -132,6 +261,104 @@ class BrowserViewModel : ViewModel() {
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
     var isDarkThemeEnabled by mutableStateOf(true)
+    var selectedLanguageCode by mutableStateOf("en")
+    var isOnboardingCompleted by mutableStateOf(false)
+    var googleAccountEmail by mutableStateOf<String?>(null)
+    var googleAccountDisplayName by mutableStateOf<String?>(null)
+    var googleAccountPhotoUrl by mutableStateOf<String?>(null)
+    var googleAccountIsSignedIn by mutableStateOf(false)
+    var selectedAccentTheme by mutableStateOf("Ocean Blue")
+    var pdfExportTheme by mutableStateOf("default")
+    var isReaderModeActive by mutableStateOf(false)
+    var readerFontSize by mutableStateOf(18)
+    var readerTheme by mutableStateOf("Light")
+    var readerFontFamily by mutableStateOf("System")
+    var readerLineHeight by mutableStateOf(1.6f)
+    var readerWidth by mutableStateOf("Medium")
+
+    // Native Player Settings
+    var playerDefaultQuality by mutableStateOf("Auto")
+    var isPlayerAutoPlayEnabled by mutableStateOf(true)
+    var isPlayerLoopEnabled by mutableStateOf(false)
+    var isPlayerBrightnessGestureEnabled by mutableStateOf(true)
+    var isPlayerVolumeGestureEnabled by mutableStateOf(true)
+    var isPlayerResumePlaybackEnabled by mutableStateOf(true)
+    var isPlayerBackgroundPlaybackEnabled by mutableStateOf(false)
+
+    var isAdblockerToggling by mutableStateOf(false)
+    var isUniversalCopyToggling by mutableStateOf(false)
+    var isAiBlockerToggling by mutableStateOf(false)
+    var isMediaGrabberToggling by mutableStateOf(false)
+    val togglingUserExtensionIds = mutableStateListOf<String>()
+    var currentSettingsVersion by mutableStateOf(0)
+
+    // Navigation event: set true when an external link intent should open the browser screen
+    var openBrowserScreenEvent by mutableStateOf(false)
+    fun triggerOpenBrowserScreen() { openBrowserScreenEvent = true }
+    fun consumeOpenBrowserScreenEvent() { openBrowserScreenEvent = false }
+
+    // ── QR Page Scanner ───────────────────────────────────────────────
+    fun scanPageForQrCodes() {
+        val geckoView = activeGeckoViewRef?.get()
+        if (geckoView == null) {
+            qrScanError = "No active page to scan"
+            return
+        }
+
+        isQrScanning = true
+        qrScanResults = emptyList()
+        qrScanError = null
+
+        geckoView.capturePixels().then { bitmap ->
+            if (bitmap == null) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    isQrScanning = false
+                    qrScanError = "Could not capture page"
+                }
+                return@then GeckoResult.fromValue(false)
+            }
+
+            // Run ML Kit barcode detection on the captured bitmap
+            val options = BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE, Barcode.FORMAT_ALL_FORMATS)
+                .build()
+            val scanner = BarcodeScanning.getClient(options)
+            val inputImage = InputImage.fromBitmap(bitmap, 0)
+
+            scanner.process(inputImage)
+                .addOnSuccessListener { barcodes ->
+                    val results = barcodes.mapNotNull { it.rawValue }.distinct()
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isQrScanning = false
+                        qrScanResults = results
+                        if (results.isEmpty()) {
+                            qrScanError = "No QR codes found on this page"
+                        }
+                    }
+                    scanner.close()
+                }
+                .addOnFailureListener { e ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isQrScanning = false
+                        qrScanError = "Scan failed: ${e.localizedMessage}"
+                    }
+                    scanner.close()
+                }
+
+            GeckoResult.fromValue(true)
+        }.exceptionally { throwable ->
+            viewModelScope.launch(Dispatchers.Main) {
+                isQrScanning = false
+                qrScanError = "Capture failed: ${throwable.localizedMessage}"
+            }
+            GeckoResult.fromValue(false)
+        }
+    }
+
+    fun clearQrScanResults() {
+        qrScanResults = emptyList()
+        qrScanError = null
+    }
 
     fun isDirectVideoUrl(url: String): Boolean {
         val clean = url.trim().lowercase()
@@ -195,21 +422,25 @@ class BrowserViewModel : ViewModel() {
     // --- Tab Management ---
     fun saveTabs() {
         val context = appContext ?: return
-        val file = File(context.filesDir, "browser_tabs.json")
-        try {
-            val jsonArray = org.json.JSONArray()
-            tabs.forEach { tab ->
-                val obj = org.json.JSONObject().apply {
-                    put("id", tab.id)
-                    put("title", tab.title)
-                    put("url", tab.url)
-                    put("isActive", tab.id == activeTabId)
+        val tabsSnapshot = tabs.toList()
+        val currentActiveId = activeTabId
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_tabs.json")
+            try {
+                val jsonArray = org.json.JSONArray()
+                tabsSnapshot.forEach { tab ->
+                    val obj = org.json.JSONObject().apply {
+                        put("id", tab.id)
+                        put("title", tab.title)
+                        put("url", tab.url)
+                        put("isActive", tab.id == currentActiveId)
+                    }
+                    jsonArray.put(obj)
                 }
-                jsonArray.put(obj)
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving tabs", e)
             }
-            file.writeText(jsonArray.toString())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving tabs", e)
         }
     }
 
@@ -232,19 +463,24 @@ class BrowserViewModel : ViewModel() {
                         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                             .usePrivateMode(isIncognitoMode)
                             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
+                            .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
                             .build()
                         val session = GeckoSession(settings)
+                        
+                        val shouldLoadNow = isActive || (url == "about:blank" || url.isEmpty())
+                        
                         val tab = TabState(
                             id = id,
                             session = session,
                             title = title,
-                            url = url
+                            url = url,
+                            isUriLoaded = shouldLoadNow
                         )
                         setupTabSessionListeners(tab, context)
                         tabs.add(tab)
                         session.open(getGeckoRuntime(context))
                         
-                        if (url != "about:blank" && url.isNotEmpty()) {
+                        if (shouldLoadNow && url != "about:blank" && url.isNotEmpty()) {
                             session.loadUri(url)
                         }
                         
@@ -285,6 +521,7 @@ class BrowserViewModel : ViewModel() {
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
             .usePrivateMode(isIncognitoMode)
             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
+            .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
             .build()
         val session = GeckoSession(settings)
         val tabId = java.util.UUID.randomUUID().toString()
@@ -297,18 +534,42 @@ class BrowserViewModel : ViewModel() {
         
         setupTabSessionListeners(newTab, context)
         tabs.add(newTab)
-        selectTab(newTab.id)
-        
         session.open(runtime)
+        selectTab(newTab.id)
         loadUrlInTab(newTab, url)
         saveTabs()
     }
 
+    fun dismissContextMenu() {
+        activeContextMenu = null
+    }
+
     fun selectTab(tabId: String) {
-        val tab = tabs.find { it.id == tabId } ?: return
+        val tabIndex = tabs.indexOfFirst { it.id == tabId }
+        if (tabIndex == -1) return
+        val tab = tabs[tabIndex]
+        val oldSession = geckoSession
         activeTabId = tabId
         geckoSession = tab.session
         currentUrl = tab.url
+        
+        // Notify Gecko runtime's web extension controller of the active tab change
+        val controller = geckoRuntime?.webExtensionController
+        if (controller != null) {
+            val oldActiveTab = tabs.find { it.session == oldSession }
+            if (oldActiveTab != null && oldActiveTab.session != tab.session) {
+                try {
+                    controller.setTabActive(oldActiveTab.session, false)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error deactivating old tab session", e)
+                }
+            }
+            try {
+                controller.setTabActive(tab.session, true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error activating new tab session", e)
+            }
+        }
         
         // Restore the tab's own saved navigation state
         canGoBack = tab.canGoBack
@@ -317,7 +578,26 @@ class BrowserViewModel : ViewModel() {
         // Clear media list when switching tabs to ensure only active tab's media is tracked
         mediaInterceptor.clear()
         isVideoPlayingInPage = false
+        
+        // If the tab's URI was loaded lazily and hasn't actually been requested yet, load it now!
+        if (!tab.isUriLoaded) {
+            val updatedTab = tab.copy(isUriLoaded = true)
+            tabs[tabIndex] = updatedTab
+            if (updatedTab.url != "about:blank" && updatedTab.url.isNotEmpty()) {
+                updatedTab.session.loadUri(updatedTab.url)
+            }
+        }
+        
         saveTabs()
+
+        // Lazily reload tab if settings changed while it was in background
+        if (tab.settingsVersion != currentSettingsVersion) {
+            val idx = tabs.indexOfFirst { it.id == tabId }
+            if (idx != -1) {
+                tabs[idx] = tabs[idx].copy(settingsVersion = currentSettingsVersion)
+            }
+            reload()
+        }
     }
 
     fun closeTab(tabId: String, context: Context) {
@@ -376,7 +656,7 @@ class BrowserViewModel : ViewModel() {
         if (formattedUrl.startsWith("about:")) {
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
-                tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl)
+                tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl, isUriLoaded = true)
             }
             if (tab.id == activeTabId) {
                 currentUrl = formattedUrl
@@ -394,7 +674,7 @@ class BrowserViewModel : ViewModel() {
         }
         val idx = tabs.indexOfFirst { it.id == tab.id }
         if (idx != -1) {
-            tabs[idx] = tabs[idx].copy(url = formattedUrl, title = "Loading...")
+            tabs[idx] = tabs[idx].copy(url = formattedUrl, title = "Loading...", isUriLoaded = true)
         }
         if (tab.id == activeTabId) {
             currentUrl = formattedUrl
@@ -410,6 +690,10 @@ class BrowserViewModel : ViewModel() {
                 callback: GeckoSession.PermissionDelegate.Callback
             ) {
                 Log.d(TAG, "onAndroidPermissionsRequest: ${permissions?.joinToString()}")
+                if (tab.id != activeTabId) {
+                    callback.reject()
+                    return
+                }
                 activeSystemPermissionRequest = SystemPermissionRequest(
                     permissions = permissions,
                     onGranted = { callback.grant() },
@@ -426,6 +710,10 @@ class BrowserViewModel : ViewModel() {
                 if (permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE ||
                     permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE) {
                     return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                }
+
+                if (tab.id != activeTabId) {
+                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
                 }
 
                 val result = GeckoResult<Int>()
@@ -453,6 +741,11 @@ class BrowserViewModel : ViewModel() {
             ) {
                 Log.d(TAG, "onMediaPermissionRequest: uri=$uri, video=${video?.size}, audio=${audio?.size}")
                 
+                if (tab.id != activeTabId) {
+                    callback.reject()
+                    return
+                }
+
                 val hasVideo = !video.isNullOrEmpty()
                 val hasAudio = !audio.isNullOrEmpty()
 
@@ -503,6 +796,21 @@ class BrowserViewModel : ViewModel() {
                 android.util.Log.e(TAG, "GeckoSession crashed, auto-reloading...")
                 session.reload()
             }
+
+            override fun onContextMenu(
+                session: GeckoSession,
+                screenX: Int,
+                screenY: Int,
+                element: GeckoSession.ContentDelegate.ContextElement
+            ) {
+                if (tab.id == activeTabId) {
+                    activeContextMenu = ContextMenuElement(
+                        linkUri = element.linkUri,
+                        srcUri = element.srcUri,
+                        linkText = element.textContent
+                    )
+                }
+            }
         }
 
         tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
@@ -513,6 +821,18 @@ class BrowserViewModel : ViewModel() {
                 hasUserGesture: Boolean
             ) {
                 url?.let {
+                    val lowerUrl = it.lowercase().trim()
+                    if (lowerUrl.contains("accounts.google.com")) {
+                        val ua = if (isDesktopMode) {
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+                        } else {
+                            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
+                        }
+                        session.settings.setUserAgentOverride(ua)
+                    } else {
+                        session.settings.setUserAgentOverride(null)
+                    }
+
                     val idx = tabs.indexOfFirst { it.id == tab.id }
                     if (idx != -1) {
                         val currentTabUrl = tabs[idx].url
@@ -521,7 +841,7 @@ class BrowserViewModel : ViewModel() {
                         if (it == "about:blank" && currentTabUrl != "about:blank" && currentTabUrl.isNotEmpty()) {
                             return
                         }
-                        tabs[idx] = tabs[idx].copy(url = it)
+                        tabs[idx] = tabs[idx].copy(url = it, settingsVersion = currentSettingsVersion)
                         saveTabs()
                     }
                     if (tab.id == activeTabId) {
@@ -557,11 +877,22 @@ class BrowserViewModel : ViewModel() {
 
             override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
                 val uri = request.uri
+                val lowerUri = uri.lowercase().trim()
+
+                if (lowerUri.contains("accounts.google.com")) {
+                    val ua = if (isDesktopMode) {
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+                    } else {
+                        "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
+                    }
+                    session.settings.setUserAgentOverride(ua)
+                } else {
+                    session.settings.setUserAgentOverride(null)
+                }
+
                 if (tab.id == activeTabId) {
                     mediaInterceptor.onMediaRequestDetected(uri)
                 }
-
-                val lowerUri = uri.lowercase().trim()
 
                 // 1. Intercept and block calendar spam subscription redirects from adware
                 if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") || 
@@ -577,7 +908,8 @@ class BrowserViewModel : ViewModel() {
                 }
 
                 // 2. Intercept clicks to direct video files and launch native player
-                if (isNativePlayerEnabled && isDirectVideoUrl(uri)) {
+                val isYouTube = lowerUri.contains("youtube.com") || lowerUri.contains("youtu.be")
+                if (isNativePlayerEnabled && isDirectVideoUrl(uri) && !isYouTube) {
                     Log.i(TAG, "🎬 Intercepted direct video load request: $uri. Opening in native player...")
                     viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                         val callback = onPlayVideoRequestReceived
@@ -680,6 +1012,8 @@ class BrowserViewModel : ViewModel() {
             override fun onPageStart(session: GeckoSession, url: String) {
                 if (tab.id == activeTabId) {
                     isLoading = true
+                    isReaderModeActive = false
+                    stopTts()
                 }
                 val idx = tabs.indexOfFirst { it.id == tab.id }
                 if (idx != -1) {
@@ -704,45 +1038,52 @@ class BrowserViewModel : ViewModel() {
 
     // --- Persistent Browser History ---
     private fun loadHistory(context: Context) {
-        val file = File(context.filesDir, "browser_history.json")
-        if (!file.exists()) return
-        try {
-            val jsonStr = file.readText()
-            val jsonArray = JSONArray(jsonStr)
-            val temp = mutableListOf<HistoryEntry>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                temp.add(
-                    HistoryEntry(
-                        title = obj.getString("title"),
-                        url = obj.getString("url"),
-                        timestamp = obj.getLong("timestamp")
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_history.json")
+            if (!file.exists()) return@launch
+            try {
+                val jsonStr = file.readText()
+                val jsonArray = JSONArray(jsonStr)
+                val temp = mutableListOf<HistoryEntry>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    temp.add(
+                        HistoryEntry(
+                            title = obj.getString("title"),
+                            url = obj.getString("url"),
+                            timestamp = obj.getLong("timestamp")
+                        )
                     )
-                )
+                }
+                temp.sortByDescending { it.timestamp }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    historyList.clear()
+                    historyList.addAll(temp)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading history", e)
             }
-            temp.sortByDescending { it.timestamp }
-            historyList.clear()
-            historyList.addAll(temp)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading history", e)
         }
     }
 
     private fun saveHistory(context: Context) {
-        val file = File(context.filesDir, "browser_history.json")
-        try {
-            val jsonArray = JSONArray()
-            historyList.forEach { entry ->
-                val obj = JSONObject().apply {
-                    put("title", entry.title)
-                    put("url", entry.url)
-                    put("timestamp", entry.timestamp)
+        val historySnapshot = historyList.toList()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_history.json")
+            try {
+                val jsonArray = JSONArray()
+                historySnapshot.forEach { entry ->
+                    val obj = JSONObject().apply {
+                        put("title", entry.title)
+                        put("url", entry.url)
+                        put("timestamp", entry.timestamp)
+                    }
+                    jsonArray.put(obj)
                 }
-                jsonArray.put(obj)
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving history", e)
             }
-            file.writeText(jsonArray.toString())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving history", e)
         }
     }
 
@@ -774,14 +1115,84 @@ class BrowserViewModel : ViewModel() {
         saveHistory(context)
     }
 
+    fun clearCacheAndSiteData(context: Context) {
+        val runtime = geckoRuntime
+        if (runtime != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    // 1. Clear GeckoView storage
+                    val flags = org.mozilla.geckoview.StorageController.ClearFlags.COOKIES or
+                                org.mozilla.geckoview.StorageController.ClearFlags.NETWORK_CACHE or
+                                org.mozilla.geckoview.StorageController.ClearFlags.IMAGE_CACHE or
+                                org.mozilla.geckoview.StorageController.ClearFlags.DOM_STORAGES or
+                                org.mozilla.geckoview.StorageController.ClearFlags.SITE_DATA or
+                                org.mozilla.geckoview.StorageController.ClearFlags.AUTH_SESSIONS
+                    
+                    withContext(Dispatchers.Main) {
+                        runtime.storageController.clearData(flags).accept(
+                            { Log.d(TAG, "Storage clear completed successfully.") },
+                            { err -> Log.e(TAG, "Storage clear error", err) }
+                        )
+                    }
+
+                    // 2. Clear standard HTTP WebView caches and temp cacheDir files
+                    val cacheDir = context.cacheDir
+                    if (cacheDir.exists()) {
+                        cacheDir.deleteRecursively()
+                        cacheDir.mkdirs()
+                    }
+
+                    // 3. Clear temporary downloads
+                    val tempDownloadsDir = File(context.filesDir, "temp_downloads")
+                    if (tempDownloadsDir.exists()) {
+                        tempDownloadsDir.deleteRecursively()
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Storage optimized successfully", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to clear cache", e)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Clear failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } else {
+            Toast.makeText(context, "Browser engine not running", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun pruneTemporaryStorage(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val cacheDir = context.cacheDir
+                if (cacheDir.exists()) {
+                    val now = System.currentTimeMillis()
+                    val oneDayMs = 24 * 60 * 60 * 1000L
+                    cacheDir.listFiles()?.forEach { file ->
+                        if (file.name.startsWith("hls_") || 
+                            file.name.startsWith("omni_") || 
+                            file.name.endsWith(".zip") || 
+                            file.name.endsWith(".pdf")) {
+                            if (now - file.lastModified() > oneDayMs) {
+                                file.deleteRecursively()
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pruning temporary storage", e)
+            }
+        }
+    }
+
     fun getGeckoRuntime(context: Context): GeckoRuntime {
+        val appCtx = context.applicationContext
+        appContext = appCtx
+
+        // 1. Static/Global runtime initialization (once per process)
         if (geckoRuntime == null) {
-            val appCtx = context.applicationContext
-            appContext = appCtx
-            
-            // Load persistent history
-            loadHistory(appCtx)
-            
             val settings = GeckoRuntimeSettings.Builder()
                 .aboutConfigEnabled(true)
                 .consoleOutput(true)
@@ -791,6 +1202,7 @@ class BrowserViewModel : ViewModel() {
                 .build()
             
             geckoRuntime = GeckoRuntime.create(appCtx, settings)
+            pruneTemporaryStorage(appCtx)
             
             geckoRuntime!!.webExtensionController.setPromptDelegate(object : org.mozilla.geckoview.WebExtensionController.PromptDelegate {
                 override fun onInstallPromptRequest(
@@ -809,6 +1221,18 @@ class BrowserViewModel : ViewModel() {
                     )
                 }
             })
+        }
+
+        // 2. Instance-scoped initialization (once per BrowserViewModel instance)
+        if (!isViewModelInitialized) {
+            isViewModelInitialized = true
+
+            // Load persistent history
+            loadHistory(appCtx)
+            loadBookmarks(appCtx)
+            loadShortcuts(appCtx)
+            initTts(appCtx)
+            fetchNews()
 
             // Initialize dependency engines
             ffmpegLoader = FFmpegLoader(appCtx)
@@ -820,6 +1244,7 @@ class BrowserViewModel : ViewModel() {
             streamDownloadEngine = StreamDownloadEngine(appCtx, ffmpegBridge, locker)
             vpnManager = VpnManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
+            aiBlockerManager = AiBlockerManager(geckoRuntime!!)
             
             // Sync user extensions on start
             syncUserExtensions()
@@ -836,6 +1261,11 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 isUniversalCopyEnabled = getUniversalCopyPreference(appCtx).first()
                 syncUniversalCopyState(shouldReload = false)
+            }
+
+            viewModelScope.launch {
+                isAiBlockerEnabled = getAiBlockerPreference(appCtx).first()
+                aiBlockerManager?.installAndSync(isAiBlockerEnabled, onComplete = null)
             }
 
             viewModelScope.launch {
@@ -865,6 +1295,46 @@ class BrowserViewModel : ViewModel() {
                 } else {
                     GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
                 }
+            }
+
+            viewModelScope.launch {
+                selectedAccentTheme = getAccentThemePreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                selectedLanguageCode = getLanguagePreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                isOnboardingCompleted = getOnboardingCompletedPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                hasSeenQrOverview = getQrOverviewSeenPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                hasSeenPdfOverview = getPdfOverviewSeenPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                hasSeenVideoOverview = getVideoOverviewSeenPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                hasSeenExtensionsOverview = getExtensionsOverviewSeenPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                hasSeenEditPageOverview = getEditPageOverviewSeenPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                hasSeenConsoleOverview = getConsoleOverviewSeenPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                loadPlayerSettings(appCtx)
             }
 
             // Auto load MSE Aggressive Grabber Extension on Engine initialization
@@ -971,7 +1441,9 @@ class BrowserViewModel : ViewModel() {
                             (message as? Map<*, *>)?.get("pageUrl") as? String
                         }) ?: ""
                         Log.i(TAG, "🎬 received PLAY_IN_NATIVE message. url=$videoUrl, pageUrl=$pageUrl, isNativePlayerEnabled=$isNativePlayerEnabled")
-                        if (videoUrl != null && isNativePlayerEnabled) {
+                        val isYouTube = pageUrl.lowercase().contains("youtube.com") || pageUrl.lowercase().contains("youtu.be") ||
+                                        (videoUrl != null && (videoUrl.lowercase().contains("youtube.com") || videoUrl.lowercase().contains("youtu.be")))
+                        if (videoUrl != null && isNativePlayerEnabled && !isYouTube) {
                             viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                                 Log.i(TAG, "🎬 Native player takeover starting for: $videoUrl")
                                 if (onPlayVideoRequestReceived == null) {
@@ -980,6 +1452,8 @@ class BrowserViewModel : ViewModel() {
                                     onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
                                 }
                             }
+                        } else if (isYouTube) {
+                            Log.i(TAG, "🎬 Native player takeover bypassed for YouTube URL")
                         }
                     } else if (type == "VIDEO_STATE_CHANGE") {
                         val playing = if (message is org.json.JSONObject) {
@@ -1004,9 +1478,13 @@ class BrowserViewModel : ViewModel() {
                         Log.d("WebConsole", "[$level] $msg")
                         // Run on main thread because we are updating a Compose MutableStateList
                         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                            consoleLogs.add(ConsoleLogEntry(level, msg))
-                            if (consoleLogs.size > 200) {
-                                consoleLogs.removeFirst()
+                            if (level == "READER_TTS_CONTENT") {
+                                speakText(msg)
+                            } else {
+                                consoleLogs.add(ConsoleLogEntry(level, msg))
+                                if (consoleLogs.size > 200) {
+                                    consoleLogs.removeAt(0)
+                                }
                             }
                         }
                     }
@@ -1033,21 +1511,34 @@ class BrowserViewModel : ViewModel() {
                     } else {
                         runtime.webExtensionController.disable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     }
-                    if (shouldReload) {
-                        action.accept(
-                            {
+                    action.accept(
+                        {
+                            isAdblockerToggling = false
+                            if (shouldReload) {
+                                currentSettingsVersion++
+                                val activeId = activeTabId
+                                if (activeId != null) {
+                                    val idx = tabs.indexOfFirst { it.id == activeId }
+                                    if (idx != -1) {
+                                        tabs[idx] = tabs[idx].copy(settingsVersion = currentSettingsVersion)
+                                    }
+                                }
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                                     reload()
                                 }
-                            },
-                            { error ->
-                                Log.e(TAG, "Failed to toggle adblocker state", error)
                             }
-                        )
-                    }
+                        },
+                        { error ->
+                            isAdblockerToggling = false
+                            Log.e(TAG, "Failed to toggle adblocker state", error)
+                        }
+                    )
+                } ?: run {
+                    isAdblockerToggling = false
                 }
             },
             { error ->
+                isAdblockerToggling = false
                 Log.e(TAG, "Failed to ensure built-in adblocker", error)
             }
         )
@@ -1055,7 +1546,16 @@ class BrowserViewModel : ViewModel() {
 
     private fun syncUniversalCopyState(shouldReload: Boolean = false) {
         copyManager?.installAndSync(isUniversalCopyEnabled, onComplete = {
+            isUniversalCopyToggling = false
             if (shouldReload) {
+                currentSettingsVersion++
+                val activeId = activeTabId
+                if (activeId != null) {
+                    val idx = tabs.indexOfFirst { it.id == activeId }
+                    if (idx != -1) {
+                        tabs[idx] = tabs[idx].copy(settingsVersion = currentSettingsVersion)
+                    }
+                }
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     reload()
                 }
@@ -1073,25 +1573,40 @@ class BrowserViewModel : ViewModel() {
                 grabberExtension = ext
                 ext?.let {
                     val action = if (isMediaGrabberEnabled) {
-                        runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
+                        val enableResult = runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
+                        setupNativeAppMessageDelegate(it)
+                        enableResult
                     } else {
                         runtime.webExtensionController.disable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     }
-                    if (shouldReload) {
-                        action.accept(
-                            {
+                    action.accept(
+                        {
+                            isMediaGrabberToggling = false
+                            if (shouldReload) {
+                                currentSettingsVersion++
+                                val activeId = activeTabId
+                                if (activeId != null) {
+                                    val idx = tabs.indexOfFirst { it.id == activeId }
+                                    if (idx != -1) {
+                                        tabs[idx] = tabs[idx].copy(settingsVersion = currentSettingsVersion)
+                                    }
+                                }
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                                     reload()
                                 }
-                            },
-                            { error ->
-                                Log.e(TAG, "Failed to toggle media grabber state", error)
                             }
-                        )
-                    }
+                        },
+                        { error ->
+                            isMediaGrabberToggling = false
+                            Log.e(TAG, "Failed to toggle media grabber state", error)
+                        }
+                    )
+                } ?: run {
+                    isMediaGrabberToggling = false
                 }
             },
             { error ->
+                isMediaGrabberToggling = false
                 Log.e(TAG, "Failed to ensure built-in media grabber", error)
             }
         )
@@ -1102,6 +1617,8 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleAdblock(context: Context) {
+        if (isAdblockerToggling) return
+        isAdblockerToggling = true
         viewModelScope.launch {
             val newState = !isAdblockerEnabled
             isAdblockerEnabled = newState
@@ -1113,6 +1630,8 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleUniversalCopy(context: Context) {
+        if (isUniversalCopyToggling) return
+        isUniversalCopyToggling = true
         viewModelScope.launch {
             val newState = !isUniversalCopyEnabled
             isUniversalCopyEnabled = newState
@@ -1120,6 +1639,45 @@ class BrowserViewModel : ViewModel() {
                 preferences[UNIVERSAL_COPY_ENABLED_KEY] = newState
             }
             syncUniversalCopyState(shouldReload = true)
+        }
+    }
+
+    fun toggleAiBlocker(context: Context) {
+        if (isAiBlockerToggling) return
+        isAiBlockerToggling = true
+        viewModelScope.launch {
+            val newState = !isAiBlockerEnabled
+            isAiBlockerEnabled = newState
+            context.dataStore.edit { preferences ->
+                preferences[AI_BLOCKER_ENABLED_KEY] = newState
+            }
+            syncAiBlockerState(shouldReload = true)
+        }
+    }
+
+    private fun syncAiBlockerState(shouldReload: Boolean = false) {
+        val manager = aiBlockerManager ?: return
+        manager.setEnabled(isAiBlockerEnabled, onComplete = {
+            isAiBlockerToggling = false
+            if (shouldReload) {
+                currentSettingsVersion++
+                val activeId = activeTabId
+                if (activeId != null) {
+                    val idx = tabs.indexOfFirst { it.id == activeId }
+                    if (idx != -1) {
+                        tabs[idx] = tabs[idx].copy(settingsVersion = currentSettingsVersion)
+                    }
+                }
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    reload()
+                }
+            }
+        })
+    }
+
+    private fun getAiBlockerPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[AI_BLOCKER_ENABLED_KEY] ?: false
         }
     }
 
@@ -1213,7 +1771,194 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    // ── Accent Theme Persistence ──
+
+    fun getAccentThemePreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[ACCENT_THEME_KEY] ?: "Ocean Blue"
+        }
+    }
+
+    fun saveAccentTheme(context: Context, theme: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[ACCENT_THEME_KEY] = theme
+            }
+            selectedAccentTheme = theme
+        }
+    }
+
+    fun getLanguagePreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[SELECTED_LANGUAGE_KEY] ?: "en"
+        }
+    }
+
+    suspend fun saveLanguagePreference(context: Context, langCode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[SELECTED_LANGUAGE_KEY] = langCode
+        }
+        selectedLanguageCode = langCode
+    }
+
+    fun getOnboardingCompletedPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[ONBOARDING_COMPLETED_KEY] ?: false
+        }
+    }
+
+    fun saveOnboardingCompleted(context: Context, completed: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[ONBOARDING_COMPLETED_KEY] = completed
+            }
+            isOnboardingCompleted = completed
+        }
+    }
+
+    fun getQrOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[QR_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun saveQrOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[QR_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenQrOverview = seen
+        }
+    }
+
+    fun getPdfOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[PDF_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun savePdfOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[PDF_EXPORT_THEME_KEY] = if (seen) "default" else "" // side-effect if needed, or just standard key
+                preferences[PDF_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenPdfOverview = seen
+        }
+    }
+
+    fun getVideoOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[VIDEO_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun saveVideoOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[VIDEO_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenVideoOverview = seen
+        }
+    }
+
+    fun getExtensionsOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[EXTENSIONS_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun saveExtensionsOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[EXTENSIONS_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenExtensionsOverview = seen
+        }
+    }
+
+    fun getEditPageOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[EDIT_PAGE_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun saveEditPageOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[EDIT_PAGE_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenEditPageOverview = seen
+        }
+    }
+
+    fun getConsoleOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CONSOLE_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun saveConsoleOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CONSOLE_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenConsoleOverview = seen
+        }
+    }
+
+    // ── Native Player Settings Persistence ──
+
+    fun savePlayerSetting(context: Context, key: String, value: Any) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                when (key) {
+                    "quality" -> { preferences[PLAYER_DEFAULT_QUALITY_KEY] = value as String; playerDefaultQuality = value }
+                    "autoplay" -> { preferences[PLAYER_AUTOPLAY_KEY] = value as Boolean; isPlayerAutoPlayEnabled = value }
+                    "loop" -> { preferences[PLAYER_LOOP_KEY] = value as Boolean; isPlayerLoopEnabled = value }
+                    "brightness_gesture" -> { preferences[PLAYER_BRIGHTNESS_GESTURE_KEY] = value as Boolean; isPlayerBrightnessGestureEnabled = value }
+                    "volume_gesture" -> { preferences[PLAYER_VOLUME_GESTURE_KEY] = value as Boolean; isPlayerVolumeGestureEnabled = value }
+                    "resume" -> { preferences[PLAYER_RESUME_PLAYBACK_KEY] = value as Boolean; isPlayerResumePlaybackEnabled = value }
+                    "background" -> { preferences[PLAYER_BACKGROUND_PLAYBACK_KEY] = value as Boolean; isPlayerBackgroundPlaybackEnabled = value }
+                }
+            }
+        }
+    }
+
+    private suspend fun loadPlayerSettings(context: Context) {
+        val prefs = context.dataStore.data.first()
+        playerDefaultQuality = prefs[PLAYER_DEFAULT_QUALITY_KEY] ?: "Auto"
+        isPlayerAutoPlayEnabled = prefs[PLAYER_AUTOPLAY_KEY] ?: true
+        isPlayerLoopEnabled = prefs[PLAYER_LOOP_KEY] ?: false
+        isPlayerBrightnessGestureEnabled = prefs[PLAYER_BRIGHTNESS_GESTURE_KEY] ?: true
+        isPlayerVolumeGestureEnabled = prefs[PLAYER_VOLUME_GESTURE_KEY] ?: true
+        isPlayerResumePlaybackEnabled = prefs[PLAYER_RESUME_PLAYBACK_KEY] ?: true
+        isPlayerBackgroundPlaybackEnabled = prefs[PLAYER_BACKGROUND_PLAYBACK_KEY] ?: false
+        pdfExportTheme = prefs[PDF_EXPORT_THEME_KEY] ?: "default"
+    }
+
+    fun savePdfExportTheme(context: Context, theme: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[PDF_EXPORT_THEME_KEY] = theme
+            }
+            pdfExportTheme = theme
+        }
+    }
+
+    val videoPlaybackPositions = mutableMapOf<String, Long>()
+
+    fun getVideoPosition(url: String): Long {
+        return if (isPlayerResumePlaybackEnabled) {
+            videoPlaybackPositions[url] ?: 0L
+        } else {
+            0L
+        }
+    }
+
+    fun saveVideoPosition(url: String, position: Long) {
+        if (isPlayerResumePlaybackEnabled) {
+            videoPlaybackPositions[url] = position
+        }
+    }
+
     fun toggleMediaGrabber(context: Context) {
+        if (isMediaGrabberToggling) return
+        isMediaGrabberToggling = true
         viewModelScope.launch {
             val newState = !isMediaGrabberEnabled
             isMediaGrabberEnabled = newState
@@ -1225,7 +1970,12 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleUserExtension(extension: WebExtension, context: Context) {
-        val runtime = geckoRuntime ?: return
+        if (togglingUserExtensionIds.contains(extension.id)) return
+        togglingUserExtensionIds.add(extension.id)
+        val runtime = geckoRuntime ?: run {
+            togglingUserExtensionIds.remove(extension.id)
+            return
+        }
         val currentlyEnabled = extension.metaData.enabled
         val action = if (currentlyEnabled) {
             runtime.webExtensionController.disable(extension, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
@@ -1235,12 +1985,24 @@ class BrowserViewModel : ViewModel() {
         action.accept(
             {
                 syncUserExtensions()
+                currentSettingsVersion++
+                val activeId = activeTabId
+                if (activeId != null) {
+                    val idx = tabs.indexOfFirst { it.id == activeId }
+                    if (idx != -1) {
+                        tabs[idx] = tabs[idx].copy(settingsVersion = currentSettingsVersion)
+                    }
+                }
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    togglingUserExtensionIds.remove(extension.id)
                     reload()
                 }
             },
             { error ->
                 Log.e(TAG, "Failed to toggle user extension: ${extension.id}", error)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    togglingUserExtensionIds.remove(extension.id)
+                }
             }
         )
     }
@@ -1289,7 +2051,10 @@ class BrowserViewModel : ViewModel() {
                     "https://duckduckgo.com/?q=$encodedQuery"
                 }
             }
-            else -> "https://www.google.com/search?q=$encodedQuery"
+            else -> {
+                val base = "https://www.google.com/search?q=$encodedQuery"
+                if (isAiBlockerEnabled) "$base&udm=14" else base
+            }
         }
     }
 
@@ -1325,7 +2090,7 @@ class BrowserViewModel : ViewModel() {
             if (activeId != null) {
                 val idx = tabs.indexOfFirst { it.id == activeId }
                 if (idx != -1 && formattedUrl.startsWith("about:")) {
-                    tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl)
+                    tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl, isUriLoaded = true)
                     currentUrl = formattedUrl
                 }
             }
@@ -1337,7 +2102,7 @@ class BrowserViewModel : ViewModel() {
         if (activeId != null) {
             val idx = tabs.indexOfFirst { it.id == activeId }
             if (idx != -1) {
-                tabs[idx] = tabs[idx].copy(url = formattedUrl, title = "Loading...")
+                tabs[idx] = tabs[idx].copy(url = formattedUrl, title = "Loading...", isUriLoaded = true)
             }
         }
         currentUrl = formattedUrl
@@ -1364,30 +2129,142 @@ class BrowserViewModel : ViewModel() {
         isDesktopMode = !isDesktopMode
         val activeTab = tabs.find { it.id == activeTabId } ?: return
         try {
-            val mode = if (isDesktopMode) {
+            val uaMode = if (isDesktopMode) {
                 org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP
             } else {
                 org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE
             }
-            activeTab.session.settings.userAgentMode = mode
+            val vpMode = if (isDesktopMode) {
+                org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP
+            } else {
+                org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE
+            }
+            // Set both user-agent and viewport mode — this is the correct dual approach
+            // used by Chrome, Firefox, and Brave on Android to trigger desktop layouts
+            activeTab.session.settings.userAgentMode = uaMode
+            activeTab.session.settings.viewportMode = vpMode
             activeTab.session.reload()
+            Log.i(TAG, "Desktop mode ${if (isDesktopMode) "ON" else "OFF"}: ua=$uaMode vp=$vpMode")
         } catch (e: Exception) {
             Log.e(TAG, "Error toggling desktop mode", e)
         }
     }
 
     fun toggleReaderMode() {
-        geckoSession.loadUri("javascript:(function(){" +
-                "var body = document.body;" +
-                "var main = document.querySelector('main') || document.querySelector('article') || body;" +
-                "var title = document.querySelector('h1')?.innerText || document.title;" +
-                "var cleanHtml = '<div style=\"max-width:600px;margin:0 auto;padding:20px;font-family:sans-serif;line-height:1.6;font-size:18px;color:#111;background-color:#fefefe;\">' + " +
-                "'<h1 style=\"font-size:28px;margin-bottom:20px;\">' + title + '</h1>' + " +
-                "main.innerHTML + '</div>';" +
-                "document.open();" +
-                "document.write(cleanHtml);" +
-                "document.close();" +
-                "})();")
+        if (!isReaderModeActive) {
+            val js = "javascript:(function(){" +
+                    "var body = document.body;" +
+                    "var main = document.querySelector('main') || document.querySelector('article') || document.querySelector('#content') || document.querySelector('.content') || body;" +
+                    "var title = document.querySelector('h1')?.innerText || document.title;" +
+                    "var contentHtml = main.innerHTML;" +
+                    "var tempDiv = document.createElement('div');" +
+                    "tempDiv.innerHTML = contentHtml;" +
+                    "var scripts = tempDiv.getElementsByTagName('script');" +
+                    "while(scripts.length > 0) scripts[0].parentNode.removeChild(scripts[0]);" +
+                    "var styles = tempDiv.getElementsByTagName('style');" +
+                    "while(styles.length > 0) styles[0].parentNode.removeChild(styles[0]);" +
+                    "var iframes = tempDiv.getElementsByTagName('iframe');" +
+                    "while(iframes.length > 0) iframes[0].parentNode.removeChild(iframes[0]);" +
+                    "var cleanHtml = '<h1 style=\"font-size:1.5em;margin-bottom:20px;font-weight:bold;\">' + title + '</h1>' + tempDiv.innerHTML;" +
+                    "document.open();" +
+                    "document.write('<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>' + title + '</title><style id=\"omni-reader-styles\"></style></head><body style=\"margin:0;padding:0;\"><div id=\"omni-reader-container\" style=\"max-width:650px;margin:0 auto;padding:24px 20px 80px 20px;font-family:system-ui, -apple-system, sans-serif;line-height:1.6;min-height:100vh;box-sizing:border-box;\">' + cleanHtml + '</div></body></html>');" +
+                    "document.close();" +
+                    "})();"
+            geckoSession.loadUri(js)
+            isReaderModeActive = true
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                applyReaderSettings()
+            }, 100)
+        } else {
+            reload()
+            isReaderModeActive = false
+            stopTts()
+        }
+    }
+
+    fun applyReaderSettings() {
+        val fontSizePx = readerFontSize.toString() + "px"
+        val lineHeightVal = readerLineHeight
+        val widthPx = when (readerWidth) {
+            "Narrow" -> "500px"
+            "Wide" -> "800px"
+            else -> "650px"
+        }
+        val fontStack = when (readerFontFamily) {
+            "Serif" -> "Georgia, 'Times New Roman', serif"
+            "Sans-Serif" -> "'Helvetica Neue', Arial, sans-serif"
+            "Monospace" -> "'Courier New', Courier, monospace"
+            "Dyslexic" -> "OpenDyslexic, Comic Sans MS, cursive"
+            else -> "system-ui, -apple-system, BlinkMacSystemFont, sans-serif" // System default
+        }
+        val (bgColor, textColor, linkColor) = when (readerTheme) {
+            "Sepia" -> Triple("#F4ECD8", "#5B4636", "#7A4E2D")
+            "Dark" -> Triple("#121212", "#E0E0E0", "#7BAFD4")
+            else -> Triple("#FFFFFF", "#1A1A1A", "#0066CC")
+        }
+        val css = "* { font-family: $fontStack !important; } " +
+                  "body { background-color: $bgColor !important; color: $textColor !important; } " +
+                  "#omni-reader-container { font-size: ${fontSizePx} !important; line-height: ${lineHeightVal} !important; max-width: $widthPx !important; } " +
+                  "p, span, li, div, h1, h2, h3, h4, h5 { color: $textColor !important; } " +
+                  "a { color: $linkColor !important; } " +
+                  "img { max-width: 100% !important; height: auto !important; border-radius: 8px !important; }"
+        val escapedCss = css.replace("'", "\\'").replace("\n", " ")
+        val js = "javascript:(function(){" +
+                 "  var style = document.getElementById('omni-reader-styles');" +
+                 "  if (style) { style.innerHTML = '$escapedCss'; }" +
+                 "})();"
+        geckoSession.loadUri(js)
+    }
+
+    fun updateReaderFontFamily(family: String) {
+        readerFontFamily = family
+        applyReaderSettings()
+    }
+
+    fun updateReaderWidth(width: String) {
+        readerWidth = width
+        applyReaderSettings()
+    }
+
+    fun increaseReaderLineHeight() {
+        if (readerLineHeight < 2.4f) {
+            readerLineHeight = (readerLineHeight + 0.2f).coerceAtMost(2.4f)
+            applyReaderSettings()
+        }
+    }
+
+    fun decreaseReaderLineHeight() {
+        if (readerLineHeight > 1.2f) {
+            readerLineHeight = (readerLineHeight - 0.2f).coerceAtLeast(1.2f)
+            applyReaderSettings()
+        }
+    }
+
+    fun increaseReaderFontSize() {
+        if (readerFontSize < 32) {
+            readerFontSize += 2
+            applyReaderSettings()
+        }
+    }
+
+    fun decreaseReaderFontSize() {
+        if (readerFontSize > 12) {
+            readerFontSize -= 2
+            applyReaderSettings()
+        }
+    }
+
+    fun setReaderThemeMode(theme: String) {
+        readerTheme = theme
+        applyReaderSettings()
+    }
+
+    fun readAloudCurrentPage() {
+        val js = "javascript:(function(){" +
+                 "  var text = document.getElementById('omni-reader-container')?.innerText || document.body.innerText || '';" +
+                 "  window.postMessage({ type: 'OMNI_CONSOLE_LOG', level: 'READER_TTS_CONTENT', message: text }, '*');" +
+                 "})();"
+        geckoSession.loadUri(js)
     }
 
     fun toggleIncognitoMode(context: Context) {
@@ -1397,6 +2274,7 @@ class BrowserViewModel : ViewModel() {
         val runtime = getGeckoRuntime(context)
         
         try {
+            runtime.webExtensionController.setTabActive(activeTab.session, false)
             activeTab.session.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error closing tab session", e)
@@ -1404,6 +2282,8 @@ class BrowserViewModel : ViewModel() {
 
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
             .usePrivateMode(isIncognitoMode)
+            .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
+            .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
             .build()
         
         val newSession = GeckoSession(settings)
@@ -1422,6 +2302,11 @@ class BrowserViewModel : ViewModel() {
         currentUrl = updatedTab.url
         
         newSession.open(runtime)
+        try {
+            runtime.webExtensionController.setTabActive(newSession, true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error activating new tab session in incognito toggle", e)
+        }
         loadUrl(updatedTab.url)
         saveTabs()
     }
@@ -1460,6 +2345,22 @@ class BrowserViewModel : ViewModel() {
             .accept(
                 { ext ->
                     Log.i(TAG, "Successfully installed extension: ${ext?.id}")
+                    if (ext != null) {
+                        ext.setActionDelegate(object : WebExtension.ActionDelegate {
+                            override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
+                                registerExtensionAction(extension.id, action)
+                            }
+                            override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
+                                registerExtensionAction(extension.id, action)
+                            }
+                            override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
+                                return handleExtensionOpenPopup(extension, action)
+                            }
+                            override fun onTogglePopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
+                                return handleExtensionOpenPopup(extension, action)
+                            }
+                        })
+                    }
                     syncUserExtensions()
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         Toast.makeText(context, "🧩 Extension installed: ${ext?.id}", Toast.LENGTH_LONG).show()
@@ -1479,9 +2380,25 @@ class BrowserViewModel : ViewModel() {
         runtime.webExtensionController.list()
             .accept(
                 { list ->
-                    val coreIds = listOf(UBLOCK_ID, GRABBER_ID, "omni-universal-copy@omnibrowser.app")
+                    val coreIds = listOf(UBLOCK_ID, GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID)
                     val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        filtered.forEach { ext ->
+                            ext.setActionDelegate(object : WebExtension.ActionDelegate {
+                                override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
+                                    registerExtensionAction(extension.id, action)
+                                }
+                                override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
+                                    registerExtensionAction(extension.id, action)
+                                }
+                                override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
+                                    return handleExtensionOpenPopup(extension, action)
+                                }
+                                override fun onTogglePopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
+                                    return handleExtensionOpenPopup(extension, action)
+                                }
+                            })
+                        }
                         userExtensions.clear()
                         userExtensions.addAll(filtered)
                     }
@@ -1512,8 +2429,747 @@ class BrowserViewModel : ViewModel() {
             )
     }
 
+
+    val bookmarksList = mutableStateListOf<BookmarkEntry>()
+
+    
+    private fun loadBookmarks(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_bookmarks.json")
+            if (!file.exists()) return@launch
+            try {
+                val jsonArray = JSONArray(file.readText())
+                val temp = mutableListOf<BookmarkEntry>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    temp.add(BookmarkEntry(
+                        title = obj.getString("title"),
+                        url = obj.getString("url"),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                    ))
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    bookmarksList.clear()
+                    bookmarksList.addAll(temp)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading bookmarks", e)
+            }
+        }
+    }
+    
+    private fun saveBookmarks(context: Context) {
+        val bookmarksSnapshot = bookmarksList.toList()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_bookmarks.json")
+            try {
+                val jsonArray = JSONArray()
+                bookmarksSnapshot.forEach { entry ->
+                    jsonArray.put(JSONObject().apply {
+                        put("title", entry.title)
+                        put("url", entry.url)
+                        put("timestamp", entry.timestamp)
+                    })
+                }
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving bookmarks", e)
+            }
+        }
+    }
+    
+    fun addToBookmarks(title: String, url: String) {
+        val context = appContext ?: return
+        if (url == "about:blank" || url.trim().isEmpty()) return
+        
+        bookmarksList.removeAll { it.url == url }
+        bookmarksList.add(0, BookmarkEntry(title, url, System.currentTimeMillis()))
+        saveBookmarks(context)
+    }
+    
+    fun removeBookmark(url: String) {
+        val context = appContext ?: return
+        bookmarksList.removeAll { it.url == url }
+        saveBookmarks(context)
+    }
+
+    fun clearAllBookmarks() {
+        val context = appContext ?: return
+        bookmarksList.clear()
+        saveBookmarks(context)
+    }
+    
+    fun isBookmarked(url: String): Boolean {
+        return bookmarksList.any { it.url == url }
+    }
+
+    val shortcutsList = mutableStateListOf<HomeShortcut>()
+    
+    private fun loadShortcuts(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_shortcuts.json")
+            if (!file.exists()) {
+                val defaultList = listOf(
+                    HomeShortcut("rebelroot", "RebelRoot", "https://www.rebelroot.xyz/omnibrowser", isPermanent = true),
+                    HomeShortcut("twitter", "Twitter", "https://twitter.com"),
+                    HomeShortcut("spotify", "Spotify", "https://spotify.com"),
+                    HomeShortcut("amazon", "Amazon", "https://amazon.com"),
+                    HomeShortcut("pinterest", "Pinterest", "https://pinterest.com"),
+                    HomeShortcut("downloads", "Downloads", "downloads", isFeature = true),
+                    HomeShortcut("history", "History", "history", isFeature = true),
+                    HomeShortcut("bookmarks", "Bookmarks", "bookmarks", isFeature = true),
+                    HomeShortcut("incognito", "Incognito", "incognito", isFeature = true)
+                )
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    shortcutsList.clear()
+                    shortcutsList.addAll(defaultList)
+                }
+                saveShortcuts(context)
+                return@launch
+            }
+            try {
+                val jsonArray = JSONArray(file.readText())
+                val temp = mutableListOf<HomeShortcut>()
+                
+                // Always ensure the permanent RebelRoot shortcut is at the beginning
+                temp.add(HomeShortcut("rebelroot", "RebelRoot", "https://www.rebelroot.xyz/omnibrowser", isPermanent = true))
+                
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val title = obj.optString("title", "")
+                    val url = obj.optString("url", "")
+                    
+                    // Skip duplicate/old RebelRoot entries
+                    if (id == "rebelroot" || url == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true)) {
+                        continue
+                    }
+                    
+                    temp.add(HomeShortcut(
+                        id = id,
+                        title = title,
+                        url = url,
+                        isFeature = obj.optBoolean("isFeature", false),
+                        isPermanent = obj.optBoolean("isPermanent", false)
+                    ))
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    shortcutsList.clear()
+                    shortcutsList.addAll(temp)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading shortcuts", e)
+            }
+        }
+    }
+    
+    fun saveShortcuts(context: Context) {
+        val shortcutsSnapshot = shortcutsList.toList()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "browser_shortcuts.json")
+            try {
+                val jsonArray = JSONArray()
+                shortcutsSnapshot.forEach { shortcut ->
+                    jsonArray.put(JSONObject().apply {
+                        put("id", shortcut.id)
+                        put("title", shortcut.title)
+                        put("url", shortcut.url)
+                        put("isFeature", shortcut.isFeature)
+                        put("isPermanent", shortcut.isPermanent)
+                    })
+                }
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving shortcuts", e)
+            }
+        }
+    }
+    
+    fun addShortcut(title: String, url: String) {
+        val context = appContext ?: return
+        val id = UUID.randomUUID().toString()
+        var formattedUrl = url.trim()
+        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+            formattedUrl = "https://$formattedUrl"
+        }
+        
+        // Prevent adding custom shortcuts that point to RebelRoot or have the title RebelRoot
+        if (formattedUrl == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true)) {
+            return
+        }
+        
+        shortcutsList.removeAll { it.url == formattedUrl }
+        // Add to index 1 (just after permanent RebelRoot shortcut) if RebelRoot is at index 0
+        if (shortcutsList.isNotEmpty() && shortcutsList[0].isPermanent) {
+            shortcutsList.add(1, HomeShortcut(id, title, formattedUrl))
+        } else {
+            shortcutsList.add(0, HomeShortcut(id, title, formattedUrl))
+        }
+        saveShortcuts(context)
+    }
+    
+    fun deleteShortcut(shortcut: HomeShortcut) {
+        if (shortcut.isPermanent) return
+        val context = appContext ?: return
+        shortcutsList.removeAll { it.id == shortcut.id }
+        saveShortcuts(context)
+    }
+
+    val newsArticles = mutableStateListOf<NewsArticle>()
+    var selectedNewsCategory by mutableStateOf("Trending")
+    var isNewsLoading by mutableStateOf(false)
+
+    fun fetchNews(category: String = "Trending") {
+        selectedNewsCategory = category
+        isNewsLoading = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = mutableListOf<NewsArticle>()
+            try {
+                // Stable Google News RSS URLs — verified working June 2026
+                val rssUrl = when (category) {
+                    "World"         -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNR3hxZHpnd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
+                    "Technology"    -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhad0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
+                    "Sports"        -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp1ZEdvVGVnc0hDaElHZWdjd0RnQjBLeWdBUAE?hl=en-US&gl=US&ceid=US:en"
+                    "Business"      -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdnd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
+                    "Science"       -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp0YVRnd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
+                    "Entertainment" -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5Rd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
+                    "Health"        -> "https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNR3QwTlRZd0VnSlVRVklvQUFQAQ?hl=en-US&gl=US&ceid=US:en"
+                    else            -> "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
+                }
+
+                val conn = java.net.URL(rssUrl).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10000
+                conn.readTimeout    = 10000
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+
+                val parser = android.util.Xml.newPullParser()
+                parser.setInput(conn.inputStream, "UTF-8")
+
+                var eventType   = parser.eventType
+                var insideItem  = false
+                var currentTag  = ""
+                var title       = ""
+                var link        = ""
+                var pubDate     = ""
+                var description = ""
+                var source      = ""
+                var sourceUrl   = ""
+
+                while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                    when (eventType) {
+                        org.xmlpull.v1.XmlPullParser.START_TAG -> {
+                            currentTag = parser.name ?: ""
+                            if (currentTag.equals("item", ignoreCase = true)) {
+                                insideItem = true
+                            }
+                            if (insideItem && currentTag.equals("source", ignoreCase = true)) {
+                                sourceUrl = parser.getAttributeValue(null, "url") ?: ""
+                            }
+                        }
+                        org.xmlpull.v1.XmlPullParser.TEXT -> {
+                            if (insideItem) {
+                                val text = parser.text ?: ""
+                                if (text.isNotEmpty()) {
+                                    when (currentTag.lowercase()) {
+                                        "title"       -> title       += text
+                                        "link"        -> link        += text
+                                        "pubdate"     -> pubDate     += text
+                                        "description" -> description += text
+                                        "source"      -> source      += text
+                                    }
+                                }
+                            }
+                        }
+                        org.xmlpull.v1.XmlPullParser.END_TAG -> {
+                            if ((parser.name ?: "").equals("item", ignoreCase = true)) {
+                                insideItem = false
+
+                                val rawTitle = title.trim()
+                                val rawLink  = link.trim()
+
+                                if (rawTitle.isNotEmpty() && rawLink.isNotEmpty()) {
+                                    // ── Quality filter ───────────────────────────
+                                    // 1. Strip trailing " - Source Name" added by Google News
+                                    val cleanTitle = if (rawTitle.contains(" - "))
+                                        rawTitle.substringBeforeLast(" - ").trim()
+                                    else rawTitle.trim()
+
+                                    // 2. Reject titles that are too short or look like junk
+                                    if (cleanTitle.length < 12) {
+                                        title = ""; link = ""; pubDate = ""
+                                        description = ""; source = ""; sourceUrl = ""
+                                        currentTag = ""
+                                        eventType = parser.next()
+                                        continue
+                                    }
+
+                                    // 3. Source name: prefer what Google appended; fall back to <source> tag
+                                    val sourceName = if (rawTitle.contains(" - "))
+                                        rawTitle.substringAfterLast(" - ").trim()
+                                    else source.trim().ifEmpty { "News" }
+
+                                    // 4. Parse date — format: "Tue, 16 Jun 2026 05:06:59 GMT"
+                                    val cleanDate = try {
+                                        val parts = pubDate.trim().split(" ")
+                                        // parts: [Tue,] [16] [Jun] [2026] ...
+                                        if (parts.size >= 4) "${parts[2]} ${parts[3]}" else pubDate.trim()
+                                    } catch (e: Exception) { pubDate.trim() }
+
+                                    // 5. Extract image from description
+                                    //    Google News HTML-encodes the description, so unescape first
+                                    val decodedDesc = android.text.Html.fromHtml(
+                                        description, android.text.Html.FROM_HTML_MODE_COMPACT
+                                    ).toString()
+
+                                    // Try to get src from the decoded HTML (plain text won't have tags,
+                                    // but the raw description string still has encoded HTML we can scan)
+                                    val imgMatch = "<img[^>]+src=[\"']([^\"']+)[\"']"
+                                        .toRegex(RegexOption.IGNORE_CASE)
+                                        .find(description)
+                                    val encodedImgMatch = "src=(?:&quot;|%22|\"')([^&\"']+)(?:&quot;|%22|\"')"
+                                        .toRegex(RegexOption.IGNORE_CASE)
+                                        .find(description)
+
+                                    var imageUrl = imgMatch?.groupValues?.getOrNull(1)?.trim()
+                                        ?: encodedImgMatch?.groupValues?.getOrNull(1)?.trim()
+                                        ?: ""
+
+                                    // 6. Fallback: use source domain favicon (64 px — decent quality)
+                                    if (imageUrl.isEmpty()) {
+                                        val domain = extractDomain(sourceUrl.ifEmpty { null }, sourceName)
+                                        imageUrl = "https://www.google.com/s2/favicons?sz=64&domain=$domain"
+                                    }
+
+                                    // 7. Deduplicate by title
+                                    if (list.none { it.title.equals(cleanTitle, ignoreCase = true) }) {
+                                        list.add(NewsArticle(
+                                            title    = cleanTitle,
+                                            link     = rawLink,
+                                            source   = sourceName,
+                                            pubDate  = cleanDate,
+                                            imageUrl = imageUrl
+                                        ))
+                                    }
+                                }
+
+                                title = ""; link = ""; pubDate = ""
+                                description = ""; source = ""; sourceUrl = ""
+                            }
+                            currentTag = ""
+                        }
+                    }
+                    eventType = parser.next()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching news RSS feed: ${e.message}", e)
+            }
+
+            launch(Dispatchers.Main) {
+                newsArticles.clear()
+                // Final quality pass: remove anything with a suspiciously short title
+                newsArticles.addAll(list.filter { it.title.length >= 12 })
+                isNewsLoading = false
+            }
+        }
+    }
+
+    /** Extract a clean domain from the source URL attribute or fall back to a lookup table. */
+    private fun extractDomain(sourceUrl: String?, sourceName: String): String {
+        if (!sourceUrl.isNullOrEmpty()) {
+            try {
+                val host = Uri.parse(sourceUrl).host ?: ""
+                return if (host.startsWith("www.")) host.substring(4) else host
+            } catch (_: Exception) { }
+        }
+        return getDomainForSource(sourceName)
+    }
+    private fun getDomainForSource(sourceName: String): String {
+        val clean = sourceName.trim().lowercase()
+            .replace(" ", "")
+            .replace("[^a-z0-9]".toRegex(), "")
+        if (clean.isEmpty()) return "google.com"
+        
+        return when (clean) {
+            "wsj" -> "wsj.com"
+            "bbc" -> "bbc.com"
+            "bbcnews" -> "bbc.com"
+            "ap" -> "apnews.com"
+            "associatedpress" -> "apnews.com"
+            "thenewyorktimes" -> "nytimes.com"
+            "newyorktimes" -> "nytimes.com"
+            "thewashingtonpost" -> "washingtonpost.com"
+            "washingtonpost" -> "washingtonpost.com"
+            "usatoday" -> "usatoday.com"
+            "thenextweb" -> "thenextweb.com"
+            "theverge" -> "theverge.com"
+            "techcrunch" -> "techcrunch.com"
+            "9to5mac" -> "9to5mac.com"
+            "macrumors" -> "macrumors.com"
+            "cnet" -> "cnet.com"
+            "gizmodo" -> "gizmodo.com"
+            "wired" -> "wired.com"
+            "forbes" -> "forbes.com"
+            "bloomberg" -> "bloomberg.com"
+            "cnbc" -> "cnbc.com"
+            "time" -> "time.com"
+            "reuters" -> "reuters.com"
+            "politico" -> "politico.com"
+            "nbc" -> "nbcnews.com"
+            "cbs" -> "cbsnews.com"
+            "abc" -> "abcnews.go.com"
+            "cnn" -> "cnn.com"
+            else -> {
+                "$clean.com"
+            }
+        }
+    }
+
+    private var tts: TextToSpeech? = null
+    var isTtsPlaying by mutableStateOf(false)
+    
+    fun initTts(context: Context) {
+        if (tts == null) {
+            tts = TextToSpeech(context.applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    Log.i(TAG, "TTS Engine successfully initialized.")
+                }
+            }
+        }
+    }
+    
+    fun speakText(text: String) {
+        val engine = tts ?: return
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "omni_tts")
+        isTtsPlaying = true
+    }
+    
+    fun stopTts() {
+        tts?.stop()
+        isTtsPlaying = false
+    }
+
+    fun installWebAppShortcut(context: Context, title: String, url: String) {
+        val appCtx = context.applicationContext
+        viewModelScope.launch(Dispatchers.IO) {
+            val domain = try {
+                Uri.parse(url).host ?: url
+            } catch (e: Exception) {
+                url
+            }
+            val faviconUrl = "https://www.google.com/s2/favicons?sz=128&domain=$domain"
+            
+            var bitmap: android.graphics.Bitmap? = null
+            try {
+                val loader = coil.ImageLoader(appCtx)
+                val request = coil.request.ImageRequest.Builder(appCtx)
+                    .data(faviconUrl)
+                    .allowHardware(false) // Must be false to convert to Bitmap safely
+                    .build()
+                val result = loader.execute(request)
+                bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching favicon for webapp shortcut", e)
+            }
+            
+            launch(Dispatchers.Main) {
+                if (ShortcutManagerCompat.isRequestPinShortcutSupported(appCtx)) {
+                    val intent = Intent(appCtx, com.rebelroot.omni.MainActivity::class.java).apply {
+                        action = Intent.ACTION_VIEW
+                        data = Uri.parse(url)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    
+                    val icon = if (bitmap != null) {
+                        IconCompat.createWithBitmap(bitmap)
+                    } else {
+                        IconCompat.createWithResource(appCtx, com.rebelroot.omni.R.mipmap.ic_launcher)
+                    }
+                    
+                    val shortcutInfo = ShortcutInfoCompat.Builder(appCtx, url)
+                        .setShortLabel(title)
+                        .setLongLabel(title)
+                        .setIcon(icon)
+                        .setIntent(intent)
+                        .build()
+                    
+                    ShortcutManagerCompat.requestPinShortcut(appCtx, shortcutInfo, null)
+                    Toast.makeText(appCtx, "Adding webapp shortcut with website logo...", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(appCtx, "Pinning shortcuts is not supported by your launcher", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun toggleEditMode() {
+        val activeId = activeTabId ?: return
+        val idx = tabs.indexOfFirst { it.id == activeId }
+        if (idx == -1) return
+        val activeTab = tabs[idx]
+        
+        val newEditMode = !activeTab.isEditModeEnabled
+        tabs[idx] = activeTab.copy(isEditModeEnabled = newEditMode)
+        
+        if (newEditMode) {
+            // Turn on designMode and focus the body so the cursor appears immediately
+            geckoSession.loadUri(
+                "javascript:(function(){" +
+                "  document.designMode = 'on';" +
+                "  document.body && document.body.focus();" +
+                "})();"
+            )
+            // Delay to let the bottom sheet dismiss animation finish, then request
+            // focus on the GeckoView and show the soft keyboard.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                val geckoView = activeGeckoViewRef?.get()
+                if (geckoView != null) {
+                    geckoView.requestFocus()
+                    val imm = geckoView.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                            as? android.view.inputmethod.InputMethodManager
+                    imm?.showSoftInput(geckoView, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    Log.d(TAG, "toggleEditMode: keyboard requested on GeckoView")
+                }
+            }, 300)
+        } else {
+            // Turn off designMode and hide the keyboard
+            geckoSession.loadUri("javascript:(function(){ document.designMode = 'off'; })();")
+            val geckoView = activeGeckoViewRef?.get()
+            if (geckoView != null) {
+                val imm = geckoView.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                        as? android.view.inputmethod.InputMethodManager
+                imm?.hideSoftInputFromWindow(geckoView.windowToken, 0)
+            }
+        }
+    }
+
+    
+
+    fun printCurrentPage(context: Context) {
+        val activeId = activeTabId ?: return
+        val activeTab = tabs.find { it.id == activeId } ?: return
+
+        // Always resolve the activity from MainActivity companion — the Compose LocalContext
+        // is a configuration-wrapped ContextImpl that fails instanceof Activity checks.
+        val activity = com.rebelroot.omni.MainActivity.getActiveActivity() ?: run {
+            Log.e(TAG, "printCurrentPage: no active MainActivity found, aborting print")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                android.widget.Toast.makeText(context, "Cannot open print dialog right now", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        // Build print CSS based on the user's PDF theme setting.
+        // We use evaluateJS (not loadUri) so the CSS is injected into the LIVE page
+        // without triggering a new navigation cycle, which would block saveAsPdf().
+        val isDark = when (pdfExportTheme) {
+            "dark"  -> true
+            "light" -> false
+            else    -> isDarkThemeEnabled   // "default" → follow app theme
+        }
+        val printCss = if (isDark) {
+            "@media print { " +
+            "  * { background-color: #121212 !important; color: #E0E0E0 !important; " +
+            "      border-color: #333 !important; -webkit-print-color-adjust: exact !important; " +
+            "      color-adjust: exact !important; } " +
+            "  a, a * { color: #8AB4F8 !important; } " +
+            "  img, video, canvas { filter: brightness(0.8) !important; background-color: transparent !important; } " +
+            "}"
+        } else {
+            "@media print { " +
+            "  * { background-color: #FFFFFF !important; color: #111111 !important; " +
+            "      border-color: #E2E8F0 !important; -webkit-print-color-adjust: exact !important; " +
+            "      color-adjust: exact !important; } " +
+            "  a, a * { color: #1A0DAB !important; } " +
+            "  img, video, canvas { background-color: transparent !important; } " +
+            "}"
+        }
+
+        // Escape the CSS for safe embedding in a JS string literal
+        val escapedCss = printCss
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+
+        // JS that idempotently injects / replaces the <style id="omni-print-style"> tag
+        val injectCssJs = """
+            (function() {
+                var el = document.getElementById('omni-print-style');
+                if (!el) {
+                    el = document.createElement('style');
+                    el.id = 'omni-print-style';
+                    (document.head || document.documentElement).appendChild(el);
+                }
+                el.textContent = '$escapedCss';
+            })();
+        """.trimIndent()
+
+        // Inject CSS, then after a short settle delay call saveAsPdf
+        val doSavePdf: () -> Unit = {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                try {
+                    activeTab.session.saveAsPdf().accept(
+                        { inputStream ->
+                            if (inputStream != null) {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    try {
+                                        val printManager = activity.getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+                                        val printAdapter = org.mozilla.geckoview.GeckoViewPrintDocumentAdapter(inputStream, activity)
+                                        printManager.print("Omni Browser — Print", printAdapter, android.print.PrintAttributes.Builder().build())
+                                        Log.i(TAG, "printCurrentPage: PrintManager.print() called successfully")
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "printCurrentPage: PrintManager error", e)
+                                        android.widget.Toast.makeText(activity, "Print failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            } else {
+                                Log.e(TAG, "printCurrentPage: saveAsPdf returned null stream")
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    android.widget.Toast.makeText(activity, "Could not generate PDF for this page", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        { error ->
+                            Log.e(TAG, "printCurrentPage: saveAsPdf error: ${error?.message}")
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                android.widget.Toast.makeText(activity, "PDF generation failed", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "printCurrentPage: exception calling saveAsPdf", e)
+                }
+            }
+        }
+
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                // loadUri("javascript:...") executes JS in the current page context without navigating
+                activeTab.session.loadUri("javascript:$injectCssJs")
+                Log.i(TAG, "printCurrentPage: CSS injected via javascript: URI (theme=$pdfExportTheme)")
+            } catch (e: Exception) {
+                Log.w(TAG, "printCurrentPage: JS injection failed (non-fatal), proceeding without theme CSS: $e")
+            }
+            // Small delay to let the browser apply the injected stylesheet before rendering to PDF
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ doSavePdf() }, 80)
+        }
+    }
+
+
+    sealed interface UpdateCheckResult {
+        data class NewUpdateAvailable(val versionName: String, val playStoreUrl: String) : UpdateCheckResult
+        object NoUpdateAvailable : UpdateCheckResult
+        data class Error(val message: String) : UpdateCheckResult
+    }
+
+    fun checkAppUpdates(context: Context, onResult: (UpdateCheckResult) -> Unit) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val url = java.net.URL("https://raw.githubusercontent.com/rebelroot/omni-browser/main/version.json")
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 8000
+                connection.readTimeout = 8000
+                connection.connect()
+
+                if (connection.responseCode == 200) {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    val json = org.json.JSONObject(response)
+                    val serverVersionName = json.getString("versionName")
+                    val serverVersionCode = json.optInt("versionCode", 0)
+                    val updateUrl = json.optString("updateUrl", "market://details?id=com.rebelroot.omni")
+
+                    val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                    val currentVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        pInfo.longVersionCode
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pInfo.versionCode.toLong()
+                    }
+
+                    if (serverVersionCode > currentVersionCode) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onResult(UpdateCheckResult.NewUpdateAvailable(serverVersionName, updateUrl))
+                        }
+                    } else {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            onResult(UpdateCheckResult.NoUpdateAvailable)
+                        }
+                    }
+                } else {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onResult(UpdateCheckResult.Error("Server returned HTTP ${connection.responseCode}"))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to check for updates", e)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onResult(UpdateCheckResult.Error(e.localizedMessage ?: "Connection error"))
+                }
+            }
+        }
+    }
+
+    // ── Google SSO Authentication Manager ──
+
+    fun checkGoogleSignInStatus(context: Context) {
+        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestProfile()
+            .build()
+        val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+        googleSignInClient.silentSignIn().addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val account = task.result
+                googleAccountEmail = account.email
+                googleAccountDisplayName = account.displayName
+                googleAccountPhotoUrl = account.photoUrl?.toString()
+                googleAccountIsSignedIn = true
+            } else {
+                googleAccountEmail = null
+                googleAccountDisplayName = null
+                googleAccountPhotoUrl = null
+                googleAccountIsSignedIn = false
+            }
+        }
+    }
+
+    fun handleGoogleSignInResult(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount?) {
+        if (account != null) {
+            googleAccountEmail = account.email
+            googleAccountDisplayName = account.displayName
+            googleAccountPhotoUrl = account.photoUrl?.toString()
+            googleAccountIsSignedIn = true
+        } else {
+            googleAccountEmail = null
+            googleAccountDisplayName = null
+            googleAccountPhotoUrl = null
+            googleAccountIsSignedIn = false
+        }
+    }
+
+    fun googleSignOut(context: Context, onComplete: () -> Unit = {}) {
+        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .build()
+        val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+        googleSignInClient.signOut().addOnCompleteListener {
+            googleAccountEmail = null
+            googleAccountDisplayName = null
+            googleAccountPhotoUrl = null
+            googleAccountIsSignedIn = false
+            onComplete()
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        dismissExtensionPopup()
         translationManager.close()
+        tts?.shutdown()
     }
 }
+
+data class ContextMenuElement(
+    val linkUri: String?,
+    val srcUri: String?,
+    val linkText: String?
+)

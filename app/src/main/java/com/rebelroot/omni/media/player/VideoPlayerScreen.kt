@@ -46,6 +46,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -54,12 +56,15 @@ fun VideoPlayerScreen(
     referrerUrl: String = "",
     videoTitle: String = "",
     downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null,
+    viewModel: com.rebelroot.omni.browser.BrowserViewModel? = null,
     onNavigateBack: () -> Unit
 ) {
     BackHandler {
         onNavigateBack()
     }
     val context = LocalContext.current
+    val accentColor = if (viewModel != null) MaterialTheme.colorScheme.primary else Color(0xFF0088FF)
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val decodedPath = remember(videoPath) {
         if (videoPath.startsWith("http://") || videoPath.startsWith("https://") || videoPath.startsWith("/")) {
             videoPath
@@ -82,13 +87,20 @@ fun VideoPlayerScreen(
     }
     val isOnline = remember(decodedPath) { decodedPath.startsWith("http://") || decodedPath.startsWith("https://") }
     var downloadToLocker by remember { mutableStateOf(false) }
-    val activity = context as? Activity
+    val activity = remember(context) {
+        var ctx = context
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is Activity) break
+            ctx = ctx.baseContext
+        }
+        ctx as? Activity
+    }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val coroutineScope = rememberCoroutineScope()
 
     var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(true) }
-    var playbackPosition by remember { mutableLongStateOf(0L) }
+    var playbackPosition by remember { mutableLongStateOf(viewModel?.getVideoPosition(decodedPath) ?: 0L) }
     var duration by remember { mutableLongStateOf(0L) }
     
     // Gestures overlay states
@@ -176,8 +188,33 @@ fun VideoPlayerScreen(
             .setMediaSourceFactory(mediaSourceFactory)
             .build().apply {
                 setMediaItem(MediaItem.fromUri(uri))
+                
+                // 1. Seek to resume position
+                val initialPos = viewModel?.getVideoPosition(decodedPath) ?: 0L
+                if (initialPos > 0L) {
+                    seekTo(initialPos)
+                }
+                
+                // 2. Configure loop mode
+                repeatMode = if (viewModel?.isPlayerLoopEnabled == true) {
+                    Player.REPEAT_MODE_ONE
+                } else {
+                    Player.REPEAT_MODE_OFF
+                }
+                
+                // 3. Configure default video quality resolution limit
+                val currentParams = trackSelectionParameters
+                val updatedParams = when (viewModel?.playerDefaultQuality) {
+                    "360p" -> currentParams.buildUpon().setMaxVideoSize(640, 360).build()
+                    "480p" -> currentParams.buildUpon().setMaxVideoSize(854, 480).build()
+                    "720p" -> currentParams.buildUpon().setMaxVideoSize(1280, 720).build()
+                    "1080p" -> currentParams.buildUpon().setMaxVideoSize(1920, 1080).build()
+                    else -> currentParams
+                }
+                trackSelectionParameters = updatedParams
+                
                 prepare()
-                playWhenReady = true
+                playWhenReady = viewModel?.isPlayerAutoPlayEnabled ?: true
                 
                 addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(playing: Boolean) {
@@ -191,14 +228,33 @@ fun VideoPlayerScreen(
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         android.util.Log.e("VideoPlayer", "ExoPlayer playback error: ${error.message}", error)
                         coroutineScope.launch {
-                            Toast.makeText(context, "Playback error: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "${context.getString(R.string.video_player_playback_error)}: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
                         }
                     }
                 })
             }
         exoPlayerInstance = exoPlayer
 
+        var wasPlayingBeforePause = false
+        val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                if (viewModel?.isPlayerBackgroundPlaybackEnabled == false) {
+                    wasPlayingBeforePause = exoPlayer.playWhenReady
+                    exoPlayer.playWhenReady = false
+                }
+            } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (viewModel?.isPlayerBackgroundPlaybackEnabled == false && wasPlayingBeforePause) {
+                    exoPlayer.playWhenReady = true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            exoPlayerInstance?.let { player ->
+                viewModel?.saveVideoPosition(decodedPath, player.currentPosition)
+            }
             exoPlayer.release()
         }
     }
@@ -208,6 +264,7 @@ fun VideoPlayerScreen(
         while (isPlaying) {
             exoPlayerInstance?.let {
                 playbackPosition = it.currentPosition
+                viewModel?.saveVideoPosition(decodedPath, it.currentPosition)
             }
             delay(1000)
         }
@@ -257,22 +314,24 @@ fun VideoPlayerScreen(
                             )
                         }
                         .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragStart = {
-                                    showGestureIndicator = true
-                                },
-                                onDragEnd = {
-                                    showGestureIndicator = false
+                            if (viewModel?.isPlayerBrightnessGestureEnabled != false) {
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                        showGestureIndicator = true
+                                    },
+                                    onDragEnd = {
+                                        showGestureIndicator = false
+                                    }
+                                ) { _, dragAmount ->
+                                    // Adjust brightness
+                                    brightness = (brightness - dragAmount / 1500f).coerceIn(0f, 1f)
+                                    activity?.let { act ->
+                                        val lp = act.window.attributes
+                                        lp.screenBrightness = brightness
+                                        act.window.attributes = lp
+                                    }
+                                    gestureIndicatorText = "🔆 Brightness: ${(brightness * 100).toInt()}%"
                                 }
-                            ) { _, dragAmount ->
-                                // Adjust brightness
-                                brightness = (brightness - dragAmount / 1500f).coerceIn(0f, 1f)
-                                activity?.let { act ->
-                                    val lp = act.window.attributes
-                                    lp.screenBrightness = brightness
-                                    act.window.attributes = lp
-                                }
-                                gestureIndicatorText = "🔆 Brightness: ${(brightness * 100).toInt()}%"
                             }
                         }
                 )
@@ -290,23 +349,25 @@ fun VideoPlayerScreen(
                             )
                         }
                         .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragStart = {
-                                    showGestureIndicator = true
-                                },
-                                onDragEnd = {
-                                    showGestureIndicator = false
+                            if (viewModel?.isPlayerVolumeGestureEnabled != false) {
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                        showGestureIndicator = true
+                                    },
+                                    onDragEnd = {
+                                        showGestureIndicator = false
+                                    }
+                                ) { _, dragAmount ->
+                                    // Adjust audio
+                                    val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    volume = (volume - dragAmount / 1500f).coerceIn(0f, 1f)
+                                    audioManager.setStreamVolume(
+                                        AudioManager.STREAM_MUSIC,
+                                        (volume * maxVol).toInt(),
+                                        0
+                                    )
+                                    gestureIndicatorText = "🔊 Volume: ${(volume * 100).toInt()}%"
                                 }
-                            ) { _, dragAmount ->
-                                // Adjust audio
-                                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                volume = (volume - dragAmount / 1500f).coerceIn(0f, 1f)
-                                audioManager.setStreamVolume(
-                                    AudioManager.STREAM_MUSIC,
-                                    (volume * maxVol).toInt(),
-                                    0
-                                )
-                                gestureIndicatorText = "🔊 Volume: ${(volume * 100).toInt()}%"
                             }
                         }
                 )
@@ -464,7 +525,7 @@ fun VideoPlayerScreen(
                                 }
                             },
                             colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = if (isLandscape) Color(0xFF0088FF).copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f)
+                                containerColor = if (isLandscape) accentColor.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f)
                             ),
                             modifier = Modifier.size(48.dp)
                         ) {
@@ -492,7 +553,7 @@ fun VideoPlayerScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.height(48.dp)
                         ) {
-                            Text("PiP", color = Color.White, fontSize = 14.sp)
+                            Text(stringResource(R.string.pip_mode), color = Color.White, fontSize = 14.sp)
                         }
 
                         if (isOnline && downloadEngine != null && currentJob == null) {
@@ -505,7 +566,7 @@ fun VideoPlayerScreen(
                                         isFetchingQualities = false
                                         
                                         if (decodedPath.contains(".m3u8") && parsed.size <= 2 && parsed.any { it.label.contains("Source Stream") }) {
-                                            Toast.makeText(context, "Could not fetch custom qualities; using source stream.", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.video_player_m3u8_fallback), Toast.LENGTH_SHORT).show()
                                         }
                                         
                                         qualityOptions = parsed
@@ -517,7 +578,7 @@ fun VideoPlayerScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Download,
-                                    contentDescription = "Download Video",
+                                    contentDescription = stringResource(R.string.downloads_title),
                                     tint = Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
@@ -620,7 +681,7 @@ fun VideoPlayerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        CircularProgressIndicator(color = Color(0xFF0088FF))
+                        CircularProgressIndicator(color = accentColor)
                         Text(
                             text = "Analyzing Stream Qualities...",
                             color = Color.White,
@@ -658,18 +719,18 @@ fun VideoPlayerScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0088FF).copy(alpha = 0.12f)),
+                                .background(accentColor.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Download,
                                 contentDescription = null,
-                                tint = Color(0xFF0088FF),
+                                tint = accentColor,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                         Text(
-                            text = "Select Download Quality",
+                            text = stringResource(R.string.video_player_select_quality),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -682,7 +743,7 @@ fun VideoPlayerScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     ) {
                         Text(
-                            text = "Download video streams with dynamic formats securely in the background.",
+                            text = stringResource(R.string.video_player_download_desc),
                             color = Color(0xFF8E9AA8),
                             fontSize = 12.sp,
                             lineHeight = 16.sp
@@ -707,18 +768,18 @@ fun VideoPlayerScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.Lock,
                                     contentDescription = null,
-                                    tint = if (downloadToLocker) Color(0xFF0088FF) else Color(0xFF8E9AA8),
+                                    tint = if (downloadToLocker) accentColor else Color(0xFF8E9AA8),
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Column {
                                     Text(
-                                        text = "Save to Private Locker",
+                                        text = stringResource(R.string.video_player_save_to_locker),
                                         color = Color.White,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 13.sp
                                     )
                                     Text(
-                                        text = "Encrypt & secure with passcode",
+                                        text = stringResource(R.string.video_player_encrypt_desc),
                                         color = Color(0xFF8E9AA8),
                                         fontSize = 10.sp
                                     )
@@ -729,7 +790,7 @@ fun VideoPlayerScreen(
                                 onCheckedChange = { downloadToLocker = it },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = Color(0xFF0088FF),
+                                    checkedTrackColor = accentColor,
                                     uncheckedThumbColor = Color(0xFF8E9AA8),
                                     uncheckedTrackColor = Color(0xFF070A0F)
                                 )
@@ -757,7 +818,7 @@ fun VideoPlayerScreen(
                                                 type = mediaType,
                                                 saveToLocker = downloadToLocker
                                             )
-                                            val toastMsg = if (downloadToLocker) "Queued secure download to Locker!" else "Queued ${option.label} download!"
+                                            val toastMsg = if (downloadToLocker) context.getString(R.string.video_player_queued_locker) else context.getString(R.string.video_player_queued_download, option.label)
                                             Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
                                         }
                                     },
@@ -777,7 +838,7 @@ fun VideoPlayerScreen(
                                         Icon(
                                             imageVector = if (option.isAudioOnly) Icons.Rounded.MusicNote else Icons.Rounded.Movie,
                                             contentDescription = null,
-                                            tint = if (option.isAudioOnly) Color(0xFFFF9800) else Color(0xFF0088FF),
+                                            tint = if (option.isAudioOnly) Color(0xFFFF9800) else accentColor,
                                             modifier = Modifier.size(20.dp)
                                         )
                                         Text(
@@ -790,7 +851,7 @@ fun VideoPlayerScreen(
                                     
                                     Icon(
                                         imageVector = Icons.Rounded.Download,
-                                        contentDescription = "Download Quality",
+                                        contentDescription = stringResource(R.string.downloads_title),
                                         tint = Color(0xFF8E9AA8),
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -808,7 +869,7 @@ fun VideoPlayerScreen(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     ) {
-                        Text("Cancel", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.cancel_text), fontWeight = FontWeight.SemiBold)
                     }
                 },
                 containerColor = Color(0xFF0D1620),
@@ -842,20 +903,20 @@ fun VideoPlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Downloading",
+                                text = stringResource(R.string.video_player_downloading),
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Icon(
                                 imageVector = Icons.Rounded.Close,
-                                contentDescription = "Cancel Download",
+                                contentDescription = stringResource(R.string.cancel_text),
                                 tint = Color(0xFF8E9AA8),
                                 modifier = Modifier
                                     .size(16.dp)
                                     .clickable {
                                         downloadEngine.cancelDownload(currentJob.id)
-                                        Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.video_player_download_cancelled), Toast.LENGTH_SHORT).show()
                                     }
                             )
                         }
@@ -863,7 +924,7 @@ fun VideoPlayerScreen(
                         when (progressValue) {
                             is com.rebelroot.omni.media.StreamDownloadEngine.DownloadProgress.Downloading -> {
                                 val percent = progressValue.percent
-                                val percentText = if (percent >= 0) "$percent%" else "Downloading..."
+                                val percentText = if (percent >= 0) "$percent%" else stringResource(R.string.video_player_downloading) + "..."
                                 val sizeMb = progressValue.bytesDownloaded.toFloat() / (1024 * 1024)
                                 
                                 Text(
@@ -875,13 +936,13 @@ fun VideoPlayerScreen(
                                     LinearProgressIndicator(
                                         progress = percent / 100f,
                                         modifier = Modifier.fillMaxWidth().height(3.dp),
-                                        color = Color(0xFF0088FF),
+                                        color = accentColor,
                                         trackColor = Color(0xFF16222F)
                                     )
                                 } else {
                                     LinearProgressIndicator(
                                         modifier = Modifier.fillMaxWidth().height(3.dp),
-                                        color = Color(0xFF0088FF),
+                                        color = accentColor,
                                         trackColor = Color(0xFF16222F)
                                     )
                                 }
@@ -901,7 +962,7 @@ fun VideoPlayerScreen(
                             }
                             is com.rebelroot.omni.media.StreamDownloadEngine.DownloadProgress.Complete -> {
                                 Text(
-                                    text = "Download Complete!",
+                                    text = stringResource(R.string.video_player_download_complete),
                                     color = Color(0xFF4CAF50),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
@@ -922,7 +983,7 @@ fun VideoPlayerScreen(
                             null -> {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
-                                    color = Color(0xFF0088FF),
+                                    color = accentColor,
                                     strokeWidth = 2.dp
                                 )
                             }

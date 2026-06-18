@@ -1,4 +1,4 @@
-package com.rebelroot.omni.history
+package com.rebelroot.omni.bookmarks
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -24,14 +24,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.browser.BrowserViewModel
-import com.rebelroot.omni.browser.HistoryEntry
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.rebelroot.omni.browser.BookmarkEntry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryScreen(
+fun BookmarksScreen(
     viewModel: BrowserViewModel,
     onNavigateBack: () -> Unit,
     onOpenUrl: (String) -> Unit
@@ -48,7 +45,6 @@ fun HistoryScreen(
     val cardBorderColor = if (isDarkMode) Color(0xFF23374A) else Color(0x1F000000)
     val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF202124)
     val textSecondaryColor = if (isDarkMode) Color(0xFF8E9AA8) else Color(0xFF606266)
-    val dividerColor = if (isDarkMode) Color(0xFF23374A).copy(alpha = 0.5f) else Color(0x1F000000)
     
     val navBgColor = if (isDarkMode) Color(0xFF0D1620) else Color(0xFFFFFFFF)
     val navBorderColor = if (isDarkMode) Color(0xFF16222F).copy(alpha = 0.5f) else Color(0x1F000000)
@@ -57,31 +53,15 @@ fun HistoryScreen(
     val inputBgColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFF2F3F5)
     val inputBorderColor = if (isDarkMode) Color(0xFF16222F) else Color(0x1F000000)
 
-    // Filter history based on search query
-    val filteredHistory = viewModel.historyList.filter {
+    val filteredBookmarks = viewModel.bookmarksList.filter {
         it.title.contains(searchQuery, ignoreCase = true) ||
                 it.url.contains(searchQuery, ignoreCase = true)
-    }
-
-    // Dynamic grouping by Today / Yesterday / Older
-    val now = System.currentTimeMillis()
-    val millisecondsInDay = 24 * 60 * 60 * 1000L
-    
-    val groupedHistory = remember(filteredHistory) {
-        filteredHistory.groupBy { entry ->
-            val diff = now - entry.timestamp
-            when {
-                diff < millisecondsInDay -> "TODAY"
-                diff < 2 * millisecondsInDay -> "YESTERDAY"
-                else -> "OLDER"
-            }
-        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.history_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -92,8 +72,12 @@ fun HistoryScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { viewModel.clearAllHistory() }) {
-                        Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.history_clear_all), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    if (viewModel.bookmarksList.isNotEmpty()) {
+                        TextButton(onClick = {
+                            viewModel.clearAllBookmarks()
+                        }) {
+                            Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_clear_all), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -105,7 +89,6 @@ fun HistoryScreen(
             )
         },
         bottomBar = {
-            // Flat minimal bottom bar persisting exactly as requested in screenshots
             Surface(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 color = navBgColor,
@@ -170,31 +153,21 @@ fun HistoryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(bgColor) // Obsidian black background
+                .background(bgColor)
         ) {
-            // Interactive Slate Search box with filter icon on the right
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                placeholder = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.history_search_placeholder), color = textSecondaryColor) },
+                placeholder = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_search_placeholder), color = textSecondaryColor) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
                         tint = textSecondaryColor
                     )
-                },
-                trailingIcon = {
-                    IconButton(onClick = { /* filter action */ }) {
-                        Icon(
-                            imageVector = Icons.Rounded.FilterList,
-                            contentDescription = "Filter",
-                            tint = textSecondaryColor
-                        )
-                    }
                 },
                 shape = RoundedCornerShape(16.dp),
                 singleLine = true,
@@ -208,7 +181,7 @@ fun HistoryScreen(
                 )
             )
 
-            if (filteredHistory.isEmpty()) {
+            if (filteredBookmarks.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -216,7 +189,7 @@ fun HistoryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.history_empty),
+                        text = androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_empty),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = textSecondaryColor
@@ -228,36 +201,20 @@ fun HistoryScreen(
                         .fillMaxSize()
                         .weight(1f)
                         .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
-                    // Loop through groups in order: TODAY, YESTERDAY, OLDER
-                    listOf("TODAY", "YESTERDAY", "OLDER").forEach { category ->
-                        val itemsInCategory = groupedHistory[category] ?: emptyList()
-                        if (itemsInCategory.isNotEmpty()) {
-                            item(key = category) {
-                                Text(
-                                    text = category,
-                                    color = textSecondaryColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 8.dp)
-                                )
-                            }
-                            
-                            items(itemsInCategory, key = { it.timestamp }) { entry ->
-                                HistoryRowItem(
-                                    entry = entry,
-                                    isDarkMode = isDarkMode,
-                                    textPrimaryColor = textPrimaryColor,
-                                    textSecondaryColor = textSecondaryColor,
-                                    cardColor = cardColor,
-                                    cardBorderColor = cardBorderColor,
-                                    onClick = { onOpenUrl(entry.url) },
-                                    onDelete = { viewModel.deleteHistoryEntry(entry) }
-                                )
-                            }
-                        }
+                    items(filteredBookmarks, key = { it.url }) { entry ->
+                        BookmarkRowItem(
+                            entry = entry,
+                            isDarkMode = isDarkMode,
+                            textPrimaryColor = textPrimaryColor,
+                            textSecondaryColor = textSecondaryColor,
+                            cardColor = cardColor,
+                            cardBorderColor = cardBorderColor,
+                            onClick = { onOpenUrl(entry.url) },
+                            onDelete = { viewModel.removeBookmark(entry.url) }
+                        )
                     }
                 }
             }
@@ -266,8 +223,8 @@ fun HistoryScreen(
 }
 
 @Composable
-fun HistoryRowItem(
-    entry: HistoryEntry,
+fun BookmarkRowItem(
+    entry: BookmarkEntry,
     isDarkMode: Boolean,
     textPrimaryColor: Color,
     textSecondaryColor: Color,
@@ -297,7 +254,7 @@ fun HistoryRowItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Language,
+                    imageVector = Icons.Rounded.Bookmark,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -331,7 +288,7 @@ fun HistoryRowItem(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
-                    contentDescription = "Delete entry",
+                    contentDescription = "Delete bookmark",
                     tint = textSecondaryColor,
                     modifier = Modifier.size(12.dp)
                 )

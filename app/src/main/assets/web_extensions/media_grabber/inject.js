@@ -293,10 +293,12 @@
 
     // (play() hijack removed to allow normal browser in-page video playback, ad skipping, and prevent loops on back navigation)
 
+    const isYouTube = window.location.hostname.includes('youtube.com') || window.location.hostname.includes('youtu.be');
+
     // --- Intercept requestFullscreen() on video elements and their containers ---
     const originalRequestFullscreen = Element.prototype.requestFullscreen;
     Element.prototype.requestFullscreen = function(...args) {
-        if (nativePlayerEnabled) {
+        if (nativePlayerEnabled && !isYouTube) {
             // Check if this element IS a video or CONTAINS a video
             const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
             if (video && !isLikelyAdOrBanner(video)) {
@@ -316,7 +318,7 @@
     if (Element.prototype.webkitRequestFullscreen) {
         const originalWebkit = Element.prototype.webkitRequestFullscreen;
         Element.prototype.webkitRequestFullscreen = function(...args) {
-            if (nativePlayerEnabled) {
+            if (nativePlayerEnabled && !isYouTube) {
                 const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
                 if (video && !isLikelyAdOrBanner(video)) {
                     const videoUrl = getVideoUrl(video);
@@ -334,7 +336,7 @@
     if (Element.prototype.webkitRequestFullScreen) {
         const originalWebkitAlt = Element.prototype.webkitRequestFullScreen;
         Element.prototype.webkitRequestFullScreen = function(...args) {
-            if (nativePlayerEnabled) {
+            if (nativePlayerEnabled && !isYouTube) {
                 const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
                 if (video && !isLikelyAdOrBanner(video)) {
                     const videoUrl = getVideoUrl(video);

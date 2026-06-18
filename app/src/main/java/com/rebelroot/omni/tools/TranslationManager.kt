@@ -1,17 +1,14 @@
 package com.rebelroot.omni.tools
 
 import android.util.Log
-import com.google.android.gms.tasks.Task
-import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.nl.translate.TranslateLanguage
-import com.google.mlkit.nl.translate.Translation
-import com.google.mlkit.nl.translate.Translator
-import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 class TranslationManager {
 
@@ -25,57 +22,75 @@ class TranslationManager {
     private val _status = MutableStateFlow<TranslationStatus>(TranslationStatus.Idle)
     val status: StateFlow<TranslationStatus> = _status
 
-    private var translator: Translator? = null
+    private var sourceLang: String = "auto"
+    private var targetLang: String = "en"
 
     /**
-     * Initializes offline translation model downloading
+     * Initializes online translation. Since it's online, the API is immediately ready without downloading models.
      */
     fun setupLanguage(sourceLang: String, targetLang: String, onSuccess: () -> Unit) {
-        _status.value = TranslationStatus.DownloadingModel
+        this.sourceLang = sourceLang.lowercase()
+        this.targetLang = targetLang.lowercase()
         
-        val options = TranslatorOptions.Builder()
-            .setSourceLanguage(sourceLang)
-            .setTargetLanguage(targetLang)
-            .build()
-
-        val localTranslator = Translation.getClient(options)
-        translator = localTranslator
-
-        val conditions = DownloadConditions.Builder()
-            .requireWifi()
-            .build()
-
-        localTranslator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-                _status.value = TranslationStatus.Ready
-                onSuccess()
-                Log.i("TranslationManager", "On-device translation model ready.")
-            }
-            .addOnFailureListener { e ->
-                _status.value = TranslationStatus.Error(e.message ?: "Failed to download model")
-                Log.e("TranslationManager", "Offline model download failure", e)
-            }
+        Log.i("TranslationManager", "Configuring online translator: $sourceLang -> $targetLang")
+        _status.value = TranslationStatus.Ready
+        onSuccess()
     }
 
-    suspend fun translateText(text: String): String = suspendCancellableCoroutine { continuation ->
-        val activeTranslator = translator
-        if (activeTranslator == null) {
-            continuation.resumeWithException(IllegalStateException("Translator not initialized. Call setupLanguage first."))
-            return@suspendCancellableCoroutine
-        }
+    /**
+     * Translates custom text using Google's free gtx translation endpoint.
+     */
+    suspend fun translateText(text: String): String = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext ""
+        
+        try {
+            val encodedText = URLEncoder.encode(text, "UTF-8")
+            val urlString = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sourceLang&tl=$targetLang&dt=t&q=$encodedText"
+            
+            val url = URL(urlString)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0")
 
-        activeTranslator.translate(text)
-            .addOnSuccessListener { result ->
-                continuation.resume(result)
+            val responseCode = connection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+                parseTranslationResponse(responseText)
+            } else {
+                val errorText = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e("TranslationManager", "HTTP Error $responseCode: $errorText")
+                throw Exception("Translation API error ($responseCode)")
             }
-            .addOnFailureListener { e ->
-                continuation.resumeWithException(e)
+        } catch (e: Exception) {
+            Log.e("TranslationManager", "Online translation failed", e)
+            throw e
+        }
+    }
+
+    private fun parseTranslationResponse(response: String): String {
+        try {
+            val jsonArray = JSONArray(response)
+            val segments = jsonArray.optJSONArray(0) ?: return ""
+            val result = StringBuilder()
+            for (i in 0 until segments.length()) {
+                val segment = segments.optJSONArray(i)
+                if (segment != null) {
+                    val translatedText = segment.optString(0)
+                    if (translatedText != null && translatedText != "null") {
+                        result.append(translatedText)
+                    }
+                }
             }
+            return result.toString()
+        } catch (e: Exception) {
+            Log.e("TranslationManager", "Failed to parse translation response JSON", e)
+            return ""
+        }
     }
 
     fun close() {
-        translator?.close()
-        translator = null
         _status.value = TranslationStatus.Idle
     }
 }

@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -111,7 +113,10 @@ fun QrToolsScreen(
                 putExtra(Intent.EXTRA_STREAM, contentUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(shareIntent, "Share QR Code"))
+            val chooser = Intent.createChooser(shareIntent, context.getString(R.string.qr_share)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
         } catch (e: Exception) {
             Toast.makeText(context, "Sharing failed.", Toast.LENGTH_SHORT).show()
         }
@@ -137,7 +142,7 @@ fun QrToolsScreen(
                             bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
                         }
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "QR saved to gallery: $displayName", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "${context.getString(R.string.qr_saved_toast)}: $displayName", Toast.LENGTH_LONG).show()
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
@@ -167,11 +172,11 @@ fun QrToolsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back_desc))
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "📱 QR & Barcode Tools",
+                            text = "📱 " + stringResource(R.string.qr_tools_screen_title),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                     }
@@ -185,12 +190,12 @@ fun QrToolsScreen(
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            text = { Text("Scan Code") }
+                            text = { Text(stringResource(R.string.qr_scan_tab)) }
                         )
                         Tab(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            text = { Text("Generate Code") }
+                            text = { Text(stringResource(R.string.qr_generate_tab)) }
                         )
                     }
                 }
@@ -254,7 +259,7 @@ fun QrToolsScreen(
                                             scannedResult = barcode.rawValue
                                         }
                                         .addOnFailureListener { e ->
-                                            Toast.makeText(context, "Scanning cancelled or failed.", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.qr_scan_cancelled), Toast.LENGTH_SHORT).show()
                                         }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -263,7 +268,7 @@ fun QrToolsScreen(
                                 ),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Scan Code")
+                                Text(stringResource(R.string.qr_scan_tab))
                             }
                         }
                     }
@@ -285,7 +290,7 @@ fun QrToolsScreen(
                                     .padding(16.dp)
                             ) {
                                 Text(
-                                    text = "Scan Result:",
+                                    text = stringResource(R.string.qr_scan_result_header),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
@@ -304,13 +309,13 @@ fun QrToolsScreen(
                                     OutlinedButton(
                                         onClick = {
                                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            val clip = ClipData.newPlainText("Scanned Text", result)
+                                            val clip = ClipData.newPlainText(context.getString(R.string.qr_scanned_text_clip), result)
                                             clipboard.setPrimaryClip(clip)
-                                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.qr_copied_toast), Toast.LENGTH_SHORT).show()
                                         },
                                         shape = RoundedCornerShape(6.dp)
                                     ) {
-                                        Text("Copy Text")
+                                        Text(stringResource(R.string.qr_copy_btn))
                                     }
                                     
                                     if (result.startsWith("http://") || result.startsWith("https://")) {
@@ -322,7 +327,7 @@ fun QrToolsScreen(
                                                 containerColor = MaterialTheme.colorScheme.primary
                                             )
                                         ) {
-                                            Text("Open Link")
+                                            Text(stringResource(R.string.qr_open_link_btn))
                                         }
                                     }
                                 }
@@ -336,12 +341,12 @@ fun QrToolsScreen(
                         value = inputQrText,
                         onValueChange = { inputQrText = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Enter URL or text to generate") },
+                        placeholder = { Text(stringResource(R.string.qr_generate_placeholder)) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
-                        colors = TextFieldDefaults.outlinedTextFieldColors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
                         )
                     )
 
@@ -362,7 +367,7 @@ fun QrToolsScreen(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
-                        Text("Generate QR")
+                        Text(stringResource(R.string.qr_generate_btn))
                     }
 
                     generatedBitmap?.let { bitmap ->
@@ -384,7 +389,7 @@ fun QrToolsScreen(
                             ) {
                                 Image(
                                     bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "Generated QR Code",
+                                    contentDescription = stringResource(R.string.qr_generate_tab),
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -403,7 +408,7 @@ fun QrToolsScreen(
                             ) {
                                 Icon(Icons.Rounded.Share, "Share icon", modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Share")
+                                Text(stringResource(R.string.qr_share))
                             }
 
                             Button(
@@ -413,7 +418,7 @@ fun QrToolsScreen(
                                     containerColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Text("Save to Gallery")
+                                Text(stringResource(R.string.qr_save_gallery))
                             }
                         }
                     }

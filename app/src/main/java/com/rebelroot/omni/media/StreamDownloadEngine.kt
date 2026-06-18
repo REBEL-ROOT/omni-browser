@@ -319,9 +319,10 @@ class StreamDownloadEngine(
             if (saveToLocker) {
                 progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
                 val mimeType = if (filename.endsWith(".mp3")) "audio/mpeg" else "video/mp4"
-                privateLockerManager.saveUriToLocker(Uri.fromFile(targetFile), filename, mimeType)
+                val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(targetFile), filename, mimeType)
                 targetFile.delete()
-                val finalLockerFile = File(context.filesDir, "locker/$filename")
+                val category = getCategoryForFile(filename)
+                val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                 progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
             } else {
                 progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
@@ -531,9 +532,10 @@ class StreamDownloadEngine(
                         
                         if (saveToLocker) {
                             progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
-                            privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutTsFile), tsFilename, "video/mp2t")
+                            val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutTsFile), tsFilename, "video/mp2t")
                             finalOutTsFile.delete()
-                            val finalLockerFile = File(context.filesDir, "locker/$tsFilename")
+                            val category = getCategoryForFile(tsFilename)
+                            val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                             progressFlow.value = DownloadProgress.Complete(finalLockerFile, finalLockerFile.length())
                         } else {
                             progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
@@ -556,9 +558,10 @@ class StreamDownloadEngine(
             if (saveToLocker) {
                 progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
                 val mimeType = if (filename.endsWith(".mp3")) "audio/mpeg" else "video/mp4"
-                privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutFile), filename, mimeType)
+                val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutFile), filename, mimeType)
                 finalOutFile.delete()
-                val finalLockerFile = File(context.filesDir, "locker/$filename")
+                val category = getCategoryForFile(filename)
+                val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                 progressFlow.value = DownloadProgress.Complete(finalLockerFile, finalLockerFile.length())
             } else {
                 progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
@@ -639,17 +642,32 @@ class StreamDownloadEngine(
         return decryptedBytes.size.toLong()
     }
 
+    private fun getCategoryForFile(filename: String): String {
+        val name = filename.lowercase()
+        return when {
+            name.endsWith(".mp4") || name.endsWith(".webm") || name.endsWith(".ts") || name.endsWith(".mkv") || name.endsWith(".avi") || name.endsWith(".mov") || name.endsWith(".flv") -> "videos"
+            name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".wav") || name.endsWith(".flac") || name.endsWith(".ogg") || name.endsWith(".aac") -> "music"
+            name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif") || name.endsWith(".webp") || name.endsWith(".bmp") -> "images"
+            else -> "documents"
+        }
+    }
+
     private fun saveToPublicDownloads(sourceFile: File, filename: String): File {
         val resolver = context.contentResolver
+        val category = getCategoryForFile(filename)
         val mimeType = when {
             filename.endsWith(".mp3") -> "audio/mpeg"
             filename.endsWith(".ts") -> "video/mp2t"
+            filename.endsWith(".png") -> "image/png"
+            filename.endsWith(".jpg") || filename.endsWith(".jpeg") -> "image/jpeg"
+            filename.endsWith(".webp") -> "image/webp"
+            filename.endsWith(".pdf") -> "application/pdf"
             else -> "video/mp4"
         }
         val contentValues = android.content.ContentValues().apply {
             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + category)
         }
 
         val targetUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
@@ -661,13 +679,14 @@ class StreamDownloadEngine(
                     }
                 }
                 sourceFile.delete()
-                return File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), filename)
+                val publicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), category).apply { mkdirs() }
+                return File(publicDir, filename)
             } catch (e: Exception) {
                 Log.e("DownloadEngine", "Failed to save via MediaStore, falling back to direct copy", e)
             }
         }
         
-        val fallbackDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        val fallbackDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, category).apply { mkdirs() }
         val fallbackFile = File(fallbackDir, filename)
         try {
             sourceFile.copyTo(fallbackFile, overwrite = true)
