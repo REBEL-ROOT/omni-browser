@@ -22,8 +22,88 @@
     <!-- Notifications for download progress on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Allow handing off downloaded APKs to the package installer (Android 8+) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Haptic feedback vibration permission -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Declare package visibility queries for resolving custom scheme intents (Android 11+) -->
+    <queries>
+        <!-- Generic ACTION_VIEW catch-all — ensures chooser can discover apps for any scheme -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+
+        <!-- For querying UPI payment apps -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+
+        <!-- Specific UPI app packages (required for chooser visibility on Android 11+) -->
+        <package android:name="com.google.android.apps.nbu.paisa.user" /> <!-- Google Pay -->
+        <package android:name="com.phonepe.app" />                       <!-- PhonePe -->
+        <package android:name="net.one97.paytm" />                       <!-- Paytm -->
+        <package android:name="in.org.npci.upiapp" />                    <!-- BHIM -->
+        <package android:name="com.dreamplug.androidapp" />              <!-- CRED -->
+        <package android:name="in.amazon.mShop.android.shopping" />      <!-- Amazon Pay -->
+        <package android:name="com.whatsapp" />                          <!-- WhatsApp -->
+
+        <!-- For intent:// scheme links (payment gateways like Razorpay, PayU) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="intent" />
+        </intent>
+
+        <!-- For market:// links (Play Store) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="market" />
+        </intent>
+
+        <!-- For querying email apps -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+        <!-- Also handle mailto: via ACTION_VIEW -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="mailto" />
+        </intent>
+
+        <!-- For dialer -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+
+        <!-- For SMS -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+
+        <!-- WhatsApp / Telegram deep links -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tg" />
+        </intent>
+
+        <!-- Geo/maps links -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"

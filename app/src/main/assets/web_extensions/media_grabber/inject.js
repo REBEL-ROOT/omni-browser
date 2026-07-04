@@ -14,6 +14,15 @@
         if (event.data?.type === 'OMNI_SET_NATIVE_PLAYER') {
             nativePlayerEnabled = !!event.data.enabled;
             console.log('[inject.js] Received OMNI_SET_NATIVE_PLAYER. nativePlayerEnabled set to:', nativePlayerEnabled);
+        } else if (event.data?.type === 'EVAL_JS') {
+            const script = event.data.script;
+            try {
+                // Execute code in window scope
+                const result = window.eval(script);
+                console.log("> " + (result === undefined ? 'undefined' : String(result)));
+            } catch (err) {
+                console.error("Error: " + (err.message || err));
+            }
         }
     });
 
@@ -302,11 +311,15 @@
             // Check if this element IS a video or CONTAINS a video
             const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
             if (video && !isLikelyAdOrBanner(video)) {
-                const videoUrl = getVideoUrl(video);
-                if (videoUrl) {
-                    // Hijack: open in native player instead of fullscreen
-                    requestNativePlayback(video, videoUrl);
-                    return Promise.resolve(); // Prevent fullscreen
+                if (video.duration && video.duration > 0 && video.duration < 15) {
+                    console.log('[inject.js] Ignoring video due to short duration (< 15s):', video.duration);
+                } else {
+                    const videoUrl = getVideoUrl(video);
+                    if (videoUrl) {
+                        // Hijack: open in native player instead of fullscreen
+                        requestNativePlayback(video, videoUrl);
+                        return Promise.resolve(); // Prevent fullscreen
+                    }
                 }
             }
         }
@@ -321,10 +334,14 @@
             if (nativePlayerEnabled && !isYouTube) {
                 const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
                 if (video && !isLikelyAdOrBanner(video)) {
-                    const videoUrl = getVideoUrl(video);
-                    if (videoUrl) {
-                        requestNativePlayback(video, videoUrl);
-                        return;
+                    if (video.duration && video.duration > 0 && video.duration < 15) {
+                        console.log('[inject.js] Ignoring webkit video due to short duration (< 15s):', video.duration);
+                    } else {
+                        const videoUrl = getVideoUrl(video);
+                        if (videoUrl) {
+                            requestNativePlayback(video, videoUrl);
+                            return;
+                        }
                     }
                 }
             }
@@ -339,10 +356,14 @@
             if (nativePlayerEnabled && !isYouTube) {
                 const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
                 if (video && !isLikelyAdOrBanner(video)) {
-                    const videoUrl = getVideoUrl(video);
-                    if (videoUrl) {
-                        requestNativePlayback(video, videoUrl);
-                        return;
+                    if (video.duration && video.duration > 0 && video.duration < 15) {
+                        console.log('[inject.js] Ignoring webkit video alt due to short duration (< 15s):', video.duration);
+                    } else {
+                        const videoUrl = getVideoUrl(video);
+                        if (videoUrl) {
+                            requestNativePlayback(video, videoUrl);
+                            return;
+                        }
                     }
                 }
             }
@@ -356,13 +377,22 @@
     // =========================================================
     function scanVideos() {
         try {
+            let anyPlaying = false;
             document.querySelectorAll('video').forEach(video => {
                 const src = video.currentSrc || video.src;
                 if (isDownloadableUrl(src)) reportMedia(src, getMimeType(src));
                 video.querySelectorAll('source').forEach(s => {
                     if (isDownloadableUrl(s.src)) reportMedia(s.src, getMimeType(s.src));
                 });
+                
+                // If a video is currently playing, report it to the native app!
+                if (video.currentTime > 0 && !video.paused && !video.ended && video.readyState > 2) {
+                    anyPlaying = true;
+                }
             });
+            if (anyPlaying) {
+                reportVideoState(true);
+            }
         } catch(e) { /* ignore */ }
     }
 

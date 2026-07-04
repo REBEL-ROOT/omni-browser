@@ -171,4 +171,16 @@
     <string name="video_player_downloading">डाउनलोड हो रहा है</string>
     <string name="video_player_download_cancelled">डाउनलोड रद्द किया गया</string>
     <string name="video_player_download_complete">डाउनलोड पूर्ण!</string>
+    <string name="discover_title">खोजें</string>
+    <string name="refresh_title">रीफ्रेश करें</string>
+    <string name="incognito_title">गुप्त</string>
+    <string name="add_title">जोड़ें</string>
+    <string name="cat_trending">चर्चित</string>
+    <string name="cat_world">विश्व</string>
+    <string name="cat_technology">तकनीक</string>
+    <string name="cat_sports">खेल</string>
+    <string name="cat_business">व्यापार</string>
+    <string name="cat_science">विज्ञान</string>
+    <string name="cat_entertainment">मनोरंजन</string>
+    <string name="cat_health">स्वास्थ्य</string>
 </resources>

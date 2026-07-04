@@ -8,20 +8,20 @@ import androidx.compose.ui.graphics.Color
 // ── Base neutral tokens (shared across all accent themes) ──
 
 // Light mode neutrals
-val LightBg = Color(0xFFF8F9FA)
-val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVar = Color(0xFFF2F3F5)
-val LightTextPrimary = Color(0xFF202124)  // Modern off-black
-val LightTextSec = Color(0xFF606266)
-val LightBorder = Color(0x1F000000)       // 12% thin divider
+val LightBg = Color(0xFFFFFFFF)           // Pure White background
+val LightSurface = Color(0xFFFFFFFF)      // Pure White surface
+val LightSurfaceVar = Color(0xFFF1F3F4)   // Chrome-like light grey
+val LightTextPrimary = Color(0xFF1C1C1E)  // Premium off-black
+val LightTextSec = Color(0xFF8E8E93)      // Modern secondary grey
+val LightBorder = Color(0xFFE5E5EA)       // Thin iOS/Chrome style divider
 
 // Dark mode neutrals
-val DarkBg = Color(0xFF000000)            // Pure OLED Black
-val DarkSurface = Color(0xFF16181D)       // Dark anthracite gray
-val DarkSurfaceVar = Color(0xFF1E2028)
-val DarkTextPrimary = Color(0xFFF3F4F6)   // Off-white
-val DarkTextSec = Color(0xFF9CA3AF)
-val DarkBorder = Color(0x14FFFFFF)        // 8% thin transparent white divider
+val DarkBg = Color(0xFF0B0B0C)            // Professional OLED Black
+val DarkSurface = Color(0xFF1C1C1E)       // Charcoal dark grey
+val DarkSurfaceVar = Color(0xFF2C2C2E)    // Dark border/card grey
+val DarkTextPrimary = Color(0xFFFFFFFF)   // Pure white text
+val DarkTextSec = Color(0xFF8E8E93)       // Neutral grey
+val DarkBorder = Color(0xFF2C2C2E)        // Thin neutral dark divider
 
 // ── Accent Theme Definitions ──
 
@@ -102,18 +102,28 @@ fun buildDarkScheme(accent: AccentPalette): ColorScheme = darkColorScheme(
 )
 
 fun buildLightScheme(accent: AccentPalette): ColorScheme = lightColorScheme(
-    background = LightBg,
-    surface = LightSurface,
-    surfaceVariant = LightSurfaceVar,
+    background = Color(0xFFF8FAFC),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFE2E8F0),
     primary = accent.primary,
     secondary = accent.secondary,
     tertiary = accent.tertiary,
-    onBackground = LightTextPrimary,
-    onSurface = LightTextPrimary,
-    onSurfaceVariant = LightTextSec,
-    outline = LightBorder,
-    error = accent.error
+    onBackground = Color(0xFF0F172A),
+    onSurface = Color(0xFF0F172A),
+    onSurfaceVariant = Color(0xFF475569),
+    outline = Color(0xFF94A3B8),
+    outlineVariant = Color(0xFFCBD5E1),
+    error = Color(0xFFDC2626),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFEE2E2),
+    onErrorContainer = Color(0xFF7F1D1D),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF8FAFC),
+    surfaceContainer = Color(0xFFF1F5F9),
+    surfaceContainerHigh = Color(0xFFE2E8F0),
+    surfaceContainerHighest = Color(0xFFCBD5E1)
 )
+
 
 // Legacy schemes for backward compat (default Ocean Blue)
 val OmniDarkScheme = buildDarkScheme(OceanBlue)

@@ -171,4 +171,16 @@
     <string name="video_player_downloading">Wird heruntergeladen</string>
     <string name="video_player_download_cancelled">Download abgebrochen</string>
     <string name="video_player_download_complete">Download abgeschlossen!</string>
+    <string name="discover_title">Entdecken</string>
+    <string name="refresh_title">Aktualisieren</string>
+    <string name="incognito_title">Inkognito</string>
+    <string name="add_title">Hinzufügen</string>
+    <string name="cat_trending">Trends</string>
+    <string name="cat_world">Welt</string>
+    <string name="cat_technology">Technologie</string>
+    <string name="cat_sports">Sport</string>
+    <string name="cat_business">Wirtschaft</string>
+    <string name="cat_science">Wissenschaft</string>
+    <string name="cat_entertainment">Unterhaltung</string>
+    <string name="cat_health">Gesundheit</string>
 </resources>
