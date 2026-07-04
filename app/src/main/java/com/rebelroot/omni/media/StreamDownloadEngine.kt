@@ -4,12 +4,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
+import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.rebelroot.omni.tools.locker.PrivateLockerManager
@@ -33,7 +37,9 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.DelicateCoroutinesApi
 
+@OptIn(DelicateCoroutinesApi::class)
 class StreamDownloadEngine(
     private val context: Context,
     private val ffmpegBridge: FFmpegBridge,
@@ -43,7 +49,8 @@ class StreamDownloadEngine(
     sealed class DownloadProgress {
         data class Downloading(val percent: Int, val bytesDownloaded: Long) : DownloadProgress()
         data class Muxing(val message: String) : DownloadProgress()
-        data class Complete(val file: File, val sizeBytes: Long) : DownloadProgress()
+        // openUri: the MediaStore content:// URI for public downloads (null for locker/video)
+        data class Complete(val file: File, val sizeBytes: Long, val openUri: Uri? = null) : DownloadProgress()
         data class Error(val message: String) : DownloadProgress()
     }
 
@@ -52,7 +59,8 @@ class StreamDownloadEngine(
         val filename: String,
         val url: String,
         val saveToLocker: Boolean,
-        val progress: StateFlow<DownloadProgress>
+        val progress: StateFlow<DownloadProgress>,
+        val isGeneric: Boolean = false
     )
 
     private val _jobs = MutableStateFlow<List<DownloadJob>>(emptyList())
@@ -263,6 +271,198 @@ class StreamDownloadEngine(
         runningJobs[jobId] = jobCoroutine
 
         return jobId
+    }
+
+    fun startGenericFileDownload(
+        url: String,
+        filename: String,
+        contentType: String?,
+        saveToLocker: Boolean
+    ): String {
+        val jobId = UUID.randomUUID().toString()
+        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
+
+        val job = DownloadJob(
+            id = jobId,
+            filename = filename,
+            url = url,
+            saveToLocker = saveToLocker,
+            progress = progressFlow,
+            isGeneric = true
+        )
+
+        _jobs.update { it + job }
+        saveDownloadHistory()
+
+        // Notification observer
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main) {
+            progressFlow.collect { progress ->
+                when (progress) {
+                    is DownloadProgress.Downloading -> {
+                        val pct = progress.percent
+                        val text = if (pct >= 0) "$pct% completed" else "Downloading..."
+                        updateNotification(jobId, filename, text, pct)
+                    }
+                    is DownloadProgress.Muxing -> {
+                        updateNotification(jobId, filename, progress.message, -1, isIndeterminate = true)
+                    }
+                    is DownloadProgress.Complete -> {
+                        showCompleteNotification(jobId, filename, "Saved successfully")
+                        jobNotificationIds.remove(jobId)
+                        saveDownloadHistory()
+                    }
+                    is DownloadProgress.Error -> {
+                        showErrorNotification(jobId, filename, progress.message)
+                        jobNotificationIds.remove(jobId)
+                        saveDownloadHistory()
+                    }
+                }
+            }
+        }
+
+        val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                downloadGenericFile(jobId, url, filename, contentType, saveToLocker, progressFlow)
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Generic download failed for job $jobId", e)
+                progressFlow.value = DownloadProgress.Error(e.message ?: "Unknown download error")
+            } finally {
+                runningJobs.remove(jobId)
+            }
+        }
+        runningJobs[jobId] = jobCoroutine
+
+        return jobId
+    }
+
+    private suspend fun downloadGenericFile(
+        jobId: String,
+        urlStr: String,
+        filename: String,
+        contentType: String?,
+        saveToLocker: Boolean,
+        progressFlow: MutableStateFlow<DownloadProgress>
+    ) = withContext(Dispatchers.IO) {
+        val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
+        val targetFile = File(targetDir, filename)
+        if (targetFile.exists()) targetFile.delete()
+
+        try {
+            val url = URL(urlStr)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+            connection.instanceFollowRedirects = true
+            connection.connect()
+
+            if (connection.responseCode !in 200..299) {
+                progressFlow.value = DownloadProgress.Error("Server returned code ${connection.responseCode}")
+                return@withContext
+            }
+
+            val totalLength = connection.contentLengthLong
+            val input = BufferedInputStream(connection.inputStream, 8192)
+            val output = FileOutputStream(targetFile)
+
+            val buffer = ByteArray(8192)
+            var count = 0
+            var totalBytes = 0L
+
+            while (isActive && input.read(buffer).also { count = it } != -1) {
+                totalBytes += count
+                output.write(buffer, 0, count)
+                val percent = if (totalLength > 0) ((totalBytes * 100) / totalLength).toInt() else -1
+                progressFlow.value = DownloadProgress.Downloading(percent, totalBytes)
+            }
+
+            output.flush()
+            output.close()
+            input.close()
+
+            if (!isActive) {
+                targetFile.delete()
+                return@withContext
+            }
+
+            if (saveToLocker) {
+                progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                val mime = contentType ?: "application/octet-stream"
+                val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(targetFile), filename, mime)
+                targetFile.delete()
+                val category = getCategoryForFile(filename)
+                val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
+                progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
+            } else {
+                progressFlow.value = DownloadProgress.Muxing("Saving to Downloads folder...")
+                val (savedFile, savedUri) = saveGenericToPublicDownloads(targetFile, filename, contentType)
+                targetFile.delete()
+                progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes, savedUri)
+            }
+        } finally {
+            if (progressFlow.value !is DownloadProgress.Complete && targetFile.exists()) {
+                targetFile.delete()
+            }
+        }
+    }
+
+    /**
+     * Saves a temp file to the PUBLIC Downloads folder so it appears in the system Files app.
+     * Android 10+: uses MediaStore.Downloads (no WRITE_EXTERNAL_STORAGE needed).
+     * Android 9-: writes directly to Environment.getExternalStoragePublicDirectory(DOWNLOADS).
+     *
+     * Returns Pair(File, Uri?) — Uri is the MediaStore content:// URI on Android 10+,
+     * which should be used for opening the file rather than FileProvider.
+     */
+    private fun saveGenericToPublicDownloads(
+        tempFile: File,
+        filename: String,
+        contentType: String?
+    ): Pair<File, Uri?> {
+        val ext = filename.substringAfterLast('.', "").lowercase()
+        val mime = contentType?.takeIf { it.isNotBlank() }
+            ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?: "application/octet-stream"
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+: Insert into MediaStore.Downloads
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.MIME_TYPE, mime)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val resolver = context.contentResolver
+            val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val itemUri = resolver.insert(collection, values)
+                ?: throw Exception("MediaStore insert returned null for $filename")
+
+            resolver.openOutputStream(itemUri)?.use { out ->
+                tempFile.inputStream().use { it.copyTo(out) }
+            }
+
+            // Mark as ready
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(itemUri, values, null, null)
+
+            // Return a dummy File (for display) + the real MediaStore URI
+            Pair(tempFile, itemUri)
+        } else {
+            // Android 9 and below: write directly to public Downloads dir
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            downloadsDir.mkdirs()
+            var destFile = File(downloadsDir, filename)
+            var counter = 1
+            while (destFile.exists()) {
+                val nameWithoutExt = filename.substringBeforeLast('.')
+                val extension = filename.substringAfterLast('.', "")
+                destFile = if (extension.isNotEmpty())
+                    File(downloadsDir, "${nameWithoutExt}($counter).$extension")
+                else
+                    File(downloadsDir, "$nameWithoutExt($counter)")
+                counter++
+            }
+            tempFile.copyTo(destFile, overwrite = true)
+            Pair(destFile, Uri.fromFile(destFile))
+        }
     }
 
     private suspend fun downloadDirect(
@@ -653,49 +853,20 @@ class StreamDownloadEngine(
     }
 
     private fun saveToPublicDownloads(sourceFile: File, filename: String): File {
-        val resolver = context.contentResolver
         val category = getCategoryForFile(filename)
-        val mimeType = when {
-            filename.endsWith(".mp3") -> "audio/mpeg"
-            filename.endsWith(".ts") -> "video/mp2t"
-            filename.endsWith(".png") -> "image/png"
-            filename.endsWith(".jpg") || filename.endsWith(".jpeg") -> "image/jpeg"
-            filename.endsWith(".webp") -> "image/webp"
-            filename.endsWith(".pdf") -> "application/pdf"
-            else -> "video/mp4"
-        }
-        val contentValues = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
-            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + category)
-        }
-
-        val targetUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-        if (targetUri != null) {
-            try {
-                resolver.openOutputStream(targetUri)?.use { output ->
-                    sourceFile.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
-                }
-                sourceFile.delete()
-                val publicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), category).apply { mkdirs() }
-                return File(publicDir, filename)
-            } catch (e: Exception) {
-                Log.e("DownloadEngine", "Failed to save via MediaStore, falling back to direct copy", e)
-            }
-        }
-        
-        val fallbackDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, category).apply { mkdirs() }
-        val fallbackFile = File(fallbackDir, filename)
+        // Store in the app's safe external files directory so ExoPlayer can read it directly
+        // without Scoped Storage permission blocks or runtime exceptions.
+        val downloadDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "OmniDownloads/$category").apply { mkdirs() }
+        val destFile = File(downloadDir, filename)
         try {
-            sourceFile.copyTo(fallbackFile, overwrite = true)
+            sourceFile.copyTo(destFile, overwrite = true)
             sourceFile.delete()
-            return fallbackFile
+            Log.i("DownloadEngine", "Saved download successfully to: ${destFile.absolutePath}")
+            return destFile
         } catch (e: Exception) {
-            Log.e("DownloadEngine", "Failed fallback file copy", e)
+            Log.e("DownloadEngine", "Failed to save download to external files dir, returning source file", e)
+            return sourceFile
         }
-        return sourceFile
     }
 
     private fun parseM3U8MasterPlaylist(baseUrl: String, content: String): List<Pair<String, String>> {

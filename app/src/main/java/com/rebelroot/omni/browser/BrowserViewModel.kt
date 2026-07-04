@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.json.JSONArray
 import org.mozilla.geckoview.AllowOrDeny
@@ -136,6 +137,7 @@ class BrowserViewModel : ViewModel() {
         val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
         val PDF_EXPORT_THEME_KEY = stringPreferencesKey("pdf_export_theme")
         val SELECTED_LANGUAGE_KEY = stringPreferencesKey("selected_language")
+        val LANGUAGE_SELECTION_DONE_KEY = booleanPreferencesKey("language_selection_done")
         val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
         val QR_OVERVIEW_SEEN_KEY = booleanPreferencesKey("qr_overview_seen")
         val PDF_OVERVIEW_SEEN_KEY = booleanPreferencesKey("pdf_overview_seen")
@@ -143,6 +145,7 @@ class BrowserViewModel : ViewModel() {
         val EXTENSIONS_OVERVIEW_SEEN_KEY = booleanPreferencesKey("extensions_overview_seen")
         val EDIT_PAGE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("edit_page_overview_seen")
         val CONSOLE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("console_overview_seen")
+        val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
 
         // Native Player Settings Keys
         val PLAYER_DEFAULT_QUALITY_KEY = stringPreferencesKey("player_default_quality")
@@ -209,6 +212,10 @@ class BrowserViewModel : ViewModel() {
     var activeContextMenu by mutableStateOf<ContextMenuElement?>(null)
         private set
 
+    // Text Selection State
+    var activeTextSelection by mutableStateOf<String?>(null)
+        private set
+
     // Browser History System
     val historyList = mutableStateListOf<HistoryEntry>()
 
@@ -246,6 +253,7 @@ class BrowserViewModel : ViewModel() {
     var hasSeenExtensionsOverview by mutableStateOf(false)
     var hasSeenEditPageOverview by mutableStateOf(false)
     var hasSeenConsoleOverview by mutableStateOf(false)
+    var hasSeenDevNotesOverview by mutableStateOf(false)
 
     // UI States
     var currentUrl by mutableStateOf("about:blank")
@@ -262,12 +270,21 @@ class BrowserViewModel : ViewModel() {
     var customSearchUrl by mutableStateOf("")
     var isDarkThemeEnabled by mutableStateOf(true)
     var selectedLanguageCode by mutableStateOf("en")
+    var isLanguageSelectionDone by mutableStateOf(false)
     var isOnboardingCompleted by mutableStateOf(false)
     var googleAccountEmail by mutableStateOf<String?>(null)
     var googleAccountDisplayName by mutableStateOf<String?>(null)
     var googleAccountPhotoUrl by mutableStateOf<String?>(null)
     var googleAccountIsSignedIn by mutableStateOf(false)
     var selectedAccentTheme by mutableStateOf("Ocean Blue")
+
+    // --- Custom Site Style Config ---
+    var siteStyleFontSize by mutableStateOf(100)
+    var siteStyleTheme by mutableStateOf("DEFAULT")
+    var siteStyleLineSpacing by mutableStateOf(1.4f)
+    var siteStyleLetterSpacing by mutableStateOf(0f)
+    var siteStyleFontFamily by mutableStateOf("inherit")
+    var siteStyleAppliedGlobally by mutableStateOf(false)
     var pdfExportTheme by mutableStateOf("default")
     var isReaderModeActive by mutableStateOf(false)
     var readerFontSize by mutableStateOf(18)
@@ -275,6 +292,9 @@ class BrowserViewModel : ViewModel() {
     var readerFontFamily by mutableStateOf("System")
     var readerLineHeight by mutableStateOf(1.6f)
     var readerWidth by mutableStateOf("Medium")
+    var readerLetterSpacing by mutableStateOf("Normal")
+    var readerWordSpacing by mutableStateOf("Normal")
+    var readerJustified by mutableStateOf(false)
 
     // Native Player Settings
     var playerDefaultQuality by mutableStateOf("Auto")
@@ -355,9 +375,176 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun scanImageForQrCodes(context: Context, uri: Uri) {
+        isQrScanning = true
+        qrScanResults = emptyList()
+        qrScanError = null
+
+        try {
+            val options = BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE, Barcode.FORMAT_ALL_FORMATS)
+                .build()
+            val scanner = BarcodeScanning.getClient(options)
+            val inputImage = InputImage.fromFilePath(context, uri)
+
+            scanner.process(inputImage)
+                .addOnSuccessListener { barcodes ->
+                    val results = barcodes.mapNotNull { it.rawValue }.distinct()
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isQrScanning = false
+                        qrScanResults = results
+                        if (results.isEmpty()) {
+                            qrScanError = "No QR codes found in this image"
+                        }
+                    }
+                    scanner.close()
+                }
+                .addOnFailureListener { e ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isQrScanning = false
+                        qrScanError = "Scan failed: ${e.localizedMessage}"
+                    }
+                    scanner.close()
+                }
+        } catch (e: Exception) {
+            isQrScanning = false
+            qrScanError = "Failed to load image: ${e.localizedMessage}"
+        }
+    }
+
+    fun applySiteStyleToActiveTab() {
+        val session = geckoSession
+        val hasCustomStyles = siteStyleTheme != "DEFAULT" || siteStyleFontSize != 100 || siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || siteStyleFontFamily != "inherit"
+
+        val bgValue = when (siteStyleTheme) {
+            "DARK" -> "#0B131E"
+            "SEPIA" -> "#F4ECD8"
+            "OLED" -> "#000000"
+            "FOREST" -> "#E6F0E6"
+            else -> null
+        }
+        val textValue = when (siteStyleTheme) {
+            "DARK" -> "#E2E8F0"
+            "SEPIA" -> "#5C4033"
+            "OLED" -> "#E5E7EB"
+            "FOREST" -> "#1E3F20"
+            else -> null
+        }
+        
+        val fontCss = if (siteStyleFontFamily != "inherit") "font-family: ${siteStyleFontFamily} !important;" else ""
+        val bgCss = if (bgValue != null) "background-color: ${bgValue} !important; background: ${bgValue} !important;" else ""
+        val textCss = if (textValue != null) "color: ${textValue} !important;" else ""
+        val sizeCss = "font-size: ${siteStyleFontSize}% !important;"
+        val lineSpacingCss = "line-height: ${siteStyleLineSpacing} !important;"
+        val letterSpacingCss = "letter-spacing: ${siteStyleLetterSpacing}px !important;"
+
+        val cssRules = if (hasCustomStyles) {
+            """
+            html, body, p, span, div, h1, h2, h3, h4, h5, h6, li, a, section, article {
+                $bgCss
+                $textCss
+                $fontCss
+                $sizeCss
+                $lineSpacingCss
+                $letterSpacingCss
+            }
+            """.trimIndent().replace("\n", " ").replace("'", "\\'")
+        } else {
+            ""
+        }
+
+        val js = """
+            javascript:(function() {
+                const styleId = 'omni-custom-site-style';
+                let styleEl = document.getElementById(styleId);
+                if ('$cssRules' === '') {
+                    if (styleEl) {
+                        styleEl.remove();
+                    }
+                } else {
+                    if (!styleEl) {
+                        styleEl = document.createElement('style');
+                        styleEl.id = styleId;
+                        document.head.appendChild(styleEl);
+                    }
+                    styleEl.innerHTML = '$cssRules';
+                }
+            })();
+        """.trimIndent()
+        
+        session.loadUri(js)
+    }
+
+    fun updateSiteStyle(
+        fontSize: Int,
+        theme: String,
+        lineSpacing: Float,
+        letterSpacing: Float,
+        fontFamily: String,
+        appliedGlobally: Boolean
+    ) {
+        siteStyleFontSize = fontSize
+        siteStyleTheme = theme
+        siteStyleLineSpacing = lineSpacing
+        siteStyleLetterSpacing = letterSpacing
+        siteStyleFontFamily = fontFamily
+        siteStyleAppliedGlobally = appliedGlobally
+
+        val context = appContext ?: return
+        val sp = context.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+        sp.edit().apply {
+            putInt("site_style_font_size", fontSize)
+            putString("site_style_theme", theme)
+            putFloat("site_style_line_spacing", lineSpacing)
+            putFloat("site_style_letter_spacing", letterSpacing)
+            putString("site_style_font_family", fontFamily)
+            putBoolean("site_style_applied_globally", appliedGlobally)
+        }.apply()
+
+        applySiteStyleToActiveTab()
+    }
+
+    fun resetSiteStyle() {
+        updateSiteStyle(
+            fontSize = 100,
+            theme = "DEFAULT",
+            lineSpacing = 1.4f,
+            letterSpacing = 0f,
+            fontFamily = "inherit",
+            appliedGlobally = false
+        )
+    }
+
     fun clearQrScanResults() {
         qrScanResults = emptyList()
         qrScanError = null
+    }
+
+    /**
+     * Extracts the S.browser_fallback_url from an intent:// URI.
+     * Payment gateways (Razorpay, PayU, etc.) embed this URL so browsers
+     * can redirect users to a web fallback when the target app isn't installed.
+     *
+     * Format: intent://...;S.browser_fallback_url=https%3A%2F%2Fexample.com;end
+     */
+    private fun extractFallbackUrl(intentUri: String): String? {
+        return try {
+            // The fallback URL is stored as an "extra" in the intent URI
+            val intent = android.content.Intent.parseUri(intentUri, android.content.Intent.URI_INTENT_SCHEME)
+            val fallback = intent.getStringExtra("browser_fallback_url")
+            if (!fallback.isNullOrBlank() && (fallback.startsWith("http://") || fallback.startsWith("https://"))) {
+                fallback
+            } else {
+                // Manual extraction as a backup (some gateways use non-standard encoding)
+                val regex = Regex("[;?&]S\\.browser_fallback_url=([^;&#]+)", RegexOption.IGNORE_CASE)
+                val match = regex.find(intentUri)
+                val url = match?.groupValues?.get(1)
+                if (url != null) java.net.URLDecoder.decode(url, "UTF-8") else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting fallback URL from intent URI", e)
+            null
+        }
     }
 
     fun isDirectVideoUrl(url: String): Boolean {
@@ -375,6 +562,81 @@ class BrowserViewModel : ViewModel() {
                 clean.contains(".webm?") ||
                 clean.contains(".mkv?") ||
                 clean.contains(".ts?")
+    }
+
+    private fun parseFilenameFromContentDisposition(disposition: String?): String? {
+        if (disposition.isNullOrBlank()) return null
+        val regex = Regex("""filename\*?=(?:UTF-8''?)?\"?([^\";]+)\"?""", RegexOption.IGNORE_CASE)
+        val match = regex.find(disposition)
+        return match?.groupValues?.get(1)?.trim()?.trim('"')
+    }
+
+    private fun guessDownloadFilename(url: String, contentType: String?): String {
+        val parsed = try {
+            Uri.parse(url).lastPathSegment
+        } catch (e: Exception) {
+            null
+        }
+        if (!parsed.isNullOrBlank() && parsed.contains('.')) {
+            return parsed
+        }
+        return when {
+            contentType?.contains("pdf", true) == true -> "download.pdf"
+            contentType?.contains("zip", true) == true -> "download.zip"
+            contentType?.contains("msword", true) == true || contentType?.contains("wordprocessingml.document", true) == true -> "download.docx"
+            contentType?.contains("excel", true) == true || contentType?.contains("spreadsheetml.sheet", true) == true -> "download.xlsx"
+            contentType?.contains("presentation", true) == true || contentType?.contains("presentationml.presentation", true) == true -> "download.pptx"
+            contentType?.contains("text/plain", true) == true -> "download.txt"
+            else -> "downloaded-file"
+        }
+    }
+
+    private fun isGenericDownloadUrl(url: String): Boolean {
+        val path = url.substringBeforeLast("?").substringAfterLast("/")
+        if (path.isBlank() || !path.contains('.')) return false
+        val ext = path.substringAfterLast('.').lowercase()
+        return ext in setOf(
+            "apk", "pdf", "zip", "rar", "7z", "tar", "gz", "tgz", "bin", "exe", "epub",
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "rtf", "xml", "json",
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "mp3", "wav", "flac",
+            "m4a", "aac", "ogg", "mp4", "mkv", "webm", "ts", "mov", "avi", "flv"
+        )
+    }
+
+    // ── Generic file download dialog ───────────────────────────────────────────
+    data class PendingGenericDownload(
+        val url: String,
+        val filename: String,
+        val contentType: String?
+    )
+    var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
+
+    fun startGenericDownload(download: PendingGenericDownload, saveToLocker: Boolean) {
+        pendingGenericDownload = null
+        streamDownloadEngine.startGenericFileDownload(
+            url = download.url,
+            filename = download.filename,
+            contentType = download.contentType,
+            saveToLocker = saveToLocker
+        )
+    }
+
+    private fun handleExternalDownloadResponse(response: org.mozilla.geckoview.WebResponse, context: Context) {
+        val headers = response.headers
+        val disposition = headers["Content-Disposition"] ?: headers["content-disposition"]
+        val contentType = headers["Content-Type"] ?: headers["content-type"]
+        if (response.requestExternalApp || disposition?.contains("attachment", true) == true) {
+            Log.i(TAG, "Handling external download response: ${response.uri}")
+            val filename = parseFilenameFromContentDisposition(disposition)
+                ?: guessDownloadFilename(response.uri, contentType)
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                pendingGenericDownload = PendingGenericDownload(
+                    url = response.uri,
+                    filename = filename,
+                    contentType = contentType
+                )
+            }
+        }
     }
 
     var isLoading by mutableStateOf(false)
@@ -401,8 +663,55 @@ class BrowserViewModel : ViewModel() {
         activeMediaPermissionPrompt = null
     }
 
+    fun dismissTextSelection() {
+        activeTextSelection = null
+    }
+
+    fun copySelectedText(context: Context) {
+        val text = activeTextSelection ?: return
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = android.content.ClipData.newPlainText("Selected Text", text)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(context, "Text copied", Toast.LENGTH_SHORT).show()
+        dismissTextSelection()
+    }
+
     // Web Video Play Takeover Lambda
     var onPlayVideoRequestReceived: ((String, String) -> Unit)? = null
+
+    // File Upload: holds all info needed for the UI to launch a file picker and
+    // then deliver the selected URIs back into the GeckoSession engine.
+    data class PendingFilePrompt(
+        val geckoResult: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>,
+        val prompt: GeckoSession.PromptDelegate.FilePrompt,
+        val allowMultiple: Boolean,
+        val mimeTypes: Array<String>?
+    )
+    var pendingFilePrompt by mutableStateOf<PendingFilePrompt?>(null)
+
+    fun deliverFilePickerResult(uris: List<android.net.Uri>) {
+        val pending = pendingFilePrompt ?: return
+        pendingFilePrompt = null
+        if (uris.isEmpty()) {
+            pending.geckoResult.complete(pending.prompt.dismiss())
+        } else {
+            val ctx = appContext
+            if (ctx == null) {
+                // No context — can't resolve content URIs; dismiss gracefully
+                pending.geckoResult.complete(pending.prompt.dismiss())
+            } else {
+                pending.geckoResult.complete(
+                    pending.prompt.confirm(ctx, uris.toTypedArray())
+                )
+            }
+        }
+    }
+
+    fun cancelFilePrompt() {
+        val pending = pendingFilePrompt ?: return
+        pendingFilePrompt = null
+        pending.geckoResult.complete(pending.prompt.dismiss())
+    }
 
     // Extensions References
     private var uBlockExtension: WebExtension? = null
@@ -412,12 +721,23 @@ class BrowserViewModel : ViewModel() {
     
     // Console Logs
     val consoleLogs = mutableStateListOf<ConsoleLogEntry>()
+    var pendingJsCommand by mutableStateOf<String?>(null)
     
     data class ConsoleLogEntry(
         val level: String,
         val message: String,
         val timestamp: Long = System.currentTimeMillis()
     )
+
+    data class DevNote(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val title: String,
+        val content: String,
+        val type: String, // "NOTE", "CODE", "KEY", "PASSWORD", "URL"
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    val devNotes = mutableStateListOf<DevNote>()
 
     // --- Tab Management ---
     fun saveTabs() {
@@ -444,6 +764,80 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun loadDevNotes(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "dev_notes.json")
+            if (file.exists()) {
+                try {
+                    val jsonStr = file.readText()
+                    val jsonArray = org.json.JSONArray(jsonStr)
+                    val loadedList = mutableListOf<DevNote>()
+                    for (i in 0 until jsonArray.length()) {
+                        val obj = jsonArray.getJSONObject(i)
+                        loadedList.add(
+                            DevNote(
+                                id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                                title = obj.optString("title", ""),
+                                content = obj.optString("content", ""),
+                                type = obj.optString("type", "NOTE"),
+                                timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                            )
+                        )
+                    }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        devNotes.clear()
+                        devNotes.addAll(loadedList)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading dev notes", e)
+                }
+            }
+        }
+    }
+
+    fun saveDevNotes() {
+        val context = appContext ?: return
+        val listSnapshot = devNotes.toList()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val file = File(context.filesDir, "dev_notes.json")
+            try {
+                val jsonArray = org.json.JSONArray()
+                listSnapshot.forEach { note ->
+                    val obj = org.json.JSONObject().apply {
+                        put("id", note.id)
+                        put("title", note.title)
+                        put("content", note.content)
+                        put("type", note.type)
+                        put("timestamp", note.timestamp)
+                    }
+                    jsonArray.put(obj)
+                }
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving dev notes", e)
+            }
+        }
+    }
+
+    fun addDevNote(title: String, content: String, type: String) {
+        val note = DevNote(title = title, content = content, type = type)
+        devNotes.add(0, note)
+        saveDevNotes()
+    }
+
+    fun updateDevNote(id: String, title: String, content: String, type: String) {
+        val idx = devNotes.indexOfFirst { it.id == id }
+        if (idx != -1) {
+            devNotes[idx] = devNotes[idx].copy(title = title, content = content, type = type, timestamp = System.currentTimeMillis())
+            saveDevNotes()
+        }
+    }
+
+    fun deleteDevNote(id: String) {
+        devNotes.removeAll { it.id == id }
+        saveDevNotes()
+    }
+
     fun initTabs(context: Context) {
         if (tabs.isEmpty()) {
             val file = File(context.filesDir, "browser_tabs.json")
@@ -464,6 +858,7 @@ class BrowserViewModel : ViewModel() {
                             .usePrivateMode(isIncognitoMode)
                             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
                             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+                            .allowJavascript(true)
                             .build()
                         val session = GeckoSession(settings)
                         
@@ -522,6 +917,7 @@ class BrowserViewModel : ViewModel() {
             .usePrivateMode(isIncognitoMode)
             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+            .allowJavascript(true)
             .build()
         val session = GeckoSession(settings)
         val tabId = java.util.UUID.randomUUID().toString()
@@ -569,6 +965,10 @@ class BrowserViewModel : ViewModel() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error activating new tab session", e)
             }
+        }
+        
+        if (siteStyleAppliedGlobally) {
+            applySiteStyleToActiveTab()
         }
         
         // Restore the tab's own saved navigation state
@@ -682,7 +1082,17 @@ class BrowserViewModel : ViewModel() {
         tab.session.loadUri(formattedUrl)
     }
 
+    private fun applyUserAgentForTab(tab: TabState) {
+        val ua = if (isDesktopMode) {
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+        } else {
+            "Mozilla/5.0 (Android 13; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"
+        }
+        tab.session.settings.setUserAgentOverride(ua)
+    }
+
     private fun setupTabSessionListeners(tab: TabState, context: Context) {
+        applyUserAgentForTab(tab)
         tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
             override fun onAndroidPermissionsRequest(
                 session: GeckoSession,
@@ -770,7 +1180,39 @@ class BrowserViewModel : ViewModel() {
             }
         }
 
+        tab.session.promptDelegate = object : GeckoSession.PromptDelegate {
+            override fun onFilePrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.FilePrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+                if (tab.id != activeTabId) {
+                    return GeckoResult.fromValue(prompt.dismiss())
+                }
+                val allowMultiple = prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.MULTIPLE
+                val mimeTypes = prompt.mimeTypes
+                Log.d(TAG, "onFilePrompt: multiple=$allowMultiple, mimes=${mimeTypes?.joinToString()}")
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                pendingFilePrompt = PendingFilePrompt(
+                    geckoResult = result,
+                    prompt = prompt,
+                    allowMultiple = allowMultiple,
+                    mimeTypes = mimeTypes
+                )
+                return result
+            }
+        }
+
         tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
+            override fun onCloseRequest(session: GeckoSession) {
+                Log.i(TAG, "onCloseRequest: closing session for tab ${tab.id}")
+                closeTab(tab.id, context)
+            }
+
+            override fun onExternalResponse(session: GeckoSession, response: org.mozilla.geckoview.WebResponse) {
+                if (tab.id != activeTabId) return
+                handleExternalDownloadResponse(response, context)
+            }
+
             override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
                 if (tab.id == activeTabId) {
                     isFullscreen = fullScreen
@@ -813,6 +1255,25 @@ class BrowserViewModel : ViewModel() {
             }
         }
 
+        tab.session.selectionActionDelegate = object : GeckoSession.SelectionActionDelegate {
+            override fun onShowActionRequest(
+                session: GeckoSession,
+                selection: GeckoSession.SelectionActionDelegate.Selection
+            ) {
+                // When text is selected in web content, show custom selection menu
+                if (tab.id == activeTabId && selection.text.isNotEmpty()) {
+                    activeTextSelection = selection.text
+                }
+            }
+
+            override fun onHideAction(session: GeckoSession, reason: Int) {
+                // Clear selection when hidden
+                if (tab.id == activeTabId) {
+                    activeTextSelection = null
+                }
+            }
+        }
+
         tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(
                 session: GeckoSession,
@@ -821,18 +1282,6 @@ class BrowserViewModel : ViewModel() {
                 hasUserGesture: Boolean
             ) {
                 url?.let {
-                    val lowerUrl = it.lowercase().trim()
-                    if (lowerUrl.contains("accounts.google.com")) {
-                        val ua = if (isDesktopMode) {
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-                        } else {
-                            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
-                        }
-                        session.settings.setUserAgentOverride(ua)
-                    } else {
-                        session.settings.setUserAgentOverride(null)
-                    }
-
                     val idx = tabs.indexOfFirst { it.id == tab.id }
                     if (idx != -1) {
                         val currentTabUrl = tabs[idx].url
@@ -879,17 +1328,6 @@ class BrowserViewModel : ViewModel() {
                 val uri = request.uri
                 val lowerUri = uri.lowercase().trim()
 
-                if (lowerUri.contains("accounts.google.com")) {
-                    val ua = if (isDesktopMode) {
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-                    } else {
-                        "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
-                    }
-                    session.settings.setUserAgentOverride(ua)
-                } else {
-                    session.settings.setUserAgentOverride(null)
-                }
-
                 if (tab.id == activeTabId) {
                     mediaInterceptor.onMediaRequestDetected(uri)
                 }
@@ -921,6 +1359,20 @@ class BrowserViewModel : ViewModel() {
                     }
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
+
+                // 2a. Intercept generic file downloads — show a dialog so user picks local vs. vault
+                if (tab.id == activeTabId && isGenericDownloadUrl(uri) && !isYouTube) {
+                    Log.i(TAG, "📥 Intercepted file download URL: $uri")
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        val filename = guessDownloadFilename(uri, null)
+                        pendingGenericDownload = PendingGenericDownload(
+                            url = uri,
+                            filename = filename,
+                            contentType = null
+                        )
+                    }
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
                 
                 // 3. Block addon install click
                 if (uri.endsWith(".xpi") || uri.contains("/firefox/downloads/file/")) {
@@ -936,14 +1388,15 @@ class BrowserViewModel : ViewModel() {
                     !lowerUri.startsWith("javascript:") && 
                     !lowerUri.startsWith("data:")
                 ) {
-                    // Block intent/market redirection to calendar or play store spam
+                    // Handle intent:// and market:// URIs (used by payment gateways, app deep links)
                     if (lowerUri.startsWith("intent:") || lowerUri.startsWith("market:")) {
-                        Log.i(TAG, "🚫 Intercepted intent/market URI: $uri")
+                        Log.i(TAG, "Intercepted intent/market URI: $uri")
                         
                         try {
                             val intent = android.content.Intent.parseUri(uri, android.content.Intent.URI_INTENT_SCHEME)
                             val intentPackage = intent.getPackage()
                             
+                            // Block calendar spam intents
                             val isCalendarSpam = (intentPackage != null && (intentPackage.contains("calendar") || intentPackage.contains("cal"))) ||
                                     (intent.dataString != null && (intent.dataString!!.contains("calendar") || intent.dataString!!.contains("webcal") || intent.dataString!!.contains(".ics")))
                             
@@ -958,12 +1411,45 @@ class BrowserViewModel : ViewModel() {
                                     try {
                                         intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
                                         intent.setComponent(null)
+                                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                                             intent.setSelector(null)
                                         }
-                                        context.startActivity(intent)
+                                        // Use createChooser so Android always shows the app picker
+                                        val chooser = android.content.Intent.createChooser(intent, "Open with")
+                                        chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(chooser)
+                                    } catch (e: android.content.ActivityNotFoundException) {
+                                        Log.w(TAG, "No app found for intent, checking for fallback URL", e)
+                                        // Extract S.browser_fallback_url from the intent:// URI
+                                        val fallbackUrl = extractFallbackUrl(uri)
+                                        if (fallbackUrl != null) {
+                                            Log.i(TAG, "Navigating to fallback URL: $fallbackUrl")
+                                            loadUrl(fallbackUrl)
+                                        } else if (intentPackage != null) {
+                                            // Open Play Store listing for the package
+                                            try {
+                                                val marketIntent = android.content.Intent(
+                                                    android.content.Intent.ACTION_VIEW,
+                                                    android.net.Uri.parse("market://details?id=$intentPackage")
+                                                )
+                                                marketIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(marketIntent)
+                                            } catch (e2: Exception) {
+                                                // Fall back to web Play Store
+                                                loadUrl("https://play.google.com/store/apps/details?id=$intentPackage")
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
+                                        }
                                     } catch (e: Exception) {
                                         Log.e(TAG, "Failed to launch external intent", e)
+                                        val fallbackUrl = extractFallbackUrl(uri)
+                                        if (fallbackUrl != null) {
+                                            loadUrl(fallbackUrl)
+                                        } else {
+                                            Toast.makeText(context, "Could not open this link", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 }
                             }
@@ -973,7 +1459,34 @@ class BrowserViewModel : ViewModel() {
                         return GeckoResult.fromValue(AllowOrDeny.DENY)
                     }
 
-                    Log.w(TAG, "Denying unknown scheme load request: $uri")
+                    // Handle other custom protocols like upi:, mailto:, tel:, sms:, geo:, whatsapp:, tg:
+                    Log.i(TAG, "Handling custom protocol URI: $uri")
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+                            // Use createChooser to force the OS app picker (critical for UPI)
+                            val chooserTitle = when {
+                                lowerUri.startsWith("upi:") -> "Pay with"
+                                lowerUri.startsWith("mailto:") -> "Send email with"
+                                lowerUri.startsWith("tel:") -> "Call with"
+                                lowerUri.startsWith("sms:") || lowerUri.startsWith("smsto:") -> "Send SMS with"
+                                else -> "Open with"
+                            }
+                            val chooser = android.content.Intent.createChooser(intent, chooserTitle)
+                            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(chooser)
+                        } catch (e: android.content.ActivityNotFoundException) {
+                            Log.e(TAG, "No app found for custom protocol: $uri", e)
+                            val schemeName = uri.split(":").firstOrNull() ?: "link"
+                            Toast.makeText(context, "No app found to handle $schemeName links", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to launch custom protocol intent for: $uri", e)
+                            val schemeName = uri.split(":").firstOrNull() ?: "link"
+                            Toast.makeText(context, "No app found to handle $schemeName", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
                 
@@ -1006,6 +1519,38 @@ class BrowserViewModel : ViewModel() {
                 
                 return null
             }
+
+            override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
+                try {
+                    Log.i(TAG, "onNewSession: opening new tab session for popup URI $uri")
+                    val runtime = getGeckoRuntime(context)
+                    val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+                        .usePrivateMode(isIncognitoMode)
+                        .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
+                        .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+                        .allowJavascript(true)
+                        .build()
+                    val newSession = GeckoSession(settings)
+                    val tabId = java.util.UUID.randomUUID().toString()
+                    val targetUrl = if (uri.isEmpty()) "about:blank" else uri
+                    val newTab = TabState(
+                        id = tabId,
+                        session = newSession,
+                        title = "New Tab",
+                        url = targetUrl
+                    )
+                    setupTabSessionListeners(newTab, context)
+                    tabs.add(newTab)
+                    newSession.open(runtime)
+                    selectTab(newTab.id)
+                    saveTabs()
+                    
+                    return GeckoResult.fromValue(newSession)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in onNewSession popup", e)
+                    return null
+                }
+            }
         }
 
         tab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
@@ -1028,6 +1573,9 @@ class BrowserViewModel : ViewModel() {
                 if (success) {
                     if (tab.id == activeTabId) {
                         injectZoomEnabler()
+                        if (siteStyleAppliedGlobally) {
+                            applySiteStyleToActiveTab()
+                        }
                     }
                 }
             }
@@ -1193,12 +1741,23 @@ class BrowserViewModel : ViewModel() {
 
         // 1. Static/Global runtime initialization (once per process)
         if (geckoRuntime == null) {
+            val isDebug = (appCtx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            
+            // Retrieve the user's selected app language preference to configure GeckoView locale
+            val lang = try {
+                val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+                sp.getString("selected_language", "en") ?: "en"
+            } catch (e: Exception) {
+                "en"
+            }
+
             val settings = GeckoRuntimeSettings.Builder()
-                .aboutConfigEnabled(true)
-                .consoleOutput(true)
-                .debugLogging(true)
-                .remoteDebuggingEnabled(true)
+                .aboutConfigEnabled(isDebug)
+                .consoleOutput(isDebug)
+                .debugLogging(isDebug)
+                .remoteDebuggingEnabled(isDebug)
                 .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
+                .locales(arrayOf(lang)) // Configures Accept-Language headers automatically
                 .build()
             
             geckoRuntime = GeckoRuntime.create(appCtx, settings)
@@ -1251,6 +1810,7 @@ class BrowserViewModel : ViewModel() {
 
             // Initialize multi-tabs
             initTabs(appCtx)
+            loadDevNotes(appCtx)
 
             // Load saved settings
             viewModelScope.launch {
@@ -1306,7 +1866,21 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
+                isLanguageSelectionDone = getLanguageSelectionDone(appCtx).first()
+            }
+
+            viewModelScope.launch {
                 isOnboardingCompleted = getOnboardingCompletedPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+                siteStyleFontSize = sp.getInt("site_style_font_size", 100)
+                siteStyleTheme = sp.getString("site_style_theme", "DEFAULT") ?: "DEFAULT"
+                siteStyleLineSpacing = sp.getFloat("site_style_line_spacing", 1.4f)
+                siteStyleLetterSpacing = sp.getFloat("site_style_letter_spacing", 0f)
+                siteStyleFontFamily = sp.getString("site_style_font_family", "inherit") ?: "inherit"
+                siteStyleAppliedGlobally = sp.getBoolean("site_style_applied_globally", false)
             }
 
             viewModelScope.launch {
@@ -1331,6 +1905,7 @@ class BrowserViewModel : ViewModel() {
 
             viewModelScope.launch {
                 hasSeenConsoleOverview = getConsoleOverviewSeenPreference(appCtx).first()
+                hasSeenDevNotesOverview = getDevNotesOverviewSeenPreference(appCtx).first()
             }
 
             viewModelScope.launch {
@@ -1349,29 +1924,33 @@ class BrowserViewModel : ViewModel() {
         Log.d(TAG, "Registering MSE Aggressive Media Grabber...")
         
         // Unconditionally uninstall the old version first during startup to ensure latest assets are loaded
-        runtime.webExtensionController.list().accept(
-            { extensions ->
-                val oldExtension = extensions?.find { it.id == GRABBER_ID }
-                if (oldExtension != null) {
-                    Log.d(TAG, "Uninstalling old grabber extension to reload new assets...")
-                    runtime.webExtensionController.uninstall(oldExtension).accept(
-                        {
-                            installGrabberExtension(runtime)
-                        },
-                        { error ->
-                            Log.e(TAG, "Failed to uninstall old grabber extension", error)
-                            installGrabberExtension(runtime)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            runtime.webExtensionController.list().accept(
+                { extensions ->
+                    val oldExtension = extensions?.find { it.id == GRABBER_ID }
+                    if (oldExtension != null) {
+                        Log.d(TAG, "Uninstalling old grabber extension to reload new assets...")
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            runtime.webExtensionController.uninstall(oldExtension).accept(
+                                {
+                                    installGrabberExtension(runtime)
+                                },
+                                { error ->
+                                    Log.e(TAG, "Failed to uninstall old grabber extension", error)
+                                    installGrabberExtension(runtime)
+                                }
+                            )
                         }
-                    )
-                } else {
+                    } else {
+                        installGrabberExtension(runtime)
+                    }
+                },
+                { error ->
+                    Log.e(TAG, "Failed to list extensions for uninstall check", error)
                     installGrabberExtension(runtime)
                 }
-            },
-            { error ->
-                Log.e(TAG, "Failed to list extensions for uninstall check", error)
-                installGrabberExtension(runtime)
-            }
-        )
+            )
+        }
     }
 
     private fun installGrabberExtension(runtime: GeckoRuntime) {
@@ -1413,7 +1992,11 @@ class BrowserViewModel : ViewModel() {
                     }
 
                     if (type == "GET_NATIVE_PLAYER_STATE") {
-                        val response = mapOf("enabled" to isNativePlayerEnabled)
+                        val response = mutableMapOf<String, Any>("enabled" to isNativePlayerEnabled)
+                        pendingJsCommand?.let {
+                            response["pendingJs"] = it
+                            pendingJsCommand = null
+                        }
                         return GeckoResult.fromValue(response)
                     } else if (type == "MEDIA_GRABBED") {
                         val url = if (message is org.json.JSONObject) {
@@ -1798,7 +2381,43 @@ class BrowserViewModel : ViewModel() {
         context.dataStore.edit { preferences ->
             preferences[SELECTED_LANGUAGE_KEY] = langCode
         }
+        try {
+            val sp = context.applicationContext.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+            sp.edit().putString("selected_language", langCode).apply()
+        } catch (e: Exception) { /* ignore */ }
         selectedLanguageCode = langCode
+    }
+
+    fun getLanguageSelectionDone(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[LANGUAGE_SELECTION_DONE_KEY] ?: false
+        }
+    }
+
+    suspend fun saveLanguageSelectionDone(context: Context, done: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[LANGUAGE_SELECTION_DONE_KEY] = done
+        }
+        isLanguageSelectionDone = done
+    }
+
+    fun saveLanguageSettings(context: Context, langCode: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val appCtx = context.applicationContext
+            appCtx.dataStore.edit { preferences ->
+                preferences[SELECTED_LANGUAGE_KEY] = langCode
+                preferences[LANGUAGE_SELECTION_DONE_KEY] = true
+            }
+            try {
+                val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+                sp.edit().putString("selected_language", langCode).apply()
+            } catch (e: Exception) { /* ignore */ }
+            selectedLanguageCode = langCode
+            isLanguageSelectionDone = true
+            withContext(Dispatchers.Main) {
+                onDone()
+            }
+        }
     }
 
     fun getOnboardingCompletedPreference(context: Context): Flow<Boolean> {
@@ -1898,6 +2517,20 @@ class BrowserViewModel : ViewModel() {
                 preferences[CONSOLE_OVERVIEW_SEEN_KEY] = seen
             }
             hasSeenConsoleOverview = seen
+        }
+    }
+
+    fun getDevNotesOverviewSeenPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DEV_NOTES_OVERVIEW_SEEN_KEY] ?: false
+        }
+    }
+    fun saveDevNotesOverviewSeen(context: Context, seen: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DEV_NOTES_OVERVIEW_SEEN_KEY] = seen
+            }
+            hasSeenDevNotesOverview = seen
         }
     }
 
@@ -2110,15 +2743,48 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun goBack() {
-        if (canGoBack) geckoSession.goBack()
+        try {
+            if (canGoBack) geckoSession.goBack()
+        } catch (e: Exception) {
+            Log.w(TAG, "goBack() failed: ${e.message}")
+        }
     }
 
     fun goForward() {
-        if (canGoForward) geckoSession.goForward()
+        try {
+            if (canGoForward) geckoSession.goForward()
+        } catch (e: Exception) {
+            Log.w(TAG, "goForward() failed: ${e.message}")
+        }
     }
 
     fun reload() {
-        geckoSession.reload()
+        try {
+            geckoSession.reload()
+        } catch (e: Exception) {
+            Log.w(TAG, "reload() failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Navigate to the home screen (about:blank) by updating only the ViewModel
+     * state — does NOT touch geckoSession. This avoids crashes during video player
+     * teardown or when the session is in an inconsistent state.
+     */
+    fun navigateHomeDirectly() {
+        val activeId = activeTabId ?: return
+        val idx = tabs.indexOfFirst { it.id == activeId }
+        if (idx != -1) {
+            tabs[idx] = tabs[idx].copy(url = "about:blank", title = "New Tab", isUriLoaded = true)
+            currentUrl = "about:blank"
+            canGoBack = false
+        }
+        // Then actually load it in the session so back history is cleared
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            try { geckoSession.loadUri("about:blank") } catch (e: Exception) {
+                Log.w(TAG, "navigateHomeDirectly geckoSession.loadUri failed: ${e.message}")
+            }
+        }
     }
 
     fun toggleFullscreen() {
@@ -2143,6 +2809,7 @@ class BrowserViewModel : ViewModel() {
             // used by Chrome, Firefox, and Brave on Android to trigger desktop layouts
             activeTab.session.settings.userAgentMode = uaMode
             activeTab.session.settings.viewportMode = vpMode
+            applyUserAgentForTab(activeTab)
             activeTab.session.reload()
             Log.i(TAG, "Desktop mode ${if (isDesktopMode) "ON" else "OFF"}: ua=$uaMode vp=$vpMode")
         } catch (e: Exception) {
@@ -2153,28 +2820,94 @@ class BrowserViewModel : ViewModel() {
     fun toggleReaderMode() {
         if (!isReaderModeActive) {
             val js = "javascript:(function(){" +
-                    "var body = document.body;" +
-                    "var main = document.querySelector('main') || document.querySelector('article') || document.querySelector('#content') || document.querySelector('.content') || body;" +
                     "var title = document.querySelector('h1')?.innerText || document.title;" +
-                    "var contentHtml = main.innerHTML;" +
-                    "var tempDiv = document.createElement('div');" +
-                    "tempDiv.innerHTML = contentHtml;" +
-                    "var scripts = tempDiv.getElementsByTagName('script');" +
-                    "while(scripts.length > 0) scripts[0].parentNode.removeChild(scripts[0]);" +
-                    "var styles = tempDiv.getElementsByTagName('style');" +
-                    "while(styles.length > 0) styles[0].parentNode.removeChild(styles[0]);" +
-                    "var iframes = tempDiv.getElementsByTagName('iframe');" +
-                    "while(iframes.length > 0) iframes[0].parentNode.removeChild(iframes[0]);" +
-                    "var cleanHtml = '<h1 style=\"font-size:1.5em;margin-bottom:20px;font-weight:bold;\">' + title + '</h1>' + tempDiv.innerHTML;" +
+                    "var clone = (document.querySelector('main') || document.querySelector('article') || document.querySelector('#content') || document.querySelector('.content') || document.body).cloneNode(true);" +
+                    "var unwantedSelectors = ['script','style','noscript','iframe','header','footer','nav','aside','form','button','input','select','textarea','.ads','.ad','.social','.share','.comments','.sidebar','.menu','.footer','.nav','.widget','.banner','.popup','.cookie','#disqus_thread','.disqus','.auth-box','.promo','.newsletter','.advertisement','.newsletter-signup','.post-sharing'];" +
+                    "unwantedSelectors.forEach(function(s){ clone.querySelectorAll(s).forEach(function(el){ el.parentNode.removeChild(el); }); });" +
+                    "var candidates = [];" +
+                    "var paragraphs = clone.querySelectorAll('p, pre, code, blockquote, li');" +
+                    "paragraphs.forEach(function(p){" +
+                    "    var parent = p.parentNode;" +
+                    "    if(!parent || parent.tagName === 'BODY') return;" +
+                    "    if(!parent.score){" +
+                    "        parent.score = 0;" +
+                    "        if(parent.tagName === 'DIV') parent.score += 5;" +
+                    "        else if(parent.tagName === 'ARTICLE') parent.score += 20;" +
+                    "        else if(parent.tagName === 'SECTION') parent.score += 10;" +
+                    "        candidates.push(parent);" +
+                    "    }" +
+                    "    var text = p.innerText.trim();" +
+                    "    if(text.length > 20){ parent.score += Math.floor(text.length/50) + 1; }" +
+                    "});" +
+                    "candidates.forEach(function(c){" +
+                    "    var links = c.querySelectorAll('a');" +
+                    "    var linkLength = 0;" +
+                    "    links.forEach(function(l){ linkLength += l.innerText.trim().length; });" +
+                    "    var totalLength = c.innerText.trim().length;" +
+                    "    if(totalLength > 0){" +
+                    "        var ratio = linkLength / totalLength;" +
+                    "        if(ratio > 0.4){ c.score -= 50; }" +
+                    "    }" +
+                    "});" +
+                    "candidates.sort(function(a,b){ return b.score - a.score; });" +
+                    "var best = candidates[0] || clone;" +
+                    "var allowedTags = ['p','pre','code','blockquote','li','ul','ol','img','h1','h2','h3','h4','h5','h6','strong','em','span','b','i','a','table','thead','tbody','tr','th','td'];" +
+                    "var cleanContentDiv = document.createElement('div');" +
+                    "function cleanNode(node, parentDest){" +
+                    "    if(node.nodeType === 3){ parentDest.appendChild(node.cloneNode(true)); return; }" +
+                    "    if(node.nodeType === 1){" +
+                    "        var tagName = node.tagName.toLowerCase();" +
+                    "        if(allowedTags.indexOf(tagName) !== -1){" +
+                    "            var newEl = document.createElement(tagName);" +
+                    "            if(tagName === 'img'){ newEl.src = node.src; newEl.alt = node.alt; }" +
+                    "            if(tagName === 'a'){ newEl.href = node.href; }" +
+                    "            node.childNodes.forEach(function(child){ cleanNode(child, newEl); });" +
+                    "            parentDest.appendChild(newEl);" +
+                    "        } else {" +
+                    "            node.childNodes.forEach(function(child){ cleanNode(child, parentDest); });" +
+                    "        }" +
+                    "    }" +
+                    "}" +
+                    "best.childNodes.forEach(function(child){ cleanNode(child, cleanContentDiv); });" +
+                    "var wordCount = cleanContentDiv.innerText.split(/\\s+/).filter(function(w){ return w.length > 0; }).length;" +
+                    "var readingTime = Math.max(1, Math.round(wordCount / 200));" +
+                    "var headings = cleanContentDiv.querySelectorAll('h2, h3');" +
+                    "var tocHtml = '';" +
+                    "if(headings.length > 1){" +
+                    "    tocHtml += '<div id=\"omni-reader-toc\" style=\"margin:20px 0;padding:16px;border-radius:12px;background:rgba(128,128,128,0.08);border:1px solid rgba(128,128,128,0.15);\"><div style=\"font-weight:bold;margin-bottom:10px;font-size:1.1em;display:flex;align-items:center;justify-content:space-between;cursor:pointer;\" onclick=\"var l = document.getElementById(\\'omni-toc-list\\'); l.style.display = l.style.display===\\'none\\'?\\'block\\':\\'none\\';\"><span>📖 Table of Contents</span><span style=\"font-size:0.8em;\">▼</span></div><ul id=\"omni-toc-list\" style=\"margin:0;padding-left:20px;display:none;list-style-type:square;line-height:1.8;\">';" +
+                    "    headings.forEach(function(h, idx){" +
+                    "        h.id = 'omni-heading-' + idx;" +
+                    "        var indent = h.tagName.toLowerCase() === 'h3' ? 'margin-left: 15px;' : '';" +
+                    "        tocHtml += '<li style=\"' + indent + '\"><a href=\"#' + h.id + '\" style=\"text-decoration:none;font-size:0.95em;\">' + h.innerText + '</a></li>';" +
+                    "    });" +
+                    "    tocHtml += '</ul></div>';" +
+                    "}" +
+                    "cleanContentDiv.querySelectorAll('pre code, pre').forEach(function(codeBlock){" +
+                    "    var raw = codeBlock.innerHTML;" +
+                    "    var html = raw" +
+                    "        .replace(/\\b(const|let|var|function|return|import|export|class|extends|if|else|for|while|do|switch|case|break|continue|new|try|catch|finally|throw|typeof|instanceof|val|var|fun|def|print|echo|public|private|protected|static|final|interface|implements|package|void|int|double|float|char|boolean|byte|short|long|null|true|false)\\b/g, '<span style=\"color:#f92672;font-weight:bold;\">$1</span>')" +
+                    "        .replace(/(\\/\\/[^\\n]*)/g, '<span style=\"color:#75715e;font-style:italic;\">$1</span>')" +
+                    "        .replace(/(\\/\\*[\\s\\S]*?\\*\\/)/g, '<span style=\"color:#75715e;font-style:italic;\">$1</span>')" +
+                    "        .replace(/(\".*?\"|\\'.*?\\'|\\`.*?\\`)/g, '<span style=\"color:#e6db74;\">$1</span>');" +
+                    "    codeBlock.innerHTML = html;" +
+                    "});" +
+                    "var htmlPayload = '<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>' + title.replace(/\\'/g, \"\\\\'\") + '</title><style id=\"omni-reader-styles\"></style></head><body style=\"margin:0;padding:0;\"><div id=\"omni-reader-progress\" style=\"position:fixed;top:0;left:0;height:4px;width:0%;z-index:10000;transition:width 0.1s ease-out;\"></div><div id=\"omni-reader-container\"><h1 id=\"omni-reader-title\">' + title + '</h1><div id=\"omni-reader-meta\" style=\"font-size:0.88em;opacity:0.75;margin-bottom:24px;border-bottom:1px solid rgba(128,128,128,0.25);padding-bottom:12px;\">⏱️ ' + readingTime + ' min read &bull; ' + wordCount + ' words</div>' + tocHtml + cleanContentDiv.innerHTML + '</div></body></html>';" +
                     "document.open();" +
-                    "document.write('<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>' + title + '</title><style id=\"omni-reader-styles\"></style></head><body style=\"margin:0;padding:0;\"><div id=\"omni-reader-container\" style=\"max-width:650px;margin:0 auto;padding:24px 20px 80px 20px;font-family:system-ui, -apple-system, sans-serif;line-height:1.6;min-height:100vh;box-sizing:border-box;\">' + cleanHtml + '</div></body></html>');" +
+                    "document.write(htmlPayload);" +
                     "document.close();" +
+                    "window.addEventListener('scroll', function(){" +
+                    "    var winScroll = document.documentElement.scrollTop || document.body.scrollTop;" +
+                    "    var height = document.documentElement.scrollHeight - document.documentElement.clientHeight;" +
+                    "    var scrolled = (winScroll / height) * 100;" +
+                    "    var bar = document.getElementById('omni-reader-progress');" +
+                    "    if(bar){ bar.style.width = scrolled + '%'; }" +
+                    "});" +
                     "})();"
             geckoSession.loadUri(js)
             isReaderModeActive = true
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 applyReaderSettings()
-            }, 100)
+            }, 300)
         } else {
             reload()
             isReaderModeActive = false
@@ -2202,12 +2935,28 @@ class BrowserViewModel : ViewModel() {
             "Dark" -> Triple("#121212", "#E0E0E0", "#7BAFD4")
             else -> Triple("#FFFFFF", "#1A1A1A", "#0066CC")
         }
+        val alignStyle = if (readerJustified) "justify" else "left"
+        val letterSpacingVal = when (readerLetterSpacing) {
+            "Wide" -> "0.08em"
+            "Very Wide" -> "0.15em"
+            else -> "normal"
+        }
+        val wordSpacingVal = when (readerWordSpacing) {
+            "Wide" -> "0.15em"
+            "Very Wide" -> "0.3em"
+            else -> "normal"
+        }
+
         val css = "* { font-family: $fontStack !important; } " +
                   "body { background-color: $bgColor !important; color: $textColor !important; } " +
-                  "#omni-reader-container { font-size: ${fontSizePx} !important; line-height: ${lineHeightVal} !important; max-width: $widthPx !important; } " +
+                  "#omni-reader-progress { background-color: $linkColor !important; } " +
+                  "#omni-reader-container { font-size: ${fontSizePx} !important; line-height: ${lineHeightVal} !important; max-width: $widthPx !important; text-align: $alignStyle !important; letter-spacing: $letterSpacingVal !important; word-spacing: $wordSpacingVal !important; margin: 0 auto; padding: 24px 20px 80px 20px; min-height: 100vh; box-sizing: border-box; } " +
                   "p, span, li, div, h1, h2, h3, h4, h5 { color: $textColor !important; } " +
                   "a { color: $linkColor !important; } " +
-                  "img { max-width: 100% !important; height: auto !important; border-radius: 8px !important; }"
+                  "img { max-width: 100% !important; height: auto !important; border-radius: 8px !important; } " +
+                  "pre { background-color: #272822 !important; color: #f8f8f2 !important; padding: 16px !important; border-radius: 8px !important; overflow-x: auto !important; font-family: \\'Courier New\\', Courier, monospace !important; font-size: 0.9em !important; line-height: 1.5 !important; border: 1px solid #3e3d32 !important; } " +
+                  "code { background-color: rgba(128,128,128,0.15) !important; color: #e74c3c !important; padding: 2px 6px !important; border-radius: 4px !important; font-family: \\'Courier New\\', Courier, monospace !important; font-size: 0.95em !important; } " +
+                  "pre code { background-color: transparent !important; color: inherit !important; padding: 0 !important; border-radius: 0 !important; }"
         val escapedCss = css.replace("'", "\\'").replace("\n", " ")
         val js = "javascript:(function(){" +
                  "  var style = document.getElementById('omni-reader-styles');" +
@@ -2259,6 +3008,21 @@ class BrowserViewModel : ViewModel() {
         applyReaderSettings()
     }
 
+    fun toggleReaderJustified() {
+        readerJustified = !readerJustified
+        applyReaderSettings()
+    }
+
+    fun updateReaderLetterSpacing(spacing: String) {
+        readerLetterSpacing = spacing
+        applyReaderSettings()
+    }
+
+    fun updateReaderWordSpacing(spacing: String) {
+        readerWordSpacing = spacing
+        applyReaderSettings()
+    }
+
     fun readAloudCurrentPage() {
         val js = "javascript:(function(){" +
                  "  var text = document.getElementById('omni-reader-container')?.innerText || document.body.innerText || '';" +
@@ -2284,6 +3048,7 @@ class BrowserViewModel : ViewModel() {
             .usePrivateMode(isIncognitoMode)
             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+            .allowJavascript(true)
             .build()
         
         val newSession = GeckoSession(settings)
@@ -2625,16 +3390,34 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val list = mutableListOf<NewsArticle>()
             try {
-                // Stable Google News RSS URLs — verified working June 2026
-                val rssUrl = when (category) {
-                    "World"         -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNR3hxZHpnd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
-                    "Technology"    -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhad0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
-                    "Sports"        -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp1ZEdvVGVnc0hDaElHZWdjd0RnQjBLeWdBUAE?hl=en-US&gl=US&ceid=US:en"
-                    "Business"      -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdnd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
-                    "Science"       -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp0YVRnd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
-                    "Entertainment" -> "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5Rd0VnSlVRVkl1Q2dKSlRpZ0FQAQ?hl=en-US&gl=US&ceid=US:en"
-                    "Health"        -> "https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNR3QwTlRZd0VnSlVRVklvQUFQAQ?hl=en-US&gl=US&ceid=US:en"
-                    else            -> "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
+                // Determine localized parameters based on selected language code
+                val (hl, gl, ceid) = when (selectedLanguageCode) {
+                    "hi" -> Triple("hi", "IN", "IN:hi")
+                    "es" -> Triple("es-419", "MX", "MX:es-419")
+                    "fr" -> Triple("fr", "FR", "FR:fr")
+                    "de" -> Triple("de", "DE", "DE:de")
+                    "zh" -> Triple("zh-CN", "CN", "CN:zh-Hans")
+                    "ja" -> Triple("ja", "JP", "JP:ja")
+                    "ru" -> Triple("ru", "RU", "RU:ru")
+                    "pt" -> Triple("pt-BR", "BR", "BR:pt")
+                    else -> Triple("en-US", "US", "US:en")
+                }
+
+                val topicPath = when (category) {
+                    "World"         -> "headlines/section/topic/WORLD"
+                    "Technology"    -> "headlines/section/topic/TECHNOLOGY"
+                    "Sports"        -> "headlines/section/topic/SPORTS"
+                    "Business"      -> "headlines/section/topic/BUSINESS"
+                    "Science"       -> "headlines/section/topic/SCIENCE"
+                    "Entertainment" -> "headlines/section/topic/ENTERTAINMENT"
+                    "Health"        -> "headlines/section/topic/HEALTH"
+                    else            -> ""
+                }
+
+                val rssUrl = if (topicPath.isNotEmpty()) {
+                    "https://news.google.com/rss/$topicPath?hl=$hl&gl=$gl&ceid=$ceid"
+                } else {
+                    "https://news.google.com/rss?hl=$hl&gl=$gl&ceid=$ceid"
                 }
 
                 val conn = java.net.URL(rssUrl).openConnection() as java.net.HttpURLConnection
@@ -3111,28 +3894,44 @@ class BrowserViewModel : ViewModel() {
 
     // ── Google SSO Authentication Manager ──
 
+    @Suppress("DEPRECATION")
     fun checkGoogleSignInStatus(context: Context) {
-        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestProfile()
-            .build()
-        val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-        googleSignInClient.silentSignIn().addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val account = task.result
-                googleAccountEmail = account.email
-                googleAccountDisplayName = account.displayName
-                googleAccountPhotoUrl = account.photoUrl?.toString()
-                googleAccountIsSignedIn = true
-            } else {
-                googleAccountEmail = null
-                googleAccountDisplayName = null
-                googleAccountPhotoUrl = null
-                googleAccountIsSignedIn = false
+        try {
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .requestProfile()
+                .build()
+            val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
+            googleSignInClient.silentSignIn().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val account = task.result
+                    googleAccountEmail = account.email
+                    googleAccountDisplayName = account.displayName
+                    googleAccountPhotoUrl = account.photoUrl?.toString()
+                    googleAccountIsSignedIn = true
+                    Log.i(TAG, "Google Sign-In: silentSignIn successful for ${account.email}")
+                } else {
+                    googleAccountEmail = null
+                    googleAccountDisplayName = null
+                    googleAccountPhotoUrl = null
+                    googleAccountIsSignedIn = false
+                    // Log the specific error code for debugging (Error 10 = DEVELOPER_ERROR = SHA-1 mismatch)
+                    val exception = task.exception
+                    if (exception is com.google.android.gms.common.api.ApiException) {
+                        Log.w(TAG, "Google Sign-In: silentSignIn failed with status code ${exception.statusCode} (${exception.message}). " +
+                                "Error 10 = DEVELOPER_ERROR: SHA-1 fingerprint not registered in Google Cloud Console for package ${context.packageName}")
+                    } else {
+                        Log.w(TAG, "Google Sign-In: silentSignIn failed", exception)
+                    }
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Google Sign-In: failed to initialize sign-in client", e)
+            googleAccountIsSignedIn = false
         }
     }
 
+    @Suppress("DEPRECATION")
     fun handleGoogleSignInResult(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount?) {
         if (account != null) {
             googleAccountEmail = account.email
@@ -3147,6 +3946,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    @Suppress("DEPRECATION")
     fun googleSignOut(context: Context, onComplete: () -> Unit = {}) {
         val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
             .build()
@@ -3158,6 +3958,64 @@ class BrowserViewModel : ViewModel() {
             googleAccountIsSignedIn = false
             onComplete()
         }
+    }
+
+    fun sendFeedbackToTelegram(
+        name: String,
+        email: String,
+        rating: Int,
+        message: String,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val url = java.net.URL("https://rebelroot-backend.parasdevprojects.workers.dev/api/feedback")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                
+                val jsonPayload = """
+                    {
+                        "name": ${escapeJson(name)},
+                        "email": ${escapeJson(email)},
+                        "rating": "${rating}",
+                        "product": "Omni Browser",
+                        "message": ${escapeJson(message)}
+                    }
+                """.trimIndent()
+                
+                conn.outputStream.use { os ->
+                    val input = jsonPayload.toByteArray(Charsets.UTF_8)
+                    os.write(input, 0, input.size)
+                }
+                
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onResult(true, null)
+                    }
+                } else {
+                    val errorMsg = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP Error $code"
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onResult(false, errorMsg)
+                    }
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onResult(false, e.localizedMessage)
+                }
+            }
+        }
+    }
+    
+    private fun escapeJson(str: String): String {
+        val escaped = str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        return "\"$escaped\""
     }
 
     override fun onCleared() {

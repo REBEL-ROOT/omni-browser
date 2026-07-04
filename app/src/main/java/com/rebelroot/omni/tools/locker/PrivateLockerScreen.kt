@@ -14,9 +14,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Backspace
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Movie
@@ -99,10 +102,7 @@ fun PrivateLockerScreen(
     // States
     var isAuthenticated by remember { mutableStateOf(false) }
     var authError by remember { mutableStateOf<String?>(null) }
-    var showPinDialog by remember { mutableStateOf(false) }
-    var pinInput by remember { mutableStateOf("") }
-    var isPinSetupMode by remember { mutableStateOf(false) }
-    var pinError by remember { mutableStateOf<String?>(null) }
+
     
     val secureFiles by lockerManager.getSecureFiles().collectAsState(initial = emptyList())
     var selectedCategory by remember { mutableStateOf<String?>(null) }
@@ -251,119 +251,13 @@ fun PrivateLockerScreen(
                 label = "auth_anim"
             ) { authenticated ->
                 if (!authenticated) {
-                    // LOCKED STATE
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .padding(16.dp)
-                                .border(
-                                    BorderStroke(
-                                        width = 0.5.dp,
-                                        brush = Brush.verticalGradient(
-                                            listOf(
-                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                            )
-                                        )
-                                    ),
-                                    RoundedCornerShape(16.dp)
-                                ),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                            ),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Lock,
-                                    contentDescription = stringResource(R.string.locker_vault_locked),
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Text(
-                                    text = stringResource(R.string.locker_vault_locked),
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = stringResource(R.string.locker_auth_desc),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(Modifier.height(24.dp))
-                                
-                                Button(
-                                    onClick = {
-                                        authManager.authenticate(
-                                            onSuccess = {
-                                                isAuthenticated = true
-                                                authError = null
-                                            },
-                                            onError = { error ->
-                                                authError = error
-                                            }
-                                        )
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(stringResource(R.string.locker_unlock_vault))
-                                }
-
-                                authError?.let { error ->
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(
-                                        text = error,
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                    if (error.contains("not configured") && !pinManager.isPinSet()) {
-                                        Spacer(Modifier.height(12.dp))
-                                        OutlinedButton(onClick = {
-                                            isPinSetupMode = true
-                                            pinInput = ""
-                                            pinError = null
-                                            showPinDialog = true
-                                        }) {
-                                            Text(stringResource(R.string.locker_setup_pin))
-                                        }
-                                    }
-                                }
-
-                                if (pinManager.isPinSet()) {
-                                    Spacer(Modifier.height(12.dp))
-                                    OutlinedButton(
-                                        onClick = {
-                                            isPinSetupMode = false
-                                            pinInput = ""
-                                            pinError = null
-                                            showPinDialog = true
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(stringResource(R.string.locker_unlock_pin))
-                                    }
-                                }
-                            }
+                    LockerLockScreen(
+                        pinManager = pinManager,
+                        authManager = authManager,
+                        onUnlockSuccess = {
+                            isAuthenticated = true
                         }
-                    }
+                    )
                 } else {
                     // UNLOCKED FILE VIEWER GRID / LIST STATE
                     if (selectedCategory == null) {
@@ -372,8 +266,8 @@ fun PrivateLockerScreen(
                             Triple("images", stringResource(R.string.locker_cat_images), Icons.Rounded.Image),
                             Triple("videos", stringResource(R.string.locker_cat_videos), Icons.Rounded.Movie),
                             Triple("docs", stringResource(R.string.locker_cat_docs), Icons.Rounded.Description),
-                            Triple("epub", stringResource(R.string.locker_cat_epub), Icons.Rounded.MenuBook),
-                            Triple("txt", stringResource(R.string.locker_cat_txt), Icons.Rounded.Article),
+                            Triple("epub", stringResource(R.string.locker_cat_epub), Icons.AutoMirrored.Rounded.MenuBook),
+                            Triple("txt", stringResource(R.string.locker_cat_txt), Icons.AutoMirrored.Rounded.Article),
                             Triple("others", stringResource(R.string.locker_cat_others), Icons.Rounded.Folder)
                         )
 
@@ -579,56 +473,284 @@ fun PrivateLockerScreen(
             }
         }
 
-        if (showPinDialog) {
-            AlertDialog(
-                onDismissRequest = { showPinDialog = false },
-                title = { Text(if (isPinSetupMode) stringResource(R.string.locker_setup_pin_title) else stringResource(R.string.locker_enter_pin_title)) },
-                text = {
-                    Column {
-                        OutlinedTextField(
-                            value = pinInput,
-                            onValueChange = { pinInput = it.take(8) }, // Max 8 chars
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                            visualTransformation = PasswordVisualTransformation(),
-                            singleLine = true,
-                            label = { Text("PIN") }
-                        )
-                        pinError?.let {
-                            Spacer(Modifier.height(4.dp))
-                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+    }
+}
+
+enum class LockSetupStep {
+    CREATE,
+    CONFIRM,
+    UNLOCK
+}
+
+@Composable
+fun LockerLockScreen(
+    pinManager: PinManager,
+    authManager: LockerAuthManager,
+    onUnlockSuccess: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var setupStep by remember { mutableStateOf(if (pinManager.isPinSet()) LockSetupStep.UNLOCK else LockSetupStep.CREATE) }
+    var pinInput by remember { mutableStateOf("") }
+    var tempPin by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val canBiometric = remember { authManager.canAuthenticateWithBiometrics() }
+
+    fun triggerBiometrics() {
+        if (canBiometric && setupStep == LockSetupStep.UNLOCK) {
+            authManager.authenticate(
+                onSuccess = {
+                    onUnlockSuccess()
                 },
-                confirmButton = {
-                    Button(onClick = {
-                        if (pinInput.length < 4) {
-                            pinError = context.getString(R.string.locker_pin_length_error)
-                            return@Button
-                        }
-                        if (isPinSetupMode) {
-                            pinManager.setPin(pinInput)
-                            showPinDialog = false
-                            isAuthenticated = true
-                        } else {
-                            if (pinManager.verifyPin(pinInput)) {
-                                showPinDialog = false
-                                isAuthenticated = true
-                            } else {
-                                pinError = context.getString(R.string.locker_pin_incorrect)
-                                pinInput = ""
-                            }
-                        }
-                    }) {
-                        Text(if (isPinSetupMode) stringResource(R.string.locker_save_unlock) else stringResource(R.string.locker_unlock_vault))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showPinDialog = false }) {
-                        Text(stringResource(R.string.cancel_text))
+                onError = { err ->
+                    if (!err.contains("cancel", ignoreCase = true) && !err.contains("negative button", ignoreCase = true)) {
+                        errorMessage = err
                     }
                 }
             )
         }
+    }
+
+    LaunchedEffect(setupStep) {
+        if (setupStep == LockSetupStep.UNLOCK) {
+            triggerBiometrics()
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(72.dp)
+            )
+
+            Text(
+                text = when (setupStep) {
+                    LockSetupStep.CREATE -> "Choose Private Locker PIN"
+                    LockSetupStep.CONFIRM -> "Confirm Private Locker PIN"
+                    LockSetupStep.UNLOCK -> "Enter Private Locker PIN"
+                },
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Text(
+                text = when (setupStep) {
+                    LockSetupStep.CREATE -> "Set up a 4-digit PIN for your vault"
+                    LockSetupStep.CONFIRM -> "Re-enter your 4-digit PIN to confirm"
+                    LockSetupStep.UNLOCK -> "Enter your 4-digit PIN to unlock files"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for (i in 0 until 4) {
+                    val isFilled = i < pinInput.length
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isFilled) MaterialTheme.colorScheme.primary 
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                            )
+                            .border(
+                                BorderStroke(
+                                    1.dp, 
+                                    if (isFilled) MaterialTheme.colorScheme.primary 
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                ),
+                                RoundedCornerShape(8.dp)
+                            )
+                    )
+                }
+            }
+
+            errorMessage?.let { error ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            val keys = listOf(
+                listOf("1", "2", "3"),
+                listOf("4", "5", "6"),
+                listOf("7", "8", "9")
+            )
+
+            for (row in keys) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(0.8f),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    for (key in row) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(32.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                .clickable {
+                                    if (pinInput.length < 4) {
+                                        errorMessage = null
+                                        pinInput += key
+                                        if (pinInput.length == 4) {
+                                            when (setupStep) {
+                                                LockSetupStep.CREATE -> {
+                                                    tempPin = pinInput
+                                                    pinInput = ""
+                                                    setupStep = LockSetupStep.CONFIRM
+                                                }
+                                                LockSetupStep.CONFIRM -> {
+                                                    if (pinInput == tempPin) {
+                                                        pinManager.setPin(pinInput)
+                                                        onUnlockSuccess()
+                                                    } else {
+                                                        errorMessage = "PINs do not match. Try again."
+                                                        pinInput = ""
+                                                        setupStep = LockSetupStep.CREATE
+                                                    }
+                                                }
+                                                LockSetupStep.UNLOCK -> {
+                                                    if (pinManager.verifyPin(pinInput)) {
+                                                        onUnlockSuccess()
+                                                    } else {
+                                                        errorMessage = "Incorrect PIN."
+                                                        pinInput = ""
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = key,
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(0.8f),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (canBiometric && setupStep == LockSetupStep.UNLOCK) {
+                    IconButton(
+                        onClick = { triggerBiometrics() },
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Rounded.Fingerprint,
+                            contentDescription = "Biometric Unlock",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(64.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .clickable {
+                            if (pinInput.length < 4) {
+                                errorMessage = null
+                                pinInput += "0"
+                                if (pinInput.length == 4) {
+                                    when (setupStep) {
+                                        LockSetupStep.CREATE -> {
+                                            tempPin = pinInput
+                                            pinInput = ""
+                                            setupStep = LockSetupStep.CONFIRM
+                                        }
+                                        LockSetupStep.CONFIRM -> {
+                                            if (pinInput == tempPin) {
+                                                pinManager.setPin(pinInput)
+                                                onUnlockSuccess()
+                                            } else {
+                                                errorMessage = "PINs do not match. Try again."
+                                                pinInput = ""
+                                                setupStep = LockSetupStep.CREATE
+                                            }
+                                        }
+                                        LockSetupStep.UNLOCK -> {
+                                            if (pinManager.verifyPin(pinInput)) {
+                                                onUnlockSuccess()
+                                            } else {
+                                                errorMessage = "Incorrect PIN."
+                                                pinInput = ""
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "0",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        if (pinInput.isNotEmpty()) {
+                            errorMessage = null
+                            pinInput = pinInput.dropLast(1)
+                        }
+                    },
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Rounded.Backspace,
+                        contentDescription = "Backspace",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

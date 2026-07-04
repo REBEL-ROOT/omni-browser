@@ -171,4 +171,16 @@
     <string name="video_player_downloading">正在下载</string>
     <string name="video_player_download_cancelled">下载已取消</string>
     <string name="video_player_download_complete">下载完成！</string>
+    <string name="discover_title">发现</string>
+    <string name="refresh_title">刷新</string>
+    <string name="incognito_title">无痕</string>
+    <string name="add_title">添加</string>
+    <string name="cat_trending">热门</string>
+    <string name="cat_world">国际</string>
+    <string name="cat_technology">科技</string>
+    <string name="cat_sports">体育</string>
+    <string name="cat_business">商业</string>
+    <string name="cat_science">科学</string>
+    <string name="cat_entertainment">娱乐</string>
+    <string name="cat_health">健康</string>
 </resources>

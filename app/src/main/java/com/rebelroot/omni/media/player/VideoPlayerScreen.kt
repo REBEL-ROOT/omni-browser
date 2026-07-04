@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.runtime.rememberCoroutineScope
 import com.rebelroot.omni.media.MediaInterceptor
@@ -161,101 +162,130 @@ fun VideoPlayerScreen(
     }
 
     DisposableEffect(decodedPath, referrerUrl) {
-        val uri = if (decodedPath.startsWith("http://") || decodedPath.startsWith("https://")) {
-            Uri.parse(decodedPath)
-        } else {
-            Uri.fromFile(java.io.File(decodedPath))
-        }
+        var exoPlayer: ExoPlayer? = null
+        var lifecycleObserver: androidx.lifecycle.LifecycleEventObserver? = null
 
-        // Configure network data source with custom headers to bypass host protections
-        val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-        
-        android.util.Log.d("VideoPlayer", "🎬 VideoPlayerScreen: decodedPath = $decodedPath, referrerUrl = $referrerUrl")
-        if (referrerUrl.isNotEmpty() && !isDirectVideoUrl(referrerUrl)) {
-            android.util.Log.d("VideoPlayer", "🎬 Setting Referer header to: $referrerUrl")
-            httpDataSourceFactory.setDefaultRequestProperties(mapOf("Referer" to referrerUrl))
-        } else {
-            android.util.Log.d("VideoPlayer", "🎬 Referer header NOT set. referrerUrl = $referrerUrl")
-        }
-
-        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
-
-        val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(dataSourceFactory)
-
-        val exoPlayer = ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build().apply {
-                setMediaItem(MediaItem.fromUri(uri))
-                
-                // 1. Seek to resume position
-                val initialPos = viewModel?.getVideoPosition(decodedPath) ?: 0L
-                if (initialPos > 0L) {
-                    seekTo(initialPos)
-                }
-                
-                // 2. Configure loop mode
-                repeatMode = if (viewModel?.isPlayerLoopEnabled == true) {
-                    Player.REPEAT_MODE_ONE
-                } else {
-                    Player.REPEAT_MODE_OFF
-                }
-                
-                // 3. Configure default video quality resolution limit
-                val currentParams = trackSelectionParameters
-                val updatedParams = when (viewModel?.playerDefaultQuality) {
-                    "360p" -> currentParams.buildUpon().setMaxVideoSize(640, 360).build()
-                    "480p" -> currentParams.buildUpon().setMaxVideoSize(854, 480).build()
-                    "720p" -> currentParams.buildUpon().setMaxVideoSize(1280, 720).build()
-                    "1080p" -> currentParams.buildUpon().setMaxVideoSize(1920, 1080).build()
-                    else -> currentParams
-                }
-                trackSelectionParameters = updatedParams
-                
-                prepare()
-                playWhenReady = viewModel?.isPlayerAutoPlayEnabled ?: true
-                
-                addListener(object : Player.Listener {
-                    override fun onIsPlayingChanged(playing: Boolean) {
-                        isPlaying = playing
-                    }
-                    override fun onPlaybackStateChanged(state: Int) {
-                        if (state == Player.STATE_READY) {
-                            duration = this@apply.duration
-                        }
-                    }
-                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        android.util.Log.e("VideoPlayer", "ExoPlayer playback error: ${error.message}", error)
-                        coroutineScope.launch {
-                            Toast.makeText(context, "${context.getString(R.string.video_player_playback_error)}: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                })
+        try {
+            val uri = if (decodedPath.startsWith("http://") || decodedPath.startsWith("https://")) {
+                Uri.parse(decodedPath)
+            } else {
+                Uri.fromFile(java.io.File(decodedPath))
             }
-        exoPlayerInstance = exoPlayer
 
-        var wasPlayingBeforePause = false
-        val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
-                if (viewModel?.isPlayerBackgroundPlaybackEnabled == false) {
-                    wasPlayingBeforePause = exoPlayer.playWhenReady
-                    exoPlayer.playWhenReady = false
-                }
-            } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                if (viewModel?.isPlayerBackgroundPlaybackEnabled == false && wasPlayingBeforePause) {
-                    exoPlayer.playWhenReady = true
+            // Configure network data source with custom headers to bypass host protections
+            val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+
+            android.util.Log.d("VideoPlayer", "🎬 VideoPlayerScreen: decodedPath = $decodedPath, referrerUrl = $referrerUrl")
+            if (referrerUrl.isNotEmpty() && !isDirectVideoUrl(referrerUrl)) {
+                android.util.Log.d("VideoPlayer", "🎬 Setting Referer header to: $referrerUrl")
+                httpDataSourceFactory.setDefaultRequestProperties(mapOf("Referer" to referrerUrl))
+            } else {
+                android.util.Log.d("VideoPlayer", "🎬 Referer header NOT set. referrerUrl = $referrerUrl")
+            }
+
+            val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
+            val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context)
+                .setDataSourceFactory(dataSourceFactory)
+
+            val mediaItemBuilder = MediaItem.Builder().setUri(uri)
+            val urlLower = decodedPath.lowercase()
+            if (urlLower.contains(".m3u8") || urlLower.contains("m3u8") || urlLower.contains("/hls/")) {
+                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+            } else if (urlLower.contains(".mpd") || urlLower.contains("mpd")) {
+                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+            } else if (urlLower.contains("index.php") || urlLower.contains(".php")) {
+                if (!urlLower.contains(".mp4") && !urlLower.contains(".mkv") && !urlLower.contains(".webm") && !urlLower.contains(".avi") && !urlLower.contains(".mov")) {
+                    android.util.Log.d("VideoPlayer", "🎬 PHP stream URL detected without progressive extension; setting mimeType to HLS (M3U8)")
+                    mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
                 }
             }
+            val mediaItem = mediaItemBuilder.build()
+
+            val player = ExoPlayer.Builder(context)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build().apply {
+                    setMediaItem(mediaItem)
+
+                    val initialPos = viewModel?.getVideoPosition(decodedPath) ?: 0L
+                    if (initialPos > 0L) seekTo(initialPos)
+
+                    repeatMode = if (viewModel?.isPlayerLoopEnabled == true) {
+                        Player.REPEAT_MODE_ONE
+                    } else {
+                        Player.REPEAT_MODE_OFF
+                    }
+
+                    val currentParams = trackSelectionParameters
+                    val updatedParams = when (viewModel?.playerDefaultQuality) {
+                        "360p" -> currentParams.buildUpon().setMaxVideoSize(640, 360).build()
+                        "480p" -> currentParams.buildUpon().setMaxVideoSize(854, 480).build()
+                        "720p" -> currentParams.buildUpon().setMaxVideoSize(1280, 720).build()
+                        "1080p" -> currentParams.buildUpon().setMaxVideoSize(1920, 1080).build()
+                        else -> currentParams
+                    }
+                    trackSelectionParameters = updatedParams
+
+                    prepare()
+                    playWhenReady = viewModel?.isPlayerAutoPlayEnabled ?: true
+
+                    addListener(object : Player.Listener {
+                        override fun onIsPlayingChanged(playing: Boolean) {
+                            isPlaying = playing
+                        }
+                        override fun onPlaybackStateChanged(state: Int) {
+                            if (state == Player.STATE_READY) {
+                                duration = this@apply.duration
+                            }
+                        }
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            android.util.Log.e("VideoPlayer", "ExoPlayer playback error: ${error.message}", error)
+                            coroutineScope.launch {
+                                Toast.makeText(context, "${context.getString(R.string.video_player_playback_error)}: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    })
+                }
+
+            exoPlayer = player
+            exoPlayerInstance = player
+
+            var wasPlayingBeforePause = false
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                    if (viewModel?.isPlayerBackgroundPlaybackEnabled == false) {
+                        wasPlayingBeforePause = player.playWhenReady
+                        player.playWhenReady = false
+                    }
+                } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    if (viewModel?.isPlayerBackgroundPlaybackEnabled == false && wasPlayingBeforePause) {
+                        player.playWhenReady = true
+                    }
+                }
+            }
+            lifecycleObserver = observer
+            lifecycleOwner.lifecycle.addObserver(observer)
+
+        } catch (e: Exception) {
+            android.util.Log.e("VideoPlayer", "Failed to initialize ExoPlayer: ${e.message}", e)
+            coroutineScope.launch {
+                Toast.makeText(context, "Unable to play video: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                kotlinx.coroutines.delay(500)
+                onNavigateBack()
+            }
         }
-        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
 
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
-            exoPlayerInstance?.let { player ->
-                viewModel?.saveVideoPosition(decodedPath, player.currentPosition)
+            try {
+                lifecycleObserver?.let { lifecycleOwner.lifecycle.removeObserver(it) }
+                exoPlayer?.let { player ->
+                    viewModel?.saveVideoPosition(decodedPath, player.currentPosition)
+                    player.release()
+                }
+                exoPlayerInstance = null
+            } catch (e: Exception) {
+                android.util.Log.w("VideoPlayer", "Error during ExoPlayer dispose: ${e.message}")
             }
-            exoPlayer.release()
         }
     }
 
@@ -415,7 +445,7 @@ fun VideoPlayerScreen(
                 modifier = Modifier.size(40.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
@@ -489,7 +519,7 @@ fun VideoPlayerScreen(
                             onClick = onNavigateBack,
                             colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f))
                         ) {
-                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         val displayName = remember(decodedPath, videoTitle) {
@@ -934,7 +964,7 @@ fun VideoPlayerScreen(
                                 )
                                 if (percent >= 0) {
                                     LinearProgressIndicator(
-                                        progress = percent / 100f,
+                                        progress = { percent / 100f },
                                         modifier = Modifier.fillMaxWidth().height(3.dp),
                                         color = accentColor,
                                         trackColor = Color(0xFF16222F)

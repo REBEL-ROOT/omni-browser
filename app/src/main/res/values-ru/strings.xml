@@ -171,4 +171,16 @@
     <string name="video_player_downloading">Skachivanie</string>
     <string name="video_player_download_cancelled">Zagruzka otmenena</string>
     <string name="video_player_download_complete">Zagruzka zavershena!</string>
+    <string name="discover_title">Интересное</string>
+    <string name="refresh_title">Обновить</string>
+    <string name="incognito_title">Инкогнито</string>
+    <string name="add_title">Добавить</string>
+    <string name="cat_trending">В тренде</string>
+    <string name="cat_world">Мир</string>
+    <string name="cat_technology">Технологии</string>
+    <string name="cat_sports">Спорт</string>
+    <string name="cat_business">Бизнес</string>
+    <string name="cat_science">Наука</string>
+    <string name="cat_entertainment">Развлечения</string>
+    <string name="cat_health">Здоровье</string>
 </resources>

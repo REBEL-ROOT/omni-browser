@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.*
@@ -22,10 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import androidx.core.content.FileProvider
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +41,7 @@ fun DownloadManagerScreen(
     onPlayVideo: (File) -> Unit
 ) {
     val jobs by engine.jobs.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -82,6 +88,47 @@ fun DownloadManagerScreen(
                         DownloadItemCard(
                             job = job,
                             onPlayVideo = onPlayVideo,
+                            onOpenFile = { file, openUri ->
+                                try {
+                                    val ext = file.extension.lowercase()
+                                    val mime = when (ext) {
+                                        "apk" -> "application/vnd.android.package-archive"
+                                        "pdf" -> "application/pdf"
+                                        "zip" -> "application/zip"
+                                        "rar" -> "application/x-rar-compressed"
+                                        "7z" -> "application/x-7z-compressed"
+                                        "doc" -> "application/msword"
+                                        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        "xls" -> "application/vnd.ms-excel"
+                                        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                        "txt", "csv" -> "text/plain"
+                                        "mp3" -> "audio/mpeg"
+                                        "mp4" -> "video/mp4"
+                                        "jpg", "jpeg" -> "image/jpeg"
+                                        "png" -> "image/png"
+                                        "gif" -> "image/gif"
+                                        "webp" -> "image/webp"
+                                        else -> android.webkit.MimeTypeMap.getSingleton()
+                                            .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+                                    }
+                                    // Use MediaStore URI directly (Android 10+), or FileProvider for older
+                                    val uri = openUri ?: FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        file
+                                    )
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(uri, mime)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "Open with").apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    })
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "No app found to open this file", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             onDelete = { engine.cancelDownload(job.id) }
                         )
                     }
@@ -95,6 +142,7 @@ fun DownloadManagerScreen(
 fun DownloadItemCard(
     job: StreamDownloadEngine.DownloadJob,
     onPlayVideo: (java.io.File) -> Unit,
+    onOpenFile: (java.io.File, android.net.Uri?) -> Unit,
     onDelete: () -> Unit
 ) {
     val progressState by job.progress.collectAsState()
@@ -117,9 +165,17 @@ fun DownloadItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (job.saveToLocker) Icons.Rounded.Lock else Icons.Rounded.PlayArrow,
+                    imageVector = when {
+                        job.saveToLocker -> Icons.Rounded.Lock
+                        job.isGeneric -> Icons.AutoMirrored.Rounded.InsertDriveFile
+                        else -> Icons.Rounded.PlayArrow
+                    },
                     contentDescription = "Type",
-                    tint = if (job.saveToLocker) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                    tint = when {
+                        job.saveToLocker -> MaterialTheme.colorScheme.primary
+                        job.isGeneric -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.secondary
+                    },
                     modifier = Modifier
                         .size(32.dp)
                         .padding(4.dp)
@@ -239,8 +295,10 @@ fun DownloadItemCard(
                         }
 
                         // Actions
-                        Row {
-                            if (!job.saveToLocker && (job.filename.endsWith(".mp4") || job.filename.endsWith(".webm"))) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Play button for local video downloads
+                            if (!job.saveToLocker && !job.isGeneric &&
+                                (job.filename.endsWith(".mp4") || job.filename.endsWith(".webm"))) {
                                 Button(
                                     onClick = { onPlayVideo(progress.file) },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -251,6 +309,20 @@ fun DownloadItemCard(
                                     Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.play_text), fontSize = 11.sp)
+                                }
+                            }
+                            // Open button for generic local downloads
+                            if (!job.saveToLocker && job.isGeneric) {
+                                Button(
+                                    onClick = { onOpenFile(progress.file, progress.openUri) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(Icons.Rounded.FolderOpen, contentDescription = "Open", modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Open", fontSize = 11.sp)
                                 }
                             }
                         }

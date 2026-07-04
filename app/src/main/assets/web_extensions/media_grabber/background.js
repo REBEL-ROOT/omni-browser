@@ -205,6 +205,17 @@ function pollNativeSettings() {
                     console.log('[background.js] Native player preference updated from app:', nativePlayerEnabled);
                     broadcastStateToTabs();
                 }
+                
+                if (response.pendingJs) {
+                    chrome.tabs.query({ active: true }, (tabs) => {
+                        if (tabs && tabs[0]) {
+                            chrome.tabs.sendMessage(tabs[0].id, {
+                                type: 'EVAL_JS',
+                                script: response.pendingJs
+                            });
+                        }
+                    });
+                }
             }
         });
     } catch (e) {
@@ -212,8 +223,8 @@ function pollNativeSettings() {
     }
 }
 
-// Poll settings every 2 seconds
-setInterval(pollNativeSettings, 2000);
+// Poll settings every 800ms for fast console response
+setInterval(pollNativeSettings, 800);
 pollNativeSettings(); // Run immediately on start
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

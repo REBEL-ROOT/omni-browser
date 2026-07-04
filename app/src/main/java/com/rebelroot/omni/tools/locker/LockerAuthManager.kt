@@ -13,8 +13,15 @@ class LockerAuthManager(private val activity: FragmentActivity) {
     }
 
     /**
-     * Launches the system biometrics sheet. If biometrics are not configured,
-     * it falls back to the system PIN/Pattern/Password screen automatically.
+     * Checks if biometric (fingerprint/face) hardware is available and enrolled.
+     */
+    fun canAuthenticateWithBiometrics(): Boolean {
+        val biometricManager = BiometricManager.from(activity)
+        return biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+
+    /**
+     * Launches the system biometrics sheet (fingerprint only, no device PIN fallback).
      */
     fun authenticate(
         onSuccess: () -> Unit,
@@ -22,25 +29,19 @@ class LockerAuthManager(private val activity: FragmentActivity) {
     ) {
         val biometricManager = BiometricManager.from(activity)
         
-        // Verify biometric status
-        val canAuthenticate = biometricManager.canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        )
+        val canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
 
         if (canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
-            onError("Authentication is not configured on this device (No PIN/Biometrics).")
+            onError("Biometrics not available or not enrolled.")
             return
         }
 
         try {
             val promptInfo = BiometricPrompt.PromptInfo.Builder()
                 .setTitle("Unlock Private Locker")
-                .setSubtitle("Confirm biometrics or device PIN to enter")
-                .setAllowedAuthenticators(
-                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                )
+                .setSubtitle("Confirm fingerprint to enter")
+                .setNegativeButtonText("Use In-App PIN")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 .build()
 
             val biometricPrompt = BiometricPrompt(
@@ -59,7 +60,6 @@ class LockerAuthManager(private val activity: FragmentActivity) {
 
                     override fun onAuthenticationFailed() {
                         Log.w(TAG, "Biometric authentication attempt failed.")
-                        // BiometricPrompt handles updating the prompt overlay on retry-able attempts
                     }
                 }
             )

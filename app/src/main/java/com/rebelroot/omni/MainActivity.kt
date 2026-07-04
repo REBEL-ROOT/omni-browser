@@ -1,6 +1,11 @@
 package com.rebelroot.omni
 
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +40,22 @@ class MainActivity : FragmentActivity() {
 
     private val browserViewModel: BrowserViewModel by viewModels()
 
+    // Runtime notification permission launcher (Android 13+)
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* granted or denied — no action needed, engine checks at post time */ }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     override fun attachBaseContext(newBase: android.content.Context) {
         val lang = try {
             val datastore = newBase.dataStore
@@ -49,7 +70,7 @@ class MainActivity : FragmentActivity() {
             "en"
         }
         
-        val locale = java.util.Locale(lang)
+        val locale = java.util.Locale.forLanguageTag(lang)
         java.util.Locale.setDefault(locale)
         val config = android.content.res.Configuration(newBase.resources.configuration)
         config.setLocale(locale)
@@ -80,9 +101,23 @@ class MainActivity : FragmentActivity() {
         }
         // -------------------------------------------------------------------------
 
+        // --- Global Robust Uncaught Exception Handler ---
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("OMNI_CRASH", "Uncaught Exception caught!", throwable)
+            val sp = getSharedPreferences("omni_crash_prefs", android.content.Context.MODE_PRIVATE)
+            sp.edit().putString("last_crash_msg", throwable.localizedMessage ?: throwable.toString()).apply()
+
+            val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+            startActivity(intent)
+            android.os.Process.killProcess(android.os.Process.myPid())
+            java.lang.System.exit(10)
+        }
+
         super.onCreate(savedInstanceState)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-
+        requestNotificationPermissionIfNeeded()
 
         val intentUrl = intent?.dataString
         val isDirectVideo = !intentUrl.isNullOrEmpty() && (intentUrl.contains("autoplay=native") || intentUrl.endsWith(".mp4"))
@@ -95,7 +130,7 @@ class MainActivity : FragmentActivity() {
             val context = LocalContext.current
             val currentLanguage = browserViewModel.selectedLanguageCode
             val localizedContext = remember(currentLanguage) {
-                val locale = java.util.Locale(currentLanguage)
+                val locale = java.util.Locale.forLanguageTag(currentLanguage)
                 java.util.Locale.setDefault(locale)
                 val config = android.content.res.Configuration(context.resources.configuration)
                 config.setLocale(locale)
@@ -123,10 +158,19 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
+                    val isLanguageSelectionDone = remember {
+                        runBlocking {
+                            val prefs = context.dataStore.data.first()
+                            prefs[BrowserViewModel.LANGUAGE_SELECTION_DONE_KEY] ?: false
+                        }
+                    }
+
                     val startDestination = if (isDirectVideo) {
                         val encodedPath = android.util.Base64.encodeToString(intentUrl!!.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
                         android.util.Log.i("MainActivity", "🎬 Startup direct video player route: video_player/$encodedPath")
                         "video_player/$encodedPath"
+                    } else if (!isLanguageSelectionDone) {
+                        "language_selection"
                     } else if (!isOnboardingCompleted) {
                         "onboarding"
                     } else {
@@ -137,6 +181,21 @@ class MainActivity : FragmentActivity() {
                         navController = navController,
                         startDestination = startDestination
                     ) {
+                        // Language Selection Screen (first launch)
+                        composable("language_selection") {
+                            com.rebelroot.omni.onboarding.LanguageSelectionScreen(
+                                viewModel = browserViewModel,
+                                context = context,
+                                onFinish = {
+                                    val nextRoute = if (!isOnboardingCompleted) "onboarding" else "browser"
+                                    navController.navigate(nextRoute) {
+                                        popUpTo("language_selection") { inclusive = true }
+                                    }
+                                    this@MainActivity.recreate()
+                                }
+                            )
+                        }
+
                         // Starting Onboarding Presentation Screen
                         composable("onboarding") {
                             com.rebelroot.omni.onboarding.OnboardingScreen(
@@ -332,6 +391,22 @@ class MainActivity : FragmentActivity() {
                 // Trigger navigation back to browser screen (e.g. when default browser opens a link from Settings)
                 browserViewModel.triggerOpenBrowserScreen()
             }
+        }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        try {
+            // Trim image loading memory caches (Coil) to reclaim memory
+            coil.Coil.imageLoader(this).memoryCache?.clear()
+            
+            // Clean up JVM garbage collection if memory is getting low
+            if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+                System.gc()
+            }
+            android.util.Log.d("MainActivity", "🧹 onTrimMemory level $level: Purged image loader memory cache and triggered GC")
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "Failed to trim memory: $e")
         }
     }
 

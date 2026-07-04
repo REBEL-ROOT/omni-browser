@@ -171,4 +171,16 @@
     <string name="video_player_downloading">Downloading</string>
     <string name="video_player_download_cancelled">Download cancelled</string>
     <string name="video_player_download_complete">Download Complete!</string>
+    <string name="discover_title">Discover</string>
+    <string name="refresh_title">Refresh</string>
+    <string name="incognito_title">Incognito</string>
+    <string name="add_title">Add</string>
+    <string name="cat_trending">Trending</string>
+    <string name="cat_world">World</string>
+    <string name="cat_technology">Technology</string>
+    <string name="cat_sports">Sports</string>
+    <string name="cat_business">Business</string>
+    <string name="cat_science">Science</string>
+    <string name="cat_entertainment">Entertainment</string>
+    <string name="cat_health">Health</string>
 </resources>

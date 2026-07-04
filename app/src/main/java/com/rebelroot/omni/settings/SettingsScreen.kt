@@ -35,6 +35,7 @@ import com.rebelroot.omni.R
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 @Composable
 fun SettingsScreen(
     viewModel: BrowserViewModel,
@@ -48,15 +49,14 @@ fun SettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val isDarkMode = viewModel.isDarkThemeEnabled
-    
-    val bgColor = if (isDarkMode) Color(0xFF070A0F) else Color(0xFFF8F9FA)
-    val cardColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFFFFFFF)
-    val cardBorderColor = if (isDarkMode) Color(0xFF23374A) else Color(0x1F000000)
-    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF202124)
-    val textSecondaryColor = if (isDarkMode) Color(0xFF8E9AA8) else Color(0xFF606266)
-    val dividerColor = if (isDarkMode) Color(0xFF23374A).copy(alpha = 0.5f) else Color(0x1F000000)
-    val inputBgColor = if (isDarkMode) Color(0xFF070A0F) else Color(0xFFF2F3F5)
     val accentColor = MaterialTheme.colorScheme.primary
+    val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
+    val cardColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val cardBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
+    val textSecondaryColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+    val dividerColor = if (isDarkMode) Color(0xFF2C2C2E).copy(alpha = 0.5f) else Color(0xFFE5E5EA)
+    val inputBgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
 
     var isNotificationsEnabled by remember {
         mutableStateOf(
@@ -83,6 +83,7 @@ fun SettingsScreen(
     }
 
     var showLanguageSelector by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
 
     val gso = remember {
         com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -197,106 +198,113 @@ fun SettingsScreen(
             var showSignOutConfirmation by remember { mutableStateOf(false) }
             var showClearCacheConfirmation by remember { mutableStateOf(false) }
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable {
-                        if (isSignedIn) {
-                            showSignOutConfirmation = true
-                        } else {
-                            try {
-                                googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Google Play Services not available", Toast.LENGTH_SHORT).show()
+            val showProfileSignIn = false
+            if (showProfileSignIn) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable {
+                            if (isSignedIn) {
+                                showSignOutConfirmation = true
+                            } else {
+                                try {
+                                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Google Play Services not available", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                    color = cardColor,
+                    border = BorderStroke(0.5.dp, cardBorderColor)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(accentColor.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSignedIn && !photoUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                        .data(photoUrl)
+                                        .size(96, 96)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Person,
+                                    contentDescription = "Avatar",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(28.dp)
+                                )
                             }
                         }
-                    },
-                color = cardColor,
-                border = BorderStroke(0.5.dp, cardBorderColor)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(accentColor.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSignedIn && !photoUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = photoUrl,
-                                contentDescription = "Profile Picture",
-                                modifier = Modifier.fillMaxSize()
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = displayName,
+                                color = textPrimaryColor,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = email,
+                                color = textSecondaryColor,
+                                fontSize = 11.sp
+                            )
+                        }
+                        
+                        if (isSignedIn) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
+                                contentDescription = "Sign Out",
+                                tint = Color(0xFFFF4444)
                             )
                         } else {
                             Icon(
-                                imageVector = Icons.Rounded.Person,
-                                contentDescription = "Avatar",
-                                tint = accentColor,
-                                modifier = Modifier.size(28.dp)
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = textSecondaryColor
                             )
                         }
                     }
-                    
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = displayName,
-                            color = textPrimaryColor,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = email,
-                            color = textSecondaryColor,
-                            fontSize = 11.sp
-                        )
-                    }
-                    
-                    if (isSignedIn) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
-                            contentDescription = "Sign Out",
-                            tint = Color(0xFFFF4444)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = textSecondaryColor
-                        )
-                    }
                 }
-            }
 
-            if (showSignOutConfirmation) {
-                AlertDialog(
-                    onDismissRequest = { showSignOutConfirmation = false },
-                    title = { Text(stringResource(id = R.string.sign_out_title), color = textPrimaryColor, fontWeight = FontWeight.Bold) },
-                    text = { Text(stringResource(id = R.string.sign_out_confirm_desc), color = textPrimaryColor) },
-                    containerColor = cardColor,
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showSignOutConfirmation = false
-                                viewModel.googleSignOut(context) {
-                                    Toast.makeText(context, "Signed out successfully", Toast.LENGTH_SHORT).show()
+                if (showSignOutConfirmation) {
+                    AlertDialog(
+                        onDismissRequest = { showSignOutConfirmation = false },
+                        title = { Text(stringResource(id = R.string.sign_out_title), color = textPrimaryColor, fontWeight = FontWeight.Bold) },
+                        text = { Text(stringResource(id = R.string.sign_out_confirm_desc), color = textPrimaryColor) },
+                        containerColor = cardColor,
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showSignOutConfirmation = false
+                                    viewModel.googleSignOut(context) {
+                                        Toast.makeText(context, "Signed out successfully", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
+                            ) {
+                                Text(stringResource(id = R.string.sign_out_title), color = Color(0xFFFF4444))
                             }
-                        ) {
-                            Text(stringResource(id = R.string.sign_out_title), color = Color(0xFFFF4444))
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showSignOutConfirmation = false }) {
+                                Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor)
+                            }
                         }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showSignOutConfirmation = false }) {
-                            Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor)
-                        }
-                    }
-                )
+                    )
+                }
             }
 
             if (showClearCacheConfirmation) {
@@ -674,7 +682,6 @@ fun SettingsScreen(
                             )
                         }
 
-                        /*
                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                         // Row 6: App Language
@@ -706,172 +713,10 @@ fun SettingsScreen(
                                 tint = textSecondaryColor
                             )
                         }
-                        */
                     }
                 }
             }
 
-            // WireGuard VPN Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(id = R.string.vpn_section),
-                    color = accentColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-
-                val vpnState by viewModel.vpnManager.state.collectAsState()
-                val hasConfig = !viewModel.customVpnConfig.isNullOrBlank()
-
-                val filePickerLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.GetContent()
-                ) { uri ->
-                    uri?.let {
-                        try {
-                            val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader -> reader.readText() }
-                            if (!content.isNullOrBlank()) {
-                                viewModel.saveCustomVpnConfig(context, content)
-                                Toast.makeText(context, "WireGuard configuration imported successfully!", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Failed to parse file: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp)),
-                    color = cardColor,
-                    border = BorderStroke(0.5.dp, cardBorderColor)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        // VPN Status indicator row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.VpnLock,
-                                    contentDescription = "VPN Lock",
-                                    tint = accentColor
-                                )
-                                Column {
-                                    Text(stringResource(id = R.string.vpn_status_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    val statusText = when (vpnState) {
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> stringResource(id = R.string.vpn_status_connected)
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> stringResource(id = R.string.vpn_status_connecting)
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> stringResource(id = R.string.vpn_status_disconnected)
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> stringResource(id = R.string.vpn_status_error_prefix, (vpnState as com.rebelroot.omni.privacy.VpnManager.VpnState.Error).message)
-                                    }
-                                    val statusColor = when (vpnState) {
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> Color(0xFF30D158) // Lime green
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> Color(0xFFFF9500) // Orange
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> textSecondaryColor
-                                        is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> Color(0xFFFF453A) // Red
-                                    }
-                                    Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            // Switch to quickly toggle connection state
-                            if (hasConfig) {
-                                Switch(
-                                    checked = vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected,
-                                    onCheckedChange = { isChecked ->
-                                        if (isChecked) {
-                                            viewModel.connectCustomVpn()
-                                        } else {
-                                            viewModel.disconnectVpn()
-                                        }
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = accentColor
-                                    )
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = dividerColor)
-
-                        // Configuration actions
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    filePickerLauncher.launch("*/*")
-                                },
-                                modifier = Modifier.weight(1f).height(40.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = accentColor.copy(alpha = 0.12f)),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.UploadFile,
-                                    contentDescription = "Upload Config",
-                                    tint = accentColor,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(id = R.string.vpn_import_conf), color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            if (hasConfig) {
-                                Button(
-                                    onClick = {
-                                        viewModel.connectCustomVpn()
-                                    },
-                                    enabled = vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected || vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Error,
-                                    modifier = Modifier.weight(1f).height(40.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PlayArrow,
-                                        contentDescription = "Start",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(stringResource(id = R.string.vpn_connect), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        if (hasConfig && vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
-                            Button(
-                                onClick = {
-                                    viewModel.disconnectVpn()
-                                },
-                                modifier = Modifier.fillMaxWidth().height(40.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A)),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Stop,
-                                    contentDescription = "Stop",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(stringResource(id = R.string.vpn_disconnect), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
 
             // 3. SEARCH ENGINE Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1172,6 +1017,40 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
+                                    onOpenUrl("https://rebelroot.xyz/support")
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.Help, contentDescription = null, tint = accentColor)
+                            Text("Help & Support", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showFeedbackDialog = true
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Feedback, contentDescription = null, tint = accentColor)
+                            Text("Send Direct Feedback", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
                                     onOpenUrl("https://github.com/rebelroot")
                                 }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -1313,6 +1192,147 @@ fun SettingsScreen(
                         text = stringResource(id = R.string.cancel_text),
                         color = accentColor
                     )
+                }
+            }
+        )
+    }
+
+    if (showFeedbackDialog) {
+        var name by remember { mutableStateOf(viewModel.googleAccountDisplayName ?: "") }
+        var email by remember { mutableStateOf(viewModel.googleAccountEmail ?: "") }
+        var rating by remember { mutableStateOf(5) }
+        var comment by remember { mutableStateOf("") }
+        var isSubmitting by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { if (!isSubmitting) showFeedbackDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Rounded.Feedback, contentDescription = null, tint = accentColor)
+                    Text("Send Direct Feedback", color = textPrimaryColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = cardColor,
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Your feedback is sent directly to the development team's Telegram bot. Thank you for helping us improve!",
+                        color = textSecondaryColor,
+                        fontSize = 12.sp
+                    )
+
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedLabelColor = accentColor,
+                            unfocusedLabelColor = textSecondaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Email Address") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedLabelColor = accentColor,
+                            unfocusedLabelColor = textSecondaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Rating", color = textPrimaryColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            for (i in 1..5) {
+                                IconButton(
+                                    onClick = { rating = i },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                        contentDescription = "$i Stars",
+                                        tint = if (i <= rating) Color(0xFFFFD700) else textSecondaryColor,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = { Text("Message / Suggestion") },
+                        minLines = 3,
+                        maxLines = 5,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedLabelColor = accentColor,
+                            unfocusedLabelColor = textSecondaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSubmitting = true
+                        viewModel.sendFeedbackToTelegram(name, email, rating, comment) { success, error ->
+                            isSubmitting = false
+                            if (success) {
+                                Toast.makeText(context, "Feedback sent successfully!", Toast.LENGTH_SHORT).show()
+                                showFeedbackDialog = false
+                            } else {
+                                Toast.makeText(context, "Failed to send: ${error ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    enabled = comment.isNotBlank() && !isSubmitting,
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Submit", color = Color.White)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showFeedbackDialog = false },
+                    enabled = !isSubmitting
+                ) {
+                    Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor)
                 }
             }
         )
