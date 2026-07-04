@@ -61,3 +61,5 @@ gradle-user-home/
 # Local documents
 APK_SIZE_OPTIMIZATION_PLAN.md
 
+# Whitelist the release keystore so it's committed to git
+!app/release.keystore

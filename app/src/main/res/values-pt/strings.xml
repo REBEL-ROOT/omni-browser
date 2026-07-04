@@ -171,4 +171,16 @@
     <string name="video_player_downloading">Baixando</string>
     <string name="video_player_download_cancelled">Download cancelado</string>
     <string name="video_player_download_complete">Download concluído!</string>
+    <string name="discover_title">Descobrir</string>
+    <string name="refresh_title">Atualizar</string>
+    <string name="incognito_title">Incógnito</string>
+    <string name="add_title">Adicionar</string>
+    <string name="cat_trending">Tendências</string>
+    <string name="cat_world">Mundo</string>
+    <string name="cat_technology">Tecnologia</string>
+    <string name="cat_sports">Esportes</string>
+    <string name="cat_business">Negócios</string>
+    <string name="cat_science">Ciência</string>
+    <string name="cat_entertainment">Entretenimento</string>
+    <string name="cat_health">Saúde</string>
 </resources>

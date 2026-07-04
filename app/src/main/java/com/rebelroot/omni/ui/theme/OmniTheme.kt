@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+@Suppress("DEPRECATION")
 @Composable
 fun OmniTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -20,13 +21,9 @@ fun OmniTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Use solid obsidian black 0xFF070A0F for status bar in dark mode, and background color in light mode
-            val statusBarColor = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF070A0F) else colorScheme.background
-            window.statusBarColor = statusBarColor.toArgb()
-            
-            // Set navigation bar color to match the bottom bar in dark mode
-            val navigationBarColor = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0D1620) else androidx.compose.ui.graphics.Color(0xFFFFFFFF)
-            window.navigationBarColor = navigationBarColor.toArgb()
+            // Enforce transparent status and navigation bars for Android 15+ edge-to-edge compliance
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !darkTheme

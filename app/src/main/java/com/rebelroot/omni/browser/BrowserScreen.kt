@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -35,8 +37,7 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,6 +55,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +71,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import org.mozilla.geckoview.GeckoView
+import com.rebelroot.omni.R
 import com.rebelroot.omni.media.MediaInterceptor
 import com.rebelroot.omni.privacy.FireButton
 import com.rebelroot.omni.tools.qrcode.BarcodeGenerator
@@ -145,7 +148,7 @@ fun TabItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreenContent(
     viewModel: BrowserViewModel,
@@ -163,7 +166,7 @@ fun HomeScreenContent(
     val context = LocalContext.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    var searchText by remember { mutableStateOf("") }
+    var searchText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -173,7 +176,7 @@ fun HomeScreenContent(
                 val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 val spokenText = results?.firstOrNull() ?: ""
                 if (spokenText.isNotEmpty()) {
-                    searchText = spokenText
+                    searchText = androidx.compose.ui.text.input.TextFieldValue(spokenText)
                     focusManager.clearFocus()
                     keyboardController?.hide()
                     onNavigateTo(spokenText)
@@ -204,8 +207,7 @@ fun HomeScreenContent(
             ),
             contentDescription = "Omni Browser Logo",
             modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp) // Adjusted height for visibility
+                .height(100.dp)
                 .padding(horizontal = 16.dp),
             contentScale = androidx.compose.ui.layout.ContentScale.Fit
         )
@@ -217,7 +219,7 @@ fun HomeScreenContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { onFocusChanged(it.isFocused) },
-            placeholder = { Text("Search or type web address", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
+            placeholder = { Text(stringResource(id = R.string.search_placeholder), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
             leadingIcon = {
                 var expanded by remember { mutableStateOf(false) }
                 val currentEngine = viewModel.selectedSearchEngine
@@ -337,22 +339,22 @@ fun HomeScreenContent(
             ),
             keyboardActions = KeyboardActions(
                 onGo = {
-                    if (searchText.isNotEmpty()) {
+                    if (searchText.text.isNotEmpty()) {
                         focusManager.clearFocus()
                         keyboardController?.hide()
-                        onNavigateTo(searchText)
+                        onNavigateTo(searchText.text)
                     }
                 }
             ),
             shape = RoundedCornerShape(24.dp),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                focusedBorderColor = MaterialTheme.colorScheme.outline,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                focusedContainerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4),
+                unfocusedContainerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4)
             )
         )
 
@@ -374,94 +376,104 @@ fun HomeScreenContent(
             capped + addBtn
         }
         val hasMore = allItems.size - 1 > 15 && !shortcutsExpanded  // -1 for Add btn
-
+        val columnsCount = 4
+        val shortcutRows = remember(visibleItems) { visibleItems.chunked(columnsCount) }
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val rows = visibleItems.chunked(5)
-            rows.forEach { rowItems ->
+            shortcutRows.forEach { rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceAround
                 ) {
                     rowItems.forEach { shortcut ->
-                        when {
-                            shortcut.id == "add_shortcut_btn" -> {
-                                CompactShortcutItem(
-                                    title = "Add",
-                                    icon = Icons.Rounded.Add,
-                                    onClick = { showAddShortcutSheet = true }
-                                )
-                            }
-                            shortcut.isFeature -> {
-                                val (icon, isAccented, action) = when (shortcut.title) {
-                                    "Downloads" -> Triple(Icons.Rounded.Download, true, onOpenDownloads)
-                                    "History"   -> Triple(Icons.Rounded.History,  false, onOpenHistory)
-                                    "Bookmarks" -> Triple(Icons.Rounded.Bookmark, false, onOpenBookmarks)
-                                    "Incognito" -> Triple(
-                                        if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                        false,
-                                        { viewModel.toggleIncognitoMode(context) }
-                                    )
-                                    else -> Triple(Icons.Rounded.Extension, false, {})
-                                }
-                                CompactShortcutItem(
-                                    title = shortcut.title,
-                                    icon = icon,
-                                    isAccented = isAccented,
-                                    onClick = action
-                                )
-                            }
-                            else -> {
-                                var showDeleteDialog by remember { mutableStateOf(false) }
-                                if (showDeleteDialog) {
-                                    AlertDialog(
-                                        onDismissRequest = { showDeleteDialog = false },
-                                        title = { Text("Delete Shortcut?") },
-                                        text = { Text("Remove shortcut to ${shortcut.title}?") },
-                                        confirmButton = {
-                                            TextButton(onClick = {
-                                                viewModel.deleteShortcut(shortcut)
-                                                showDeleteDialog = false
-                                            }) { Text("Delete", color = Color(0xFFFF3B30)) }
-                                        },
-                                        dismissButton = {
-                                            TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-                                        }
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            when {
+                                shortcut.id == "add_shortcut_btn" -> {
+                                    CompactShortcutItem(
+                                        title = stringResource(id = R.string.add_title),
+                                        icon = Icons.Rounded.Add,
+                                        onClick = { showAddShortcutSheet = true }
                                     )
                                 }
-                                CompactDynamicShortcutItem(
-                                    title = shortcut.title,
-                                    url = shortcut.url,
-                                    onClick = { onNavigateTo(shortcut.url) },
-                                    onLongClick = { if (!shortcut.isPermanent) showDeleteDialog = true }
-                                )
+                                shortcut.isFeature -> {
+                                    val (icon, isAccented, action) = when (shortcut.title) {
+                                        "Downloads" -> Triple(Icons.Rounded.Download, true, onOpenDownloads)
+                                        "History"   -> Triple(Icons.Rounded.History,  false, onOpenHistory)
+                                        "Bookmarks" -> Triple(Icons.Rounded.Bookmark, false, onOpenBookmarks)
+                                        "Incognito" -> Triple(
+                                            if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                            false,
+                                            { viewModel.toggleIncognitoMode(context) }
+                                        )
+                                        else -> Triple(Icons.Rounded.Extension, false, {})
+                                    }
+                                    val displayTitle = when (shortcut.title) {
+                                        "Downloads" -> stringResource(id = R.string.downloads_title)
+                                        "History"   -> stringResource(id = R.string.history_title)
+                                        "Bookmarks" -> stringResource(id = R.string.bookmarks_title)
+                                        "Incognito" -> stringResource(id = R.string.incognito_title)
+                                        else        -> shortcut.title
+                                    }
+                                    CompactShortcutItem(
+                                        title = displayTitle,
+                                        icon = icon,
+                                        isAccented = isAccented,
+                                        onClick = action
+                                    )
+                                }
+                                else -> {
+                                    var showDeleteDialog by remember { mutableStateOf(false) }
+                                    if (showDeleteDialog) {
+                                        AlertDialog(
+                                            onDismissRequest = { showDeleteDialog = false },
+                                            title = { Text("Delete Shortcut?") },
+                                            text = { Text("Remove shortcut to ${shortcut.title}?") },
+                                            confirmButton = {
+                                                TextButton(onClick = {
+                                                    viewModel.deleteShortcut(shortcut)
+                                                    showDeleteDialog = false
+                                                }) { Text("Delete", color = Color(0xFFFF3B30)) }
+                                            },
+                                            dismissButton = {
+                                                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                                            }
+                                        )
+                                    }
+                                    CompactDynamicShortcutItem(
+                                        title = shortcut.title,
+                                        url = shortcut.url,
+                                        onClick = { onNavigateTo(shortcut.url) },
+                                        onLongClick = { if (!shortcut.isPermanent) showDeleteDialog = true }
+                                    )
+                                }
                             }
                         }
                     }
-                    // Fill remainder of last row so SpaceBetween stays even
-                    if (rowItems.size < 5) {
-                        repeat(5 - rowItems.size) {
-                            Spacer(modifier = Modifier.width(56.dp))
+                    if (rowItems.size < columnsCount) {
+                        repeat(columnsCount - rowItems.size) {
+                            Spacer(modifier = Modifier.weight(1f))
                         }
                     }
                 }
             }
+        }
 
-            // "More" / "Less" expander
-            if (hasMore || shortcutsExpanded) {
-                TextButton(
-                    onClick = { shortcutsExpanded = !shortcutsExpanded },
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                ) {
-                    Text(
-                        text = if (shortcutsExpanded) "Show less" else "More ›",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+        if (hasMore || shortcutsExpanded) {
+            TextButton(
+                onClick = { shortcutsExpanded = !shortcutsExpanded },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(
+                    text = if (shortcutsExpanded) "Show less" else "More ›",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
 
@@ -470,7 +482,7 @@ fun HomeScreenContent(
             ModalBottomSheet(
                 onDismissRequest = { showAddShortcutSheet = false },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color.White
             ) {
                 var nameInput by remember { mutableStateOf("") }
                 var urlInput by remember { mutableStateOf("") }
@@ -549,7 +561,7 @@ fun HomeScreenContent(
                         }
                     }
                     
-                    HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color(0x1F000000))
+                    HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
                     
                     Text(
                         text = "Popular websites",
@@ -569,22 +581,37 @@ fun HomeScreenContent(
                         Triple("Daily Mail", "https://dailymail.co.uk", Color(0xFF005689))
                     )
                     
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        popularSites.chunked(4).forEach { rowItems ->
+                    val popularColumns = 4
+                    val popularRows = remember(popularSites) { popularSites.chunked(popularColumns) }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        popularRows.forEach { rowItems ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceAround
                             ) {
                                 rowItems.forEach { site ->
-                                    PopularSiteItem(
-                                        title = site.first,
-                                        domain = site.second,
-                                        bgColor = site.third,
-                                        onClick = {
-                                            viewModel.addShortcut(site.first, site.second)
-                                            showAddShortcutSheet = false
-                                        }
-                                    )
+                                    Box(
+                                        modifier = Modifier.weight(1f),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        PopularSiteItem(
+                                            title = site.first,
+                                            domain = site.second,
+                                            bgColor = site.third,
+                                            onClick = {
+                                                viewModel.addShortcut(site.first, site.second)
+                                                showAddShortcutSheet = false
+                                            }
+                                        )
+                                    }
+                                }
+                                if (rowItems.size < popularColumns) {
+                                    repeat(popularColumns - rowItems.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -606,13 +633,13 @@ fun HomeScreenContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Discover",
+                    text = stringResource(id = R.string.discover_title),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Refresh",
+                    text = stringResource(id = R.string.refresh_title),
                     color = MaterialTheme.colorScheme.primary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
@@ -630,6 +657,17 @@ fun HomeScreenContent(
             ) {
                 items(categories) { category ->
                     val isSelected = viewModel.selectedNewsCategory == category
+                    val displayCategory = when (category) {
+                        "Trending" -> stringResource(id = R.string.cat_trending)
+                        "World" -> stringResource(id = R.string.cat_world)
+                        "Technology" -> stringResource(id = R.string.cat_technology)
+                        "Sports" -> stringResource(id = R.string.cat_sports)
+                        "Business" -> stringResource(id = R.string.cat_business)
+                        "Science" -> stringResource(id = R.string.cat_science)
+                        "Entertainment" -> stringResource(id = R.string.cat_entertainment)
+                        "Health" -> stringResource(id = R.string.cat_health)
+                        else -> category
+                    }
                     Surface(
                         onClick = { viewModel.fetchNews(category) },
                         shape = RoundedCornerShape(16.dp),
@@ -642,7 +680,7 @@ fun HomeScreenContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = category,
+                                text = displayCategory,
                                 color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
@@ -689,7 +727,11 @@ fun HomeScreenContent(
                             ) {
                                 // Thumbnail — always present (real image or source favicon)
                                 coil.compose.AsyncImage(
-                                    model = article.imageUrl,
+                                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                        .data(article.imageUrl)
+                                        .size(120, 120)
+                                        .crossfade(true)
+                                        .build(),
                                     contentDescription = null,
                                     modifier = Modifier
                                         .size(56.dp)
@@ -833,7 +875,11 @@ fun CompactDynamicShortcutItem(
             contentAlignment = Alignment.Center
         ) {
             coil.compose.AsyncImage(
-                model = faviconUrl,
+                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                    .data(faviconUrl)
+                    .size(64, 64)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = title,
                 modifier = Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)),
                 error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
@@ -939,7 +985,7 @@ fun DiscoverRowItem(
         }
         
         Icon(
-            imageVector = Icons.Rounded.KeyboardArrowRight,
+            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -949,40 +995,62 @@ fun DiscoverRowItem(
 @Composable
 fun ToolCard(
     title: String,
-    subtitle: String = "",
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier.width(90.dp),
+    isDarkTheme: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Surface(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.93f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "scale"
+    )
+
+    val accentColor = MaterialTheme.colorScheme.primary
+    val iconContainerBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+
+    Box(
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() },
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(iconContainerBg)
+                    .border(BorderStroke(0.5.dp, accentColor.copy(alpha = 0.35f)), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
+                    tint = accentColor,
+                    modifier = Modifier.size(22.dp)
                 )
             }
             Text(
                 text = title,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF1E293B),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -993,7 +1061,7 @@ fun ToolCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun BrowserScreen(
     viewModel: BrowserViewModel,
@@ -1017,7 +1085,7 @@ fun BrowserScreen(
 
     
     var showMenu by remember { mutableStateOf(false) }
-    var inputUrl by remember { mutableStateOf(viewModel.currentUrl) }
+    var inputUrl by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)) }
     var isInputFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -1123,10 +1191,21 @@ fun BrowserScreen(
     
     // Developer Console state
     var showConsoleSheet by remember { mutableStateOf(false) }
+    var showDevNotesSheet by remember { mutableStateOf(false) }
+    var showSiteStyleCustomizerSheet by remember { mutableStateOf(false) }
 
     // Tools sheet state
     var showToolsSheet by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
+
+    val isKeyboardVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    LaunchedEffect(isKeyboardVisible) {
+        if (!isKeyboardVisible) {
+            focusManager.clearFocus()
+            isHomeSearchFocused = false
+            isInputFocused = false
+        }
+    }
 
     // QR Quick Tools states
     var showQrGeneratorDialog by remember { mutableStateOf(false) }
@@ -1149,6 +1228,8 @@ fun BrowserScreen(
 
     var pendingEditPageAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingConsoleAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showDevNotesOverviewDialog by remember { mutableStateOf(false) }
+    var pendingDevNotesAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val systemPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -1171,8 +1252,47 @@ fun BrowserScreen(
         }
     }
 
+    // ── File / Photo picker for web <input type="file"> ────────────────
+    // Single-file picker (also handles camera/gallery via MIME type)
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.deliverFilePickerResult(listOf(uri))
+        } else {
+            viewModel.cancelFilePrompt()
+        }
+    }
+
+    // Multi-file picker
+    val multiFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.deliverFilePickerResult(uris)
+        } else {
+            viewModel.cancelFilePrompt()
+        }
+    }
+
+    // Observe pendingFilePrompt and launch the right picker automatically
+    LaunchedEffect(viewModel.pendingFilePrompt) {
+        val pending = viewModel.pendingFilePrompt ?: return@LaunchedEffect
+        // Build a MIME type string for the launcher. Fall back to "*/*" if none supplied.
+        val mime = pending.mimeTypes
+            ?.filter { it.isNotBlank() }
+            ?.joinToString(",")
+            ?.ifBlank { null }
+            ?: "*/*"
+        if (pending.allowMultiple) {
+            multiFilePickerLauncher.launch(mime)
+        } else {
+            filePickerLauncher.launch(mime)
+        }
+    }
+
     LaunchedEffect(viewModel.currentUrl) {
-        inputUrl = viewModel.currentUrl
+        inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
     }
 
     LaunchedEffect(viewModel.qrScanResults) {
@@ -1213,51 +1333,178 @@ fun BrowserScreen(
     }
 
 
-    // Reset home search focus state when we leave the home screen
+    // Reset home search focus state when we leave the home screen.
+    // Also force the nav bar permanently visible when on the home screen.
     LaunchedEffect(showHomeScreen) {
         if (!showHomeScreen) {
             isHomeSearchFocused = false
+        } else {
+            isScrollNavBarVisible = true
         }
     }
 
-    // Scroll delegate: registered once per tab session to drive nav bar hide/show
+    val currentShowHomeScreen by rememberUpdatedState(showHomeScreen)
+
+    // Scroll delegate: registered once per tab session to drive nav bar hide/show.
+    //
+    // Why accumulated delta instead of raw diff:
+    // Sites with sticky/fixed footer navs sometimes fire a burst of small scroll
+    // events (position corrections, IntersectionObserver reflows, etc.) that reset
+    // lastScrollY without the user actually scrolling up.  A single-diff check
+    // interprets those corrections as "scrolled up → show nav" and the nav never
+    // hides.  Accumulating deltas across events means a site-triggered micro-scroll
+    // (+3 px) cannot cancel a user's deliberate downward scroll (+80 px).
     LaunchedEffect(activeTab?.session) {
         val session = activeTab?.session ?: return@LaunchedEffect
         var lastScrollY = 0
+        var accumulatedDelta = 0  // running sum; reset when direction commits
         session.scrollDelegate = object : org.mozilla.geckoview.GeckoSession.ScrollDelegate {
             override fun onScrollChanged(sess: org.mozilla.geckoview.GeckoSession, scrollX: Int, scrollY: Int) {
-                if (!isNavHideEnabled) {
+                // ── Always pin the nav bar on the home screen ──────────────────
+                if (currentShowHomeScreen) {
                     isScrollNavBarVisible = true
                     lastScrollY = scrollY
+                    accumulatedDelta = 0
                     return
                 }
 
+                if (!isNavHideEnabled) {
+                    isScrollNavBarVisible = true
+                    lastScrollY = scrollY
+                    accumulatedDelta = 0
+                    return
+                }
+
+
+                // Always show nav when the page is scrolled back to the very top
                 if (scrollY <= 0) {
                     isScrollNavBarVisible = true
-                } else {
-                    val diff = scrollY - lastScrollY
-                    if (diff > 25) {
-                        isScrollNavBarVisible = false
-                    } else if (diff < -25) {
-                        isScrollNavBarVisible = true
-                    }
+                    lastScrollY = 0
+                    accumulatedDelta = 0
+                    return
                 }
+
+                val delta = scrollY - lastScrollY
                 lastScrollY = scrollY
+
+                // Ignore near-zero jitter (≤ 4 px) — these are typically layout/
+                // reflow corrections fired by sites with sticky footer navs.
+                if (delta > -5 && delta < 5) return
+
+                accumulatedDelta += delta
+
+                // Commit hide only after accumulating a meaningful downward scroll
+                if (accumulatedDelta > 60) {
+                    isScrollNavBarVisible = false
+                    accumulatedDelta = 0
+                // Commit show only after accumulating a meaningful upward scroll
+                } else if (accumulatedDelta < -40) {
+                    isScrollNavBarVisible = true
+                    accumulatedDelta = 0
+                }
             }
         }
     }
 
     // Add back gesture handler to handle system back clicks safely
-    androidx.activity.compose.BackHandler(enabled = !showHomeScreen && viewModel.canGoBack) {
-        viewModel.goBack()
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+
+    // Only intercept back when the browser screen is actually in focus.
+    // The video player screen has its own BackHandler that takes priority when it is
+    // composed on top, so this handler is only active when the browser is the top destination.
+    androidx.activity.compose.BackHandler(enabled = true) {
+        if (!showHomeScreen) {
+            if (viewModel.canGoBack) {
+                // Navigate the active tab's GeckoSession back safely
+                try { viewModel.goBack() } catch (e: Exception) {
+                    android.util.Log.w("BackHandler", "goBack() error, going home: ${e.message}")
+                    viewModel.navigateHomeDirectly()
+                }
+            } else {
+                // No history left – go to home screen without touching session
+                viewModel.navigateHomeDirectly()
+            }
+        } else {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastBackPressTime < 2000) {
+                showExitConfirmDialog = true
+            } else {
+                lastBackPressTime = currentTime
+                Toast.makeText(context, "Tap again to exit Omni Browser", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    if (showExitConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            title = {
+                Text("Exit Browser?", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
+            },
+            text = {
+                Text("Are you sure you want to exit Omni Browser?", fontSize = 14.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        (context as? android.app.Activity)?.finish()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Yes", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirmDialog = false }) {
+                    Text("No", color = if (viewModel.isDarkThemeEnabled) Color.Gray else Color.DarkGray)
+                }
+            },
+            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // Uncaught exception crash recovery notification dialog
+    val crashPrefs = remember { context.getSharedPreferences("omni_crash_prefs", android.content.Context.MODE_PRIVATE) }
+    var crashMsg by remember { mutableStateOf(crashPrefs.getString("last_crash_msg", null)) }
+    if (crashMsg != null) {
+        AlertDialog(
+            onDismissRequest = {
+                crashPrefs.edit().remove("last_crash_msg").apply()
+                crashMsg = null
+            },
+            title = {
+                Text("Auto Recovery", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+            },
+            text = {
+                Text("Omni Browser recovered from an unexpected error: \n\n$crashMsg\n\nYou can continue browsing safely.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        crashPrefs.edit().remove("last_crash_msg").apply()
+                        crashMsg = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("OK", color = Color.White)
+                }
+            },
+            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 
     Scaffold(
         topBar = {
             AnimatedVisibility(
-                visible = !viewModel.isFullscreen && !showHomeScreen && isScrollNavBarVisible,
-                enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(220)) + fadeIn(animationSpec = tween(220)),
-                exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(180)) + fadeOut(animationSpec = tween(180))
+                visible = !viewModel.isFullscreen && !showHomeScreen,
+                enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(durationMillis = 350, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeIn(animationSpec = tween(durationMillis = 350)),
+                exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeOut(animationSpec = tween(durationMillis = 300))
             ) {
                 Column {
                     Surface(
@@ -1276,7 +1523,7 @@ fun BrowserScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(44.dp)
-                                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE8EAED))
+                                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4))
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1285,10 +1532,10 @@ fun BrowserScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        items(viewModel.tabs) { tab ->
+                                        items(viewModel.tabs, key = { it.id }) { tab ->
                                             val isActive = tab.id == viewModel.activeTabId
                                             val tabBg = if (isActive) {
-                                                if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color.White
+                                                if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color.White
                                             } else {
                                                 Color.Transparent
                                             }
@@ -1442,7 +1689,7 @@ fun BrowserScreen(
                                             )
 
                                             BasicTextField(
-                                                value = if (inputUrl == "about:blank") "" else inputUrl,
+                                                value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
                                                 onValueChange = { inputUrl = it },
                                                 modifier = Modifier
                                                     .weight(1f)
@@ -1457,7 +1704,7 @@ fun BrowserScreen(
                                                 ),
                                                 keyboardActions = KeyboardActions(
                                                     onGo = {
-                                                        viewModel.loadUrl(inputUrl)
+                                                        viewModel.loadUrl(inputUrl.text)
                                                         focusManager.clearFocus()
                                                         keyboardController?.hide()
                                                     }
@@ -1465,11 +1712,11 @@ fun BrowserScreen(
                                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                                             )
 
-                                            if (inputUrl.isNotEmpty() && inputUrl != "about:blank") {
+                                            if (inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
                                                 Box(
                                                     modifier = Modifier
                                                         .size(24.dp)
-                                                        .clickable { inputUrl = "" },
+                                                        .clickable { inputUrl = androidx.compose.ui.text.input.TextFieldValue("") },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
@@ -1494,7 +1741,7 @@ fun BrowserScreen(
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Icon(
-                                                            imageVector = Icons.Rounded.MenuBook,
+                                                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                                             contentDescription = "Reader Mode",
                                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                                             modifier = Modifier.size(18.dp)
@@ -1531,7 +1778,7 @@ fun BrowserScreen(
                                     if (isInputFocused) {
                                         TextButton(
                                             onClick = {
-                                                inputUrl = viewModel.currentUrl
+                                                inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
                                                 focusManager.clearFocus()
                                                 keyboardController?.hide()
                                             }
@@ -1600,13 +1847,13 @@ fun BrowserScreen(
                                 ) {
                                     AnimatedVisibility(visible = !isInputFocused) {
                                         IconButton(
-                                            onClick = { viewModel.createNewTab(context, "about:blank") },
+                                            onClick = { viewModel.loadUrl("about:blank") },
                                             modifier = Modifier.size(36.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Add,
-                                                contentDescription = "New Tab",
-                                                tint = MaterialTheme.colorScheme.onBackground
+                                            androidx.compose.foundation.Image(
+                                                painter = androidx.compose.ui.res.painterResource(id = com.rebelroot.omni.R.drawable.ic_omni_logo),
+                                                contentDescription = "Go Home",
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
@@ -1641,7 +1888,7 @@ fun BrowserScreen(
                                             )
 
                                             BasicTextField(
-                                                value = if (inputUrl == "about:blank") "" else inputUrl,
+                                                value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
                                                 onValueChange = { inputUrl = it },
                                                 modifier = Modifier
                                                     .weight(1f)
@@ -1656,7 +1903,7 @@ fun BrowserScreen(
                                                 ),
                                                 keyboardActions = KeyboardActions(
                                                     onGo = {
-                                                        viewModel.loadUrl(inputUrl)
+                                                        viewModel.loadUrl(inputUrl.text)
                                                         focusManager.clearFocus()
                                                         keyboardController?.hide()
                                                     }
@@ -1664,11 +1911,11 @@ fun BrowserScreen(
                                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                                             )
 
-                                            if (inputUrl.isNotEmpty() && inputUrl != "about:blank") {
+                                            if (inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
                                                 Box(
                                                     modifier = Modifier
                                                         .size(24.dp)
-                                                        .clickable { inputUrl = "" },
+                                                        .clickable { inputUrl = androidx.compose.ui.text.input.TextFieldValue("") },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
@@ -1694,7 +1941,7 @@ fun BrowserScreen(
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Icon(
-                                                            imageVector = Icons.Rounded.MenuBook,
+                                                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                                             contentDescription = "Reader Mode",
                                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                                             modifier = Modifier.size(18.dp)
@@ -1732,7 +1979,7 @@ fun BrowserScreen(
                                     AnimatedVisibility(visible = isInputFocused) {
                                         TextButton(
                                             onClick = {
-                                                inputUrl = viewModel.currentUrl
+                                                inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
                                                 focusManager.clearFocus()
                                                 keyboardController?.hide()
                                             }
@@ -1795,7 +2042,7 @@ fun BrowserScreen(
 
                     val isRestrictedDomain = listOf("youtube.com", "youtu.be", "google.com", "googlevideo.com", "googleusercontent.com").any { viewModel.currentUrl.contains(it, ignoreCase = true) }
                     val nonDrmMedia = if (isRestrictedDomain) emptyList() else detectedMedia.filter { !it.isDrmProtected }
-                    val showAlohaBanner = viewModel.isVideoPlayingInPage && nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive
+                    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive
 
                     AnimatedVisibility(
                         visible = showAlohaBanner,
@@ -1828,20 +2075,48 @@ fun BrowserScreen(
 
                                 Spacer(modifier = Modifier.width(12.dp))
 
-                                EqualizerIcon(
-                                    modifier = Modifier.align(Alignment.CenterVertically),
-                                    color = Color(0xFF00D2FF)
-                                )
+                                if (viewModel.isVideoPlayingInPage) {
+                                    EqualizerIcon(
+                                        modifier = Modifier.align(Alignment.CenterVertically),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayCircle,
+                                        contentDescription = "Video Detected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
                                 Text(
-                                    text = "Video is playing",
+                                    text = if (viewModel.isVideoPlayingInPage) "Video is playing" else "Video playing detected",
                                     color = Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     modifier = Modifier.weight(1f)
                                 )
+
+                                IconButton(
+                                    onClick = {
+                                        val firstMedia = nonDrmMedia.firstOrNull()
+                                        if (firstMedia != null) {
+                                            onPlayOnlineStream(firstMedia.url, viewModel.currentUrl)
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayArrow,
+                                        contentDescription = "Play in Premium Player",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
 
                                 IconButton(
                                     onClick = {
@@ -1870,15 +2145,15 @@ fun BrowserScreen(
         bottomBar = {
             AnimatedVisibility(
                 visible = !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused && (showHomeScreen || isScrollNavBarVisible),
-                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(220)) + fadeIn(animationSpec = tween(220)),
-                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(animationSpec = tween(180))
+                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(durationMillis = 350, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeIn(animationSpec = tween(durationMillis = 350)),
+                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeOut(animationSpec = tween(durationMillis = 300))
             ) {
                 // Flat minimal bottom bar persisting exactly as requested in screenshots
                 val isDark = viewModel.isDarkThemeEnabled
-                val navBg = if (isDark) Color(0xFF0D1620) else Color(0xFFFFFFFF)
-                val navBorder = if (isDark) Color(0xFF16222F).copy(alpha = 0.5f) else Color(0x1F000000)
-                val navContent = if (isDark) Color.White else Color(0xFF202124)
-                val navContentMuted = if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF202124).copy(alpha = 0.2f)
+                val navBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+                val navBorder = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+                val navContent = if (isDark) Color.White else Color(0xFF1C1C1E)
+                val navContentMuted = if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF8E8E93)
 
                 Surface(
                     modifier = Modifier
@@ -2032,15 +2307,15 @@ fun BrowserScreen(
     // ── Edge-style Grid Menu Bottom Sheet ──────────────────────────────
     if (showMenu) {
         val isDark = viewModel.isDarkThemeEnabled
-        val inactiveIconBg = if (isDark) Color(0xFF1A2A3A) else MaterialTheme.colorScheme.surfaceVariant
-        val inactiveIconTint = if (isDark) Color(0xFFAABBCC) else MaterialTheme.colorScheme.onSurfaceVariant
+        val inactiveIconBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
+        val inactiveIconTint = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
         val activeIconTint = MaterialTheme.colorScheme.primary
         val activeIconBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
 
         ModalBottomSheet(
             onDismissRequest = { showMenu = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = if (isDark) Color(0xFF0D1620) else Color.White,
+            containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
             dragHandle = {
                 Box(
                     modifier = Modifier
@@ -2048,7 +2323,7 @@ fun BrowserScreen(
                         .width(36.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFF3A4A5A))
+                        .background(if (isDark) Color(0xFF3A3A3C) else Color(0xFFC7C7CC))
                 )
             }
         ) {
@@ -2232,7 +2507,7 @@ fun BrowserScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF070A0F) else MaterialTheme.colorScheme.background)
+                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0B0B0C) else Color(0xFFFFFFFF))
         ) {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -2248,11 +2523,17 @@ fun BrowserScreen(
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
-                            GeckoView(ctx).apply {
+                            object : GeckoView(ctx) {
+                                override fun onDetachedFromWindow() {
+                                    releaseSession()
+                                    super.onDetachedFromWindow()
+                                }
+                            }.apply {
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
+                                
                                 val runtime = viewModel.getGeckoRuntime(ctx)
                                 if (!activeTab.session.isOpen) {
                                     activeTab.session.open(runtime)
@@ -2270,12 +2551,17 @@ fun BrowserScreen(
                                 activeTab.session.open(runtime)
                             }
                             if (geckoView.session != activeTab.session) {
+                                geckoView.releaseSession()
                                 geckoView.setSession(activeTab.session)
                             }
                             activeTab.session.setActive(true)
                             viewModel.setActiveGeckoView(geckoView)
                             
                             // Scroll delegate is managed via LaunchedEffect; no inline assignment needed
+                        },
+                        onRelease = { geckoView ->
+                            geckoView.releaseSession()
+                            viewModel.clearActiveGeckoView()
                         }
                     )
 
@@ -2285,13 +2571,13 @@ fun BrowserScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF070A0F) else MaterialTheme.colorScheme.background),
+                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0B0B0C) else Color(0xFFFFFFFF)),
                             contentAlignment = Alignment.Center
                         ) {
                             Card(
                                 shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                                colors = CardDefaults.cardColors(containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White),
+                                border = BorderStroke(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
+                                colors = CardDefaults.cardColors(containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color.White),
                                 modifier = Modifier
                                     .fillMaxWidth(0.85f)
                                     .padding(16.dp)
@@ -2357,7 +2643,7 @@ fun BrowserScreen(
                     // network stack, and JS engine. Without this, returning from
                     // background causes pages to appear frozen until a user interaction
                     // triggers a Compose recomposition.
-                    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+                    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
                     DisposableEffect(activeTab.id, lifecycleOwner) {
                         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                             val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session
@@ -2480,7 +2766,7 @@ fun BrowserScreen(
                                 )
 
                                 Icon(
-                                    imageVector = Icons.Rounded.KeyboardArrowRight,
+                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                                     contentDescription = "Collapse Auto Scroll",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier
@@ -2565,7 +2851,7 @@ fun BrowserScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Icon(
-                                    imageVector = Icons.Rounded.KeyboardArrowLeft,
+                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                                     modifier = Modifier.size(10.dp)
@@ -2629,7 +2915,7 @@ fun BrowserScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Rounded.MenuBook,
+                                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(16.dp)
@@ -2664,7 +2950,7 @@ fun BrowserScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = if (viewModel.isTtsPlaying) Icons.Rounded.VolumeUp else Icons.Rounded.RecordVoiceOver,
+                                                imageVector = if (viewModel.isTtsPlaying) Icons.AutoMirrored.Rounded.VolumeUp else Icons.Rounded.RecordVoiceOver,
                                                 contentDescription = "Read Aloud",
                                                 tint = if (viewModel.isTtsPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(14.dp)
@@ -2907,6 +3193,102 @@ fun BrowserScreen(
                                     }
                                 }
                             }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Space",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.width(28.dp)
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (viewModel.readerLetterSpacing != "Normal") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            val next = when (viewModel.readerLetterSpacing) {
+                                                "Normal" -> "Wide"
+                                                "Wide" -> "Very Wide"
+                                                else -> "Normal"
+                                            }
+                                            viewModel.updateReaderLetterSpacing(next)
+                                        }
+                                ) {
+                                    Text(
+                                        text = "Letter: ${viewModel.readerLetterSpacing}",
+                                        fontSize = 10.sp,
+                                        fontWeight = if (viewModel.readerLetterSpacing != "Normal") FontWeight.Bold else FontWeight.Normal,
+                                        color = if (viewModel.readerLetterSpacing != "Normal") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (viewModel.readerWordSpacing != "Normal") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            val next = when (viewModel.readerWordSpacing) {
+                                                "Normal" -> "Wide"
+                                                "Wide" -> "Very Wide"
+                                                else -> "Normal"
+                                            }
+                                            viewModel.updateReaderWordSpacing(next)
+                                        }
+                                ) {
+                                    Text(
+                                        text = "Word: ${viewModel.readerWordSpacing}",
+                                        fontSize = 10.sp,
+                                        fontWeight = if (viewModel.readerWordSpacing != "Normal") FontWeight.Bold else FontWeight.Normal,
+                                        color = if (viewModel.readerWordSpacing != "Normal") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Align",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.width(28.dp)
+                                )
+                                listOf("Left", "Justify").forEach { align ->
+                                    val isSelected = (align == "Justify" && viewModel.readerJustified) || (align == "Left" && !viewModel.readerJustified)
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { viewModel.toggleReaderJustified() }
+                                    ) {
+                                        Text(
+                                            text = align,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            modifier = Modifier.padding(vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -2932,7 +3314,7 @@ fun BrowserScreen(
                                 horizontalArrangement = Arrangement.spacedBy(1.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.MenuBook,
+                                    imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                     contentDescription = "Expand Reader Controls",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
@@ -3015,7 +3397,7 @@ fun BrowserScreen(
                             }
                         }
 
-                        // Bottom-right download button
+                        // Bottom-right controls: Play FAB + Download FAB
                         AnimatedVisibility(
                             visible = showFullscreenDownloadBtn,
                             enter = fadeIn(),
@@ -3024,26 +3406,51 @@ fun BrowserScreen(
                                 .align(Alignment.BottomEnd)
                                 .padding(end = 20.dp, bottom = 32.dp)
                         ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    if (!viewModel.hasSeenVideoOverview) {
-                                        pendingVideoAction = { showDownloadSheet = true }
-                                        showVideoOverviewDialog = true
-                                    } else {
-                                        showDownloadSheet = true
-                                    }
-                                },
-                                containerColor = Color.Black.copy(alpha = 0.78f),
-                                contentColor = Color.White,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.size(56.dp)
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalAlignment = Alignment.End
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Download,
-                                    contentDescription = "Download Video",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(26.dp)
-                                )
+                                val firstMedia = nonDrmMedia.firstOrNull()
+                                if (firstMedia != null) {
+                                    FloatingActionButton(
+                                        onClick = {
+                                            onPlayOnlineStream(firstMedia.url, viewModel.currentUrl)
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = Color.White,
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.size(56.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = "Play in Premium Player",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+
+                                FloatingActionButton(
+                                    onClick = {
+                                        if (!viewModel.hasSeenVideoOverview) {
+                                            pendingVideoAction = { showDownloadSheet = true }
+                                            showVideoOverviewDialog = true
+                                        } else {
+                                            showDownloadSheet = true
+                                        }
+                                    },
+                                    containerColor = Color.Black.copy(alpha = 0.78f),
+                                    contentColor = Color.White,
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = "Download Video",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -3140,7 +3547,7 @@ fun BrowserScreen(
                             
                             // Open in New Tab
                             ContextMenuItem(
-                                icon = Icons.Rounded.OpenInNew,
+                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
                                 title = "Open image in new tab",
                                 onClick = {
                                     viewModel.dismissContextMenu()
@@ -3168,7 +3575,7 @@ fun BrowserScreen(
                             val linkUrl = activeContextMenu.linkUri
                             // Open Link in New Tab
                             ContextMenuItem(
-                                icon = Icons.Rounded.OpenInNew,
+                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
                                 title = "Open link in new tab",
                                 onClick = {
                                     viewModel.dismissContextMenu()
@@ -3206,6 +3613,98 @@ fun BrowserScreen(
                                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                     }
                                     context.startActivity(chooserIntent)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Text Selection Bottom Sheet
+            val activeTextSelection = viewModel.activeTextSelection
+            if (activeTextSelection != null) {
+                ModalBottomSheet(
+                    onDismissRequest = { viewModel.dismissTextSelection() },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color.White,
+                    contentColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFE0E0E0)) }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp)
+                    ) {
+                        // Header
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = "Text Selection",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = activeTextSelection,
+                                fontSize = 14.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.6f) else Color(0xFF606266)
+                            )
+                        }
+                        
+                        HorizontalDivider(
+                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFE0E0E0),
+                            thickness = 1.dp
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Options
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            // Copy Option
+                            ContextMenuItem(
+                                icon = Icons.Rounded.ContentCopy,
+                                title = "Copy",
+                                onClick = {
+                                    viewModel.copySelectedText(context)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                            
+                            // Share Option
+                            ContextMenuItem(
+                                icon = Icons.Rounded.Share,
+                                title = "Share",
+                                onClick = {
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(android.content.Intent.EXTRA_TEXT, activeTextSelection)
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share text"))
+                                    viewModel.dismissTextSelection()
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                            
+                            // Select All Option (already selected, so just show it)
+                            ContextMenuItem(
+                                icon = Icons.Rounded.SelectAll,
+                                title = "Select All",
+                                onClick = {
+                                    // Text is already selected, just dismiss
+                                    viewModel.dismissTextSelection()
                                 },
                                 isDark = viewModel.isDarkThemeEnabled
                             )
@@ -3737,7 +4236,11 @@ fun BrowserScreen(
                                                     // Show snapshot / reference image using high-res favicon
                                                     if (tab.url.isNotEmpty() && tab.url != "about:blank") {
                                                         coil.compose.AsyncImage(
-                                                            model = "https://www.google.com/s2/favicons?domain=${tab.url}&sz=128",
+                                                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                                .data("https://www.google.com/s2/favicons?domain=${tab.url}&sz=128")
+                                                                .size(96, 96)
+                                                                .crossfade(true)
+                                                                .build(),
                                                             contentDescription = "Site Thumbnail",
                                                             modifier = Modifier.size(40.dp)
                                                         )
@@ -3781,6 +4284,7 @@ fun BrowserScreen(
 
             // 3. Web Extensions Manager Bottom Sheet
             if (showConsoleSheet) {
+                var jsInputText by remember { mutableStateOf("") }
                 ModalBottomSheet(
                     onDismissRequest = { showConsoleSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -3812,13 +4316,13 @@ fun BrowserScreen(
                         androidx.compose.foundation.lazy.LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(400.dp)
+                                .height(320.dp)
                                 .background(if (viewModel.isDarkThemeEnabled) Color(0xFF05080C) else Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
                                 .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                                 .padding(8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            items(viewModel.consoleLogs.toList()) { log ->
+                            items(viewModel.consoleLogs.toList(), key = { "${it.timestamp}_${it.message.hashCode()}" }) { log ->
                                 val color = when (log.level) {
                                     "ERROR" -> Color(0xFFFF5555)
                                     "WARN" -> Color(0xFFFFB86C)
@@ -3836,6 +4340,52 @@ fun BrowserScreen(
                                     lineHeight = 14.sp
                                 )
                                 HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f))
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = jsInputText,
+                                onValueChange = { jsInputText = it },
+                                placeholder = { Text("console.log('Hello');", fontSize = 14.sp) },
+                                modifier = Modifier.weight(1f),
+                                textStyle = LocalTextStyle.current.copy(
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                    fontSize = 13.sp
+                                ),
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color.LightGray
+                                ),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                    onSend = {
+                                        if (jsInputText.isNotBlank()) {
+                                            viewModel.pendingJsCommand = jsInputText
+                                            jsInputText = ""
+                                        }
+                                    }
+                                )
+                            )
+                            androidx.compose.material3.Button(
+                                onClick = {
+                                    if (jsInputText.isNotBlank()) {
+                                        viewModel.pendingJsCommand = jsInputText
+                                        jsInputText = ""
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text("Run", fontSize = 13.sp)
                             }
                         }
                     }
@@ -4109,198 +4659,134 @@ fun BrowserScreen(
 
                         HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A).copy(alpha = 0.5f) else Color.LightGray.copy(alpha = 0.5f))
 
-                        // Row 1 (Tools 1-4)
-                        Row(
+                        androidx.compose.foundation.layout.FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            maxItemsInEachRow = 4
                         ) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "QR Tools",
-                                    icon = Icons.Rounded.QrCodeScanner,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        showToolsSheet = false
-                                        if (!viewModel.hasSeenQrOverview) {
-                                            pendingQrAction = onOpenQrTools
-                                            showQrOverviewDialog = true
-                                        } else {
-                                            onOpenQrTools()
-                                        }
-                                    }
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "Safe Locker",
-                                    icon = Icons.Rounded.Lock,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        showToolsSheet = false
-                                        onOpenLocker()
-                                    }
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "Translator",
-                                    icon = Icons.Rounded.Translate,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        showToolsSheet = false
-                                        translationSourceText = ""
-                                        translationResultText = ""
-                                        showTranslationDialog = true
-                                    }
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                val isEditing = activeTab?.isEditModeEnabled ?: false
-                                ToolCard(
-                                    title = if (isEditing) "Stop Edit" else "Edit Page",
-                                    icon = Icons.Rounded.Edit,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        if (showHomeScreen || activeTab == null) {
-                                            Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            showToolsSheet = false
-                                            if (!viewModel.hasSeenEditPageOverview) {
-                                                pendingEditPageAction = { viewModel.toggleEditMode() }
-                                                showEditPageOverviewDialog = true
-                                            } else {
-                                                viewModel.toggleEditMode()
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                        }
+                            val cardModifier = Modifier.width(82.dp)
+                            val isDark = viewModel.isDarkThemeEnabled
 
-                        // Row 2 (Tools 5-8)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "Save PDF",
-                                    icon = Icons.Rounded.Print,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        if (showHomeScreen || activeTab == null) {
-                                            Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            showToolsSheet = false
-                                            if (!viewModel.hasSeenPdfOverview) {
-                                                pendingPdfAction = { viewModel.printCurrentPage(context) }
-                                                showPdfOverviewDialog = true
-                                            } else {
-                                                viewModel.printCurrentPage(context)
-                                            }
-                                        }
-                                    }
-                                )
+                            ToolCard(title = "QR Scanner", icon = Icons.Rounded.QrCodeScanner, isDarkTheme = isDark, modifier = cardModifier) {
+                                showToolsSheet = false
+                                if (!viewModel.hasSeenQrOverview) {
+                                    pendingQrAction = onOpenQrTools
+                                    showQrOverviewDialog = true
+                                } else {
+                                    onOpenQrTools()
+                                }
                             }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "Pin Web App",
-                                    icon = Icons.Rounded.OpenInNew,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        if (showHomeScreen || activeTab == null) {
-                                            Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            showToolsSheet = false
-                                            viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url)
-                                        }
-                                    }
-                                )
+                            ToolCard(title = "Safe Locker", icon = Icons.Rounded.Lock, isDarkTheme = isDark, modifier = cardModifier) {
+                                showToolsSheet = false
+                                onOpenLocker()
                             }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "Auto-Scroll",
-                                    icon = Icons.Rounded.ArrowDownward,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        if (showHomeScreen || activeTab == null) {
-                                            Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            showToolsSheet = false
-                                            isAutoScrollActive = !isAutoScrollActive
-                                        }
-                                    }
-                                )
+                            ToolCard(title = "Translator", icon = Icons.Rounded.Translate, isDarkTheme = isDark, modifier = cardModifier) {
+                                showToolsSheet = false
+                                translationSourceText = ""
+                                translationResultText = ""
+                                showTranslationDialog = true
                             }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "QR Scan Page",
-                                    icon = Icons.Rounded.CenterFocusWeak,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        if (showHomeScreen || activeTab == null) {
-                                            Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            showToolsSheet = false
-                                            if (!viewModel.hasSeenQrOverview) {
-                                                pendingQrAction = { viewModel.scanPageForQrCodes() }
-                                                showQrOverviewDialog = true
-                                            } else {
-                                                viewModel.scanPageForQrCodes()
-                                            }
-                                        }
+                            val isEditing = activeTab?.isEditModeEnabled ?: false
+                            ToolCard(title = if (isEditing) "Stop Edit" else "Edit Page", icon = Icons.Rounded.Edit, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    if (!viewModel.hasSeenEditPageOverview) {
+                                        pendingEditPageAction = { viewModel.toggleEditMode() }
+                                        showEditPageOverviewDialog = true
+                                    } else {
+                                        viewModel.toggleEditMode()
                                     }
-                                )
+                                }
                             }
-                        }
+                            ToolCard(title = "Save PDF", icon = Icons.Rounded.Print, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    if (!viewModel.hasSeenPdfOverview) {
+                                        pendingPdfAction = { viewModel.printCurrentPage(context) }
+                                        showPdfOverviewDialog = true
+                                    } else {
+                                        viewModel.printCurrentPage(context)
+                                    }
+                                }
+                            }
+                            ToolCard(title = "Pin Web App", icon = Icons.AutoMirrored.Rounded.OpenInNew, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url)
+                                }
+                            }
+                            ToolCard(title = "Auto-Scroll", icon = Icons.Rounded.ArrowDownward, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    isAutoScrollActive = !isAutoScrollActive
+                                }
+                            }
+                            ToolCard(title = "QR Scan Page", icon = Icons.Rounded.CenterFocusWeak, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    if (!viewModel.hasSeenQrOverview) {
+                                        pendingQrAction = { viewModel.scanPageForQrCodes() }
+                                        showQrOverviewDialog = true
+                                    } else {
+                                        viewModel.scanPageForQrCodes()
+                                    }
+                                }
+                            }
+                            ToolCard(title = "QR Generator", icon = Icons.Rounded.QrCode2, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    if (!viewModel.hasSeenQrOverview) {
+                                        pendingQrAction = {
+                                            qrGeneratorUrl = activeTab.url
+                                            showQrGeneratorDialog = true
+                                        }
+                                        showQrOverviewDialog = true
+                                    } else {
+                                        qrGeneratorUrl = activeTab.url
+                                        showQrGeneratorDialog = true
+                                    }
+                                }
+                            }
 
-                        // Row 3 (Tools 9-10 + placeholders for alignment)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "QR Generator",
-                                    icon = Icons.Rounded.QrCode2,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        if (showHomeScreen || activeTab == null) {
-                                            Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            showToolsSheet = false
-                                            if (!viewModel.hasSeenQrOverview) {
-                                                pendingQrAction = {
-                                                    qrGeneratorUrl = activeTab.url
-                                                    showQrGeneratorDialog = true
-                                                }
-                                                showQrOverviewDialog = true
-                                            } else {
-                                                qrGeneratorUrl = activeTab.url
-                                                showQrGeneratorDialog = true
-                                            }
-                                        }
-                                    }
-                                )
+                            ToolCard(title = "Console Log", icon = Icons.Rounded.Terminal, isDarkTheme = isDark, modifier = cardModifier) {
+                                showToolsSheet = false
+                                if (!viewModel.hasSeenConsoleOverview) {
+                                    pendingConsoleAction = { showConsoleSheet = true }
+                                    showConsoleOverviewDialog = true
+                                } else {
+                                    showConsoleSheet = true
+                                }
                             }
-                            Box(modifier = Modifier.weight(1f)) {
-                                ToolCard(
-                                    title = "Console Log",
-                                    icon = Icons.Rounded.Terminal,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = {
-                                        showToolsSheet = false
-                                        if (!viewModel.hasSeenConsoleOverview) {
-                                            pendingConsoleAction = { showConsoleSheet = true }
-                                            showConsoleOverviewDialog = true
-                                        } else {
-                                            showConsoleSheet = true
-                                        }
-                                    }
-                                )
+                            ToolCard(title = "Dev Notes", icon = Icons.Rounded.Description, isDarkTheme = isDark, modifier = cardModifier) {
+                                showToolsSheet = false
+                                if (!viewModel.hasSeenDevNotesOverview) {
+                                    pendingDevNotesAction = { showDevNotesSheet = true }
+                                    showDevNotesOverviewDialog = true
+                                } else {
+                                    showDevNotesSheet = true
+                                }
                             }
-                            Box(modifier = Modifier.weight(1f)) {}
-                            Box(modifier = Modifier.weight(1f)) {}
+                            ToolCard(title = "Site Style", icon = Icons.Rounded.Palette, isDarkTheme = isDark, modifier = cardModifier) {
+                                if (showHomeScreen || activeTab == null) {
+                                    Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showToolsSheet = false
+                                    showSiteStyleCustomizerSheet = true
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -4308,6 +4794,21 @@ fun BrowserScreen(
                 }
             }
             
+            // 6. Dev Notes & Vault Bottom Sheet
+            if (showDevNotesSheet) {
+                DevNotesSheetContent(
+                    viewModel = viewModel,
+                    activeTab = activeTab,
+                    onDismissRequest = { showDevNotesSheet = false }
+                )
+            }
+
+            if (showSiteStyleCustomizerSheet) {
+                SiteStyleCustomizerSheetContent(
+                    viewModel = viewModel,
+                    onDismissRequest = { showSiteStyleCustomizerSheet = false }
+                )
+            }
 
             // QR Overview Dialog
             if (showQrOverviewDialog) {
@@ -4416,6 +4917,24 @@ fun BrowserScreen(
                     }
                 )
             }
+
+            // Dev Notes Overview Dialog
+            if (showDevNotesOverviewDialog) {
+                FeatureOverviewDialog(
+                    title = "Dev Notes & Vault",
+                    subtitle = "Secure Offline Credentials & Snippets",
+                    description = "Store passwords, API keys, code snippets, and urls 100% offline securely inside the app sandbox.\n\nIncludes an helper keyboard row for quick symbols insertion (`{}`, `[]`, `=>`, `;`), paste/copy clipboard operators, and direct URL navigation with automated password copying.",
+                    icon = Icons.Rounded.Description,
+                    accentColor = Color(0xFF9B59B6), // Purple
+                    isDarkTheme = viewModel.isDarkThemeEnabled,
+                    onDismiss = {
+                        showDevNotesOverviewDialog = false
+                        viewModel.saveDevNotesOverviewSeen(context, true)
+                        pendingDevNotesAction?.invoke()
+                        pendingDevNotesAction = null
+                    }
+                )
+            }
             
             // Site permission prompt overlay
             viewModel.activePermissionPrompt?.let { prompt ->
@@ -4458,9 +4977,101 @@ fun BrowserScreen(
                     isDarkTheme = viewModel.isDarkThemeEnabled
                 )
             }
+
+            // ── Generic file download destination dialog ───────────────────────────
+            viewModel.pendingGenericDownload?.let { pending ->
+                ModalBottomSheet(
+                    onDismissRequest = { viewModel.pendingGenericDownload = null },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else MaterialTheme.colorScheme.surface
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        val ext = pending.filename.substringAfterLast('.').lowercase()
+                        val (fileIcon, fileColor) = when {
+                            ext == "pdf" -> Icons.Rounded.PictureAsPdf to Color(0xFFE53935)
+                            ext == "apk" -> Icons.Rounded.Android to Color(0xFF43A047)
+                            ext in setOf("zip", "rar", "7z", "tar", "gz") -> Icons.Rounded.FolderZip to Color(0xFFFF8F00)
+                            ext in setOf("mp3", "wav", "flac", "m4a", "ogg", "aac") -> Icons.Rounded.MusicNote to Color(0xFF8E24AA)
+                            ext in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> Icons.Rounded.Image to Color(0xFF039BE5)
+                            ext in setOf("doc", "docx", "txt", "rtf") -> Icons.Rounded.Description to Color(0xFF1E88E5)
+                            ext in setOf("xls", "xlsx", "csv") -> Icons.Rounded.TableChart to Color(0xFF43A047)
+                            else -> Icons.AutoMirrored.Rounded.InsertDriveFile to MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(fileColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(fileIcon, contentDescription = null, tint = fileColor, modifier = Modifier.size(26.dp))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Download File",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = pending.filename,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Button(
+                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = false) },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Download Locally", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = true) },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Save to Private Vault 🔒", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+
+                        TextButton(
+                            onClick = { viewModel.pendingGenericDownload = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
     }
 }
+
 
 @Composable
 fun ExtensionItemCard(
@@ -4733,7 +5344,7 @@ fun UserExtensionItemCard(
                             modifier = Modifier.height(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.OpenInNew,
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp)
                             )
@@ -5079,7 +5690,11 @@ fun DynamicShortcutItem(
                 contentAlignment = Alignment.Center
             ) {
                 coil.compose.AsyncImage(
-                    model = faviconUrl,
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(faviconUrl)
+                        .size(64, 64)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = title,
                     modifier = Modifier
                         .size(32.dp)
@@ -5130,7 +5745,11 @@ fun PopularSiteItem(
                     val faviconUrl = "https://www.google.com/s2/favicons?sz=128&domain=$cleanDomain"
                     
                     coil.compose.AsyncImage(
-                        model = faviconUrl,
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(faviconUrl)
+                            .size(64, 64)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = title,
                         modifier = Modifier
                             .size(28.dp)
@@ -5684,7 +6303,7 @@ fun QrScanResultComposer(
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = "Previous",
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurface
@@ -5697,7 +6316,7 @@ fun QrScanResultComposer(
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.ArrowForward,
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                     contentDescription = "Next",
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurface
@@ -6164,4 +6783,1020 @@ fun ContextMenuItem(
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DevNotesSheetContent(
+    viewModel: BrowserViewModel,
+    activeTab: TabState?,
+    onDismissRequest: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isEditorOpen by remember { mutableStateOf(false) }
+    var selectedNoteForEdit by remember { mutableStateOf<BrowserViewModel.DevNote?>(null) }
+    
+    // Editor Form States
+    var noteTitle by remember { mutableStateOf("") }
+    var noteContent by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var noteType by remember { mutableStateOf("NOTE") } 
+    var isTypeMenuExpanded by remember { mutableStateOf(false) }
+
+    // Toggle states for password visibility in the list
+    val passwordVisibilityMap = remember { mutableStateMapOf<String, Boolean>() }
+    
+    // Search & filter states
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilterTag by remember { mutableStateOf("All") }
+    var quickNoteText by remember { mutableStateOf("") }
+
+    // Voice input recognizer
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                val data = result.data
+                val results = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+                val spokenText = results?.firstOrNull() ?: ""
+                if (spokenText.isNotEmpty()) {
+                    quickNoteText = spokenText
+                }
+            }
+        }
+    )
+
+    val isDark = viewModel.isDarkThemeEnabled
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = if (isDark) Color(0xFF0B0F19) else Color(0xFFF3F4F6)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (isEditorOpen) {
+                // --- NOTE EDITOR SCREEN (Detailed Editor) ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (selectedNoteForEdit == null) "New Dev Note" else "Edit Note",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    TextButton(onClick = { isEditorOpen = false }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+
+                HorizontalDivider(color = if (isDark) Color(0xFF1E293B) else Color.LightGray.copy(alpha = 0.5f))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    OutlinedTextField(
+                        value = noteTitle,
+                        onValueChange = { noteTitle = it },
+                        label = { Text("Title") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = if (isDark) Color(0xFF1E293B) else Color.LightGray
+                        )
+                    )
+
+                    // Type Selector Button
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { isTypeMenuExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Type: $noteType",
+                                    color = if (isDark) Color.White else Color.Black,
+                                    fontSize = 14.sp
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = isTypeMenuExpanded,
+                            onDismissRequest = { isTypeMenuExpanded = false },
+                            modifier = Modifier.fillMaxWidth(0.9f)
+                        ) {
+                            listOf("NOTE", "CODE", "KEY", "PASSWORD", "URL").forEach { type ->
+                                DropdownMenuItem(
+                                    text = { Text(type) },
+                                    onClick = {
+                                        noteType = type
+                                        isTypeMenuExpanded = false
+                                        if (type == "URL" && activeTab != null && noteTitle.isEmpty() && noteContent.text.isEmpty()) {
+                                            noteTitle = activeTab.title.take(30)
+                                            noteContent = androidx.compose.ui.text.input.TextFieldValue(activeTab.url)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Content Field
+                    OutlinedTextField(
+                        value = noteContent,
+                        onValueChange = { noteContent = it },
+                        label = { Text("Content") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 13.sp
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = if (isDark) Color(0xFF1E293B) else Color.LightGray
+                        )
+                    )
+
+                    // Helper Row
+                    val symbols = listOf("{}", "[]", "()", "=>", ";", "\"", "'", "const", "let", "function", "&&", "||", "!")
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clip = clipboard.primaryClip
+                                    if (clip != null && clip.itemCount > 0) {
+                                        val text = clip.getItemAt(0).text?.toString() ?: ""
+                                        val start = noteContent.selection.start
+                                        val end = noteContent.selection.end
+                                        val newText = noteContent.text.substring(0, start) + text + noteContent.text.substring(end)
+                                        noteContent = androidx.compose.ui.text.input.TextFieldValue(
+                                            text = newText,
+                                            selection = androidx.compose.ui.text.TextRange(start + text.length)
+                                        )
+                                    }
+                                },
+                                label = { Text("Paste Clip") },
+                                leadingIcon = { Icon(Icons.Rounded.ContentPaste, null, modifier = Modifier.size(14.dp)) }
+                            )
+                        }
+                        if (noteType == "PASSWORD") {
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        val generatedPass = generateRandomPassword()
+                                        val start = noteContent.selection.start
+                                        val end = noteContent.selection.end
+                                        val newText = noteContent.text.substring(0, start) + generatedPass + noteContent.text.substring(end)
+                                        noteContent = androidx.compose.ui.text.input.TextFieldValue(
+                                            text = newText,
+                                            selection = androidx.compose.ui.text.TextRange(start + generatedPass.length)
+                                        )
+                                    },
+                                    label = { Text("Gen Password") },
+                                    leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(14.dp)) }
+                                )
+                            }
+                        }
+                        if (noteType == "KEY") {
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        val generatedKey = generateRandomKey()
+                                        val start = noteContent.selection.start
+                                        val end = noteContent.selection.end
+                                        val newText = noteContent.text.substring(0, start) + generatedKey + noteContent.text.substring(end)
+                                        noteContent = androidx.compose.ui.text.input.TextFieldValue(
+                                            text = newText,
+                                            selection = androidx.compose.ui.text.TextRange(start + generatedKey.length)
+                                        )
+                                    },
+                                    label = { Text("Gen UUID") },
+                                    leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(14.dp)) }
+                                )
+                            }
+                        }
+                        items(symbols) { sym ->
+                            AssistChip(
+                                onClick = {
+                                    val start = noteContent.selection.start
+                                    val end = noteContent.selection.end
+                                    val newText = noteContent.text.substring(0, start) + sym + noteContent.text.substring(end)
+                                    noteContent = androidx.compose.ui.text.input.TextFieldValue(
+                                        text = newText,
+                                        selection = androidx.compose.ui.text.TextRange(start + sym.length)
+                                    )
+                                },
+                                label = { Text(sym) }
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            if (noteTitle.isNotBlank() && noteContent.text.isNotBlank()) {
+                                val currentNote = selectedNoteForEdit
+                                if (currentNote == null) {
+                                    viewModel.addDevNote(noteTitle, noteContent.text, noteType)
+                                } else {
+                                    viewModel.updateDevNote(currentNote.id, noteTitle, noteContent.text, noteType)
+                                }
+                                isEditorOpen = false
+                            } else {
+                                Toast.makeText(context, "Title and Content cannot be empty", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Save Note")
+                    }
+                }
+            } else {
+                // --- NEW DEV NOTES UI DASHBOARD ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.width(36.dp))
+                    Text(
+                        text = "All notes",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = if (isDark) Color.White else Color.Black
+                    )
+                    IconButton(
+                        onClick = {
+                            selectedNoteForEdit = null
+                            noteTitle = ""
+                            noteContent = androidx.compose.ui.text.input.TextFieldValue("")
+                            noteType = "NOTE"
+                            isEditorOpen = true
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Add New Note",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                // Search Bar Box
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search notes...", color = Color.Gray, fontSize = 14.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Rounded.Search, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Rounded.Close, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = CircleShape,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = if (isDark) Color(0xFF141D2D) else Color.White,
+                            unfocusedContainerColor = if (isDark) Color(0xFF141D2D) else Color.White,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .border(
+                                width = 1.dp,
+                                color = if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                    )
+                }
+
+                // Filter Tag Pills
+                val allNotes = viewModel.devNotes.toList()
+                val counts = mapOf(
+                    "All" to allNotes.size,
+                    "NOTE" to allNotes.count { it.type == "NOTE" },
+                    "CODE" to allNotes.count { it.type == "CODE" },
+                    "KEY" to allNotes.count { it.type == "KEY" },
+                    "PASSWORD" to allNotes.count { it.type == "PASSWORD" },
+                    "URL" to allNotes.count { it.type == "URL" }
+                )
+
+                val filterItems = listOf(
+                    "All" to "All ${counts["All"]}",
+                    "NOTE" to "#notes ${counts["NOTE"]}",
+                    "CODE" to "#codes ${counts["CODE"]}",
+                    "KEY" to "#keys ${counts["KEY"]}",
+                    "PASSWORD" to "#passwords ${counts["PASSWORD"]}",
+                    "URL" to "#urls ${counts["URL"]}"
+                )
+
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filterItems) { (tag, label) ->
+                        val isSelected = selectedFilterTag == tag
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else (if (isDark) Color(0xFF141D2D) else Color.White),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) Color.Transparent else (if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .clickable { selectedFilterTag = tag }
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White else (if (isDark) Color.LightGray else Color.DarkGray)
+                            )
+                        }
+                    }
+                }
+
+                // Info banner explaining what Dev Notes does
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) Color(0xFF1E293B).copy(alpha = 0.5f) else Color(0xFFE2E8F0)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Dev Notes is an offline-first developer vault for saving code snippets, keys, passwords, and links securely.",
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = if (isDark) Color.LightGray else Color.DarkGray
+                        )
+                    }
+                }
+
+                // Filter & Search Result Notes
+                val filteredNotes = allNotes.filter { note ->
+                    (selectedFilterTag == "All" || note.type == selectedFilterTag) &&
+                    (searchQuery.isBlank() || note.title.contains(searchQuery, ignoreCase = true) || note.content.contains(searchQuery, ignoreCase = true))
+                }
+
+                if (filteredNotes.isEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 200.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Rounded.Search, null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text("No matching notes found", color = Color.Gray, fontSize = 14.sp)
+                    }
+                } else {
+                    val chunkedNotes = filteredNotes.chunked(2)
+
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 450.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(chunkedNotes) { rowItems ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Max),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                for (note in rowItems) {
+                                    val isPassVisible = passwordVisibilityMap[note.id] ?: false
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .background(
+                                                color = if (isDark) Color(0xFF141D2D) else Color.White,
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isDark) Color(0xFF1E293B) else Color.LightGray.copy(alpha = 0.4f),
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable {
+                                                selectedNoteForEdit = note
+                                                noteTitle = note.title
+                                                noteContent = androidx.compose.ui.text.input.TextFieldValue(note.content)
+                                                noteType = note.type
+                                                isEditorOpen = true
+                                            }
+                                            .padding(14.dp)
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = note.title,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = if (isDark) Color.White else Color.Black,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            if (note.type == "PASSWORD") {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text(
+                                                        text = if (isPassVisible) note.content else "••••••••",
+                                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                        fontSize = 13.sp,
+                                                        color = if (isDark) Color.LightGray else Color.DarkGray,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    IconButton(
+                                                        onClick = {
+                                                            passwordVisibilityMap[note.id] = !isPassVisible
+                                                        },
+                                                        modifier = Modifier.size(24.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (isPassVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                Text(
+                                                    text = note.content,
+                                                    fontSize = 12.sp,
+                                                    color = if (isDark) Color.LightGray.copy(alpha = 0.8f) else Color.DarkGray,
+                                                    fontFamily = if (note.type == "CODE") androidx.compose.ui.text.font.FontFamily.Monospace else androidx.compose.ui.text.font.FontFamily.SansSerif,
+                                                    maxLines = 4,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "#" + note.type.lowercase(java.util.Locale.ROOT),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = when (note.type) {
+                                                        "PASSWORD" -> Color(0xFFEF4444)
+                                                        "KEY" -> Color(0xFFF59E0B)
+                                                        "CODE" -> Color(0xFF06B6D4)
+                                                        "URL" -> Color(0xFF10B981)
+                                                        else -> MaterialTheme.colorScheme.primary
+                                                    }
+                                                )
+                                                
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                            val clip = android.content.ClipData.newPlainText("Copied Note", note.content)
+                                                            clipboard.setPrimaryClip(clip)
+                                                            Toast.makeText(context, "Copied content", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        modifier = Modifier.size(24.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.ContentCopy,
+                                                            contentDescription = "Copy",
+                                                            tint = Color.Gray,
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            viewModel.deleteDevNote(note.id)
+                                                            Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        modifier = Modifier.size(24.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Delete,
+                                                            contentDescription = "Delete",
+                                                            tint = Color.Gray,
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Text(
+                                                text = formatNoteTimestamp(note.timestamp),
+                                                fontSize = 10.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                    }
+                                }
+                                if (rowItems.size < 2) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Bottom capsule quick notes input field
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                color = if (isDark) Color(0xFF141D2D) else Color.White,
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                if (activeTab != null && activeTab.url != "about:blank") {
+                                    val textToAppend = "${activeTab.title}: ${activeTab.url}"
+                                    quickNoteText = if (quickNoteText.isEmpty()) textToAppend else "$quickNoteText $textToAppend"
+                                    Toast.makeText(context, "Attached URL from active tab", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "No active webpage tab to attach", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Link,
+                                contentDescription = "Attach Web URL",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        BasicTextField(
+                            value = quickNoteText,
+                            onValueChange = { quickNoteText = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = if (isDark) Color.White else Color.Black,
+                                fontSize = 14.sp
+                            ),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                            decorationBox = { innerTextField ->
+                                if (quickNoteText.isEmpty()) {
+                                    Text("Create quick note", color = Color.Gray, fontSize = 14.sp)
+                                }
+                                innerTextField()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
+                        )
+
+                        if (quickNoteText.isEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                        }
+                                        speechRecognizerLauncher.launch(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Speech recognizer not available", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Mic,
+                                    contentDescription = "Voice Input",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    val isSendEnabled = quickNoteText.isNotBlank()
+                    IconButton(
+                        onClick = {
+                            if (isSendEnabled) {
+                                val parsed = parseQuickNote(quickNoteText)
+                                viewModel.addDevNote(parsed.title, parsed.content, parsed.type)
+                                quickNoteText = ""
+                                Toast.makeText(context, "Note added", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (isSendEnabled) MaterialTheme.colorScheme.primary else (if (isDark) Color(0xFF141D2D) else Color.White),
+                            disabledContainerColor = if (isDark) Color(0xFF141D2D) else Color.White
+                        ),
+                        modifier = Modifier
+                            .size(46.dp)
+                            .border(
+                                width = 1.dp,
+                                color = if (isSendEnabled) Color.Transparent else (if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f)),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "Save Note",
+                            tint = if (isSendEnabled) Color.White else Color.Gray,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SiteStyleCustomizerSheetContent(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit
+) {
+    var fontSize by remember { mutableStateOf(viewModel.siteStyleFontSize) }
+    var themePreset by remember { mutableStateOf(viewModel.siteStyleTheme) }
+    var lineSpacing by remember { mutableStateOf(viewModel.siteStyleLineSpacing) }
+    var letterSpacing by remember { mutableStateOf(viewModel.siteStyleLetterSpacing) }
+    var fontFamily by remember { mutableStateOf(viewModel.siteStyleFontFamily) }
+    var appliedGlobally by remember { mutableStateOf(viewModel.siteStyleAppliedGlobally) }
+
+    val presets = listOf(
+        "DEFAULT" to ("Original" to Color.Gray),
+        "DARK" to ("Dark Blue" to Color(0xFF0B131E)),
+        "SEPIA" to ("Sepia" to Color(0xFFF4ECD8)),
+        "OLED" to ("OLED Black" to Color(0xFF000000)),
+        "FOREST" to ("Forest" to Color(0xFFE6F0E6))
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Site Style Customizer",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                TextButton(
+                    onClick = {
+                        viewModel.resetSiteStyle()
+                        fontSize = 100
+                        themePreset = "DEFAULT"
+                        lineSpacing = 1.4f
+                        letterSpacing = 0f
+                        fontFamily = "inherit"
+                        appliedGlobally = false
+                    }
+                ) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Color Theme Presets", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presets.forEach { (code, labelInfo) ->
+                        val (label, color) = labelInfo
+                        val isSelected = themePreset == code
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .background(
+                                    color = if (code == "DEFAULT") {
+                                        if (viewModel.isDarkThemeEnabled) Color(0xFF1C2C3E) else Color(0xFFF1F5F9)
+                                    } else color,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    themePreset = code
+                                    viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (code == "SEPIA" || code == "FOREST" || (code == "DEFAULT" && !viewModel.isDarkThemeEnabled)) Color.Black else Color.White
+                            )
+                        }
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Font Size", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
+                    Text("${fontSize}%", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                }
+                androidx.compose.material3.Slider(
+                    value = fontSize.toFloat(),
+                    onValueChange = {
+                        fontSize = it.toInt()
+                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                    },
+                    valueRange = 80f..200f
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Line Spacing", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
+                    Text(String.format("%.2fx", lineSpacing), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                }
+                androidx.compose.material3.Slider(
+                    value = lineSpacing,
+                    onValueChange = {
+                        lineSpacing = it
+                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                    },
+                    valueRange = 1.0f..2.5f
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Letter Spacing", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
+                    Text(String.format("%.2fpx", letterSpacing), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                }
+                androidx.compose.material3.Slider(
+                    value = letterSpacing,
+                    onValueChange = {
+                        letterSpacing = it
+                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                    },
+                    valueRange = -1.0f..4.0f
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Font Style", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "inherit" to "Default",
+                        "sans-serif" to "Sans-Serif",
+                        "serif" to "Serif",
+                        "monospace" to "Monospace"
+                    ).forEach { (code, label) ->
+                        val isSelected = fontFamily == code
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .background(
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .clickable {
+                                    fontFamily = code
+                                    viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontFamily = when (code) {
+                                    "serif" -> androidx.compose.ui.text.font.FontFamily.Serif
+                                    "monospace" -> androidx.compose.ui.text.font.FontFamily.Monospace
+                                    else -> androidx.compose.ui.text.font.FontFamily.SansSerif
+                                },
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Apply to all sites", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black)
+                    Text("Save preferences to automatically load on every site.", fontSize = 11.sp, color = Color.Gray)
+                }
+                androidx.compose.material3.Switch(
+                    checked = appliedGlobally,
+                    onCheckedChange = {
+                        appliedGlobally = it
+                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+fun formatNoteTimestamp(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("MMM dd, h:mm a", java.util.Locale.getDefault())
+    val date = java.util.Date(timestamp)
+    val now = java.util.Calendar.getInstance()
+    val noteCal = java.util.Calendar.getInstance().apply { time = date }
+    
+    return when {
+        now.get(java.util.Calendar.YEAR) == noteCal.get(java.util.Calendar.YEAR) &&
+        now.get(java.util.Calendar.DAY_OF_YEAR) == noteCal.get(java.util.Calendar.DAY_OF_YEAR) -> {
+            "Today ${java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(date)}"
+        }
+        now.get(java.util.Calendar.YEAR) == noteCal.get(java.util.Calendar.YEAR) &&
+        now.get(java.util.Calendar.DAY_OF_YEAR) - noteCal.get(java.util.Calendar.DAY_OF_YEAR) == 1 -> {
+            "Yesterday ${java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(date)}"
+        }
+        else -> {
+            sdf.format(date)
+        }
+    }
+}
+
+fun parseQuickNote(text: String): BrowserViewModel.DevNote {
+    val trimmed = text.trim()
+    val lower = trimmed.lowercase(java.util.Locale.ROOT)
+    val type = when {
+        trimmed.contains("http://") || trimmed.contains("https://") || trimmed.contains("www.") -> "URL"
+        trimmed.contains("{") && trimmed.contains("}") -> "CODE"
+        trimmed.contains("function ") || trimmed.contains("val ") || trimmed.contains("var ") ||
+                trimmed.contains("import ") || trimmed.contains("class ") || trimmed.contains("fun ") ||
+                trimmed.contains("public ") || trimmed.contains("private ") || trimmed.contains("return ") ||
+                trimmed.contains("const ") || trimmed.contains("let ") || trimmed.contains("def ") -> "CODE"
+        lower.contains("password") || lower.contains("pwd") || lower.contains("passwd") || lower.contains("credentials") -> "PASSWORD"
+        lower.contains("api_key") || lower.contains("apikey") || lower.contains("ssh-") || lower.contains("ghp_") ||
+                lower.contains("token") || lower.contains("secret") || lower.contains("key") -> "KEY"
+        else -> "NOTE"
+    }
+
+    var title = "Quick Note"
+    var content = trimmed
+
+    if (trimmed.contains(": ")) {
+        val parts = trimmed.split(": ", limit = 2)
+        if (parts[0].length in 2..60) {
+            title = parts[0].trim()
+            content = parts[1].trim()
+        }
+    } else {
+        val words = trimmed.split(Regex("\\s+"))
+        if (words.isNotEmpty()) {
+            val preview = words.take(4).joinToString(" ")
+            title = if (preview.length > 35) preview.take(35) + "..." else preview
+        }
+    }
+
+    return BrowserViewModel.DevNote(
+        title = title,
+        content = content,
+        type = type
+    )
+}
+
+fun generateRandomPassword(): String {
+    val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+"
+    return (1..16).map { chars.random() }.joinToString("")
+}
+
+fun generateRandomKey(): String {
+    return java.util.UUID.randomUUID().toString()
+}
+
 

@@ -53,6 +53,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             type: 'OMNI_SET_NATIVE_PLAYER',
             enabled: message.enabled
         }, '*');
+    } else if (message.type === 'EVAL_JS') {
+        window.postMessage({
+            type: 'EVAL_JS',
+            script: message.script
+        }, '*');
     }
 });
 

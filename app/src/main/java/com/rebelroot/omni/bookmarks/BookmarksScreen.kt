@@ -40,18 +40,18 @@ fun BookmarksScreen(
     
     val isDarkMode = viewModel.isDarkThemeEnabled
     
-    val bgColor = if (isDarkMode) Color(0xFF070A0F) else Color(0xFFF8F9FA)
-    val cardColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFFFFFFF)
-    val cardBorderColor = if (isDarkMode) Color(0xFF23374A) else Color(0x1F000000)
-    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF202124)
-    val textSecondaryColor = if (isDarkMode) Color(0xFF8E9AA8) else Color(0xFF606266)
+    val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
+    val cardColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val cardBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
+    val textSecondaryColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
     
-    val navBgColor = if (isDarkMode) Color(0xFF0D1620) else Color(0xFFFFFFFF)
-    val navBorderColor = if (isDarkMode) Color(0xFF16222F).copy(alpha = 0.5f) else Color(0x1F000000)
-    val navContentColor = if (isDarkMode) Color.White else Color(0xFF202124)
-    val navContentMutedColor = if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color(0xFF202124).copy(alpha = 0.2f)
-    val inputBgColor = if (isDarkMode) Color(0xFF16222F) else Color(0xFFF2F3F5)
-    val inputBorderColor = if (isDarkMode) Color(0xFF16222F) else Color(0x1F000000)
+    val navBgColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val navBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val navContentColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
+    val navContentMutedColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+    val inputBgColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFF1F3F4)
+    val inputBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
 
     val filteredBookmarks = viewModel.bookmarksList.filter {
         it.title.contains(searchQuery, ignoreCase = true) ||

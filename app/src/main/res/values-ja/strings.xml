@@ -171,4 +171,16 @@
     <string name="video_player_downloading">ダウンロード中</string>
     <string name="video_player_download_cancelled">ダウンロードがキャンセルされました</string>
     <string name="video_player_download_complete">ダウンロード完了！</string>
+    <string name="discover_title">発見</string>
+    <string name="refresh_title">更新</string>
+    <string name="incognito_title">無痕</string>
+    <string name="add_title">追加</string>
+    <string name="cat_trending">急上昇</string>
+    <string name="cat_world">世界</string>
+    <string name="cat_technology">テクノロジー</string>
+    <string name="cat_sports">スポーツ</string>
+    <string name="cat_business">ビジネス</string>
+    <string name="cat_science">科学</string>
+    <string name="cat_entertainment">エンタメ</string>
+    <string name="cat_health">健康</string>
 </resources>

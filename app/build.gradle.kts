@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -13,8 +12,8 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.0.7"
+        versionCode = 19
+        versionName = "1.1.9"
 
         ndk {
             abiFilters.add("arm64-v8a")
@@ -24,16 +23,18 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
 
+    androidResources {
+        // Fixes deprecation: replaces aaptOptions.ignoreAssetsPattern
         // Ensure WebExtension files starting with underscores (e.g. _locales)
         // are not excluded by the Android packaging process.
-        aaptOptions {
-            ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
-        }
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
 
+        // Fixes deprecation: replaces resourceConfigurations
         // Restrict bundled translations to only the languages the app actively
         // supports — removes ~2MB of unused locale data from AAPT.
-        resourceConfigurations += listOf(
+        localeFilters += listOf(
             "en", "hi", "es", "fr", "de", "pt", "ru", "ja", "zh", "ar"
         )
     }
@@ -49,12 +50,8 @@ android {
 
     buildTypes {
         debug {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
         release {
             isMinifyEnabled = true
@@ -75,10 +72,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        // Strip runtime-only Kotlin metadata to save ~200 KB from dex
-        freeCompilerArgs += listOf("-Xno-param-assertions")
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            freeCompilerArgs.add("-Xno-param-assertions")
+        }
     }
 
     buildFeatures {
@@ -86,14 +84,13 @@ android {
         // Disable features we don't use — each one adds overhead
         buildConfig = false
         aidl       = false
-        renderScript = false
+        // Removed deprecated renderScript = false
     }
 
     packaging {
         jniLibs {
-            // true = compress native libs inside APK (smaller download for direct APK installs).
-            // Play Store AAB delivery automatically uses extracted libs anyway.
-            useLegacyPackaging = true
+            // false = keep native libraries uncompressed and aligned to 16 KB page boundaries for Android 15+ compatibility.
+            useLegacyPackaging = false
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
         }
         resources {
@@ -132,6 +129,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
     implementation("androidx.activity:activity-compose:1.9.3")
 
     // === Mozilla GeckoView Engine (arm64-v8a only — matches ndk abiFilters) ===
@@ -174,8 +172,6 @@ dependencies {
     implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
-    // === WireGuard VPN ===
-    implementation("com.wireguard.android:tunnel:1.0.20260102")
 
     // === Image Loading ===
     implementation("io.coil-kt:coil-compose:2.7.0")
@@ -187,4 +183,10 @@ dependencies {
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
+
+    // === CameraX ===
+    val cameraxVersion = "1.4.0"
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
 }
