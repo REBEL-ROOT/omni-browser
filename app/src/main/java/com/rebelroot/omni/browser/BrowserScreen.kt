@@ -3718,6 +3718,17 @@ fun BrowserScreen(
                                 },
                                 isDark = viewModel.isDarkThemeEnabled
                             )
+
+                            // Speak Aloud Option
+                            ContextMenuItem(
+                                icon = Icons.Rounded.RecordVoiceOver,
+                                title = "Speak Aloud",
+                                onClick = {
+                                    viewModel.speakSelectedText(context)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+
                             
                             // Select All Option
                             ContextMenuItem(
