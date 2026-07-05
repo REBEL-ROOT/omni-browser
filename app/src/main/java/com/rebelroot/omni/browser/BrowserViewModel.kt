@@ -695,6 +695,14 @@ class BrowserViewModel : ViewModel() {
         activeSelectionObject = null
     }
 
+    fun speakSelectedText(context: Context) {
+        val text = activeTextSelection ?: return
+        initTts(context)
+        speakText(text)
+        dismissTextSelection()
+    }
+
+
     fun selectAllText() {
         val selection = activeSelectionObject
         if (selection != null) {
