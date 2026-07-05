@@ -200,10 +200,9 @@ fun LanguageSelectionScreen(
                         val isSelected = selectedCode == lang.code
 
                         Surface(
+                            onClick = { selectedCode = lang.code },
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable { selectedCode = lang.code },
+                                .fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
                             color = if (isSelected) AccentTeal.copy(alpha = 0.08f) else CardBg,
                             border = androidx.compose.foundation.BorderStroke(
@@ -212,6 +211,7 @@ fun LanguageSelectionScreen(
                             ),
                             shadowElevation = if (isSelected) 2.dp else 0.dp
                         ) {
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
