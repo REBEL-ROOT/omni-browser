@@ -12,7 +12,8 @@
   <a href="https://kotlinlang.org/"><img src="https://img.shields.io/badge/Kotlin-1.9.24-blue.svg?style=flat&logo=kotlin" alt="Kotlin" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Compose-Material%203-green.svg?style=flat" alt="Jetpack Compose" /></a>
   <a href="https://mozilla.github.io/geckoview/"><img src="https://img.shields.io/badge/Engine-GeckoView%20v145-orange.svg?style=flat&logo=firefox" alt="GeckoView" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-purple.svg?style=flat" alt="License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat" alt="License" /></a>
+
 </p>
 
 ---
@@ -133,7 +134,8 @@ Please review our [CONTRIBUTING.md](CONTRIBUTING.md) and security guidelines bef
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3 (GPLv3). See the [LICENSE](LICENSE) file for details.
+
 
 ---
 
