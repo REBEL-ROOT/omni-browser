@@ -240,6 +240,8 @@ class BrowserViewModel : ViewModel() {
     // Text Selection State
     var activeTextSelection by mutableStateOf<String?>(null)
         private set
+    var activeSelectionObject by mutableStateOf<org.mozilla.geckoview.GeckoSession.SelectionActionDelegate.Selection?>(null)
+
 
     // Browser History System
     val historyList = mutableStateListOf<HistoryEntry>()
@@ -690,7 +692,34 @@ class BrowserViewModel : ViewModel() {
 
     fun dismissTextSelection() {
         activeTextSelection = null
+        activeSelectionObject = null
     }
+
+    fun selectAllText() {
+        val selection = activeSelectionObject
+        if (selection != null) {
+            try {
+                selection.execute(org.mozilla.geckoview.GeckoSession.SelectionActionDelegate.ACTION_SELECT_ALL)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error executing SELECT_ALL action", e)
+                // Fallback to JS Selection API
+                try {
+                    geckoSession.loadUri("javascript:window.getSelection()?.selectAllChildren(document.body);")
+                } catch (jsEx: Exception) {
+                    Log.e(TAG, "Error fallback selectAll JS", jsEx)
+                }
+            }
+        } else {
+            // Fallback to evaluating JS selectall command
+            try {
+                geckoSession.loadUri("javascript:window.getSelection()?.selectAllChildren(document.body);")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fallback selectAll JS", e)
+            }
+        }
+    }
+
+
 
     fun copySelectedText(context: Context) {
         val text = activeTextSelection ?: return
@@ -1340,6 +1369,7 @@ class BrowserViewModel : ViewModel() {
                 // When text is selected in web content, show custom selection menu
                 if (tab.id == activeTabId && selection.text.isNotEmpty()) {
                     activeTextSelection = selection.text
+                    activeSelectionObject = selection
                 }
             }
 
@@ -1347,9 +1377,11 @@ class BrowserViewModel : ViewModel() {
                 // Clear selection when hidden
                 if (tab.id == activeTabId) {
                     activeTextSelection = null
+                    activeSelectionObject = null
                 }
             }
         }
+
 
         tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(
