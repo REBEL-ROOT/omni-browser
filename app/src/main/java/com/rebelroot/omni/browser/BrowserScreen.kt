@@ -3719,16 +3719,16 @@ fun BrowserScreen(
                                 isDark = viewModel.isDarkThemeEnabled
                             )
                             
-                            // Select All Option (already selected, so just show it)
+                            // Select All Option
                             ContextMenuItem(
                                 icon = Icons.Rounded.SelectAll,
                                 title = "Select All",
                                 onClick = {
-                                    // Text is already selected, just dismiss
-                                    viewModel.dismissTextSelection()
+                                    viewModel.selectAllText()
                                 },
                                 isDark = viewModel.isDarkThemeEnabled
                             )
+
                         }
                     }
                 }
