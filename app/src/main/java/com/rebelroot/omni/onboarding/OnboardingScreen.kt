@@ -281,10 +281,11 @@ fun OnboardingScreen(
                             painter = painterResource(id = pageData.imageRes),
                             contentDescription = pageData.title,
                             modifier = Modifier
-                                .size(200.dp)
-                                .clip(RoundedCornerShape(24.dp)),
+                                .size(220.dp)
+                                .clip(CircleShape),
                             contentScale = ContentScale.Crop
                         )
+
 
                         // Floating Badge 1 ( Bobbing offset 1 )
                         FloatingFeatureBadge(
