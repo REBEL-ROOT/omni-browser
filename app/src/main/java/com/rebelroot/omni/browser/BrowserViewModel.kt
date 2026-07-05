@@ -65,8 +65,10 @@ data class TabState(
     val loadError: String? = null,
     val isEditModeEnabled: Boolean = false,
     val settingsVersion: Int = 0,
-    val isUriLoaded: Boolean = true
+    val isUriLoaded: Boolean = true,
+    val isIncognito: Boolean = false
 )
+
 
 data class BookmarkEntry(
     val title: String,
@@ -207,6 +209,11 @@ class BrowserViewModel : ViewModel() {
     val tabs = mutableStateListOf<TabState>()
     var activeTabId by mutableStateOf<String?>(null)
         private set
+    var activeNormalTabId by mutableStateOf<String?>(null)
+        private set
+    var activeIncognitoTabId by mutableStateOf<String?>(null)
+        private set
+
 
     // Context Menu State
     var activeContextMenu by mutableStateOf<ContextMenuElement?>(null)
@@ -754,6 +761,7 @@ class BrowserViewModel : ViewModel() {
                         put("title", tab.title)
                         put("url", tab.url)
                         put("isActive", tab.id == currentActiveId)
+                        put("isIncognito", tab.isIncognito)
                     }
                     jsonArray.put(obj)
                 }
@@ -763,6 +771,7 @@ class BrowserViewModel : ViewModel() {
             }
         }
     }
+
 
     fun loadDevNotes(context: Context) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -853,9 +862,10 @@ class BrowserViewModel : ViewModel() {
                         val title = obj.getString("title")
                         val url = obj.getString("url")
                         val isActive = obj.optBoolean("isActive", false)
+                        val isIncognito = obj.optBoolean("isIncognito", false)
                         
                         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
-                            .usePrivateMode(isIncognitoMode)
+                            .usePrivateMode(isIncognito)
                             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
                             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
                             .allowJavascript(true)
@@ -869,6 +879,7 @@ class BrowserViewModel : ViewModel() {
                             session = session,
                             title = title,
                             url = url,
+                            isIncognito = isIncognito,
                             isUriLoaded = shouldLoadNow
                         )
                         setupTabSessionListeners(tab, context)
@@ -881,12 +892,24 @@ class BrowserViewModel : ViewModel() {
                         
                         if (isActive) {
                             activeId = id
+                            if (isIncognito) {
+                                activeIncognitoTabId = id
+                            } else {
+                                activeNormalTabId = id
+                            }
                         }
                     }
                     if (tabs.isNotEmpty()) {
-                        selectTab(activeId ?: tabs.first().id)
+                        val activeNormalTab = tabs.find { !it.isIncognito }
+                        val activeIncognitoTab = tabs.find { it.isIncognito }
+                        activeNormalTabId = activeNormalTabId ?: activeNormalTab?.id
+                        activeIncognitoTabId = activeIncognitoTabId ?: activeIncognitoTab?.id
+                        
+                        val targetId = activeId ?: tabs.first().id
+                        selectTab(targetId)
                         loaded = true
                     }
+
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading saved tabs", e)
                 }
@@ -925,7 +948,8 @@ class BrowserViewModel : ViewModel() {
             id = tabId,
             session = session,
             title = "New Tab",
-            url = url
+            url = url,
+            isIncognito = isIncognitoMode
         )
         
         setupTabSessionListeners(newTab, context)
@@ -948,6 +972,13 @@ class BrowserViewModel : ViewModel() {
         activeTabId = tabId
         geckoSession = tab.session
         currentUrl = tab.url
+        isIncognitoMode = tab.isIncognito
+        
+        if (tab.isIncognito) {
+            activeIncognitoTabId = tabId
+        } else {
+            activeNormalTabId = tabId
+        }
         
         // Notify Gecko runtime's web extension controller of the active tab change
         val controller = geckoRuntime?.webExtensionController
@@ -974,6 +1005,7 @@ class BrowserViewModel : ViewModel() {
         // Restore the tab's own saved navigation state
         canGoBack = tab.canGoBack
         canGoForward = tab.canGoForward
+
 
         // Clear media list when switching tabs to ensure only active tab's media is tracked
         mediaInterceptor.clear()
@@ -1003,36 +1035,60 @@ class BrowserViewModel : ViewModel() {
     fun closeTab(tabId: String, context: Context) {
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
+        val tabToClose = tabs[tabIndex]
         
-        if (tabs.size <= 1) {
-            // Keep at least one tab open, reset it to the Home screen
-            val tab = tabs[0]
-            val idx = tabs.indexOfFirst { it.id == tab.id }
-            if (idx != -1) {
-                tabs[idx] = tabs[idx].copy(
-                    url = "about:blank",
-                    title = "New Tab",
-                    canGoBack = false,
-                    canGoForward = false,
-                    loadError = null
-                )
+        val modeTabsCount = tabs.count { it.isIncognito == tabToClose.isIncognito }
+        
+        if (modeTabsCount <= 1) {
+            if (!tabToClose.isIncognito) {
+                // Last normal tab: keep it, but reset to Home
+                val idx = tabs.indexOfFirst { it.id == tabToClose.id }
+                if (idx != -1) {
+                    tabs[idx] = tabs[idx].copy(
+                        url = "about:blank",
+                        title = "New Tab",
+                        canGoBack = false,
+                        canGoForward = false,
+                        loadError = null
+                    )
+                }
+                if (tabToClose.id == activeTabId) {
+                    currentUrl = "about:blank"
+                    canGoBack = false
+                    canGoForward = false
+                }
+                try {
+                    tabToClose.session.stop()
+                    tabToClose.session.loadUri("about:blank")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error resetting last tab session", e)
+                }
+                saveTabs()
+                return
+            } else {
+                // Last incognito tab: close it and exit incognito mode
+                try {
+                    tabToClose.session.close()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error closing tab session", e)
+                }
+                tabs.removeAt(tabIndex)
+                
+                isIncognitoMode = false
+                
+                val normalTabs = tabs.filter { !it.isIncognito }
+                if (normalTabs.isEmpty()) {
+                    createNewTab(context, "about:blank")
+                } else {
+                    val targetTab = normalTabs.find { it.id == activeNormalTabId } ?: normalTabs.first()
+                    selectTab(targetTab.id)
+                }
+                saveTabs()
+                return
             }
-            if (tab.id == activeTabId) {
-                currentUrl = "about:blank"
-                canGoBack = false
-                canGoForward = false
-            }
-            try {
-                tab.session.stop()
-                tab.session.loadUri("about:blank")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error resetting last tab session", e)
-            }
-            saveTabs()
-            return
         }
 
-        val tabToClose = tabs[tabIndex]
+        // Standard close for any tab when there are multiple tabs in that mode
         try {
             tabToClose.session.close()
         } catch (e: Exception) {
@@ -1040,14 +1096,17 @@ class BrowserViewModel : ViewModel() {
         }
         tabs.removeAt(tabIndex)
         
-        if (tabs.isEmpty()) {
-            createNewTab(context, "about:blank")
-        } else if (activeTabId == tabId) {
-            val nextSelectIndex = if (tabIndex < tabs.size) tabIndex else tabs.size - 1
-            selectTab(tabs[nextSelectIndex].id)
+        if (activeTabId == tabId) {
+            val remainingModeTabs = tabs.filter { it.isIncognito == tabToClose.isIncognito }
+            if (remainingModeTabs.isNotEmpty()) {
+                val nextSelect = remainingModeTabs.find { it.id == (if (tabToClose.isIncognito) activeIncognitoTabId else activeNormalTabId) } 
+                    ?: remainingModeTabs.first()
+                selectTab(nextSelect.id)
+            }
         }
         saveTabs()
     }
+
 
     private fun loadUrlInTab(tab: TabState, url: String) {
         var formattedUrl = url.trim()
@@ -1537,8 +1596,10 @@ class BrowserViewModel : ViewModel() {
                         id = tabId,
                         session = newSession,
                         title = "New Tab",
-                        url = targetUrl
+                        url = targetUrl,
+                        isIncognito = isIncognitoMode
                     )
+
                     setupTabSessionListeners(newTab, context)
                     tabs.add(newTab)
                     newSession.open(runtime)
@@ -3032,49 +3093,24 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleIncognitoMode(context: Context) {
-        isIncognitoMode = !isIncognitoMode
+        val nextMode = !isIncognitoMode
+        isIncognitoMode = nextMode
         
-        val activeTab = tabs.find { it.id == activeTabId } ?: return
-        val runtime = getGeckoRuntime(context)
+        val targetTabId = if (nextMode) activeIncognitoTabId else activeNormalTabId
+        val targetTabExists = tabs.any { it.id == targetTabId && it.isIncognito == nextMode }
         
-        try {
-            runtime.webExtensionController.setTabActive(activeTab.session, false)
-            activeTab.session.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing tab session", e)
+        if (targetTabExists && targetTabId != null) {
+            selectTab(targetTabId)
+        } else {
+            val modeTabs = tabs.filter { it.isIncognito == nextMode }
+            if (modeTabs.isNotEmpty()) {
+                selectTab(modeTabs.first().id)
+            } else {
+                createNewTab(context, "about:blank")
+            }
         }
-
-        val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
-            .usePrivateMode(isIncognitoMode)
-            .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
-            .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-            .allowJavascript(true)
-            .build()
-        
-        val newSession = GeckoSession(settings)
-        val updatedTab = activeTab.copy(
-            session = newSession,
-            url = if (isIncognitoMode) "about:blank" else activeTab.url
-        )
-        
-        val idx = tabs.indexOf(activeTab)
-        if (idx != -1) {
-            tabs[idx] = updatedTab
-        }
-        
-        setupTabSessionListeners(updatedTab, context)
-        geckoSession = newSession
-        currentUrl = updatedTab.url
-        
-        newSession.open(runtime)
-        try {
-            runtime.webExtensionController.setTabActive(newSession, true)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error activating new tab session in incognito toggle", e)
-        }
-        loadUrl(updatedTab.url)
-        saveTabs()
     }
+
 
 
     private fun injectZoomEnabler() {

@@ -1523,26 +1523,27 @@ fun BrowserScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(44.dp)
-                                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4))
+                                        .background(if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF1C1C1E) else Color(0xFFF1F3F4))
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val tabletTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
                                     LazyRow(
                                         modifier = Modifier.weight(1f),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        items(viewModel.tabs, key = { it.id }) { tab ->
+                                        items(tabletTabs, key = { it.id }) { tab ->
                                             val isActive = tab.id == viewModel.activeTabId
                                             val tabBg = if (isActive) {
-                                                if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color.White
+                                                if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF2C2C2E) else Color.White
                                             } else {
                                                 Color.Transparent
                                             }
                                             val tabTextColor = if (isActive) {
-                                                if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
+                                                if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color.White else Color(0xFF202124)
                                             } else {
-                                                if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.6f) else Color(0xFF606266)
+                                                if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color.White.copy(alpha = 0.6f) else Color(0xFF606266)
                                             }
                                             
                                             Row(
@@ -1565,7 +1566,7 @@ fun BrowserScreen(
                                                     modifier = Modifier.weight(1f)
                                                 )
                                                 
-                                                if (viewModel.tabs.size > 1) {
+                                                if (tabletTabs.size > 1 || viewModel.isIncognitoMode) {
                                                     Box(
                                                         modifier = Modifier
                                                             .size(16.dp)
@@ -2177,16 +2178,18 @@ fun BrowserScreen(
                                 detectHorizontalDragGestures(
                                     onDragEnd = {
                                         if (dragAmountAccumulated > 100f) {
+                                            val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
                                             // Swiped right -> select previous tab
-                                            val currentIndex = viewModel.tabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                            val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
                                             if (currentIndex > 0) {
-                                                viewModel.selectTab(viewModel.tabs[currentIndex - 1].id)
+                                                viewModel.selectTab(currentModeTabs[currentIndex - 1].id)
                                             }
                                         } else if (dragAmountAccumulated < -100f) {
                                             // Swiped left -> select next tab
-                                            val currentIndex = viewModel.tabs.indexOfFirst { it.id == viewModel.activeTabId }
-                                            if (currentIndex != -1 && currentIndex < viewModel.tabs.size - 1) {
-                                                viewModel.selectTab(viewModel.tabs[currentIndex + 1].id)
+                                            val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                                            val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                            if (currentIndex != -1 && currentIndex < currentModeTabs.size - 1) {
+                                                viewModel.selectTab(currentModeTabs[currentIndex + 1].id)
                                             }
                                         }
                                         dragAmountAccumulated = 0f
@@ -2272,7 +2275,7 @@ fun BrowserScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = viewModel.tabs.size.toString(),
+                                    text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
                                     color = navContent,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
@@ -4087,10 +4090,13 @@ fun BrowserScreen(
 
             // 2. Premium Grid Tab Windows Switcher Tray Bottom Sheet
             if (showTabGroupsSheet) {
+                val currentModeTabs = remember(viewModel.tabs.toList(), viewModel.isIncognitoMode) {
+                    viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                }
                 ModalBottomSheet(
                     onDismissRequest = { showTabGroupsSheet = false },
                     sheetState = rememberModalBottomSheetState(),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF070A0F) else MaterialTheme.colorScheme.surface
+                    containerColor = if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF070A0F) else MaterialTheme.colorScheme.surface
                 ) {
                     Column(
                         modifier = Modifier
@@ -4107,8 +4113,8 @@ fun BrowserScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Open Tabs (${viewModel.tabs.size})",
-                                color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                text = if (viewModel.isIncognitoMode) "Incognito Tabs (${currentModeTabs.size})" else "Open Tabs (${currentModeTabs.size})",
+                                color = if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color.White else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp
                             )
@@ -4134,7 +4140,65 @@ fun BrowserScreen(
                             }
                         }
 
-                        val tabChunks = remember(viewModel.tabs.toList()) { viewModel.tabs.chunked(2) }
+                        // Premium Mode Toggle Capsule Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 4.dp)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF1E2D3F) else MaterialTheme.colorScheme.surfaceVariant),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val normalCount = viewModel.tabs.count { !it.isIncognito }
+                            val privateCount = viewModel.tabs.count { it.isIncognito }
+
+                            // Normal tab option
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (!viewModel.isIncognitoMode) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable {
+                                        if (viewModel.isIncognitoMode) {
+                                            viewModel.toggleIncognitoMode(context)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Normal ($normalCount)",
+                                    color = if (!viewModel.isIncognitoMode) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            // Private tab option
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (viewModel.isIncognitoMode) Color(0xFFFF3B5C) else Color.Transparent)
+                                    .clickable {
+                                        if (!viewModel.isIncognitoMode) {
+                                            viewModel.toggleIncognitoMode(context)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Incognito ($privateCount)",
+                                    color = if (viewModel.isIncognitoMode) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+
+                        val tabChunks = remember(currentModeTabs) { currentModeTabs.chunked(2) }
 
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
