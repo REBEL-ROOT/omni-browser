@@ -22,7 +22,9 @@ import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -133,9 +135,10 @@ class MainActivity : FragmentActivity() {
             java.lang.System.exit(10)
         }
 
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         requestNotificationPermissionIfNeeded()
+
 
         val intentUrl = intent?.dataString
         val isDirectVideo = !intentUrl.isNullOrEmpty() && (intentUrl.contains("autoplay=native") || intentUrl.endsWith(".mp4"))
