@@ -27,6 +27,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
+
 @Suppress("DEPRECATION")
 @Composable
 fun OmniTheme(
@@ -38,16 +42,27 @@ fun OmniTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            // Enforce transparent status and navigation bars for Android 15+ edge-to-edge compliance
-            window.statusBarColor = android.graphics.Color.TRANSPARENT
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-
-            val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.isAppearanceLightStatusBars = !darkTheme
-            insetsController.isAppearanceLightNavigationBars = !darkTheme
+            var context = view.context
+            while (context is android.content.ContextWrapper) {
+                if (context is ComponentActivity) break
+                context = context.baseContext
+            }
+            val activity = context as? ComponentActivity
+            activity?.enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT,
+                    detectDarkMode = { darkTheme }
+                ),
+                navigationBarStyle = SystemBarStyle.auto(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT,
+                    detectDarkMode = { darkTheme }
+                )
+            )
         }
     }
+
 
     MaterialTheme(
         colorScheme = colorScheme,
