@@ -111,7 +111,9 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:resizeableActivity="true"
         android:theme="@style/Theme.OmniBrowser">
+
 
         <!-- Opt out of ML Kit telemetry for Google Play Data Safety compliance -->
         <meta-data
