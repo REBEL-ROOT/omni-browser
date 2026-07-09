@@ -39,9 +39,13 @@ class UniversalCopyManager(private val runtime: GeckoRuntime) {
         ).accept(
             { ext ->
                 extension = ext
+                if (ext != null) {
+                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                }
                 Log.i(TAG, "Universal Copy Extension installed.")
                 setEnabled(enabled, onComplete)
             },
+
             { error ->
                 Log.e(TAG, "Failed to load Universal Copy Extension", error)
                 onComplete?.invoke()
