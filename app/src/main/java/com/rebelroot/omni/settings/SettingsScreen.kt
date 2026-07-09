@@ -47,7 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.browser.BrowserViewModel
-import com.rebelroot.omni.ui.theme.AccentThemes
+import com.rebelroot.omni.ui.theme.AccentThemesLight
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
 import kotlinx.coroutines.launch
@@ -61,6 +61,7 @@ fun SettingsScreen(
     onOpenUrl: (String) -> Unit,
     onLanguageChanged: () -> Unit = {}
 ) {
+    val accentThemes = AccentThemesLight.keys.toList()
     BackHandler {
         onNavigateBack()
     }
