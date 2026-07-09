@@ -120,13 +120,13 @@ fun TabItem(
             .padding(horizontal = 3.dp, vertical = 3.dp)
             .height(32.dp)
             .widthIn(max = 120.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(20.dp))
             .border(
                 BorderStroke(
                     0.5.dp,
                     if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                 ),
-                RoundedCornerShape(8.dp)
+                RoundedCornerShape(20.dp)
             )
             .clickable { onClick() },
         color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -153,7 +153,7 @@ fun TabItem(
             )
             IconButton(
                 onClick = onClose,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(16.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
@@ -210,7 +210,7 @@ fun HomeScreenContent(
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(28.dp)
+        verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -271,7 +271,7 @@ fun HomeScreenContent(
                         onDismissRequest = { expanded = false },
                         modifier = Modifier
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(8.dp))
+                            
                     ) {
                         val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
                         engines.forEach { engine ->
@@ -533,14 +533,14 @@ fun HomeScreenContent(
                         }
                     }
                     
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = nameInput,
                             onValueChange = { nameInput = it },
                             label = { Text("Shortcut Name") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(24.dp)
                         )
                         OutlinedTextField(
                             value = urlInput,
@@ -549,7 +549,7 @@ fun HomeScreenContent(
                             placeholder = { Text("example.com") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(24.dp),
                             keyboardOptions = KeyboardOptions(
                                 imeAction = androidx.compose.ui.text.input.ImeAction.Done
                             ),
@@ -573,7 +573,7 @@ fun HomeScreenContent(
                             },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(24.dp)
                         ) {
                             Text("Add Custom Shortcut", color = Color.White, fontWeight = FontWeight.Bold)
                         }
@@ -688,13 +688,13 @@ fun HomeScreenContent(
                     }
                     Surface(
                         onClick = { viewModel.fetchNews(category) },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(32.dp),
                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                         border = if (isSelected) null else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.height(32.dp)
                     ) {
                         Box(
-                            modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp),
+                            modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -729,7 +729,7 @@ fun HomeScreenContent(
             } else {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(32.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
                 ) {
@@ -753,7 +753,7 @@ fun HomeScreenContent(
                                     contentDescription = null,
                                     modifier = Modifier
                                         .size(56.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
+                                        .clip(RoundedCornerShape(20.dp)),
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                     error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery),
                                     placeholder = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery)
@@ -837,8 +837,8 @@ fun CompactShortcutItem(
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .size(48.dp)
+                .clip(RoundedCornerShape(32.dp))
                 .background(
                     if (isAccented)
                         MaterialTheme.colorScheme.primary
@@ -851,7 +851,7 @@ fun CompactShortcutItem(
                 imageVector = icon,
                 contentDescription = title,
                 tint = if (isAccented) Color.White else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
         Text(
@@ -886,8 +886,8 @@ fun CompactDynamicShortcutItem(
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .size(48.dp)
+                .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),
             contentAlignment = Alignment.Center
@@ -899,7 +899,7 @@ fun CompactDynamicShortcutItem(
                     .crossfade(true)
                     .build(),
                 contentDescription = title,
-                modifier = Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)),
+                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(32.dp)),
                 error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
             )
         }
@@ -930,8 +930,8 @@ fun ShortcutItem(
     ) {
         Surface(
             modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(64.dp)
+                .clip(RoundedCornerShape(24.dp))
                 .clickable { onClick() },
             color = if (isAccented) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
             border = if (isAccented) null else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
@@ -976,7 +976,7 @@ fun DiscoverRowItem(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
@@ -1038,7 +1038,7 @@ fun ToolCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(24.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1053,17 +1053,16 @@ fun ToolCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(iconContainerBg)
-                    .border(BorderStroke(0.5.dp, accentColor.copy(alpha = 0.35f)), CircleShape),
+                    .background(iconContainerBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
                     tint = accentColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
             Text(
@@ -1470,7 +1469,7 @@ fun BrowserScreen(
                         (context as? android.app.Activity)?.finish()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(20.dp)
                 ) {
                     Text("Yes", color = Color.White)
                 }
@@ -1481,7 +1480,7 @@ fun BrowserScreen(
                 }
             },
             containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(32.dp)
         )
     }
 
@@ -1507,13 +1506,13 @@ fun BrowserScreen(
                         crashMsg = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(20.dp)
                 ) {
                     Text("OK", color = Color.White)
                 }
             },
             containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(32.dp)
         )
     }
 
@@ -1540,7 +1539,7 @@ fun BrowserScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(44.dp)
+                                        .height(56.dp)
                                         .background(if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF1C1C1E) else Color(0xFFF1F3F4))
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1566,12 +1565,12 @@ fun BrowserScreen(
                                             
                                             Row(
                                                 modifier = Modifier
-                                                    .width(160.dp)
+                                                    .width(164.dp)
                                                     .fillMaxHeight()
-                                                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                                                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                                                     .background(tabBg)
                                                     .clickable { viewModel.selectTab(tab.id) }
-                                                    .padding(horizontal = 10.dp),
+                                                    .padding(horizontal = 8.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
@@ -1614,7 +1613,7 @@ fun BrowserScreen(
                                             imageVector = Icons.Rounded.Add,
                                             contentDescription = "New Tab",
                                             tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
@@ -1638,7 +1637,7 @@ fun BrowserScreen(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                             contentDescription = "Back",
                                             tint = if (viewModel.canGoBack) (if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)) else (if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.2f) else Color(0x1F000000)),
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
 
@@ -1651,7 +1650,7 @@ fun BrowserScreen(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                             contentDescription = "Forward",
                                             tint = if (viewModel.canGoForward) (if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)) else (if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.2f) else Color(0x1F000000)),
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
 
@@ -1663,7 +1662,7 @@ fun BrowserScreen(
                                             imageVector = Icons.Rounded.Refresh,
                                             contentDescription = "Reload",
                                             tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
 
@@ -1675,14 +1674,14 @@ fun BrowserScreen(
                                             imageVector = Icons.Rounded.Home,
                                             contentDescription = "Home",
                                             tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
 
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(42.dp)
+                                            .height(48.dp)
                                             .background(
                                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                                 shape = RoundedCornerShape(20.dp)
@@ -1692,7 +1691,7 @@ fun BrowserScreen(
                                                 color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                                                 shape = RoundedCornerShape(20.dp)
                                             )
-                                            .padding(horizontal = 14.dp),
+                                            .padding(horizontal = 16.dp),
                                         contentAlignment = Alignment.CenterStart
                                     ) {
                                         Row(
@@ -1763,7 +1762,7 @@ fun BrowserScreen(
                                                             imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                                             contentDescription = "Reader Mode",
                                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                            modifier = Modifier.size(18.dp)
+                                                            modifier = Modifier.size(20.dp)
                                                         )
                                                     }
                                                     
@@ -1787,7 +1786,7 @@ fun BrowserScreen(
                                                         imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                                         contentDescription = "Bookmark",
                                                         tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                        modifier = Modifier.size(18.dp)
+                                                        modifier = Modifier.size(20.dp)
                                                     )
                                                 }
                                             }
@@ -1815,7 +1814,7 @@ fun BrowserScreen(
                                                 imageVector = Icons.Rounded.Extension,
                                                 contentDescription = "Extensions",
                                                 tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                             if (hasActiveUserExtensions) {
                                                 Box(
@@ -1840,7 +1839,7 @@ fun BrowserScreen(
                                             imageVector = BlackholeIcon,
                                             contentDescription = "Tools",
                                             tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                                            modifier = Modifier.size(22.dp)
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
 
@@ -1852,7 +1851,7 @@ fun BrowserScreen(
                                             imageVector = Icons.Rounded.Menu,
                                             contentDescription = "Menu",
                                             tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
@@ -1880,7 +1879,7 @@ fun BrowserScreen(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(42.dp)
+                                            .height(48.dp)
                                             .padding(horizontal = 4.dp)
                                             .background(
                                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -1891,7 +1890,7 @@ fun BrowserScreen(
                                                 color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                                                 shape = RoundedCornerShape(20.dp)
                                             )
-                                            .padding(horizontal = 14.dp),
+                                            .padding(horizontal = 16.dp),
                                         contentAlignment = Alignment.CenterStart
                                     ) {
                                         Row(
@@ -1963,7 +1962,7 @@ fun BrowserScreen(
                                                             imageVector = Icons.AutoMirrored.Rounded.MenuBook,
                                                             contentDescription = "Reader Mode",
                                                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                            modifier = Modifier.size(18.dp)
+                                                            modifier = Modifier.size(20.dp)
                                                         )
                                                     }
                                                     
@@ -1988,7 +1987,7 @@ fun BrowserScreen(
                                                         imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                                         contentDescription = "Bookmark",
                                                         tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                        modifier = Modifier.size(18.dp)
+                                                        modifier = Modifier.size(20.dp)
                                                     )
                                                 }
                                             }
@@ -2088,7 +2087,7 @@ fun BrowserScreen(
                                         imageVector = Icons.Rounded.Close,
                                         contentDescription = "Dismiss",
                                         tint = Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
 
@@ -2152,7 +2151,7 @@ fun BrowserScreen(
                                         imageVector = Icons.Rounded.Download,
                                         contentDescription = "Download Options",
                                         tint = Color.White,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
@@ -2191,7 +2190,7 @@ fun BrowserScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .height(56.dp)
                             .pointerInput(Unit) {
                                 detectHorizontalDragGestures(
                                     onDragEnd = {
@@ -2229,13 +2228,13 @@ fun BrowserScreen(
                             IconButton(
                                 onClick = { viewModel.goBack() },
                                 enabled = viewModel.canGoBack,
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = "Back",
                                     tint = if (viewModel.canGoBack) navContent else navContentMuted,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -2249,13 +2248,13 @@ fun BrowserScreen(
                             IconButton(
                                 onClick = { viewModel.goForward() },
                                 enabled = viewModel.canGoForward,
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                     contentDescription = "Forward",
                                     tint = if (viewModel.canGoForward) navContent else navContentMuted,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -2268,13 +2267,13 @@ fun BrowserScreen(
                         ) {
                             IconButton(
                                 onClick = { showToolsSheet = true },
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = BlackholeIcon,
                                     contentDescription = "Tools",
                                     tint = navContent,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -2309,13 +2308,13 @@ fun BrowserScreen(
                         ) {
                             IconButton(
                                 onClick = { showMenu = true },
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Menu,
                                     contentDescription = "Menu",
                                     tint = navContent,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -2340,10 +2339,10 @@ fun BrowserScreen(
             dragHandle = {
                 Box(
                     modifier = Modifier
-                        .padding(top = 10.dp, bottom = 6.dp)
+                        .padding(top = 8.dp, bottom = 6.dp)
                         .width(36.dp)
                         .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(RoundedCornerShape(20.dp))
                         .background(if (isDark) Color(0xFF3A3A3C) else Color(0xFFC7C7CC))
                 )
             }
@@ -2402,7 +2401,7 @@ fun BrowserScreen(
 
                 HorizontalDivider(
                     color = if (isDark) Color(0xFF23374A).copy(alpha = 0.6f) else Color.LightGray.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(vertical = 10.dp)
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
 
                 // ── Row 2: Secondary actions ──
@@ -2596,7 +2595,7 @@ fun BrowserScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(32.dp),
                                 border = BorderStroke(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
                                 colors = CardDefaults.cardColors(containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color.White),
                                 modifier = Modifier
@@ -2632,7 +2631,7 @@ fun BrowserScreen(
                                     Button(
                                         onClick = { viewModel.reload() },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(20.dp)
                                     ) {
                                         Text(
                                             text = "Retry",
@@ -2737,7 +2736,7 @@ fun BrowserScreen(
                             .padding(bottom = 80.dp, end = 16.dp)
                             .clip(RoundedCornerShape(24.dp))
                             .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE3F2FD))
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
+                            
                             .combinedClickable(
                                 onClick = {
                                     isAutoScrollPaused = !isAutoScrollPaused
@@ -2791,7 +2790,7 @@ fun BrowserScreen(
                                     contentDescription = "Collapse Auto Scroll",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier
-                                        .size(18.dp)
+                                        .size(20.dp)
                                         .clickable {
                                             isAutoScrollHUDExpanded = false
                                         }
@@ -2850,7 +2849,7 @@ fun BrowserScreen(
                             .padding(bottom = 80.dp, end = 16.dp)
                             .size(36.dp)
                             .clickable { isAutoScrollHUDExpanded = true },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE3F2FD)
                         ),
@@ -2875,7 +2874,7 @@ fun BrowserScreen(
                                     imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(10.dp)
+                                    modifier = Modifier.size(8.dp)
                                 )
                             }
                         }
@@ -2916,7 +2915,7 @@ fun BrowserScreen(
                     ) {
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // ── Header Row ──────────────────────────────────────────────
                             Row(
@@ -2930,8 +2929,8 @@ fun BrowserScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(20.dp))
                                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -2966,7 +2965,7 @@ fun BrowserScreen(
                                         }
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
@@ -2974,7 +2973,7 @@ fun BrowserScreen(
                                                 imageVector = if (viewModel.isTtsPlaying) Icons.AutoMirrored.Rounded.VolumeUp else Icons.Rounded.RecordVoiceOver,
                                                 contentDescription = "Read Aloud",
                                                 tint = if (viewModel.isTtsPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
+                                                modifier = Modifier.size(16.dp)
                                             )
                                             Text(
                                                 text = if (viewModel.isTtsPlaying) "Stop" else "Listen",
@@ -2987,8 +2986,8 @@ fun BrowserScreen(
 
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(20.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                             .clickable { isReaderSettingsExpanded = false },
                                         contentAlignment = Alignment.Center
@@ -2997,14 +2996,14 @@ fun BrowserScreen(
                                             imageVector = Icons.Rounded.KeyboardArrowDown,
                                             contentDescription = "Collapse Reader Controls",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
 
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(20.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                             .clickable { viewModel.toggleReaderMode() },
                                         contentAlignment = Alignment.Center
@@ -3013,7 +3012,7 @@ fun BrowserScreen(
                                             imageVector = Icons.Rounded.Close,
                                             contentDescription = "Exit Reader Mode",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
@@ -3031,7 +3030,7 @@ fun BrowserScreen(
                                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                         modifier = Modifier.clickable { viewModel.decreaseReaderFontSize() }
                                     ) {
@@ -3051,7 +3050,7 @@ fun BrowserScreen(
                                         modifier = Modifier.padding(horizontal = 4.dp)
                                     )
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                         modifier = Modifier.clickable { viewModel.increaseReaderFontSize() }
                                     ) {
@@ -3073,10 +3072,10 @@ fun BrowserScreen(
                                         imageVector = Icons.Rounded.FormatLineSpacing,
                                         contentDescription = "Line spacing",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                         modifier = Modifier.clickable { viewModel.decreaseReaderLineHeight() }
                                     ) {
@@ -3096,7 +3095,7 @@ fun BrowserScreen(
                                         modifier = Modifier.padding(horizontal = 2.dp)
                                     )
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                         modifier = Modifier.clickable { viewModel.increaseReaderLineHeight() }
                                     ) {
@@ -3120,13 +3119,13 @@ fun BrowserScreen(
                                         }
                                         Box(
                                             modifier = Modifier
-                                                .size(width = 46.dp, height = 26.dp)
-                                                .clip(RoundedCornerShape(6.dp))
+                                                .size(width = 46.dp, height = 24.dp)
+                                                .clip(RoundedCornerShape(32.dp))
                                                 .background(themeBg)
                                                 .border(
                                                     width = if (isSelected) 2.dp else 0.5.dp,
                                                     color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.3f),
-                                                    shape = RoundedCornerShape(6.dp)
+                                                    shape = RoundedCornerShape(32.dp)
                                                 )
                                                 .clickable { viewModel.setReaderThemeMode(theme) },
                                             contentAlignment = Alignment.Center
@@ -3152,7 +3151,7 @@ fun BrowserScreen(
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.width(28.dp)
+                                    modifier = Modifier.width(32.dp)
                                 )
                                 listOf("System", "Serif", "Sans", "Mono").forEach { family ->
                                     val isSelected = viewModel.readerFontFamily == (if (family == "Sans") "Sans-Serif" else if (family == "Mono") "Monospace" else family)
@@ -3162,7 +3161,7 @@ fun BrowserScreen(
                                         else -> family
                                     }
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                         modifier = Modifier
@@ -3191,12 +3190,12 @@ fun BrowserScreen(
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.width(28.dp)
+                                    modifier = Modifier.width(32.dp)
                                 )
                                 listOf("Narrow", "Medium", "Wide").forEach { w ->
                                     val isSelected = viewModel.readerWidth == w
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                         modifier = Modifier
@@ -3225,10 +3224,10 @@ fun BrowserScreen(
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.width(28.dp)
+                                    modifier = Modifier.width(32.dp)
                                 )
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(20.dp),
                                     color = if (viewModel.readerLetterSpacing != "Normal") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                     modifier = Modifier
@@ -3252,7 +3251,7 @@ fun BrowserScreen(
                                     )
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(20.dp),
                                     color = if (viewModel.readerWordSpacing != "Normal") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                     modifier = Modifier
@@ -3287,12 +3286,12 @@ fun BrowserScreen(
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.width(28.dp)
+                                    modifier = Modifier.width(32.dp)
                                 )
                                 listOf("Left", "Justify").forEach { align ->
                                     val isSelected = (align == "Justify" && viewModel.readerJustified) || (align == "Left" && !viewModel.readerJustified)
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                         modifier = Modifier
@@ -3319,7 +3318,7 @@ fun BrowserScreen(
                             .padding(bottom = if (isTablet) 16.dp else 72.dp, end = 16.dp)
                             .size(36.dp)
                             .clickable { isReaderSettingsExpanded = true },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE3F2FD)
                         ),
@@ -3344,7 +3343,7 @@ fun BrowserScreen(
                                     imageVector = Icons.Rounded.KeyboardArrowUp,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(10.dp)
+                                    modifier = Modifier.size(8.dp)
                                 )
                             }
                         }
@@ -3389,13 +3388,13 @@ fun BrowserScreen(
                                     colors = IconButtonDefaults.iconButtonColors(
                                         containerColor = Color.Black.copy(alpha = 0.65f)
                                     ),
-                                    modifier = Modifier.size(44.dp)
+                                    modifier = Modifier.size(48.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                         contentDescription = "Back",
                                         tint = Color.White,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                                 // Exit fullscreen button — tells GeckoView to exit fullscreen
@@ -3406,13 +3405,13 @@ fun BrowserScreen(
                                     colors = IconButtonDefaults.iconButtonColors(
                                         containerColor = Color.Black.copy(alpha = 0.65f)
                                     ),
-                                    modifier = Modifier.size(44.dp)
+                                    modifier = Modifier.size(48.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.FullscreenExit,
                                         contentDescription = "Exit Fullscreen",
                                         tint = Color.White,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
@@ -3439,14 +3438,14 @@ fun BrowserScreen(
                                         },
                                         containerColor = MaterialTheme.colorScheme.primary,
                                         contentColor = Color.White,
-                                        shape = RoundedCornerShape(16.dp),
+                                        shape = RoundedCornerShape(32.dp),
                                         modifier = Modifier.size(56.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.PlayArrow,
                                             contentDescription = "Play in Premium Player",
                                             tint = Color.White,
-                                            modifier = Modifier.size(28.dp)
+                                            modifier = Modifier.size(32.dp)
                                         )
                                     }
                                 }
@@ -3462,14 +3461,14 @@ fun BrowserScreen(
                                     },
                                     containerColor = Color.Black.copy(alpha = 0.78f),
                                     contentColor = Color.White,
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = RoundedCornerShape(32.dp),
                                     modifier = Modifier.size(56.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Download,
                                         contentDescription = "Download Video",
                                         tint = Color.White,
-                                        modifier = Modifier.size(26.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
@@ -3771,7 +3770,7 @@ fun BrowserScreen(
                         ) {
                             items(nonDrmMedia) { item ->
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(24.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -3798,7 +3797,7 @@ fun BrowserScreen(
                                                 text = item.type.name,
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                                modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
 
@@ -3814,7 +3813,7 @@ fun BrowserScreen(
                                                 modifier = Modifier.weight(1f),
                                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                                             ) {
-                                                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("Play", fontSize = 12.sp)
                                             }
@@ -3835,7 +3834,7 @@ fun BrowserScreen(
                                                 modifier = Modifier.weight(1f),
                                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                                             ) {
-                                                Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("Save", fontSize = 12.sp)
                                             }
@@ -3856,7 +3855,7 @@ fun BrowserScreen(
                                                 modifier = Modifier.weight(1f),
                                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                                             ) {
-                                                Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("Locker", fontSize = 12.sp)
                                             }
@@ -3912,14 +3911,14 @@ fun BrowserScreen(
                                     (currentUrl.startsWith("http://") || currentUrl.startsWith("https://"))
 
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(24.dp),
                                 color = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color(0xFFF1F5F9),
                                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
                                     modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
                                         text = "Translate Webpage",
@@ -3970,7 +3969,7 @@ fun BrowserScreen(
                                                     }
                                                 }
                                             },
-                                            shape = RoundedCornerShape(8.dp),
+                                            shape = RoundedCornerShape(20.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
@@ -3989,14 +3988,14 @@ fun BrowserScreen(
 
                             // --- Text Translation Card ---
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(24.dp),
                                 color = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color(0xFFF1F5F9),
                                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
                                     modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
                                         text = "Translate Custom Text",
@@ -4041,7 +4040,7 @@ fun BrowserScreen(
                                         placeholder = { Text("Type text to translate...", color = Color.Gray) },
                                         textStyle = androidx.compose.ui.text.TextStyle(color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black),
                                         modifier = Modifier.fillMaxWidth().height(90.dp),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(20.dp)
                                     )
 
                                     if (translationProgress) {
@@ -4062,7 +4061,7 @@ fun BrowserScreen(
                                     if (translationResultText.isNotEmpty()) {
                                         Surface(
                                             color = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE2E8F0),
-                                            shape = RoundedCornerShape(8.dp),
+                                            shape = RoundedCornerShape(20.dp),
                                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                                         ) {
                                             Text(
@@ -4070,7 +4069,7 @@ fun BrowserScreen(
                                                 fontSize = 14.sp,
                                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
                                                 fontWeight = FontWeight.Medium,
-                                                modifier = Modifier.padding(10.dp)
+                                                modifier = Modifier.padding(8.dp)
                                             )
                                         }
                                     }
@@ -4093,7 +4092,7 @@ fun BrowserScreen(
                                                 }
                                             }
                                         },
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(20.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -4244,14 +4243,14 @@ fun BrowserScreen(
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .clip(RoundedCornerShape(12.dp))
+                                                .clip(RoundedCornerShape(24.dp))
                                                 .background(if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
                                                 .border(
                                                     BorderStroke(
                                                         if (isActive) 1.5.dp else 0.5.dp,
                                                         if (isActive) MaterialTheme.colorScheme.primary else (if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                                                     ),
-                                                    RoundedCornerShape(12.dp)
+                                                    RoundedCornerShape(24.dp)
                                                 )
                                                 .clickable {
                                                     viewModel.selectTab(tab.id)
@@ -4265,7 +4264,7 @@ fun BrowserScreen(
                                                 Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                                        .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
@@ -4314,7 +4313,7 @@ fun BrowserScreen(
                                                         .fillMaxWidth()
                                                         .height(84.dp)
                                                         .padding(start = 6.dp, end = 6.dp, bottom = 6.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clip(RoundedCornerShape(20.dp))
                                                         .background(
                                                             Brush.verticalGradient(
                                                                 colors = if (viewModel.isDarkThemeEnabled) {
@@ -4410,8 +4409,8 @@ fun BrowserScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(320.dp)
-                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF05080C) else Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
-                                .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF05080C) else Color(0xFFF1F5F9), RoundedCornerShape(20.dp))
+                                .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                                 .padding(8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -4451,7 +4450,7 @@ fun BrowserScreen(
                                     fontSize = 13.sp
                                 ),
                                 singleLine = true,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color.LightGray
@@ -4475,7 +4474,7 @@ fun BrowserScreen(
                                         jsInputText = ""
                                     }
                                 },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Text("Run", fontSize = 13.sp)
@@ -4647,7 +4646,7 @@ fun BrowserScreen(
                     onDismissRequest = { viewModel.dismissExtensionPopup() },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                     containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White,
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
                 ) {
                     Column(
                         modifier = Modifier
@@ -4664,12 +4663,12 @@ fun BrowserScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(24.dp))
                                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -5104,10 +5103,10 @@ fun BrowserScreen(
                             Box(
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .background(fileColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                                    .background(fileColor.copy(alpha = 0.12f), RoundedCornerShape(24.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(fileIcon, contentDescription = null, tint = fileColor, modifier = Modifier.size(26.dp))
+                                Icon(fileIcon, contentDescription = null, tint = fileColor, modifier = Modifier.size(24.dp))
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -5131,22 +5130,22 @@ fun BrowserScreen(
                         Button(
                             onClick = { viewModel.startGenericDownload(pending, saveToLocker = false) },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(32.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text("Download Locally", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         }
 
                         OutlinedButton(
                             onClick = { viewModel.startGenericDownload(pending, saveToLocker = true) },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(32.dp),
                             border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
                         ) {
                             Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text("Save to Private Vault 🔒", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
                         }
 
@@ -5177,7 +5176,7 @@ fun ExtensionItemCard(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
         modifier = Modifier
@@ -5187,8 +5186,8 @@ fun ExtensionItemCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -5198,8 +5197,8 @@ fun ExtensionItemCard(
                 // Icon box with brush/gradient
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
                         .background(
                             brush = Brush.linearGradient(
                                 colors = listOf(
@@ -5233,7 +5232,7 @@ fun ExtensionItemCard(
                         if (!enabled) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(24.dp)
                             ) {
                                 Text(
                                     text = "SYNCING",
@@ -5299,7 +5298,7 @@ fun UserExtensionItemCard(
     }
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(32.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
         modifier = Modifier
@@ -5309,8 +5308,8 @@ fun UserExtensionItemCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Top Row: Icon, Title & Details, Switch
             Row(
@@ -5321,8 +5320,8 @@ fun UserExtensionItemCard(
                 // Extension puzzle icon with soft gradient background
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
                         .background(
                             brush = Brush.linearGradient(
                                 colors = listOf(
@@ -5356,7 +5355,7 @@ fun UserExtensionItemCard(
                         if (!enabled) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(24.dp)
                             ) {
                                 Text(
                                     text = "SYNCING",
@@ -5426,8 +5425,8 @@ fun UserExtensionItemCard(
                         Button(
                             onClick = onPopupClick,
                             enabled = enabled && checked, // Only clickable if enabled & checked/active!
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                 contentColor = MaterialTheme.colorScheme.primary,
@@ -5439,7 +5438,7 @@ fun UserExtensionItemCard(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Open", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -5575,7 +5574,7 @@ fun PermissionPromptDialog(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(20.dp)
             ) {
                 Text("Allow", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
@@ -5587,14 +5586,14 @@ fun PermissionPromptDialog(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = textSecondary
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(20.dp)
             ) {
                 Text("Deny", fontWeight = FontWeight.SemiBold)
             }
         },
         containerColor = cardColor,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.border(BorderStroke(0.5.dp, borderCol), RoundedCornerShape(16.dp))
+        shape = RoundedCornerShape(32.dp),
+        modifier = Modifier
     )
 }
 
@@ -5677,7 +5676,7 @@ fun MediaPermissionPromptDialog(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(20.dp)
             ) {
                 Text("Allow", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
@@ -5689,14 +5688,14 @@ fun MediaPermissionPromptDialog(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = textSecondary
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(20.dp)
             ) {
                 Text("Deny", fontWeight = FontWeight.SemiBold)
             }
         },
         containerColor = cardColor,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.border(BorderStroke(0.5.dp, borderCol), RoundedCornerShape(16.dp))
+        shape = RoundedCornerShape(32.dp),
+        modifier = Modifier
     )
 }
 
@@ -5711,7 +5710,7 @@ fun MenuGridCell(
     Column(
         modifier = Modifier
             .width(80.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -5769,8 +5768,8 @@ fun DynamicShortcutItem(
     ) {
         Surface(
             modifier = Modifier
-                .size(60.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(64.dp)
+                .clip(RoundedCornerShape(24.dp))
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick
@@ -5791,7 +5790,7 @@ fun DynamicShortcutItem(
                     contentDescription = title,
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .clip(RoundedCornerShape(32.dp)),
                     error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
                 )
             }
@@ -5819,13 +5818,13 @@ fun PopularSiteItem(
         modifier = Modifier.width(72.dp)
     ) {
         Box(
-            modifier = Modifier.size(60.dp)
+            modifier = Modifier.size(64.dp)
         ) {
             Surface(
                 modifier = Modifier
                     .size(54.dp)
                     .align(Alignment.BottomStart)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .clickable { onClick() },
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
@@ -5845,8 +5844,8 @@ fun PopularSiteItem(
                             .build(),
                         contentDescription = title,
                         modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(4.dp)),
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(24.dp)),
                         error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
                     )
                 }
@@ -5854,7 +5853,7 @@ fun PopularSiteItem(
             
             Box(
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(20.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
                     .align(Alignment.TopEnd),
@@ -5898,7 +5897,7 @@ fun EqualizerIcon(modifier: Modifier = Modifier, color: Color = MaterialTheme.co
     }
 
     Row(
-        modifier = modifier.height(14.dp),
+        modifier = modifier.height(16.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.Bottom
     ) {
@@ -5925,7 +5924,7 @@ fun LanguageDropdownSelector(
     Box(modifier = Modifier.width(135.dp)) {
         OutlinedButton(
             onClick = { onExpandedChange(true) },
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(20.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = Color.White
@@ -6356,7 +6355,7 @@ fun QrScanResultComposer(
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(20.dp))
                                 .background(if (isDarkTheme) Color(0xFF1E2E3D) else Color(0xFFF0F4F8)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -6364,7 +6363,7 @@ fun QrScanResultComposer(
                                 imageVector = Icons.Rounded.QrCodeScanner,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Column {
@@ -6393,7 +6392,7 @@ fun QrScanResultComposer(
                                 onClick = {
                                     currentIndex = (currentIndex - 1 + results.size) % results.size
                                 },
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -6406,7 +6405,7 @@ fun QrScanResultComposer(
                                 onClick = {
                                     currentIndex = (currentIndex + 1) % results.size
                                 },
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
@@ -6418,7 +6417,7 @@ fun QrScanResultComposer(
                         }
                         IconButton(
                             onClick = onDismiss,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
@@ -6434,7 +6433,7 @@ fun QrScanResultComposer(
 
                 // Result Content Card
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(24.dp),
                     color = if (isDarkTheme) Color(0xFF16222F) else Color(0xFFF5F7FA),
                     border = BorderStroke(0.5.dp, if (isDarkTheme) Color(0xFF23374A) else Color.LightGray.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
@@ -6463,7 +6462,7 @@ fun QrScanResultComposer(
                             clipboard.setPrimaryClip(clip)
                             Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                         },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(24.dp),
                         modifier = Modifier.weight(1f),
                         border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF23374A) else Color.LightGray)
                     ) {
@@ -6487,7 +6486,7 @@ fun QrScanResultComposer(
                             }
                             context.startActivity(chooser)
                         },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(24.dp),
                         modifier = Modifier.weight(1f),
                         border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF23374A) else Color.LightGray)
                     ) {
@@ -6510,7 +6509,7 @@ fun QrScanResultComposer(
                             }
                             onDismiss()
                         },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(24.dp),
                         modifier = Modifier.weight(1.2f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
@@ -6601,7 +6600,7 @@ fun QrGeneratorDialog(
                             contentDescription = "QR Code",
                             modifier = Modifier
                                 .size(180.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(20.dp))
                         )
                     } else {
                         Column(
@@ -6631,7 +6630,7 @@ fun QrGeneratorDialog(
                 label = { Text("URL / Text") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -6677,7 +6676,7 @@ fun QrGeneratorDialog(
                             }
                         }
                     },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier.weight(1f),
                     border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF23374A) else Color.LightGray),
                     enabled = qrBitmap != null
@@ -6685,7 +6684,7 @@ fun QrGeneratorDialog(
                     Icon(
                         imageVector = Icons.Rounded.Share,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Share")
@@ -6707,7 +6706,7 @@ fun QrGeneratorDialog(
                             }
                         }
                     },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(24.dp),
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
@@ -6717,7 +6716,7 @@ fun QrGeneratorDialog(
                     Icon(
                         imageVector = Icons.Rounded.Save,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = Color.White
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -6786,7 +6785,7 @@ fun FeatureOverviewDialog(
                             imageVector = icon,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
@@ -6829,7 +6828,7 @@ fun FeatureOverviewDialog(
                 // Action button: Got It
                 Button(
                     onClick = onDismiss,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(32.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accentColor,
                         contentColor = Color.White
@@ -6859,7 +6858,7 @@ fun ContextMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -6867,7 +6866,7 @@ fun ContextMenuItem(
             imageVector = icon,
             contentDescription = null,
             tint = if (isDark) Color(0xFF90CAF9) else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(24.dp)
         )
         Text(
             text = title,
@@ -6959,7 +6958,7 @@ fun DevNotesSheetContent(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     OutlinedTextField(
                         value = noteTitle,
@@ -6967,7 +6966,7 @@ fun DevNotesSheetContent(
                         label = { Text("Title") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = if (isDark) Color(0xFF1E293B) else Color.LightGray
@@ -6979,7 +6978,7 @@ fun DevNotesSheetContent(
                         OutlinedButton(
                             onClick = { isTypeMenuExpanded = true },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(20.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                         ) {
                             Row(
@@ -7028,7 +7027,7 @@ fun DevNotesSheetContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(180.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(20.dp),
                         textStyle = androidx.compose.ui.text.TextStyle(
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                             fontSize = 13.sp
@@ -7062,7 +7061,7 @@ fun DevNotesSheetContent(
                                     }
                                 },
                                 label = { Text("Paste Clip") },
-                                leadingIcon = { Icon(Icons.Rounded.ContentPaste, null, modifier = Modifier.size(14.dp)) }
+                                leadingIcon = { Icon(Icons.Rounded.ContentPaste, null, modifier = Modifier.size(16.dp)) }
                             )
                         }
                         if (noteType == "PASSWORD") {
@@ -7079,7 +7078,7 @@ fun DevNotesSheetContent(
                                         )
                                     },
                                     label = { Text("Gen Password") },
-                                    leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(14.dp)) }
+                                    leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(16.dp)) }
                                 )
                             }
                         }
@@ -7097,7 +7096,7 @@ fun DevNotesSheetContent(
                                         )
                                     },
                                     label = { Text("Gen UUID") },
-                                    leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(14.dp)) }
+                                    leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(16.dp)) }
                                 )
                             }
                         }
@@ -7132,7 +7131,7 @@ fun DevNotesSheetContent(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(20.dp)
                     ) {
                         Text("Save Note")
                     }
@@ -7246,15 +7245,15 @@ fun DevNotesSheetContent(
                             modifier = Modifier
                                 .background(
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else (if (isDark) Color(0xFF141D2D) else Color.White),
-                                    shape = RoundedCornerShape(16.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 )
                                 .border(
                                     width = 1.dp,
                                     color = if (isSelected) Color.Transparent else (if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f)),
-                                    shape = RoundedCornerShape(16.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 )
                                 .clickable { selectedFilterTag = tag }
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = label,
@@ -7274,18 +7273,18 @@ fun DevNotesSheetContent(
                     colors = CardDefaults.cardColors(
                         containerColor = if (isDark) Color(0xFF1E293B).copy(alpha = 0.5f) else Color(0xFFE2E8F0)
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(24.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Info,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                         Text(
                             text = "Dev Notes is an offline-first developer vault for saving code snippets, keys, passwords, and links securely.",
@@ -7320,16 +7319,16 @@ fun DevNotesSheetContent(
                     androidx.compose.foundation.lazy.LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 450.dp)
+                            .heightIn(max = 448.dp)
                             .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(chunkedNotes) { rowItems ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(IntrinsicSize.Max),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 for (note in rowItems) {
                                     val isPassVisible = passwordVisibilityMap[note.id] ?: false
@@ -7339,12 +7338,12 @@ fun DevNotesSheetContent(
                                             .fillMaxHeight()
                                             .background(
                                                 color = if (isDark) Color(0xFF141D2D) else Color.White,
-                                                shape = RoundedCornerShape(16.dp)
+                                                shape = RoundedCornerShape(32.dp)
                                             )
                                             .border(
                                                 width = 1.dp,
                                                 color = if (isDark) Color(0xFF1E293B) else Color.LightGray.copy(alpha = 0.4f),
-                                                shape = RoundedCornerShape(16.dp)
+                                                shape = RoundedCornerShape(32.dp)
                                             )
                                             .clickable {
                                                 selectedNoteForEdit = note
@@ -7353,7 +7352,7 @@ fun DevNotesSheetContent(
                                                 noteType = note.type
                                                 isEditorOpen = true
                                             }
-                                            .padding(14.dp)
+                                            .padding(16.dp)
                                     ) {
                                         Column(
                                             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -7594,7 +7593,7 @@ fun DevNotesSheetContent(
                             imageVector = Icons.Rounded.Check,
                             contentDescription = "Save Note",
                             tint = if (isSendEnabled) Color.White else Color.Gray,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
@@ -7635,7 +7634,7 @@ fun SiteStyleCustomizerSheetContent(
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 8.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -7675,17 +7674,17 @@ fun SiteStyleCustomizerSheetContent(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp)
+                                .height(56.dp)
                                 .background(
                                     color = if (code == "DEFAULT") {
                                         if (viewModel.isDarkThemeEnabled) Color(0xFF1C2C3E) else Color(0xFFF1F5F9)
                                     } else color,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(20.dp)
                                 )
                                 .border(
                                     width = if (isSelected) 2.dp else 1.dp,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.3f),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(20.dp)
                                 )
                                 .clickable {
                                     themePreset = code
@@ -7768,12 +7767,12 @@ fun SiteStyleCustomizerSheetContent(
                                 .height(36.dp)
                                 .background(
                                     color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
-                                    shape = RoundedCornerShape(6.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 )
                                 .border(
                                     width = 1.dp,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.3f),
-                                    shape = RoundedCornerShape(6.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 )
                                 .clickable {
                                     fontFamily = code
