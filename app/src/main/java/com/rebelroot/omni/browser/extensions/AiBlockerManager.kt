@@ -39,9 +39,13 @@ class AiBlockerManager(private val runtime: GeckoRuntime) {
         ).accept(
             { ext ->
                 extension = ext
+                if (ext != null) {
+                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                }
                 Log.i(TAG, "AI Blocker Extension installed.")
                 setEnabled(enabled, onComplete)
             },
+
             { error ->
                 Log.e(TAG, "Failed to load AI Blocker Extension", error)
                 onComplete?.invoke()

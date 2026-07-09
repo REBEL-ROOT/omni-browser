@@ -2080,12 +2080,14 @@ class BrowserViewModel : ViewModel() {
             { ext ->
                 grabberExtension = ext
                 ext?.let {
+                    runtime.webExtensionController.setAllowedInPrivateBrowsing(it, true)
                     if (isMediaGrabberEnabled) {
                         runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     } else {
                         runtime.webExtensionController.disable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     }
                     setupNativeAppMessageDelegate(it)
+
                 }
                 Log.i(TAG, "Aggressive Media Grabber active.")
             },
@@ -2208,11 +2210,13 @@ class BrowserViewModel : ViewModel() {
             { ext ->
                 uBlockExtension = ext
                 ext?.let {
+                    runtime.webExtensionController.setAllowedInPrivateBrowsing(it, true)
                     val action = if (isAdblockerEnabled) {
                         runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     } else {
                         runtime.webExtensionController.disable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     }
+
                     action.accept(
                         {
                             isAdblockerToggling = false
@@ -2274,6 +2278,7 @@ class BrowserViewModel : ViewModel() {
             { ext ->
                 grabberExtension = ext
                 ext?.let {
+                    runtime.webExtensionController.setAllowedInPrivateBrowsing(it, true)
                     val action = if (isMediaGrabberEnabled) {
                         val enableResult = runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                         setupNativeAppMessageDelegate(it)
@@ -2281,6 +2286,7 @@ class BrowserViewModel : ViewModel() {
                     } else {
                         runtime.webExtensionController.disable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                     }
+
                     action.accept(
                         {
                             isMediaGrabberToggling = false
@@ -3205,7 +3211,10 @@ class BrowserViewModel : ViewModel() {
                 { ext ->
                     Log.i(TAG, "Successfully installed extension: ${ext?.id}")
                     if (ext != null) {
+                        runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                        runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
                         ext.setActionDelegate(object : WebExtension.ActionDelegate {
+
                             override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
                                 registerExtensionAction(extension.id, action)
                             }
@@ -3243,7 +3252,9 @@ class BrowserViewModel : ViewModel() {
                     val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         filtered.forEach { ext ->
+                            runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
                             ext.setActionDelegate(object : WebExtension.ActionDelegate {
+
                                 override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
                                     registerExtensionAction(extension.id, action)
                                 }
