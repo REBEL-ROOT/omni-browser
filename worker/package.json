@@ -1,0 +1,16 @@
+{
+  "name": "rebelroot-backend",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers edge API for RebelRoot digital sovereignty suite",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240524.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.105.0"
+  }
+}

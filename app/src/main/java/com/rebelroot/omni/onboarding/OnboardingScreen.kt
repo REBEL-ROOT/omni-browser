@@ -18,11 +18,8 @@
 
 package com.rebelroot.omni.onboarding
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,18 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Security
-import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.Computer
-import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.CameraAlt
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Extension
-import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,22 +54,33 @@ import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
-// Soft light cyan/white gradient and slate-contrast tokens (copied from MyPdf UI pattern)
-private val BgStart = Color(0xFFCBEFF4)
-private val BgEnd = Color(0xFFFFFFFF)
-private val DarkSlate = Color(0xFF07212F)
-private val SubtextColor = Color(0xFF475569)
+// ── Design tokens ──────────────────────────────────────────────────────────────
+private val BgGradientTop    = Color(0xFF0A1628)
+private val BgGradientBottom = Color(0xFF0F2137)
+private val SubtextColor     = Color(0xFF8A9BBD)
+private val FeatureRowBg     = Color(0x14FFFFFF)   // 8% white — subtle row background
+private val PhoneBorderColor = Color(0xFF2D4A6E)   // Muted blue-slate border
+private val PhoneHomebar     = Color(0x50FFFFFF)   // Semi-transparent white
 
-data class OnboardingPageData(
+/**
+ * One onboarding slide.
+ *
+ * [features] are shown as a simple bullet list below the phone screenshot —
+ * the same pattern used by Google, Apple, and Samsung on their setup screens.
+ * No overlaid callouts, no floating animations, no clipping issues.
+ */
+data class OnboardingPage(
     val imageRes: Int,
     val title: String,
-    val subtitle: String,
-    val description: String,
     val accentColor: Color,
-    val badge1Icon: ImageVector,
-    val badge1Text: String,
-    val badge2Icon: ImageVector,
-    val badge2Text: String
+    val tagline: String,
+    val features: List<FeatureItem>
+)
+
+data class FeatureItem(
+    val icon: ImageVector,
+    val title: String,
+    val detail: String
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -94,142 +91,94 @@ fun OnboardingScreen(
     onFinish: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
+
+    // 4 carefully chosen slides — each mapped to a real screenshot.
+    // Features listed below the screenshot describe what the user is looking at,
+    // like Google's Pixel setup flow or Apple's iOS intro screens.
     val pages = remember {
         listOf(
-            OnboardingPageData(
+            OnboardingPage(
                 imageRes = R.drawable.ob_secure_browser,
-                title = "Security First",
-                subtitle = "No External APIs & Telemetry",
-                description = "Omni Browser runs fully locally. We make zero external API calls to trackers or central servers, keeping your browsing fully private and secure.",
+                title = "Browse Freely,\nBrowse Privately",
                 accentColor = Color(0xFF0A84FF),
-                badge1Icon = Icons.Rounded.Security,
-                badge1Text = "Secure",
-                badge2Icon = Icons.Rounded.VisibilityOff,
-                badge2Text = "No APIs"
+                tagline = "Zero Trackers · Fully On-Device",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.Search,          "Smart Address Bar",    "Search or enter any URL — voice and camera search built in"),
+                    FeatureItem(Icons.Rounded.Newspaper,       "Discover Feed",        "Trending news by topic, refreshed without any account needed"),
+                    FeatureItem(Icons.Rounded.VisibilityOff,   "Incognito Mode",       "No history, no cookies, no trace — one tap from home screen")
+                )
             ),
-            OnboardingPageData(
+            OnboardingPage(
                 imageRes = R.drawable.ob_quick_tools,
-                title = "Developer Tools",
-                subtitle = "Edit Webpages Real-time",
-                description = "Inspect source code, manipulate the live DOM, or inject custom CSS/JS scripts on any page with our powerful integrated Quick Tools.",
+                title = "12 Tools,\nOne Browser",
                 accentColor = Color(0xFF5E5CE6),
-                badge1Icon = Icons.Rounded.Code,
-                badge1Text = "DOM",
-                badge2Icon = Icons.Rounded.Computer,
-                badge2Text = "Scripts"
+                tagline = "Everything You Need · No Extra Apps",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.QrCodeScanner,   "QR Scanner",           "Scan QR codes visible on any webpage instantly"),
+                    FeatureItem(Icons.Rounded.Description,     "Save as PDF",          "Export any article as a clean, readable PDF offline"),
+                    FeatureItem(Icons.Rounded.Code,            "Developer Tools",      "Inspect HTML, inject CSS/JS, and view console logs live")
+                )
             ),
-            OnboardingPageData(
-                imageRes = R.drawable.ob_save_pdf,
-                title = "Web page to PDF",
-                subtitle = "Clean Formatting Export",
-                description = "Convert any complex web article into a clean, read-optimized PDF document instantly. Ideal for offline reading and research.",
-                accentColor = Color(0xFF30D158),
-                badge1Icon = Icons.Rounded.Description,
-                badge1Text = "PDF",
-                badge2Icon = Icons.Rounded.ArrowDownward,
-                badge2Text = "Clean"
-            ),
-            OnboardingPageData(
-                imageRes = R.drawable.ob_media_player,
-                title = "Media Hub",
-                subtitle = "Native Player & Downloader",
-                description = "Stream video feeds through our hardware-accelerated Media3 player with gesture controls, background playback, and multi-threaded parallel downloads.",
-                accentColor = Color(0xFFFF6D00),
-                badge1Icon = Icons.Rounded.PlayCircle,
-                badge1Text = "Player",
-                badge2Icon = Icons.Rounded.ArrowDownward,
-                badge2Text = "Save"
-            ),
-            OnboardingPageData(
-                imageRes = R.drawable.ob_qr_scanner,
-                title = "QR Tools",
-                subtitle = "Smart Scan Page & Share QR",
-                description = "Scan any QR codes visible on webpages instantly using our Google Lens-style scanner, or generate live sharing QR codes for links in real-time.",
-                accentColor = Color(0xFF00D2C4),
-                badge1Icon = Icons.Rounded.CameraAlt,
-                badge1Text = "Scan",
-                badge2Icon = Icons.Rounded.Share,
-                badge2Text = "Share"
-            ),
-            OnboardingPageData(
+            OnboardingPage(
                 imageRes = R.drawable.ob_extensions_vault,
-                title = "Extensions & Vault",
-                subtitle = "Firefox Extensions & Secure Locker",
-                description = "Install desktop extensions (like uBlock Origin) to block ads, and lock your sensitive downloads behind biometrically encrypted local vault storage.",
+                title = "Real Extensions,\nReal Protection",
                 accentColor = Color(0xFFFF3B5C),
-                badge1Icon = Icons.Rounded.Extension,
-                badge1Text = "uBlock",
-                badge2Icon = Icons.Rounded.Lock,
-                badge2Text = "Vault"
+                tagline = "Firefox Extensions · Biometric Vault",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.Extension,       "uBlock Origin",        "Full Firefox desktop ad blocker — runs natively on GeckoView"),
+                    FeatureItem(Icons.Rounded.Shield,          "AI Blocker",           "Hides AI overview summaries from Google and Bing search"),
+                    FeatureItem(Icons.Rounded.Lock,            "Safe Locker",          "Fingerprint-encrypted vault for images, docs, and videos")
+                )
+            ),
+            OnboardingPage(
+                imageRes = R.drawable.ob_media_player,
+                title = "Browser Menu\n& Quick Access",
+                accentColor = Color(0xFFFF6D00),
+                tagline = "Bookmarks · History · Downloads · Burn",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.BookmarkBorder,  "Bookmarks & History",  "Saved sites and full browsing history always one tap away"),
+                    FeatureItem(Icons.Rounded.PlayCircle,      "Media Downloader",     "Grab videos, audio, and HLS streams from any page"),
+                    FeatureItem(Icons.Rounded.LocalFireDepartment, "Burn Mode",        "Instantly wipes all tabs, history, and session cookies")
+                )
             )
         )
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val isLastPage = pagerState.currentPage == pages.size - 1
-
-    // Floating animation offset variables
-    val infiniteTransition = rememberInfiniteTransition(label = "float")
-    val floatOffset1 by infiniteTransition.animateFloat(
-        initialValue = -8f,
-        targetValue = 8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200),
-            repeatMode = RepeatMode.Reverse
-        ), label = "f1"
-    )
-    val floatOffset2 by infiniteTransition.animateFloat(
-        initialValue = 6f,
-        targetValue = -6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800),
-            repeatMode = RepeatMode.Reverse
-        ), label = "f2"
-    )
+    val currentPage = pages[pagerState.currentPage]
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(BgStart, BgEnd)
-                )
-            )
+            .background(Brush.verticalGradient(listOf(BgGradientTop, BgGradientBottom)))
             .windowInsetsPadding(WindowInsets.systemBars)
     ) {
-        // --- Top Bar (Skip Button) ---
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            contentAlignment = Alignment.TopEnd
-        ) {
-            AnimatedVisibility(
-                visible = !isLastPage,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Text(
-                    text = "Skip",
-                    color = DarkSlate.copy(alpha = 0.6f),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            viewModel.saveOnboardingCompleted(context, true)
-                            onFinish()
-                        }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
+
+        // ── Skip ────────────────────────────────────────────────────────────────
+        if (!isLastPage) {
+            Text(
+                text = "Skip",
+                color = SubtextColor,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 16.dp, end = 24.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        viewModel.saveOnboardingCompleted(context, true)
+                        onFinish()
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            )
         }
 
-        // --- Pager & Content ---
+        // ── Pager ────────────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 48.dp, bottom = 100.dp),
+                .padding(top = 52.dp, bottom = 88.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             HorizontalPager(
@@ -237,168 +186,128 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 32.dp)
+                beyondViewportPageCount = 1   // Pre-load neighbour to reduce first-swipe jank
             ) { page ->
                 val pageData = pages[page]
 
-                // Page offset calculations for premium offset translation animations
+                // Lightweight page transition: scale + alpha only.
+                // rotationY (3D book-flip) was removed — it forces a GPU compositing
+                // layer on every frame during a drag gesture, causing consistent jank.
                 val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                val scale = 1f - (pageOffset.absoluteValue * 0.15f).coerceIn(0f, 0.15f)
-                val alpha = 1f - (pageOffset.absoluteValue * 0.7f).coerceIn(0f, 0.7f)
-                val rotationY = pageOffset * -30f // 3D Book page turn feel
+                val scale = 1f - (pageOffset.absoluteValue * 0.06f).coerceIn(0f, 0.06f)
+                val alpha = 1f - (pageOffset.absoluteValue * 0.4f).coerceIn(0f, 0.4f)
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(horizontal = 24.dp)
                         .graphicsLayer {
-                            this.scaleX = scale
-                            this.scaleY = scale
+                            scaleX = scale
+                            scaleY = scale
                             this.alpha = alpha
-                            this.rotationY = rotationY
-                            this.cameraDistance = 8 * density
                         },
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Top
                 ) {
-                    // Illustration Card Showcase Area (Soft white circle background + Floating animated badges)
-                    Box(
+
+                    // ── Phone mockup ─────────────────────────────────────────────
+                    // The frame is a border-only rounded rectangle — no filled
+                    // background — so it never bleeds into the page background colour.
+                    PhoneMockup(
+                        imageRes = pageData.imageRes,
+                        accentColor = pageData.accentColor,
                         modifier = Modifier
-                            .weight(1.2f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Background Soft White Circle Card
-                        Box(
-                            modifier = Modifier
-                                .size(260.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.6f))
-                                .border(1.5.dp, Color.White, CircleShape)
-                        )
+                            .weight(1f)
+                            .wrapContentWidth()
+                    )
 
-                        // Central main illustration
-                        Image(
-                            painter = painterResource(id = pageData.imageRes),
-                            contentDescription = pageData.title,
-                            modifier = Modifier
-                                .size(220.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                    Spacer(Modifier.height(20.dp))
 
+                    // ── Title ───────────────────────────────────────────────────
+                    Text(
+                        text = pageData.title,
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 30.sp
+                    )
 
-                        // Floating Badge 1 ( Bobbing offset 1 )
-                        FloatingFeatureBadge(
-                            icon = pageData.badge1Icon,
-                            containerColor = pageData.accentColor,
-                            text = pageData.badge1Text,
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .offset(x = 16.dp, y = (32f + floatOffset1).dp)
-                        )
+                    Spacer(Modifier.height(6.dp))
 
-                        // Floating Badge 2 ( Bobbing offset 2 )
-                        FloatingFeatureBadge(
-                            icon = pageData.badge2Icon,
-                            containerColor = DarkSlate,
-                            text = pageData.badge2Text,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = (-16).dp, y = ((-32f) + floatOffset2).dp)
-                        )
-                    }
+                    // ── Tagline chip ────────────────────────────────────────────
+                    Text(
+                        text = pageData.tagline,
+                        color = pageData.accentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .background(
+                                pageData.accentColor.copy(alpha = 0.15f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
 
-                    Spacer(modifier = Modifier.height(28.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                    // Text Content Card
+                    // ── Feature list ────────────────────────────────────────────
+                    // Simple rows with icon + title + one-line description.
+                    // This is the pattern used by Google (Pixel setup), Apple (iOS intro),
+                    // and Samsung (Galaxy setup) — clean, readable, no positioning risk.
                     Column(
-                        modifier = Modifier
-                            .weight(0.9f)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Title
-                        Text(
-                            text = pageData.title,
-                            color = DarkSlate,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 34.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Subtitle with Accent Color
-                        Text(
-                            text = pageData.subtitle,
-                            color = pageData.accentColor,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .background(
-                                    pageData.accentColor.copy(alpha = 0.12f),
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Description
-                        Text(
-                            text = pageData.description,
-                            color = SubtextColor,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 22.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
+                        pageData.features.forEach { feature ->
+                            FeatureRow(
+                                feature = feature,
+                                accentColor = pageData.accentColor
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // --- Bottom Navigation & Indicators ---
-        Box(
+        // ── Bottom nav ───────────────────────────────────────────────────────────
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 24.dp)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Page Indicators (Animated Dots)
+            // Page indicator dots
             Row(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 repeat(pages.size) { index ->
-                    val active = pagerState.currentPage == index
+                    val isActive = pagerState.currentPage == index
                     val width by animateDpAsState(
-                        targetValue = if (active) 22.dp else 8.dp,
+                        targetValue = if (isActive) 24.dp else 7.dp,
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                        label = "dot_width"
+                        label = "dot_w_$index"
                     )
                     val color by animateColorAsState(
-                        targetValue = if (active) pages[pagerState.currentPage].accentColor else DarkSlate.copy(alpha = 0.15f),
-                        animationSpec = tween(durationMillis = 300),
-                        label = "dot_color"
+                        targetValue = if (isActive) pages[pagerState.currentPage].accentColor
+                                      else Color.White.copy(alpha = 0.25f),
+                        animationSpec = tween(250),
+                        label = "dot_c_$index"
                     )
-
                     Box(
                         modifier = Modifier
-                            .size(width = width, height = 8.dp)
+                            .size(width = width, height = 7.dp)
                             .clip(CircleShape)
                             .background(color)
                     )
                 }
             }
 
-            // Next / Action Button
+            // Next / Get Started — colour tracks the current slide accent
             Button(
                 onClick = {
                     if (isLastPage) {
@@ -410,20 +319,17 @@ fun OnboardingScreen(
                         }
                     }
                 },
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .height(56.dp)
-                    .shadow(8.dp, shape = CircleShape),
+                modifier = Modifier.height(50.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = DarkSlate,
+                    containerColor = currentPage.accentColor,
                     contentColor = Color.White
                 ),
                 shape = CircleShape,
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = if (isLastPage) "Get Started" else "Next",
@@ -431,8 +337,9 @@ fun OnboardingScreen(
                         fontSize = 15.sp
                     )
                     Icon(
-                        imageVector = if (isLastPage) Icons.Rounded.CheckCircle else Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = if (isLastPage) "Get Started" else "Next",
+                        imageVector = if (isLastPage) Icons.Rounded.CheckCircle
+                                      else Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -441,37 +348,126 @@ fun OnboardingScreen(
     }
 }
 
+/**
+ * A minimal phone mockup that wraps a real app screenshot.
+ *
+ * Design decisions:
+ *  - The "frame" is a border only (no [Modifier.background] fill) so it never
+ *    creates an opaque rectangle behind itself that overflows the page gradient.
+ *  - The screenshot is clipped to [RoundedCornerShape] matching the inner radius
+ *    of the border, producing a seamless screen-inside-bezel look.
+ *  - A thin accent-coloured glow line at the top gives each slide a unique visual
+ *    identity without adding heavy shadow layers that would slow compositing.
+ *  - The home-indicator bar at the bottom is the only decoration — no speaker
+ *    cutout, camera notch, or status-bar overlay. These added layout complexity
+ *    and weren't visible at the mockup size.
+ */
 @Composable
-private fun FloatingFeatureBadge(
-    icon: ImageVector,
-    containerColor: Color,
-    text: String,
+private fun PhoneMockup(
+    imageRes: Int,
+    accentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier
-            .shadow(6.dp, shape = RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .aspectRatio(0.48f)    // ~portrait phone ratio
+                .shadow(
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(36.dp),
+                    ambientColor = accentColor.copy(alpha = 0.2f),
+                    spotColor = accentColor.copy(alpha = 0.3f)
+                )
+                .clip(RoundedCornerShape(36.dp))
+                .border(
+                    width = 2.5.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            accentColor.copy(alpha = 0.7f),   // accent glow at top
+                            PhoneBorderColor,                  // neutral border rest
+                            PhoneBorderColor
+                        )
+                    ),
+                    shape = RoundedCornerShape(36.dp)
+                )
+        ) {
+            // Screenshot fills the entire mockup — no padding gap around it
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(34.dp)),   // 2dp inset from border
+                contentScale = ContentScale.Crop
+            )
+
+            // Home indicator
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+                    .size(width = 44.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(PhoneHomebar)
+            )
+        }
+    }
+}
+
+/**
+ * A single feature row: accent icon in a pill on the left, title + one-line
+ * description on the right. Same layout pattern used in Google's Pixel setup
+ * app and Apple's iOS feature introduction screens.
+ *
+ * No animations — this is static content rendered once per composition.
+ */
+@Composable
+private fun FeatureRow(
+    feature: FeatureItem,
+    accentColor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FeatureRowBg, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Icon container
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(accentColor.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = feature.icon,
                 contentDescription = null,
-                tint = Color.White,
+                tint = accentColor,
                 modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.height(2.dp))
+        }
+
+        // Text
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = text,
+                text = feature.title,
                 color = Color.White,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 18.sp
+            )
+            Text(
+                text = feature.detail,
+                color = SubtextColor,
+                fontSize = 12.sp,
+                lineHeight = 17.sp
             )
         }
     }
