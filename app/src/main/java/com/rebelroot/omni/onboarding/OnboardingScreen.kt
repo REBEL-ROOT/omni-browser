@@ -21,12 +21,12 @@ package com.rebelroot.omni.onboarding
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,55 +47,40 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
-import androidx.compose.foundation.Image
 
-// Design tokens
-private val BgStart   = Color(0xFF0D1B2A)   // Deep navy — matches the app's dark theme
-private val BgMid     = Color(0xFF11263A)
-private val BgEnd     = Color(0xFF0A1628)
-private val CardBg    = Color(0xFF162032)
-private val SubtextColor = Color(0xFF94A3B8)
-private val PhoneBezel   = Color(0xFF1E293B)
-private val PhoneSpeaker = Color(0xFF334155)
+// ── Design tokens ──────────────────────────────────────────────────────────────
+private val BgGradientTop    = Color(0xFF0A1628)
+private val BgGradientBottom = Color(0xFF0F2137)
+private val SubtextColor     = Color(0xFF8A9BBD)
+private val FeatureRowBg     = Color(0x14FFFFFF)   // 8% white — subtle row background
+private val PhoneBorderColor = Color(0xFF2D4A6E)   // Muted blue-slate border
+private val PhoneHomebar     = Color(0x50FFFFFF)   // Semi-transparent white
 
 /**
- * Data model for a single onboarding slide.
+ * One onboarding slide.
  *
- * [callouts] are pointer labels drawn over the phone screenshot to highlight
- * specific UI elements — this replaces the old floating badge system which
- * had no visual connection to the actual screenshot content.
- *
- * Performance note: [imageRes] should point to a PNG/JPG in drawable/, not
- * drawable-nodpi/, so the system can select density-appropriate variants.
- * Current screenshots are ~150-190KB which is acceptable for onboarding.
+ * [features] are shown as a simple bullet list below the phone screenshot —
+ * the same pattern used by Google, Apple, and Samsung on their setup screens.
+ * No overlaid callouts, no floating animations, no clipping issues.
  */
 data class OnboardingPage(
     val imageRes: Int,
     val title: String,
     val accentColor: Color,
     val tagline: String,
-    val description: String,
-    val callouts: List<Callout>
+    val features: List<FeatureItem>
 )
 
-/**
- * A pointer callout drawn over the phone screenshot.
- * [xFraction] / [yFraction] are 0–1 positions within the phone screen area.
- * [icon] is a Material icon shown in a small pill next to the pointer dot.
- */
-data class Callout(
+data class FeatureItem(
     val icon: ImageVector,
-    val label: String,
-    val xFraction: Float,   // 0 = left edge, 1 = right edge of phone screen
-    val yFraction: Float,   // 0 = top, 1 = bottom
-    val accentColor: Color
+    val title: String,
+    val detail: String
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -107,57 +92,53 @@ fun OnboardingScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // 4 slides — reduced from 6. Merged "QR Tools" into "Quick Tools" slide
-    // and removed the separate "Web page to PDF" slide (now a callout on Quick Tools).
-    // Each slide uses a real screenshot from the app, not an AI illustration.
+    // 4 carefully chosen slides — each mapped to a real screenshot.
+    // Features listed below the screenshot describe what the user is looking at,
+    // like Google's Pixel setup flow or Apple's iOS intro screens.
     val pages = remember {
         listOf(
             OnboardingPage(
                 imageRes = R.drawable.ob_secure_browser,
-                title = "Your Browser,\nYour Rules",
+                title = "Browse Freely,\nBrowse Privately",
                 accentColor = Color(0xFF0A84FF),
-                tagline = "Privacy First — No Trackers, No Telemetry",
-                description = "Omni runs entirely on-device. Zero calls to tracking servers. Your history, tabs, and data never leave your phone.",
-                callouts = listOf(
-                    Callout(Icons.Rounded.Search, "Search", 0.5f, 0.30f, Color(0xFF0A84FF)),
-                    Callout(Icons.Rounded.VisibilityOff, "Incognito", 0.22f, 0.55f, Color(0xFF5E5CE6)),
-                    Callout(Icons.Rounded.Newspaper, "Discover", 0.5f, 0.75f, Color(0xFF30D158))
+                tagline = "Zero Trackers · Fully On-Device",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.Search,          "Smart Address Bar",    "Search or enter any URL — voice and camera search built in"),
+                    FeatureItem(Icons.Rounded.Newspaper,       "Discover Feed",        "Trending news by topic, refreshed without any account needed"),
+                    FeatureItem(Icons.Rounded.VisibilityOff,   "Incognito Mode",       "No history, no cookies, no trace — one tap from home screen")
                 )
             ),
             OnboardingPage(
                 imageRes = R.drawable.ob_quick_tools,
-                title = "Powerful\nQuick Tools",
+                title = "12 Tools,\nOne Browser",
                 accentColor = Color(0xFF5E5CE6),
-                tagline = "12 Built-in Tools — One Tap Away",
-                description = "QR Scanner, PDF Export, Page Translator, DOM Inspector, Auto-Scroll, Dev Console and more — all without leaving the browser.",
-                callouts = listOf(
-                    Callout(Icons.Rounded.QrCodeScanner, "QR Scan", 0.22f, 0.42f, Color(0xFF00D2C4)),
-                    Callout(Icons.Rounded.Description, "Save PDF", 0.22f, 0.60f, Color(0xFF30D158)),
-                    Callout(Icons.Rounded.Code, "Dev Tools", 0.78f, 0.78f, Color(0xFF5E5CE6))
+                tagline = "Everything You Need · No Extra Apps",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.QrCodeScanner,   "QR Scanner",           "Scan QR codes visible on any webpage instantly"),
+                    FeatureItem(Icons.Rounded.Description,     "Save as PDF",          "Export any article as a clean, readable PDF offline"),
+                    FeatureItem(Icons.Rounded.Code,            "Developer Tools",      "Inspect HTML, inject CSS/JS, and view console logs live")
                 )
             ),
             OnboardingPage(
                 imageRes = R.drawable.ob_extensions_vault,
-                title = "Extensions\n& Safe Vault",
+                title = "Real Extensions,\nReal Protection",
                 accentColor = Color(0xFFFF3B5C),
-                tagline = "Real Firefox Extensions + Biometric Locker",
-                description = "Install uBlock Origin and other Firefox desktop extensions. Lock sensitive files behind fingerprint-encrypted vault storage.",
-                callouts = listOf(
-                    Callout(Icons.Rounded.Extension, "uBlock", 0.25f, 0.38f, Color(0xFFFF3B5C)),
-                    Callout(Icons.Rounded.Lock, "Vault", 0.75f, 0.62f, Color(0xFFFF9F0A)),
-                    Callout(Icons.Rounded.Shield, "AI Block", 0.25f, 0.72f, Color(0xFF0A84FF))
+                tagline = "Firefox Extensions · Biometric Vault",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.Extension,       "uBlock Origin",        "Full Firefox desktop ad blocker — runs natively on GeckoView"),
+                    FeatureItem(Icons.Rounded.Shield,          "AI Blocker",           "Hides AI overview summaries from Google and Bing search"),
+                    FeatureItem(Icons.Rounded.Lock,            "Safe Locker",          "Fingerprint-encrypted vault for images, docs, and videos")
                 )
             ),
             OnboardingPage(
                 imageRes = R.drawable.ob_media_player,
-                title = "Browser +\nMedia Hub",
+                title = "Browser Menu\n& Quick Access",
                 accentColor = Color(0xFFFF6D00),
-                tagline = "Native Player, Downloads & Burn Mode",
-                description = "Stream and download media with gesture controls and background playback. Burn mode clears all session data instantly with one tap.",
-                callouts = listOf(
-                    Callout(Icons.Rounded.BookmarkBorder, "Bookmarks", 0.5f, 0.28f, Color(0xFFFF6D00)),
-                    Callout(Icons.Rounded.PlayCircle, "Media", 0.75f, 0.50f, Color(0xFFFF3B5C)),
-                    Callout(Icons.Rounded.LocalFireDepartment, "Burn", 0.25f, 0.65f, Color(0xFFFF453A))
+                tagline = "Bookmarks · History · Downloads · Burn",
+                features = listOf(
+                    FeatureItem(Icons.Rounded.BookmarkBorder,  "Bookmarks & History",  "Saved sites and full browsing history always one tap away"),
+                    FeatureItem(Icons.Rounded.PlayCircle,      "Media Downloader",     "Grab videos, audio, and HLS streams from any page"),
+                    FeatureItem(Icons.Rounded.LocalFireDepartment, "Burn Mode",        "Instantly wipes all tabs, history, and session cookies")
                 )
             )
         )
@@ -165,17 +146,16 @@ fun OnboardingScreen(
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val isLastPage = pagerState.currentPage == pages.size - 1
+    val currentPage = pages[pagerState.currentPage]
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(BgStart, BgMid, BgEnd))
-            )
+            .background(Brush.verticalGradient(listOf(BgGradientTop, BgGradientBottom)))
             .windowInsetsPadding(WindowInsets.systemBars)
     ) {
 
-        // Skip button — top right, hidden on last page
+        // ── Skip ────────────────────────────────────────────────────────────────
         if (!isLastPage) {
             Text(
                 text = "Skip",
@@ -194,11 +174,11 @@ fun OnboardingScreen(
             )
         }
 
-        // Pager
+        // ── Pager ────────────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 56.dp, bottom = 96.dp),
+                .padding(top = 52.dp, bottom = 88.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             HorizontalPager(
@@ -206,95 +186,92 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                // No horizontal padding — phone frame fills the width naturally
-                beyondViewportPageCount = 1   // Pre-load adjacent page to reduce jank on swipe
+                beyondViewportPageCount = 1   // Pre-load neighbour to reduce first-swipe jank
             ) { page ->
                 val pageData = pages[page]
 
-                // Lightweight scale+alpha only — rotationY was removed because the
-                // 3D perspective transform forces a GPU layer on every frame during
-                // the swipe gesture and was the primary source of frame drops.
+                // Lightweight page transition: scale + alpha only.
+                // rotationY (3D book-flip) was removed — it forces a GPU compositing
+                // layer on every frame during a drag gesture, causing consistent jank.
                 val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                val scale = 1f - (pageOffset.absoluteValue * 0.08f).coerceIn(0f, 0.08f)
-                val alpha = 1f - (pageOffset.absoluteValue * 0.5f).coerceIn(0f, 0.5f)
+                val scale = 1f - (pageOffset.absoluteValue * 0.06f).coerceIn(0f, 0.06f)
+                val alpha = 1f - (pageOffset.absoluteValue * 0.4f).coerceIn(0f, 0.4f)
 
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(horizontal = 24.dp)
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
                             this.alpha = alpha
-                            // renderEffect / layer hint: tell RenderThread this column
-                            // will animate, so it stays on its own hardware layer.
-                            // This avoids re-rasterising the static screenshot on every frame.
                         },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Top
                 ) {
-                    // Phone frame with real screenshot + callout pointers
-                    // Only pass isCurrentPage so infinite animations only run on the visible slide.
-                    PhoneFrameWithScreenshot(
+
+                    // ── Phone mockup ─────────────────────────────────────────────
+                    // The frame is a border-only rounded rectangle — no filled
+                    // background — so it never bleeds into the page background colour.
+                    PhoneMockup(
                         imageRes = pageData.imageRes,
-                        callouts = pageData.callouts,
                         accentColor = pageData.accentColor,
-                        isCurrentPage = page == pagerState.currentPage,
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 32.dp)
+                            .wrapContentWidth()
                     )
 
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(20.dp))
 
-                    // Text section
-                    Column(
+                    // ── Title ───────────────────────────────────────────────────
+                    Text(
+                        text = pageData.title,
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 30.sp
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    // ── Tagline chip ────────────────────────────────────────────
+                    Text(
+                        text = pageData.tagline,
+                        color = pageData.accentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .background(
+                                pageData.accentColor.copy(alpha = 0.15f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // ── Feature list ────────────────────────────────────────────
+                    // Simple rows with icon + title + one-line description.
+                    // This is the pattern used by Google (Pixel setup), Apple (iOS intro),
+                    // and Samsung (Galaxy setup) — clean, readable, no positioning risk.
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = pageData.title,
-                            color = Color.White,
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 32.sp
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        // Accent tagline pill
-                        Text(
-                            text = pageData.tagline,
-                            color = pageData.accentColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .background(
-                                    pageData.accentColor.copy(alpha = 0.15f),
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .padding(horizontal = 12.dp, vertical = 5.dp)
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Text(
-                            text = pageData.description,
-                            color = SubtextColor,
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 22.sp
-                        )
+                        pageData.features.forEach { feature ->
+                            FeatureRow(
+                                feature = feature,
+                                accentColor = pageData.accentColor
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Bottom nav — dots + button
+        // ── Bottom nav ───────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -311,26 +288,26 @@ fun OnboardingScreen(
                 repeat(pages.size) { index ->
                     val isActive = pagerState.currentPage == index
                     val width by animateDpAsState(
-                        targetValue = if (isActive) 24.dp else 8.dp,
+                        targetValue = if (isActive) 24.dp else 7.dp,
                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                         label = "dot_w_$index"
                     )
                     val color by animateColorAsState(
                         targetValue = if (isActive) pages[pagerState.currentPage].accentColor
-                                      else Color.White.copy(alpha = 0.2f),
+                                      else Color.White.copy(alpha = 0.25f),
                         animationSpec = tween(250),
                         label = "dot_c_$index"
                     )
                     Box(
                         modifier = Modifier
-                            .size(width = width, height = 8.dp)
+                            .size(width = width, height = 7.dp)
                             .clip(CircleShape)
                             .background(color)
                     )
                 }
             }
 
-            // Next / Get Started button
+            // Next / Get Started — colour tracks the current slide accent
             Button(
                 onClick = {
                     if (isLastPage) {
@@ -338,19 +315,13 @@ fun OnboardingScreen(
                         onFinish()
                     } else {
                         coroutineScope.launch {
-                            pagerState.animateScrollToPage(
-                                pagerState.currentPage + 1,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                )
-                            )
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
                         }
                     }
                 },
-                modifier = Modifier.height(52.dp),
+                modifier = Modifier.height(50.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = pages[pagerState.currentPage].accentColor,
+                    containerColor = currentPage.accentColor,
                     contentColor = Color.White
                 ),
                 shape = CircleShape,
@@ -378,201 +349,126 @@ fun OnboardingScreen(
 }
 
 /**
- * Renders a phone-frame bezel containing the real app screenshot, overlaid with
- * animated callout pointers that highlight key UI elements on the screenshot.
+ * A minimal phone mockup that wraps a real app screenshot.
  *
- * Performance decisions:
- *  - [isCurrentPage]: infinite pulse animations on callout dots only run when this
- *    page is the active one. Running them on background pages wastes Choreographer
- *    frames and was a measured source of jank.
- *  - No `shadow()` inside the pager content — hardware-layer composites don't
- *    interact well with shadow blur during the swipe gesture.
- *  - The phone frame shape is drawn with simple Canvas-level modifiers, not a
- *    separate Image drawable, to avoid an extra bitmap decode.
+ * Design decisions:
+ *  - The "frame" is a border only (no [Modifier.background] fill) so it never
+ *    creates an opaque rectangle behind itself that overflows the page gradient.
+ *  - The screenshot is clipped to [RoundedCornerShape] matching the inner radius
+ *    of the border, producing a seamless screen-inside-bezel look.
+ *  - A thin accent-coloured glow line at the top gives each slide a unique visual
+ *    identity without adding heavy shadow layers that would slow compositing.
+ *  - The home-indicator bar at the bottom is the only decoration — no speaker
+ *    cutout, camera notch, or status-bar overlay. These added layout complexity
+ *    and weren't visible at the mockup size.
  */
 @Composable
-private fun PhoneFrameWithScreenshot(
+private fun PhoneMockup(
     imageRes: Int,
-    callouts: List<Callout>,
     accentColor: Color,
-    isCurrentPage: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Pulse animation for callout dots — only active on the current page
-    val infiniteTransition = rememberInfiniteTransition(label = "callout_pulse")
-    val pulseScale by if (isCurrentPage) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.85f,
-            targetValue = 1.15f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(900, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulse"
-        )
-    } else {
-        remember { mutableStateOf(1f) }
-    }
-
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        // Phone outer bezel
         Box(
             modifier = Modifier
-                .fillMaxHeight(0.88f)
-                .aspectRatio(0.46f)
+                .fillMaxHeight()
+                .aspectRatio(0.48f)    // ~portrait phone ratio
+                .shadow(
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(36.dp),
+                    ambientColor = accentColor.copy(alpha = 0.2f),
+                    spotColor = accentColor.copy(alpha = 0.3f)
+                )
                 .clip(RoundedCornerShape(36.dp))
-                .background(PhoneBezel)
-                .border(2.dp, PhoneSpeaker, RoundedCornerShape(36.dp)),
-            contentAlignment = Alignment.Center
+                .border(
+                    width = 2.5.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            accentColor.copy(alpha = 0.7f),   // accent glow at top
+                            PhoneBorderColor,                  // neutral border rest
+                            PhoneBorderColor
+                        )
+                    ),
+                    shape = RoundedCornerShape(36.dp)
+                )
         ) {
-            // Speaker notch
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 12.dp)
-                    .size(width = 48.dp, height = 6.dp)
-                    .clip(CircleShape)
-                    .background(PhoneSpeaker)
-            )
-
-            // Screen area with the real screenshot
-            Box(
+            // Screenshot fills the entire mockup — no padding gap around it
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(
-                        top = 28.dp,
-                        bottom = 10.dp,
-                        start = 6.dp,
-                        end = 6.dp
-                    )
-                    .clip(RoundedCornerShape(28.dp))
-            ) {
-                Image(
-                    painter = painterResource(id = imageRes),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                    .clip(RoundedCornerShape(34.dp)),   // 2dp inset from border
+                contentScale = ContentScale.Crop
+            )
 
-                // Callout overlay — drawn using BoxWithConstraints so we can
-                // convert xFraction/yFraction to actual pixel offsets.
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val w = maxWidth
-                    val h = maxHeight
-                    callouts.forEach { callout ->
-                        CalloutPointer(
-                            callout = callout,
-                            x = w * callout.xFraction,
-                            y = h * callout.yFraction,
-                            pulseScale = pulseScale,
-                            modifier = Modifier.align(Alignment.TopStart)
-                        )
-                    }
-                }
-            }
-
-            // Home indicator bar at bottom of phone
+            // Home indicator
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 4.dp)
-                    .size(width = 40.dp, height = 4.dp)
+                    .padding(bottom = 8.dp)
+                    .size(width = 44.dp, height = 4.dp)
                     .clip(CircleShape)
-                    .background(PhoneSpeaker)
+                    .background(PhoneHomebar)
             )
         }
     }
 }
 
 /**
- * A single callout pointer: a pulsing dot at [x,y] with an icon+label pill
- * floating to the side. The pill side (left or right) is chosen automatically
- * based on whether the point is in the left or right half of the screen,
- * so labels never clip off the edge.
+ * A single feature row: accent icon in a pill on the left, title + one-line
+ * description on the right. Same layout pattern used in Google's Pixel setup
+ * app and Apple's iOS feature introduction screens.
+ *
+ * No animations — this is static content rendered once per composition.
  */
 @Composable
-private fun CalloutPointer(
-    callout: Callout,
-    x: Dp,
-    y: Dp,
-    pulseScale: Float,
-    modifier: Modifier = Modifier
+private fun FeatureRow(
+    feature: FeatureItem,
+    accentColor: Color
 ) {
-    val pillOnLeft = callout.xFraction > 0.5f   // If point is on right, pill goes left
-
-    Box(modifier = modifier.offset(x = x, y = y)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.offset(
-                x = if (pillOnLeft) (-120).dp else 6.dp,
-                y = (-12).dp
-            )
-        ) {
-            if (!pillOnLeft) {
-                // Dot on left, pill on right
-                PulseDot(callout.accentColor, pulseScale)
-                CalloutPill(callout)
-            } else {
-                // Pill on left, dot on right
-                CalloutPill(callout)
-                PulseDot(callout.accentColor, pulseScale)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PulseDot(color: Color, pulseScale: Float) {
-    Box(contentAlignment = Alignment.Center) {
-        // Outer pulse ring
-        Box(
-            modifier = Modifier
-                .size((14 * pulseScale).dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.3f))
-        )
-        // Inner solid dot
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-    }
-}
-
-@Composable
-private fun CalloutPill(callout: Callout) {
     Row(
         modifier = Modifier
-            .background(
-                Color(0xCC0D1B2A),   // Dark translucent — readable over any screenshot
-                RoundedCornerShape(20.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = callout.accentColor.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .fillMaxWidth()
+            .background(FeatureRowBg, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(
-            imageVector = callout.icon,
-            contentDescription = null,
-            tint = callout.accentColor,
-            modifier = Modifier.size(12.dp)
-        )
-        Text(
-            text = callout.label,
-            color = Color.White,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        // Icon container
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(accentColor.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = feature.icon,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // Text
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = feature.title,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 18.sp
+            )
+            Text(
+                text = feature.detail,
+                color = SubtextColor,
+                fontSize = 12.sp,
+                lineHeight = 17.sp
+            )
+        }
     }
 }
