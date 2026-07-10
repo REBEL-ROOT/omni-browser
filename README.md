@@ -28,9 +28,9 @@
 |:---:|:---:|:---:|
 | <img src="images/screenshots/home.png" width="200" alt="Home Screen" /> | <img src="images/screenshots/quick_tools.png" width="200" alt="Quick Tools" /> | <img src="images/screenshots/browser_menu.png" width="200" alt="Browser Menu" /> |
 
-| Extensions | Settings |
-|:---:|:---:|
-| <img src="images/screenshots/extensions.png" width="200" alt="Extensions" /> | <img src="images/screenshots/settings.png" width="200" alt="Settings" /> |
+| Extensions | Settings | Safe Locker |
+|:---:|:---:|:---:|
+| <img src="images/screenshots/extensions.png" width="200" alt="Extensions" /> | <img src="images/screenshots/settings.png" width="200" alt="Settings" /> | <img src="images/screenshots/safe_locker.png" width="200" alt="Safe Locker" /> |
 
 > 🎬 **Demo** — Place a screen recording at `images/demo.gif` and uncomment below:
 >
