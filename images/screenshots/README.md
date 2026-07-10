@@ -1,16 +1,15 @@
-# 📸 Screenshots
+# 📸 How to Add Your Screenshots
 
-Place your app screenshots here with these exact filenames:
+Save your real app screenshots here with these exact filenames:
 
-| Filename | Screen |
+| Filename | Screen shown |
 |---|---|
-| `browser.png` | Main browser screen |
-| `incognito.png` | Private / Incognito mode |
-| `extensions.png` | Extensions manager panel |
-| `media_player.png` | ExoPlayer media player |
-| `settings.png` | Settings screen |
-| `quick_tools.png` | Quick tools panel |
+| `home.png` | Home screen with logo, search bar, quick links, Discover news |
+| `quick_tools.png` | Quick Tools panel (QR, Translator, Save PDF, etc.) |
+| `browser_menu.png` | Browser side menu (Bookmarks, History, Burn, Extensions) |
+| `extensions.png` | Extensions manager (uBlock, Copy, Grabber, AI Blocker) |
+| `settings.png` | Settings screen (Dark Mode, Accent Color, etc.) |
 
-And place your screen recording GIF as `../demo.gif` (one level up in `images/`).
+Place your GIF screen recording one level up as `../demo.gif` (i.e. `images/demo.gif`).
 
-**Recommended screenshot size:** 1080 × 2400 px (portrait) or 1440 × 3200 px for high-res devices.
+**Tip:** Use PNG format, portrait orientation, any resolution — GitHub will scale them.
