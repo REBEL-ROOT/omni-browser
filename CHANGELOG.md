@@ -67,3 +67,40 @@ All notable changes to the Omni Browser project will be documented in this file.
 - **Incognito Relocation**: Relocated private browsing toggles to tools dropdown with race-prevention switch click listeners.
 - **Session Open Crash**: Refactored GeckoSession binding to use Compose update block with safe `!session.isOpen` check.
 - **Search Contrast**: Fixed search input text color matching.
+
+---
+
+## [1.2.2] - 2026-07-10
+
+### Fixed
+- **WebExtensions not working on pages**: Resolved a critical bug where all browser extensions (uBlock, Universal Copy, AI Blocker, Media Grabber) were silently inactive due to missing `enable()` call after installation.
+- **Extensions disabled in Incognito mode**: All bundled and user-installed extensions are now explicitly allowed in private browsing sessions via `setAllowedInPrivateBrowsing(true)`.
+- **Extension API namespace**: Fixed `chrome.webRequest` namespace compatibility issue — now uses a cross-engine fallback (`const api = typeof browser !== 'undefined' ? browser : chrome`).
+- **adblocker engine coverage**: Expanded blocked domains from 14 to 70+ major advertising, analytics, and tracker networks.
+
+### Changed
+- Visual theme polish: updated color tokens, rounded shape sizes, and full Material 3 typography scale.
+
+---
+
+## [1.2.1] - 2026-07-06
+
+### Fixed
+- **Edge-to-edge display**: Replaced deprecated `setDecorFitsSystemWindows(window, false)` and manual bar coloring with the modern `enableEdgeToEdge()` + `SystemBarStyle.auto()` API.
+- **Large screen compatibility**: Declared `android:resizeableActivity="true"` to support tablets, foldables, and split-screen mode.
+
+---
+
+## [1.2.0] - 2026-07-05
+
+### Added
+- **Speak Aloud**: Added a "Speak Aloud" option to the text selection context menu using Android TextToSpeech.
+- **Select All fix**: Fixed "Select All" text selection using GeckoSession native action with JS fallback.
+- **Incognito Tab Groups**: Separated Normal and Incognito tabs into distinct groups in the tab switcher.
+- **Redesigned Onboarding**: Replaced flat onboarding illustrations with circular-cropped, cream-themed 3D artwork.
+- **Light Mode Logo**: Added a high-contrast dark-metallic version of the logo for light theme.
+
+### Changed
+- Language card selection: Fixed square outline bug by switching from `Modifier.clickable` to native `Surface(onClick = ...)`.
+- License: Replaced MIT with **GNU General Public License v3 (GPLv3)**.
+- All Kotlin source files now include the standard GPLv3 copyright header.
