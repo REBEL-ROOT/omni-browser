@@ -18,62 +18,29 @@
 
 package com.rebelroot.omni.browser.extensions
 
-import android.util.Log
 import org.mozilla.geckoview.GeckoRuntime
-import org.mozilla.geckoview.WebExtension
-import org.mozilla.geckoview.WebExtensionController
 
-class UniversalCopyManager(private val runtime: GeckoRuntime) {
-
-    companion object {
-        private const val TAG = "UniversalCopyManager"
-        private const val EXTENSION_ID = "omni-universal-copy@omnibrowser.app"
-    }
-
-    private var extension: WebExtension? = null
-
-    fun installAndSync(enabled: Boolean, onComplete: (() -> Unit)? = null) {
-        runtime.webExtensionController.ensureBuiltIn(
-            "resource://android/assets/web_extensions/universal_copy/",
-            EXTENSION_ID
-        ).accept(
-            { ext ->
-                extension = ext
-                if (ext != null) {
-                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
-                }
-                Log.i(TAG, "Universal Copy Extension installed.")
-                setEnabled(enabled, onComplete)
-            },
-
-            { error ->
-                Log.e(TAG, "Failed to load Universal Copy Extension", error)
-                onComplete?.invoke()
-            }
-        )
-    }
-
-    fun setEnabled(enabled: Boolean, onComplete: (() -> Unit)? = null) {
-        val ext = extension
-        if (ext == null) {
-            onComplete?.invoke()
-            return
-        }
-        val action = if (enabled) {
-            Log.d(TAG, "Enabling Universal Copy...")
-            runtime.webExtensionController.enable(ext, WebExtensionController.EnableSource.APP)
-        } else {
-            Log.d(TAG, "Disabling Universal Copy...")
-            runtime.webExtensionController.disable(ext, WebExtensionController.EnableSource.APP)
-        }
-        action.accept(
-            {
-                onComplete?.invoke()
-            },
-            { error ->
-                Log.e(TAG, "Failed to enable/disable Universal Copy", error)
-                onComplete?.invoke()
-            }
-        )
-    }
-}
+/**
+ * Manages the Universal Copy built-in extension.
+ *
+ * Many sites (Medium, Quora, news paywalls) set `user-select: none` on their
+ * content or intercept clipboard events via JavaScript to prevent copying. This
+ * extension injects a content script that removes those restrictions on page load,
+ * restoring native text selection and clipboard behaviour for the user.
+ *
+ * Delegates all lifecycle management to [BuiltInExtensionManager].
+ *
+ * NOTE: This extension must be granted private-browsing access so it works on
+ * paywalled sites visited in incognito mode. [BuiltInExtensionManager] handles
+ * this via setAllowedInPrivateBrowsing(true) on install.
+ *
+ * FIXME: Some single-page apps re-apply the user-select restriction after route
+ *        changes via their framework's lifecycle hooks. The content script currently
+ *        only runs on initial page load — needs a MutationObserver to catch reruns.
+ */
+class UniversalCopyManager(runtime: GeckoRuntime) : BuiltInExtensionManager(
+    runtime = runtime,
+    assetPath = "web_extensions/universal_copy/",
+    extensionId = "omni-universal-copy@omnibrowser.app",
+    label = "Universal Copy"
+)

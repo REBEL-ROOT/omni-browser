@@ -656,7 +656,7 @@ class BrowserViewModel : ViewModel() {
             Log.i(TAG, "Handling external download response: ${response.uri}")
             val filename = parseFilenameFromContentDisposition(disposition)
                 ?: guessDownloadFilename(response.uri, contentType)
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            viewModelScope.launch(Dispatchers.Main) {
                 pendingGenericDownload = PendingGenericDownload(
                     url = response.uri,
                     filename = filename,
@@ -806,7 +806,7 @@ class BrowserViewModel : ViewModel() {
         val context = appContext ?: return
         val tabsSnapshot = tabs.toList()
         val currentActiveId = activeTabId
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_tabs.json")
             try {
                 val jsonArray = org.json.JSONArray()
@@ -829,7 +829,7 @@ class BrowserViewModel : ViewModel() {
 
 
     fun loadDevNotes(context: Context) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "dev_notes.json")
             if (file.exists()) {
                 try {
@@ -848,7 +848,7 @@ class BrowserViewModel : ViewModel() {
                             )
                         )
                     }
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         devNotes.clear()
                         devNotes.addAll(loadedList)
                     }
@@ -862,7 +862,7 @@ class BrowserViewModel : ViewModel() {
     fun saveDevNotes() {
         val context = appContext ?: return
         val listSnapshot = devNotes.toList()
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "dev_notes.json")
             try {
                 val jsonArray = org.json.JSONArray()
@@ -1456,7 +1456,7 @@ class BrowserViewModel : ViewModel() {
                     (lowerUri.startsWith("intent:") && (lowerUri.contains("calendar") || lowerUri.contains(".ics") || lowerUri.contains("webcal")))
                 ) {
                     Log.w(TAG, "🚫 Intercepted and blocked potential spam calendar request: $uri")
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    viewModelScope.launch(Dispatchers.Main) {
                         Toast.makeText(context, "Blocked calendar spam attempt", Toast.LENGTH_SHORT).show()
                     }
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
@@ -1466,7 +1466,7 @@ class BrowserViewModel : ViewModel() {
                 val isYouTube = lowerUri.contains("youtube.com") || lowerUri.contains("youtu.be")
                 if (isNativePlayerEnabled && isDirectVideoUrl(uri) && !isYouTube) {
                     Log.i(TAG, "🎬 Intercepted direct video load request: $uri. Opening in native player...")
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    viewModelScope.launch(Dispatchers.Main) {
                         val callback = onPlayVideoRequestReceived
                         if (callback != null) {
                             callback.invoke(uri, tab.url)
@@ -1480,7 +1480,7 @@ class BrowserViewModel : ViewModel() {
                 // 2a. Intercept generic file downloads — show a dialog so user picks local vs. vault
                 if (tab.id == activeTabId && isGenericDownloadUrl(uri) && !isYouTube) {
                     Log.i(TAG, "📥 Intercepted file download URL: $uri")
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    viewModelScope.launch(Dispatchers.Main) {
                         val filename = guessDownloadFilename(uri, null)
                         pendingGenericDownload = PendingGenericDownload(
                             url = uri,
@@ -1519,12 +1519,12 @@ class BrowserViewModel : ViewModel() {
                             
                             if (isCalendarSpam) {
                                 Log.w(TAG, "🚫 Blocked calendar/adware intent: package=$intentPackage, data=${intent.dataString}")
-                                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                viewModelScope.launch(Dispatchers.Main) {
                                     Toast.makeText(context, "Blocked calendar spam intent", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
                                 Log.i(TAG, "Launching external app intent safely: package=$intentPackage")
-                                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                viewModelScope.launch(Dispatchers.Main) {
                                     try {
                                         intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
                                         intent.setComponent(null)
@@ -1578,7 +1578,7 @@ class BrowserViewModel : ViewModel() {
 
                     // Handle other custom protocols like upi:, mailto:, tel:, sms:, geo:, whatsapp:, tg:
                     Log.i(TAG, "Handling custom protocol URI: $uri")
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    viewModelScope.launch(Dispatchers.Main) {
                         try {
                             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))
                             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1705,7 +1705,7 @@ class BrowserViewModel : ViewModel() {
 
     // --- Persistent Browser History ---
     private fun loadHistory(context: Context) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_history.json")
             if (!file.exists()) return@launch
             try {
@@ -1723,7 +1723,7 @@ class BrowserViewModel : ViewModel() {
                     )
                 }
                 temp.sortByDescending { it.timestamp }
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     historyList.clear()
                     historyList.addAll(temp)
                 }
@@ -1735,7 +1735,7 @@ class BrowserViewModel : ViewModel() {
 
     private fun saveHistory(context: Context) {
         val historySnapshot = historyList.toList()
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_history.json")
             try {
                 val jsonArray = JSONArray()
@@ -1914,7 +1914,7 @@ class BrowserViewModel : ViewModel() {
 
             // Initialize dependency engines
             ffmpegLoader = FFmpegLoader(appCtx)
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO) {
                 ffmpegLoader.downloadAndInstall()
             }
             ffmpegBridge = FFmpegBridge(ffmpegLoader)
@@ -2148,7 +2148,7 @@ class BrowserViewModel : ViewModel() {
                         val isYouTube = pageUrl.lowercase().contains("youtube.com") || pageUrl.lowercase().contains("youtu.be") ||
                                         (videoUrl != null && (videoUrl.lowercase().contains("youtube.com") || videoUrl.lowercase().contains("youtu.be")))
                         if (videoUrl != null && isNativePlayerEnabled && !isYouTube) {
-                            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            viewModelScope.launch(Dispatchers.Main) {
                                 Log.i(TAG, "🎬 Native player takeover starting for: $videoUrl")
                                 if (onPlayVideoRequestReceived == null) {
                                     Log.e(TAG, "onPlayVideoRequestReceived is NULL! Cannot navigate to VideoPlayerScreen.")
@@ -2165,7 +2165,7 @@ class BrowserViewModel : ViewModel() {
                         } else {
                             (message as? Map<*, *>)?.get("isPlaying") as? Boolean ?: false
                         }
-                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        viewModelScope.launch(Dispatchers.Main) {
                             isVideoPlayingInPage = playing
                         }
                     } else if (type == "CONSOLE_LOG") {
@@ -2181,7 +2181,7 @@ class BrowserViewModel : ViewModel() {
                         }) ?: ""
                         Log.d("WebConsole", "[$level] $msg")
                         // Run on main thread because we are updating a Compose MutableStateList
-                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        viewModelScope.launch(Dispatchers.Main) {
                             if (level == "READER_TTS_CONTENT") {
                                 speakText(msg)
                             } else {
@@ -2582,7 +2582,9 @@ class BrowserViewModel : ViewModel() {
     fun savePdfOverviewSeen(context: Context, seen: Boolean) {
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
-                preferences[PDF_EXPORT_THEME_KEY] = if (seen) "default" else "" // side-effect if needed, or just standard key
+                // Reset the PDF export theme to "default" when the overview is dismissed —
+                // the overview picker sets a custom theme, so dismissing it should revert.
+                preferences[PDF_EXPORT_THEME_KEY] = if (seen) "default" else ""
                 preferences[PDF_OVERVIEW_SEEN_KEY] = seen
             }
             hasSeenPdfOverview = seen
@@ -2832,7 +2834,7 @@ class BrowserViewModel : ViewModel() {
         // Intercept direct video playback if native player is enabled
         if (isNativePlayerEnabled && isDirectVideoUrl(formattedUrl)) {
             Log.i(TAG, "🎬 Direct video URL loaded: $formattedUrl. Launching native player...")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            viewModelScope.launch(Dispatchers.Main) {
                 val callback = onPlayVideoRequestReceived
                 if (callback != null) {
                     callback.invoke(formattedUrl, formattedUrl)
@@ -2905,7 +2907,7 @@ class BrowserViewModel : ViewModel() {
             canGoBack = false
         }
         // Then actually load it in the session so back history is cleared
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+        viewModelScope.launch(Dispatchers.Main) {
             try { geckoSession.loadUri("about:blank") } catch (e: Exception) {
                 Log.w(TAG, "navigateHomeDirectly geckoSession.loadUri failed: ${e.message}")
             }
@@ -3304,7 +3306,7 @@ class BrowserViewModel : ViewModel() {
 
     
     private fun loadBookmarks(context: Context) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_bookmarks.json")
             if (!file.exists()) return@launch
             try {
@@ -3318,7 +3320,7 @@ class BrowserViewModel : ViewModel() {
                         timestamp = obj.optLong("timestamp", System.currentTimeMillis())
                     ))
                 }
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     bookmarksList.clear()
                     bookmarksList.addAll(temp)
                 }
@@ -3330,7 +3332,7 @@ class BrowserViewModel : ViewModel() {
     
     private fun saveBookmarks(context: Context) {
         val bookmarksSnapshot = bookmarksList.toList()
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_bookmarks.json")
             try {
                 val jsonArray = JSONArray()
@@ -3376,7 +3378,7 @@ class BrowserViewModel : ViewModel() {
     val shortcutsList = mutableStateListOf<HomeShortcut>()
     
     private fun loadShortcuts(context: Context) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_shortcuts.json")
             if (!file.exists()) {
                 val defaultList = listOf(
@@ -3390,7 +3392,7 @@ class BrowserViewModel : ViewModel() {
                     HomeShortcut("bookmarks", "Bookmarks", "bookmarks", isFeature = true),
                     HomeShortcut("incognito", "Incognito", "incognito", isFeature = true)
                 )
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     shortcutsList.clear()
                     shortcutsList.addAll(defaultList)
                 }
@@ -3423,7 +3425,7 @@ class BrowserViewModel : ViewModel() {
                         isPermanent = obj.optBoolean("isPermanent", false)
                     ))
                 }
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     shortcutsList.clear()
                     shortcutsList.addAll(temp)
                 }
@@ -3435,7 +3437,7 @@ class BrowserViewModel : ViewModel() {
     
     fun saveShortcuts(context: Context) {
         val shortcutsSnapshot = shortcutsList.toList()
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "browser_shortcuts.json")
             try {
                 val jsonArray = JSONArray()
@@ -3950,7 +3952,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun checkAppUpdates(context: Context, onResult: (UpdateCheckResult) -> Unit) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val url = java.net.URL("https://raw.githubusercontent.com/rebelroot/omni-browser/main/version.json")
                 val connection = url.openConnection() as java.net.HttpURLConnection
@@ -3975,22 +3977,22 @@ class BrowserViewModel : ViewModel() {
                     }
 
                     if (serverVersionCode > currentVersionCode) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             onResult(UpdateCheckResult.NewUpdateAvailable(serverVersionName, updateUrl))
                         }
                     } else {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             onResult(UpdateCheckResult.NoUpdateAvailable)
                         }
                     }
                 } else {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         onResult(UpdateCheckResult.Error("Server returned HTTP ${connection.responseCode}"))
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to check for updates", e)
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     onResult(UpdateCheckResult.Error(e.localizedMessage ?: "Connection error"))
                 }
             }
@@ -4072,7 +4074,7 @@ class BrowserViewModel : ViewModel() {
         message: String,
         onResult: (Boolean, String?) -> Unit
     ) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val url = java.net.URL("https://rebelroot-backend.parasdevprojects.workers.dev/api/feedback")
                 val conn = url.openConnection() as java.net.HttpURLConnection
@@ -4097,17 +4099,17 @@ class BrowserViewModel : ViewModel() {
                 
                 val code = conn.responseCode
                 if (code in 200..299) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         onResult(true, null)
                     }
                 } else {
                     val errorMsg = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP Error $code"
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         onResult(false, errorMsg)
                     }
                 }
             } catch (e: Exception) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     onResult(false, e.localizedMessage)
                 }
             }
