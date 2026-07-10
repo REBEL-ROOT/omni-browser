@@ -303,7 +303,7 @@ git push origin feature/your-feature
 
 ---
 
-## 📄 License
+## 📄 License & Trademark
 
 This project is licensed under the **GNU General Public License v3 (GPLv3)**.
 
@@ -312,6 +312,11 @@ Omni Browser — Copyright (C) 2026 RebelRoot Ltd
 This is free software: you can redistribute it and/or modify it
 under the terms of the GPLv3. See LICENSE for details.
 ```
+
+> [!IMPORTANT]
+> **Forking & Redistribution Terms:**
+> Pursuant to GPLv3 Section 7(b), any derivative works, forks, or hosted versions of this software **must retain original author attribution** and link back to this repository. You **must also rebrand** the application (use your own logo and name) to respect the **[Trademark & Attribution Policy](TRADEMARK.md)**.
+
 
 ---
 
