@@ -1,6 +1,4 @@
-# 📸 How to Add Your Screenshots
 
-Save your real app screenshots here with these exact filenames:
 
 | Filename | Screen shown |
 |---|---|
@@ -10,6 +8,3 @@ Save your real app screenshots here with these exact filenames:
 | `extensions.png` | Extensions manager (uBlock, Copy, Grabber, AI Blocker) |
 | `settings.png` | Settings screen (Dark Mode, Accent Color, etc.) |
 
-Place your GIF screen recording one level up as `../demo.gif` (i.e. `images/demo.gif`).
-
-**Tip:** Use PNG format, portrait orientation, any resolution — GitHub will scale them.
