@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp")
@@ -45,15 +47,25 @@ android {
         )
     }
 
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        val stream = localPropertiesFile.inputStream()
+        try {
+            localProperties.load(stream)
+        } finally {
+            stream.close()
+        }
+    }
+
     signingConfigs {
         // Only configure release signing if the keystore exists locally.
-        // On CI (GitHub Actions), unsigned APKs are built instead.
         if (file("release.keystore").exists()) {
             create("release") {
                 storeFile = file("release.keystore")
-                storePassword = "omnibrowserrelease"
-                keyAlias = "omni-release"
-                keyPassword = "omnibrowserrelease"
+                storePassword = localProperties.getProperty("keystore.password") ?: System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = localProperties.getProperty("keystore.alias") ?: System.getenv("KEYSTORE_ALIAS") ?: ""
+                keyPassword = localProperties.getProperty("keystore.alias.password") ?: System.getenv("KEYSTORE_ALIAS_PASSWORD") ?: ""
             }
         }
     }
