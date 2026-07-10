@@ -46,11 +46,15 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("release.keystore")
-            storePassword = ""
-            keyAlias = "omni-release"
-            keyPassword = ""
+        // Only configure release signing if the keystore exists locally.
+        // On CI (GitHub Actions), unsigned APKs are built instead.
+        if (file("release.keystore").exists()) {
+            create("release") {
+                storeFile = file("release.keystore")
+                storePassword = ""
+                keyAlias = "omni-release"
+                keyPassword = ""
+            }
         }
     }
 
@@ -62,14 +66,14 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // R8 full mode: more aggressive dead-code removal and class merging
-            // than classic ProGuard — safe for Compose + GeckoView when keep
-            // rules are in place.
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Only apply signing config locally — CI builds unsigned APKs
+            if (file("release.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
