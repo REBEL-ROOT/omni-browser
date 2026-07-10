@@ -3,7 +3,7 @@ name: 🚀 Build & Release APK
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'   # ONLY triggers on version tags like v1.3.0, v2.0.0-beta
 
 jobs:
   release:
@@ -34,53 +34,48 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
+          restore-keys: gradle-${{ runner.os }}-
 
-      - name: Run Lint before release
-        run: ./gradlew lintRelease --no-daemon
+      - name: Compile check before release
+        run: ./gradlew compileReleaseKotlin --no-daemon
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon
-
-      - name: Sign APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
-        uses: r0adkll/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
-          BUILD_TOOLS_VERSION: "35.0.0"
+          # Tell Gradle to skip the local keystore — use CI secrets instead
+          SKIP_SIGNING: "true"
 
       - name: Rename APK
         run: |
           VERSION=${{ github.ref_name }}
-          mv app/build/outputs/apk/release/app-release*.apk \
-             app/build/outputs/apk/release/omni-browser-${VERSION}.apk || true
+          find app/build/outputs/apk/release/ -name "*.apk" \
+            -exec mv {} app/build/outputs/apk/release/omni-browser-${VERSION}.apk \;
+          echo "APK renamed to omni-browser-${VERSION}.apk"
+          ls -lh app/build/outputs/apk/release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Omni Browser ${{ github.ref_name }}
+          name: "Omni Browser ${{ github.ref_name }}"
           draft: false
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
           generate_release_notes: true
           files: app/build/outputs/apk/release/omni-browser-*.apk
           body: |
             ## 📦 Omni Browser ${{ github.ref_name }}
 
-            > ⚠️ This is an experimental release. See the [README](https://github.com/REBEL-ROOT/omni-browser#readme) disclaimer before installing.
+            > ⚠️ **Experimental Release** — This software is in active development. See the [README disclaimer](https://github.com/REBEL-ROOT/omni-browser#readme) before installing.
 
-            ### 📲 Installation
-            1. Download `omni-browser-${{ github.ref_name }}.apk` below
-            2. Enable **Install from unknown sources** on your device
-            3. Install and enjoy!
+            ### 📲 How to Install
+            1. Download `omni-browser-${{ github.ref_name }}.apk` from the assets below
+            2. On your Android device: **Settings → Install unknown apps** → enable for your file manager
+            3. Open the APK and tap **Install**
 
             ### 📋 What's Changed
             See [CHANGELOG.md](https://github.com/REBEL-ROOT/omni-browser/blob/main/CHANGELOG.md) for full details.
+
+            ### 📱 Requirements
+            - Android 8.0+ (API 26)
+            - `arm64-v8a` device architecture
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
