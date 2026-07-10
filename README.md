@@ -46,10 +46,6 @@
 |:---:|:---:|:---:|
 | <img src="images/screenshots/extensions.png" width="200" alt="Extensions" /> | <img src="images/screenshots/settings.png" width="200" alt="Settings" /> | <img src="images/screenshots/safe_locker.png" width="200" alt="Safe Locker" /> |
 
-> 🎬 **Demo** — Place a screen recording at `images/demo.gif` and uncomment below:
->
-> <!-- ![Demo](images/demo.gif) -->
-
 ---
 
 ## ✨ Overview
