@@ -1,0 +1,160 @@
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // ── Row 1: Primary actions (colored, filled icons) ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Bookmarks
+                    MenuGridCell(
+                        icon = Icons.Rounded.Bookmark,
+                        label = "Bookmarks",
+                        iconTint = Color(0xFF0088FF),
+                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            val activeTabTitle = viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: "Bookmark"
+                            viewModel.addToHistory(activeTabTitle, viewModel.currentUrl)
+                            Toast.makeText(context, "Added to Bookmarks", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    // History
+                    MenuGridCell(
+                        icon = Icons.Rounded.History,
+                        label = "History",
+                        iconTint = Color(0xFF0088FF),
+                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+                        onClick = { showMenu = false; onOpenHistory() }
+                    )
+                    // Downloads
+                    MenuGridCell(
+                        icon = Icons.Rounded.Download,
+                        label = "Downloads",
+                        iconTint = Color(0xFF0088FF),
+                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+                        onClick = { showMenu = false; onOpenDownloads() }
+                    )
+                    // Settings
+                    MenuGridCell(
+                        icon = Icons.Rounded.Settings,
+                        label = "Settings",
+                        iconTint = Color(0xFF0088FF),
+                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+                        onClick = { showMenu = false; onOpenSettings() }
+                    )
+                }
+
+                HorizontalDivider(
+                    color = Color(0xFF23374A).copy(alpha = 0.6f),
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+
+                // ── Row 2: Secondary actions ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // New Tab
+                    MenuGridCell(
+                        icon = Icons.Rounded.Add,
+                        label = "New Tab",
+                        iconTint = Color(0xFFAABBCC),
+                        iconBg = Color(0xFF1A2A3A),
+                        onClick = { showMenu = false; viewModel.createNewTab(context, "about:blank") }
+                    )
+                    // Incognito (with toggle state)
+                    MenuGridCell(
+                        icon = if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        label = "Incognito",
+                        iconTint = if (viewModel.isIncognitoMode) Color(0xFF0088FF) else Color(0xFFAABBCC),
+                        iconBg = if (viewModel.isIncognitoMode) Color(0xFF0088FF).copy(alpha = 0.15f) else Color(0xFF1A2A3A),
+                        onClick = { viewModel.toggleIncognitoMode(context) }
+                    )
+                    // Reload
+                    MenuGridCell(
+                        icon = Icons.Rounded.Refresh,
+                        label = "Reload",
+                        iconTint = Color(0xFFAABBCC),
+                        iconBg = Color(0xFF1A2A3A),
+                        onClick = { showMenu = false; viewModel.reload() }
+                    )
+                    // Native Player
+                    MenuGridCell(
+                        icon = Icons.Rounded.PlayCircle,
+                        label = "Native\nPlayer",
+                        iconTint = Color(0xFFAABBCC),
+                        iconBg = Color(0xFF1A2A3A),
+                        onClick = {
+                            showMenu = false
+                            val activeTabUrl = viewModel.currentUrl
+                            if (activeTabUrl.isNotEmpty() && activeTabUrl != "about:blank") {
+                                viewModel.onPlayVideoRequestReceived?.invoke(activeTabUrl, activeTabUrl)
+                            } else {
+                                Toast.makeText(context, "No active video stream to play", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // ── Row 3: Power tools ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Desktop Site
+                    MenuGridCell(
+                        icon = Icons.Rounded.Computer,
+                        label = "Desktop\nSite",
+                        iconTint = if (viewModel.isDesktopMode) Color(0xFF0088FF) else Color(0xFFAABBCC),
+                        iconBg = if (viewModel.isDesktopMode) Color(0xFF0088FF).copy(alpha = 0.15f) else Color(0xFF1A2A3A),
+                        onClick = { viewModel.toggleDesktopMode(context) }
+                    )
+                    // Extensions
+                    MenuGridCell(
+                        icon = Icons.Rounded.Extension,
+                        label = "Extensions",
+                        iconTint = Color(0xFFAABBCC),
+                        iconBg = Color(0xFF1A2A3A),
+                        onClick = { showMenu = false; showExtensionsSheet = true }
+                    )
+                    // Reader Mode
+                    MenuGridCell(
+                        icon = Icons.Rounded.Book,
+                        label = "Reader\nMode",
+                        iconTint = Color(0xFFAABBCC),
+                        iconBg = Color(0xFF1A2A3A),
+                        onClick = {
+                            showMenu = false
+                            try { viewModel.toggleReaderMode() } catch (e: Exception) {
+                                Toast.makeText(context, "Reader Mode not supported on this page", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                    // Burn Data
+                    MenuGridCell(
+                        icon = Icons.Rounded.LocalFireDepartment,
+                        label = "Burn\nData",
+                        iconTint = Color(0xFFFF4444),
+                        iconBg = Color(0xFFFF4444).copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            coroutineScope.launch {
+                                val runtime = viewModel.getGeckoRuntime(context)
+                                FireButton(runtime, context).burn()
+                                Toast.makeText(context, "🔥 Browsing data burned", Toast.LENGTH_SHORT).show()
+                                viewModel.loadUrl("about:blank")
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
