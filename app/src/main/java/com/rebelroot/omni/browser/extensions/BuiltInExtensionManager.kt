@@ -50,11 +50,11 @@ import org.mozilla.geckoview.WebExtensionController
  * Thread-safety: GeckoView's [WebExtensionController] callbacks fire on the main thread.
  * The [onComplete] lambda is always invoked on the calling thread of the GeckoResult callback.
  */
-class BuiltInExtensionManager(
-    private val runtime: GeckoRuntime,
-    private val assetPath: String,
-    private val extensionId: String,
-    private val label: String
+open class BuiltInExtensionManager(
+    protected val runtime: GeckoRuntime,
+    protected val assetPath: String,
+    protected val extensionId: String,
+    protected val label: String
 ) {
     private val tag = "BuiltIn[$label]"
 
