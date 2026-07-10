@@ -1,0 +1,351 @@
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val accentRed = Color(0xFFFF3F6C)
+                val accentBlue = Color(0xFF0088FF)
+                val accentMuted = Color(0xFFAABBCC)
+                val bgMuted = Color(0xFF1A2A3A)
+
+                // ── Row 1 ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Bookmarks
+                    MenuGridCell(
+                        icon = Icons.Rounded.Bookmark,
+                        label = "Bookmarks",
+                        iconTint = accentRed,
+                        iconBg = accentRed.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            onOpenBookmarks()
+                        }
+                    )
+                    // History
+                    MenuGridCell(
+                        icon = Icons.Rounded.History,
+                        label = "History",
+                        iconTint = accentRed,
+                        iconBg = accentRed.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            onOpenHistory()
+                        }
+                    )
+                    // Downloads
+                    MenuGridCell(
+                        icon = Icons.Rounded.Download,
+                        label = "Downloads",
+                        iconTint = accentRed,
+                        iconBg = accentRed.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            onOpenDownloads()
+                        }
+                    )
+                    // Settings
+                    MenuGridCell(
+                        icon = Icons.Rounded.Settings,
+                        label = "Settings",
+                        iconTint = accentRed,
+                        iconBg = accentRed.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            onOpenSettings()
+                        }
+                    )
+                }
+
+                HorizontalDivider(
+                    color = Color(0xFF23374A).copy(alpha = 0.6f),
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+
+                // ── Row 2 ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Incognito (with toggle state)
+                    MenuGridCell(
+                        icon = if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                        label = "Incognito",
+                        iconTint = accentBlue,
+                        iconBg = if (viewModel.isIncognitoMode) accentBlue.copy(alpha = 0.15f) else bgMuted,
+                        onClick = {
+                            viewModel.toggleIncognitoMode(context)
+                        }
+                    )
+                    // Player Settings
+                    MenuGridCell(
+                        icon = Icons.Rounded.PlayCircle,
+                        label = "Player\nSettings",
+                        iconTint = accentBlue,
+                        iconBg = accentBlue.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            showPlayerSettingsSheet = true
+                        }
+                    )
+                    // Desktop Site
+                    MenuGridCell(
+                        icon = Icons.Rounded.Computer,
+                        label = "Desktop\nSite",
+                        iconTint = accentRed,
+                        iconBg = if (viewModel.isDesktopMode) accentRed.copy(alpha = 0.15f) else bgMuted,
+                        onClick = {
+                            viewModel.toggleDesktopMode(context)
+                        }
+                    )
+                    // Nav Hide On / Off
+                    MenuGridCell(
+                        icon = Icons.Rounded.OpenInFull,
+                        label = if (viewModel.isNavHideEnabled) "Nav Hide On" else "Nav Hide Off",
+                        iconTint = if (viewModel.isNavHideEnabled) accentRed else accentMuted,
+                        iconBg = if (viewModel.isNavHideEnabled) accentRed.copy(alpha = 0.15f) else bgMuted,
+                        onClick = {
+                            viewModel.saveNavHideEnabled(context, !viewModel.isNavHideEnabled)
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // ── Row 3 ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Reader Mode
+                    MenuGridCell(
+                        icon = Icons.Rounded.Book,
+                        label = "Reader\nMode",
+                        iconTint = accentBlue,
+                        iconBg = if (viewModel.isReaderModeActive) accentBlue.copy(alpha = 0.15f) else bgMuted,
+                        onClick = {
+                            showMenu = false
+                            try {
+                                viewModel.toggleReaderMode()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Reader Mode not supported on this page", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                    // Auto-Scroll
+                    MenuGridCell(
+                        icon = Icons.Rounded.ArrowDownward,
+                        label = "Auto-Scroll",
+                        iconTint = if (viewModel.isAutoScrollEnabled) accentBlue else accentMuted,
+                        iconBg = if (viewModel.isAutoScrollEnabled) accentBlue.copy(alpha = 0.15f) else bgMuted,
+                        onClick = {
+                            viewModel.toggleAutoScroll()
+                        }
+                    )
+                    // Burn Data
+                    MenuGridCell(
+                        icon = Icons.Rounded.LocalFireDepartment,
+                        label = "Burn\nData",
+                        iconTint = accentRed,
+                        iconBg = accentRed.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            coroutineScope.launch {
+                                val runtime = viewModel.getGeckoRuntime(context)
+                                FireButton(runtime, context).burn()
+                                Toast.makeText(context, "🔥 Browsing data burned", Toast.LENGTH_SHORT).show()
+                                viewModel.loadUrl("about:blank")
+                            }
+                        }
+                    )
+                    // Extensions
+                    MenuGridCell(
+                        icon = Icons.Rounded.Extension,
+                        label = "Extensions",
+                        iconTint = accentBlue,
+                        iconBg = accentBlue.copy(alpha = 0.12f),
+                        onClick = {
+                            showMenu = false
+                            showExtensionsSheet = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // ── Player Settings Bottom Sheet ───────────────────────────────────
+    if (showPlayerSettingsSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showPlayerSettingsSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White,
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 10.dp, bottom = 6.dp)
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFF3A4A5A))
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Player Settings",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF0088FF)
+                )
+
+                HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.6f))
+
+                // Default Quality selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Default Quality", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Preferred stream quality", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    var qualityExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        Button(
+                            onClick = { qualityExpanded = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A2A3A)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(viewModel.playerDefaultQuality, color = Color.White)
+                        }
+                        DropdownMenu(
+                            expanded = qualityExpanded,
+                            onDismissRequest = { qualityExpanded = false },
+                            modifier = Modifier.background(if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White)
+                        ) {
+                            val qualities = listOf("Auto", "1080p", "720p", "480p", "360p")
+                            qualities.forEach { quality ->
+                                DropdownMenuItem(
+                                    text = { Text(quality, color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black) },
+                                    onClick = {
+                                        viewModel.savePlayerSetting(context, "quality", quality)
+                                        qualityExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Autoplay Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Autoplay", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Play videos automatically on open", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = viewModel.isPlayerAutoPlayEnabled,
+                        onCheckedChange = { viewModel.savePlayerSetting(context, "autoplay", it) }
+                    )
+                }
+
+                // Loop Video Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Loop Video", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Automatically replay when video ends", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = viewModel.isPlayerLoopEnabled,
+                        onCheckedChange = { viewModel.savePlayerSetting(context, "loop", it) }
+                    )
+                }
+
+                // Swipe Gestures (Volume) Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Volume Gestures", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Swipe vertically on right side of player", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = viewModel.isPlayerVolumeGestureEnabled,
+                        onCheckedChange = { viewModel.savePlayerSetting(context, "volume_gesture", it) }
+                    )
+                }
+
+                // Swipe Gestures (Brightness) Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Brightness Gestures", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Swipe vertically on left side of player", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = viewModel.isPlayerBrightnessGestureEnabled,
+                        onCheckedChange = { viewModel.savePlayerSetting(context, "brightness_gesture", it) }
+                    )
+                }
+
+                // Resume Playback Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Resume Playback", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Remember and resume last playback position", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = viewModel.isPlayerResumePlaybackEnabled,
+                        onCheckedChange = { viewModel.savePlayerSetting(context, "resume", it) }
+                    )
+                }
+
+                // Background Playback Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Background Playback", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Continue audio playback when in background", color = Color(0xFF8E9AA8), fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = viewModel.isPlayerBackgroundPlaybackEnabled,
+                        onCheckedChange = { viewModel.savePlayerSetting(context, "background", it) }
+                    )
+                }
+            }
+        }
+    }
