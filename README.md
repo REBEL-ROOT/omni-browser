@@ -11,6 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge" /></a>
   <a href="https://github.com/REBEL-ROOT/omni-browser/releases"><img src="https://img.shields.io/github/v/release/REBEL-ROOT/omni-browser?style=for-the-badge&color=success" /></a>
   <a href="https://github.com/REBEL-ROOT/omni-browser/issues"><img src="https://img.shields.io/github/issues/REBEL-ROOT/omni-browser?style=for-the-badge" /></a>
+  <a href="https://www.linkedin.com/company/rebelroot"><img src="https://img.shields.io/badge/LinkedIn-RebelRoot-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" /></a>
 
   <br /><br />
 
@@ -321,4 +322,6 @@ To report a vulnerability, use GitHub's private [Security Advisory](https://gith
 
 <div align="center">
   <sub>Made with 💻 and ☕ by <strong>RebelRoot</strong> &nbsp;|&nbsp; Powered by <a href="https://mozilla.github.io/geckoview/">Mozilla GeckoView</a></sub>
+  <br />
+  <sub><a href="https://www.linkedin.com/company/rebelroot">🔗 Follow us on LinkedIn</a></sub>
 </div>
