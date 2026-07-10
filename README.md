@@ -22,6 +22,20 @@
 
 ---
 
+> [!CAUTION]
+> **🧪 Experimental Software — Use With Caution**
+>
+> Omni Browser is currently in **active development and experimental phase**. Features may be incomplete, unstable, or subject to significant change without notice. You may encounter bugs, crashes, or unexpected behaviour.
+>
+> - ⚠️ **Not recommended as your sole/primary browser yet**
+> - 🐛 **Bugs are expected** — please [report them](https://github.com/REBEL-ROOT/omni-browser/issues)
+> - 🔄 **APIs and features may change** between releases
+> - 💾 **Back up any important data** stored in the app (vault, notes)
+>
+> We appreciate your patience and feedback as we work toward a stable release. 🙏
+
+---
+
 ## 📸 Screenshots
 
 | Home | Quick Tools | Browser Menu |
