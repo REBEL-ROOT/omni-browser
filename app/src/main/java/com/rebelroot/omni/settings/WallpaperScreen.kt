@@ -5,6 +5,8 @@
 
 package com.rebelroot.omni.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -55,6 +57,20 @@ fun WallpaperScreen(
     }
 
     val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            try {
+                val flag = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(it, flag)
+            } catch (e: Exception) {
+                // Fallback for non-document providers
+            }
+            viewModel.saveBrowserWallpaperUri(context, it.toString())
+        }
+    }
+
     val isDarkMode = viewModel.isDarkThemeEnabled
     val accentColor = MaterialTheme.colorScheme.primary
     val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
@@ -100,7 +116,7 @@ fun WallpaperScreen(
                     shape = CircleShape,
                     border = BorderStroke(1.dp, cardBorderColor),
                     modifier = Modifier
-                        .clickable { /* Future: Open Image Picker */ }
+                        .clickable { launcher.launch("image/*") }
                 ) {
                     Text(
                         text = "My photos",
@@ -110,6 +126,7 @@ fun WallpaperScreen(
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                     )
                 }
+                
                 
                 Surface(
                     color = cardColor,
@@ -185,6 +202,41 @@ fun WallpaperScreen(
                     ) {
                         Text("No Wallpaper", color = textSecondaryColor)
                         if (selectedWallpaper == null) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(8.dp)
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(accentColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+
+                // If a custom wallpaper is selected, show it
+                if (selectedWallpaper != null && !PRESET_WALLPAPERS.contains(selectedWallpaper)) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(0.7f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.DarkGray)
+                                .border(
+                                    2.dp,
+                                    accentColor,
+                                    RoundedCornerShape(16.dp)
+                                )
+                        ) {
+                            AsyncImage(
+                                model = selectedWallpaper,
+                                contentDescription = "Custom Wallpaper",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
