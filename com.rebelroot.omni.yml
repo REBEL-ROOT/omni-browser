@@ -22,9 +22,9 @@ RepoType: git
 Repo: https://github.com/rebelroot/omni-browser
 
 Builds:
-  - versionName: 1.2.3
-    versionCode: 1002003
-    commit: v1.2.3
+  - versionName: 1.2.3.4
+    versionCode: 1002004
+    commit: v1.2.3.4
     subdir: app
     gradle:
       - yes
@@ -32,5 +32,5 @@ Builds:
 AutoName: Omni Browser
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags
-CurrentVersion: 1.2.3
-CurrentVersionCode: 1002003
+CurrentVersion: 1.2.3.4
+CurrentVersionCode: 1002004
