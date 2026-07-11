@@ -1,10 +1,9 @@
-// background.js — Omni Aggressive Media Grabber
-// Dual-path media detection: webRequest network interception + MSE content script relay
+// background.js — media detection using webRequest network interception and MSE hooks
 
-// ============================================
-// PATH 1: Network-level webRequest interception
-// Catches ALL sub-resource media requests (not just navigation)
-// ============================================
+const api = typeof browser !== "undefined" ? browser : chrome;
+var chrome = api;
+
+// Path 1: Network-level webRequest interception
 
 const MEDIA_URL_PATTERNS = [
     /\.m3u8(\?|$|#)/i,
@@ -113,7 +112,7 @@ function reportToNative(url, mimeType, tabId) {
             type: 'MEDIA_GRABBED',
             url: url,
             mimeType: mimeType || 'video/mp4'
-        });
+        }).catch(() => {});
     } catch (e) {
         console.error('[MediaGrabber] Native message failed:', e);
     }
@@ -173,11 +172,7 @@ chrome.webRequest.onHeadersReceived.addListener(
     ["responseHeaders"]
 );
 
-// ============================================
-// PATH 2: Relay from content script MSE hooks
-// ============================================
-
-// Settings cache and polling
+// Path 2: Content script MSE hook communication
 let nativePlayerEnabled = true; // Default to true
 
 function broadcastStateToTabs() {
@@ -197,27 +192,29 @@ function broadcastStateToTabs() {
 
 function pollNativeSettings() {
     try {
-        chrome.runtime.sendNativeMessage('omniApp', { type: 'GET_NATIVE_PLAYER_STATE' }, (response) => {
-            if (response && response.hasOwnProperty('enabled')) {
-                const newState = !!response.enabled;
-                if (newState !== nativePlayerEnabled) {
-                    nativePlayerEnabled = newState;
-                    console.log('[background.js] Native player preference updated from app:', nativePlayerEnabled);
-                    broadcastStateToTabs();
+        chrome.runtime.sendNativeMessage('omniApp', { type: 'GET_NATIVE_PLAYER_STATE' })
+            .then((response) => {
+                if (response && response.hasOwnProperty('enabled')) {
+                    const newState = !!response.enabled;
+                    if (newState !== nativePlayerEnabled) {
+                        nativePlayerEnabled = newState;
+                        console.log('[background.js] Native player preference updated from app:', nativePlayerEnabled);
+                        broadcastStateToTabs();
+                    }
+                    
+                    if (response.pendingJs) {
+                        chrome.tabs.query({ active: true }, (tabs) => {
+                            if (tabs && tabs[0]) {
+                                chrome.tabs.sendMessage(tabs[0].id, {
+                                    type: 'EVAL_JS',
+                                    script: response.pendingJs
+                                }).catch(() => {});
+                            }
+                        });
+                    }
                 }
-                
-                if (response.pendingJs) {
-                    chrome.tabs.query({ active: true }, (tabs) => {
-                        if (tabs && tabs[0]) {
-                            chrome.tabs.sendMessage(tabs[0].id, {
-                                type: 'EVAL_JS',
-                                script: response.pendingJs
-                            });
-                        }
-                    });
-                }
-            }
-        });
+            })
+            .catch(() => {});
     } catch (e) {
         // Polling failed (app might be starting up), ignore and retry
     }
@@ -251,7 +248,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.runtime.sendNativeMessage('omniApp', {
                 type: 'VIDEO_STATE_CHANGE',
                 isPlaying: message.isPlaying
-            });
+            }).catch(() => {});
         } catch (e) {
             console.error('[Omni] Native message failed for video state:', e);
         }
@@ -265,7 +262,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 url: message.url,
                 pageUrl: message.pageUrl,
                 mimeType: message.mimeType || 'video/mp4'
-            });
+            }).catch(() => {});
             console.log('[background.js] sendNativeMessage successfully dispatched.');
         } catch (e) {
             console.error('[Omni] Native message failed for PLAY_IN_NATIVE:', e);
@@ -276,7 +273,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 type: 'CONSOLE_LOG',
                 level: message.level,
                 message: message.message
-            });
+            }).catch(() => {});
         } catch (e) {
             console.error('[Omni] Native message failed:', e);
         }
