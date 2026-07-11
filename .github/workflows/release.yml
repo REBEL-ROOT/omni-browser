@@ -36,14 +36,27 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      - name: Decode keystore from GitHub Secret
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+          echo "✅ Keystore decoded"
+
       - name: Compile check before release
         run: ./gradlew compileReleaseKotlin --no-daemon
 
-      - name: Build Release APK
+      - name: Build & Sign Release APK
         run: ./gradlew assembleRelease --no-daemon
         env:
-          # Tell Gradle to skip the local keystore — use CI secrets instead
-          SKIP_SIGNING: "true"
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+
+      - name: Verify APK is signed
+        run: |
+          APK=$(find app/build/outputs/apk/release/ -name "*.apk" | head -1)
+          echo "APK path: $APK"
+          # Verify it has a valid signature (will error if unsigned)
+          $JAVA_HOME/bin/jarsigner -verify "$APK" && echo "✅ APK signature verified" || (echo "❌ APK is NOT signed!" && exit 1)
 
       - name: Rename APK
         run: |
@@ -52,6 +65,12 @@ jobs:
             -exec mv {} app/build/outputs/apk/release/omni-browser-${VERSION}.apk \;
           echo "APK renamed to omni-browser-${VERSION}.apk"
           ls -lh app/build/outputs/apk/release/
+
+      - name: Wipe keystore from runner (security cleanup)
+        if: always()
+        run: |
+          rm -f app/release.keystore
+          echo "🔒 Keystore wiped from runner"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
