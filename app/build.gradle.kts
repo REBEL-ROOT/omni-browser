@@ -14,8 +14,8 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.2.2"
+        versionCode = 23
+        versionName = "1.2.3"
 
 
 
@@ -144,6 +144,15 @@ android {
     }
 
     // ndk.abiFilters already restricts to arm64-v8a — no splits needed.
+}
+
+// Exclude io.opencensus transitive dependencies pulled in by io.grpc.
+// These libraries are telemetry/tracing stubs and are not used by the app
+// at runtime. F-Droid scanner flags them as "Tracker" anti-features.
+configurations.all {
+    exclude(group = "io.opencensus", module = "opencensus-api")
+    exclude(group = "io.opencensus", module = "opencensus-proto")
+    exclude(group = "io.opencensus", module = "opencensus-contrib-grpc-metrics")
 }
 
 dependencies {

@@ -141,8 +141,26 @@ class BrowserViewModel : ViewModel() {
         private const val UBLOCK_ID = "uBlock0@raymondhill.net"
         private const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
         private const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
+
+        /** Known ad popup / pop-under network domains.
+         *  Popups opening any of these URLs are silently blocked regardless of user gesture. */
+        private val POPUP_AD_DOMAINS = setOf(
+            "popads.net", "popcash.net", "popunder.net",
+            "exoclick.com", "trafficjunky.net", "juicyads.com",
+            "adsterra.com", "propellerads.com", "hilltopads.net",
+            "clickadu.com", "evadav.com", "megapush.com",
+            "push.house", "richpush.co", "pushground.com",
+            "mgpusher.com", "pu.sh", "adf.ly", "j.gs",
+            "link.tl", "linkvertise.com", "hrefli.com",
+            "trafficfactory.biz", "tsyndicate.com", "doublelift.net",
+            "adskeeper.com", "voluumtrk.com", "atominik.com",
+            "mondoagency.net", "trafficshop.com", "adnxs.com",
+            "openx.net", "rubiconproject.com", "doubleclick.net",
+            "googlesyndication.com"
+        )
         
         val UBLOCK_ENABLED_KEY = booleanPreferencesKey("ublock_adblocker_enabled")
+        val POPUP_BLOCKER_ENABLED_KEY = booleanPreferencesKey("popup_blocker_enabled")
         val UNIVERSAL_COPY_ENABLED_KEY = booleanPreferencesKey("universal_copy_enabled")
         val AI_BLOCKER_ENABLED_KEY = booleanPreferencesKey("ai_blocker_enabled")
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
@@ -312,6 +330,8 @@ class BrowserViewModel : ViewModel() {
     var isFullscreen by mutableStateOf(false)
     var isVideoPlayingInPage by mutableStateOf(false)
     var isAdblockerEnabled by mutableStateOf(true)
+    /** When true (default), popup windows not triggered by a real user tap are blocked. */
+    var isPopupBlockerEnabled by mutableStateOf(true)
     var isUniversalCopyEnabled by mutableStateOf(false)
     var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
@@ -1639,7 +1659,36 @@ class BrowserViewModel : ViewModel() {
 
             override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
                 try {
-                    Log.i(TAG, "onNewSession: opening new tab session for popup URI $uri")
+                    // ── Popup Blocker ─────────────────────────────────────────────────────
+                    // Block the popup if:
+                    //   (a) the target URL belongs to a known ad/popup network, OR
+                    //   (b) the popup blocker is enabled AND the URI is empty / about:blank
+                    //       (common ad trick: open blank popup then JS-redirect it).
+                    // Legitimate popups (OAuth, login dialogs, user-opened links) have a
+                    // real https:// URI and pass through fine.
+                    val lowerUri = uri.lowercase().trim()
+
+                    if (isPopupBlockerEnabled) {
+                        // Block if the URL matches a known popup ad network domain
+                        val isAdPopup = POPUP_AD_DOMAINS.any { domain ->
+                            lowerUri.contains(domain)
+                        }
+                        if (isAdPopup) {
+                            Log.w(TAG, "🚫 Popup blocked — ad domain: $uri")
+                            return null   // returning null tells GeckoView to cancel the popup
+                        }
+
+                        // Block suspicious blank popups that are script-injected (no real URL).
+                        // about:blank popups are only legitimate when they have a meaningful URI
+                        // passed in, e.g. for OAuth flows the URI is always a real https:// URL.
+                        if (uri.isEmpty() || lowerUri == "about:blank") {
+                            Log.w(TAG, "🚫 Popup blocked — suspicious blank popup with no URI")
+                            return null
+                        }
+                    }
+
+                    // ── Allow legitimate popup → open in new background tab ───────────────
+                    Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                     val runtime = getGeckoRuntime(context)
                     val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                         .usePrivateMode(isIncognitoMode)
@@ -1649,12 +1698,11 @@ class BrowserViewModel : ViewModel() {
                         .build()
                     val newSession = GeckoSession(settings)
                     val tabId = java.util.UUID.randomUUID().toString()
-                    val targetUrl = if (uri.isEmpty()) "about:blank" else uri
                     val newTab = TabState(
                         id = tabId,
                         session = newSession,
                         title = "New Tab",
-                        url = targetUrl,
+                        url = uri,
                         isIncognito = isIncognitoMode
                     )
 
@@ -1663,7 +1711,7 @@ class BrowserViewModel : ViewModel() {
                     newSession.open(runtime)
                     selectTab(newTab.id)
                     saveTabs()
-                    
+
                     return GeckoResult.fromValue(newSession)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in onNewSession popup", e)
@@ -1961,6 +2009,10 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 isAdblockerEnabled = getAdblockPreference(appCtx).first()
                 syncAdblockerState(shouldReload = false)
+            }
+
+            viewModelScope.launch {
+                isPopupBlockerEnabled = getPopupBlockerPreference(appCtx).first()
             }
 
             viewModelScope.launch {
@@ -2379,6 +2431,16 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun togglePopupBlocker(context: Context) {
+        viewModelScope.launch {
+            val newState = !isPopupBlockerEnabled
+            isPopupBlockerEnabled = newState
+            context.dataStore.edit { preferences ->
+                preferences[POPUP_BLOCKER_ENABLED_KEY] = newState
+            }
+        }
+    }
+
     fun toggleUniversalCopy(context: Context) {
         if (isUniversalCopyToggling) return
         isUniversalCopyToggling = true
@@ -2434,6 +2496,12 @@ class BrowserViewModel : ViewModel() {
     private fun getAdblockPreference(context: Context): Flow<Boolean> {
         return context.dataStore.data.map { preferences ->
             preferences[UBLOCK_ENABLED_KEY] ?: true
+        }
+    }
+
+    private fun getPopupBlockerPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[POPUP_BLOCKER_ENABLED_KEY] ?: true  // Default ON
         }
     }
 

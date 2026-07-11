@@ -1,0 +1,6 @@
+• Fixed: Popup and auto-jumping ad tab blocker — ad scripts can no longer hijack new tabs
+• Improved: Expanded ad blocker to 180+ domains covering popup networks, SSPs, social trackers and analytics
+• New: Cosmetic ad filter — hides ad containers and cookie banners on pages
+• Improved: FOSS compliance — removed all proprietary Google dependencies (ML Kit, Play Services)
+• New: QR code scanner using ZXing (fully open-source, no Play Services required)
+• Improved: F-Droid release — signed with updated release key

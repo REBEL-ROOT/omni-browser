@@ -5058,6 +5058,17 @@ fun BrowserScreen(
                             onCheckedChange = { viewModel.toggleAdblock(context) }
                         )
 
+                        // Extension Item 1b: Popup & Ad-Tab Blocker
+                        ExtensionItemCard(
+                            icon = Icons.Rounded.Block,
+                            name = "Popup & Ad-Tab Blocker",
+                            author = "Omni Browser Team",
+                            description = "Blocks auto-jumping ad tabs, pop-unders, and script-injected popups from ad networks.",
+                            checked = viewModel.isPopupBlockerEnabled,
+                            enabled = true,
+                            onCheckedChange = { viewModel.togglePopupBlocker(context) }
+                        )
+
                         // Extension Item 2: Universal Text Copy
                         ExtensionItemCard(
                             icon = Icons.Rounded.FileCopy,
