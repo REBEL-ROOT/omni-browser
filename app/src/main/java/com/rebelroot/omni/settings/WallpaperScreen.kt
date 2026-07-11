@@ -145,7 +145,7 @@ fun WallpaperScreen(
                 }
             }
 
-            // Change daily toggle
+            // Toggle for daily auto-rotation
             Surface(
                 color = cardColor,
                 modifier = Modifier
@@ -169,7 +169,7 @@ fun WallpaperScreen(
                 }
             }
 
-            // Standard Wallpapers Grid
+            // Grid options
             Text(
                 "Standard",
                 color = textPrimaryColor,
@@ -185,7 +185,7 @@ fun WallpaperScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Clear Wallpaper item
+                // Option to disable wallpaper
                 item {
                     Box(
                         modifier = Modifier
@@ -217,7 +217,7 @@ fun WallpaperScreen(
                     }
                 }
 
-                // If a custom wallpaper is selected, show it
+                // Active custom wallpaper option
                 if (selectedWallpaper != null && !PRESET_WALLPAPERS.contains(selectedWallpaper)) {
                     item {
                         Box(

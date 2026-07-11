@@ -396,7 +396,7 @@ class BrowserViewModel : ViewModel() {
     fun triggerOpenBrowserScreen() { openBrowserScreenEvent = true }
     fun consumeOpenBrowserScreenEvent() { openBrowserScreenEvent = false }
 
-    // ── QR Page Scanner ───────────────────────────────────────────────
+    // QR code scanner support
     fun scanPageForQrCodes() {
         val geckoView = activeGeckoViewRef?.get()
         if (geckoView == null) {
@@ -650,7 +650,7 @@ class BrowserViewModel : ViewModel() {
         )
     }
 
-    // ── Generic file download dialog ───────────────────────────────────────────
+    // Download interceptor data struct
     data class PendingGenericDownload(
         val url: String,
         val filename: String,
@@ -1469,7 +1469,7 @@ class BrowserViewModel : ViewModel() {
                     mediaInterceptor.onMediaRequestDetected(uri)
                 }
 
-                // ── Popup & Ad-Tab Blocker ─────────────────────────────────────────────
+                // Intercept popups before new session triggers
                 if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
                     if (isPopupBlockerEnabled) {
                         // 1. Block if target is a known ad popup network
@@ -1686,8 +1686,7 @@ class BrowserViewModel : ViewModel() {
 
             override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
                 try {
-                    // ── Popup Blocker ─────────────────────────────────────────────────────
-                    // Block the popup if:
+                    // Block target if ad domain or blank window
                     //   (a) the target URL belongs to a known ad/popup network, OR
                     //   (b) the popup blocker is enabled AND the URI is empty / about:blank
                     //       (common ad trick: open blank popup then JS-redirect it).
@@ -1715,7 +1714,7 @@ class BrowserViewModel : ViewModel() {
                     }
 
 
-                    // ── Allow legitimate popup → open in new background tab ───────────────
+                    // Allow legitimate popups in background tab
                     Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                     val runtime = getGeckoRuntime(context)
                     val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -2622,7 +2621,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    // ── Accent Theme Persistence ──
+    // Accent Theme settings helper methods
 
     fun getAccentThemePreference(context: Context): Flow<String> {
         return context.dataStore.data.map { preferences ->
@@ -2872,7 +2871,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    // ── Native Player Settings Persistence ──
+    // Player preferences persistence helper
 
     fun savePlayerSetting(context: Context, key: String, value: Any) {
         viewModelScope.launch {
@@ -3813,8 +3812,7 @@ class BrowserViewModel : ViewModel() {
                                 val rawLink  = link.trim()
 
                                 if (rawTitle.isNotEmpty() && rawLink.isNotEmpty()) {
-                                    // ── Quality filter ───────────────────────────
-                                    // 1. Strip trailing " - Source Name" added by Google News
+                                    // Strip trailing source info from Google News titles
                                     val cleanTitle = if (rawTitle.contains(" - "))
                                         rawTitle.substringBeforeLast(" - ").trim()
                                     else rawTitle.trim()

@@ -1,12 +1,9 @@
-// background.js — Omni Aggressive Media Grabber
-// Dual-path media detection: webRequest network interception + MSE content script relay
+// background.js — media detection using webRequest network interception and MSE hooks
 
 const api = typeof browser !== "undefined" ? browser : chrome;
 var chrome = api;
-// ============================================
-// PATH 1: Network-level webRequest interception
-// Catches ALL sub-resource media requests (not just navigation)
-// ============================================
+
+// Path 1: Network-level webRequest interception
 
 const MEDIA_URL_PATTERNS = [
     /\.m3u8(\?|$|#)/i,
@@ -175,11 +172,7 @@ chrome.webRequest.onHeadersReceived.addListener(
     ["responseHeaders"]
 );
 
-// ============================================
-// PATH 2: Relay from content script MSE hooks
-// ============================================
-
-// Settings cache and polling
+// Path 2: Content script MSE hook communication
 let nativePlayerEnabled = true; // Default to true
 
 function broadcastStateToTabs() {
