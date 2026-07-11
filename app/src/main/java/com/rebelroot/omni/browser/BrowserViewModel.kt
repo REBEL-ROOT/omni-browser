@@ -346,8 +346,8 @@ class BrowserViewModel : ViewModel() {
     var isOnboardingCompleted by mutableStateOf(false)
     var selectedAccentTheme by mutableStateOf("Ocean Blue")
     var forceDarkWebsites by mutableStateOf(false)
-    var navBarHideTop by mutableStateOf(false)
-    var navBarHideBottom by mutableStateOf(false)
+    var navBarHideTop by mutableStateOf(true)
+    var navBarHideBottom by mutableStateOf(true)
     var addressBarPosition by mutableStateOf("Top")
     var appIconState by mutableStateOf("Default")
     var browserWallpaperUri by mutableStateOf<String?>(null)
@@ -2115,8 +2115,8 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 appCtx.dataStore.data.first().let { prefs ->
                     forceDarkWebsites = prefs[FORCE_DARK_WEBSITES_KEY] ?: false
-                    navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: false
-                    navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: false
+                    navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
+                    navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
                     addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Top"
                     appIconState = prefs[APP_ICON_STATE_KEY] ?: "Default"
                     browserWallpaperUri = prefs[BROWSER_WALLPAPER_URI_KEY]
