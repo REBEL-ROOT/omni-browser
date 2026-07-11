@@ -14,7 +14,7 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
+        versionCode = 1002003
         versionName = "1.2.3"
 
 
