@@ -14,12 +14,9 @@
 
 const api = typeof browser !== "undefined" ? browser : chrome;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NETWORK BLOCK LIST
-// Add "*://*.domain.com/*" to block an entire domain + all subdomains.
-// ─────────────────────────────────────────────────────────────────────────────
+// Blocklist domains
 const BLOCKED_DOMAINS = [
-    // ── Google Advertising & Analytics ───────────────────────
+    // Google ad domains
     "*://*.doubleclick.net/*",
     "*://*.google-analytics.com/*",
     "*://*.googlesyndication.com/*",
@@ -33,7 +30,7 @@ const BLOCKED_DOMAINS = [
     "*://*.pagead2.googlesyndication.com/*",
     "*://*.tpc.googlesyndication.com/*",
 
-    // ── Programmatic Ad Exchanges / SSPs ──────────────────────
+    // Programmatic SSPs
     "*://*.adnxs.com/*",           // Xandr (Microsoft Advertising)
     "*://*.pubmatic.com/*",
     "*://*.rubiconproject.com/*",
@@ -80,7 +77,7 @@ const BLOCKED_DOMAINS = [
     "*://*.freewheel.tv/*",
     "*://*.stickyadstv.com/*",
 
-    // ── Native / Content Recommendation Networks ─────────────
+    // Content recommendations
     "*://*.outbrain.com/*",
     "*://*.taboola.com/*",
     "*://*.revcontent.com/*",
@@ -89,7 +86,7 @@ const BLOCKED_DOMAINS = [
     "*://*.zergnet.com/*",
     "*://*.around.io/*",
 
-    // ── Popup & Pop-under Networks ────────────────────────────
+    // Popunder systems
     "*://*.popads.net/*",
     "*://*.popcash.net/*",
     "*://*.popunder.net/*",
@@ -128,7 +125,7 @@ const BLOCKED_DOMAINS = [
     "*://*.hrefli.com/*",
     "*://*.linkvertise.com/*",
 
-    // ── Direct Ad Networks ────────────────────────────────────
+    // Ad networks
     "*://*.adcolony.com/*",
     "*://*.unityads.unity3d.com/*",
     "*://*.amazon-adsystem.com/*",
@@ -161,7 +158,7 @@ const BLOCKED_DOMAINS = [
     "*://*.servedby.flashtalking.com/*",
     "*://*.flashtalking.com/*",
 
-    // ── Mobile Ad SDKs ────────────────────────────────────────
+    // Mobile SDK integrations
     "*://*.flurry.com/*",
     "*://*.inmobi.com/*",
     "*://*.ironsrc.com/*",
@@ -172,7 +169,7 @@ const BLOCKED_DOMAINS = [
     "*://*.liftoff.io/*",
     "*://*.tapjoy.com/*",
 
-    // ── Analytics, Session Recording & Fingerprinting ────────
+    // Fingerprint trackers
     "*://*.quantserve.com/*",
     "*://*.scorecardresearch.com/*",
     "*://*.chartbeat.com/*",
@@ -202,7 +199,7 @@ const BLOCKED_DOMAINS = [
     "*://*.zdassets.com/*",
     "*://*.zendesk.com/*",        // support widget (can be re-enabled per site)
 
-    // ── Click Trackers & Redirect Chains ─────────────────────
+    // Redirects
     "*://*.fastclick.net/*",
     "*://*.adtech.de/*",
     "*://*.adtarget.io/*",
@@ -214,7 +211,7 @@ const BLOCKED_DOMAINS = [
     "*://*.rambler.ru/ad*",
     "*://*.cdn-cgi/ad*",
 
-    // ── Social Trackers ───────────────────────────────────────
+    // Social widgets
     "*://*.connect.facebook.net/*",
     "*://*.facebook.com/tr/*",
     "*://*.facebook.com/plugins/like*",
@@ -227,10 +224,7 @@ const BLOCKED_DOMAINS = [
     "*://*.sc-static.net/*",      // Snapchat pixel
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POPUP BLOCKER
-// Block new windows/tabs that are opened by scripts (not user-initiated).
-// ─────────────────────────────────────────────────────────────────────────────
+// Popups to block
 const POPUP_BLOCKED_PATTERNS = [
     // Ad popup networks
     "*://*.popads.net/*",

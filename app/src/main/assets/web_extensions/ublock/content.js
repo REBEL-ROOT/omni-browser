@@ -16,7 +16,7 @@
 (function () {
     "use strict";
 
-    // ── Selectors for ad containers to hide ──────────────────────────────────
+    // selectors for matching known ad containers
     const AD_SELECTORS = [
         // Generic ad slot class names & IDs
         "[id*='google_ads']",
@@ -113,7 +113,7 @@
         "[id*='fullpage-ad']",
     ];
 
-    // ── CSS injection for immediate hiding (before JS runs) ──────────────────
+    // CSS snippet for hiding cosmetic ad elements
     const COSMETIC_CSS = AD_SELECTORS.join(",\n") + " { display: none !important; visibility: hidden !important; height: 0 !important; max-height: 0 !important; overflow: hidden !important; }";
 
     function injectCosmeticCSS() {
@@ -127,7 +127,7 @@
         }
     }
 
-    // ── Forcibly remove matched elements (some sites re-show via JS) ─────────
+    // scan and remove matched nodes
     function removeAdElements() {
         for (const selector of AD_SELECTORS) {
             try {
@@ -147,39 +147,8 @@
         }
     }
 
-    // ── Block window.open() and inject popup override ─────────────────────────
-    function blockWindowOpen() {
-        const adPopupDomains = [
-            "popads.net", "popcash.net", "exoclick.com", "trafficjunky.net",
-            "juicyads.com", "adsterra.com", "propellerads.com", "hilltopads.net",
-            "clickadu.com", "evadav.com", "megapush.com", "adf.ly", "linkvertise.com",
-            "trafficfactory.biz", "tsyndicate.com", "doublelift.net",
-        ];
 
-        const originalOpen = window.open;
-        window.open = function (url, target, features) {
-            if (!url) return null;
-            const lowerUrl = String(url).toLowerCase();
-            // Block if URL matches an ad popup domain
-            for (const domain of adPopupDomains) {
-                if (lowerUrl.includes(domain)) {
-                    console.debug("[Omni] Blocked popup to ad domain:", url);
-                    return null;
-                }
-            }
-            // Block popups that open "about:blank" then redirect (common trick)
-            if (lowerUrl === "about:blank" || lowerUrl === "") {
-                // Allow only if there's a legitimate feature request (like window size)
-                if (!features || features.length === 0) {
-                    console.debug("[Omni] Blocked suspicious about:blank popup");
-                    return null;
-                }
-            }
-            return originalOpen.call(window, url, target, features);
-        };
-    }
-
-    // ── Block automatic redirects via meta refresh + JS location changes ──────
+    // remove ad-injected meta refresh tags
     function blockAutoRedirects() {
         // Remove meta refresh tags
         document.querySelectorAll('meta[http-equiv="refresh"]').forEach(function (el) {
@@ -191,7 +160,7 @@
         });
     }
 
-    // ── MutationObserver: catch dynamically inserted ads ─────────────────────
+    // observe dynamic changes for infinite scrolls
     function observeDynamicAds() {
         const observer = new MutationObserver(function (mutations) {
             let shouldClean = false;
@@ -212,9 +181,9 @@
         });
     }
 
-    // ── Entry point ───────────────────────────────────────────────────────────
+    // initialization
     injectCosmeticCSS();
-    blockWindowOpen();
+
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", function () {
