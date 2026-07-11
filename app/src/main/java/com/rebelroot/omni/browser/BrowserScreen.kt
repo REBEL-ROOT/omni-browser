@@ -64,6 +64,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.paint
+import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -107,6 +109,7 @@ import android.provider.MediaStore
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 
 @Composable
 fun TabItem(
@@ -203,10 +206,40 @@ fun HomeScreenContent(
         }
     )
 
+    val wallpaperPainter = if (viewModel.browserWallpaperUri != null && !viewModel.isIncognitoMode) {
+        rememberAsyncImagePainter(viewModel.browserWallpaperUri)
+    } else {
+        null
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .then(
+                if (wallpaperPainter != null) {
+                    Modifier.paint(
+                        painter = wallpaperPainter,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .background(
+                if (viewModel.isIncognitoMode) {
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0xFF161320), Color(0xFF0C0A10))
+                    )
+                } else if (wallpaperPainter != null) {
+                    // Semitransparent overlay scrim to maintain high readability of text and search bar
+                    val overlayColor = if (viewModel.isDarkThemeEnabled) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.65f)
+                    Brush.verticalGradient(colors = listOf(overlayColor, overlayColor))
+                } else {
+                    Brush.verticalGradient(
+                        colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background)
+                    )
+                }
+            )
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -214,21 +247,59 @@ fun HomeScreenContent(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Center branding OMNI stylized logo Image
-        androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(
-                id = if (viewModel.isDarkThemeEnabled) {
-                    com.rebelroot.omni.R.drawable.omni_home_logo
-                } else {
-                    com.rebelroot.omni.R.drawable.omni_home_logo_light
+        if (viewModel.isIncognitoMode) {
+            // Incognito Branding
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF282335)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.VisibilityOff,
+                        contentDescription = "Incognito Mode",
+                        tint = Color(0xFFCBB2FF),
+                        modifier = Modifier.size(44.dp)
+                    )
                 }
-            ),
-            contentDescription = "Omni Browser Logo",
-            modifier = Modifier
-                .height(100.dp)
-                .padding(horizontal = 16.dp),
-            contentScale = androidx.compose.ui.layout.ContentScale.Fit
-        )
+                Text(
+                    text = "You've gone incognito",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Your browsing history, search history, and cookies won't be saved. Files downloaded and bookmarks created will still be kept.",
+                    color = Color(0xFF9186A8),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+        } else {
+            // Center branding OMNI stylized logo Image
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(
+                    id = if (viewModel.isDarkThemeEnabled) {
+                        com.rebelroot.omni.R.drawable.omni_home_logo
+                    } else {
+                        com.rebelroot.omni.R.drawable.omni_home_logo_light
+                    }
+                ),
+                contentDescription = "Omni Browser Logo",
+                modifier = Modifier
+                    .height(100.dp)
+                    .padding(horizontal = 16.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+        }
 
         // Flat Slate search pill
         OutlinedTextField(
@@ -382,6 +453,11 @@ fun HomeScreenContent(
         var shortcutsExpanded by remember { mutableStateOf(false) }
         val shortcuts = viewModel.shortcutsList
 
+        var selectedShortcutForMenu by remember { mutableStateOf<HomeShortcut?>(null) }
+        var showShortcutOptionsSheet by remember { mutableStateOf(false) }
+        var showEditShortcutDialog by remember { mutableStateOf(false) }
+        var showDeleteShortcutDialog by remember { mutableStateOf(false) }
+
         val allItems = remember(shortcuts.toList()) {
             shortcuts.toList() + HomeShortcut(id = "add_shortcut_btn", title = "Add", url = "add")
         }
@@ -445,28 +521,16 @@ fun HomeScreenContent(
                                     )
                                 }
                                 else -> {
-                                    var showDeleteDialog by remember { mutableStateOf(false) }
-                                    if (showDeleteDialog) {
-                                        AlertDialog(
-                                            onDismissRequest = { showDeleteDialog = false },
-                                            title = { Text("Delete Shortcut?") },
-                                            text = { Text("Remove shortcut to ${shortcut.title}?") },
-                                            confirmButton = {
-                                                TextButton(onClick = {
-                                                    viewModel.deleteShortcut(shortcut)
-                                                    showDeleteDialog = false
-                                                }) { Text("Delete", color = Color(0xFFFF3B30)) }
-                                            },
-                                            dismissButton = {
-                                                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-                                            }
-                                        )
-                                    }
                                     CompactDynamicShortcutItem(
                                         title = shortcut.title,
                                         url = shortcut.url,
                                         onClick = { onNavigateTo(shortcut.url) },
-                                        onLongClick = { if (!shortcut.isPermanent) showDeleteDialog = true }
+                                        onLongClick = {
+                                            if (!shortcut.isPermanent) {
+                                                selectedShortcutForMenu = shortcut
+                                                showShortcutOptionsSheet = true
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -493,6 +557,152 @@ fun HomeScreenContent(
                     fontWeight = FontWeight.Medium
                 )
             }
+        }
+
+        // Shortcut long-press Options Sheet
+        if (showShortcutOptionsSheet && selectedShortcutForMenu != null) {
+            ModalBottomSheet(
+                onDismissRequest = {
+                    showShortcutOptionsSheet = false
+                    selectedShortcutForMenu = null
+                },
+                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color.White
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = selectedShortcutForMenu!!.title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showShortcutOptionsSheet = false
+                                showEditShortcutDialog = true
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Edit Shortcut",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Edit Shortcut",
+                            color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showShortcutOptionsSheet = false
+                                showDeleteShortcutDialog = true
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "Remove Shortcut",
+                            tint = Color.Red
+                        )
+                        Text(
+                            text = "Remove Shortcut",
+                            color = Color.Red,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Edit Shortcut Dialog
+        if (showEditShortcutDialog && selectedShortcutForMenu != null) {
+            var editName by remember { mutableStateOf(selectedShortcutForMenu!!.title) }
+            var editUrl by remember { mutableStateOf(selectedShortcutForMenu!!.url) }
+            AlertDialog(
+                onDismissRequest = {
+                    showEditShortcutDialog = false
+                    selectedShortcutForMenu = null
+                },
+                title = { Text("Edit Shortcut") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            label = { Text("Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        OutlinedTextField(
+                            value = editUrl,
+                            onValueChange = { editUrl = it },
+                            label = { Text("URL") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (editName.isNotBlank() && editUrl.isNotBlank()) {
+                            viewModel.editShortcut(selectedShortcutForMenu!!, editName, editUrl)
+                        }
+                        showEditShortcutDialog = false
+                        selectedShortcutForMenu = null
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showEditShortcutDialog = false
+                        selectedShortcutForMenu = null
+                    }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Delete Shortcut Confirmation Dialog
+        if (showDeleteShortcutDialog && selectedShortcutForMenu != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showDeleteShortcutDialog = false
+                    selectedShortcutForMenu = null
+                },
+                title = { Text("Delete Shortcut?") },
+                text = { Text("Remove shortcut to ${selectedShortcutForMenu!!.title}?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.deleteShortcut(selectedShortcutForMenu!!)
+                        showDeleteShortcutDialog = false
+                        selectedShortcutForMenu = null
+                    }) { Text("Delete", color = Color(0xFFFF3B30)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showDeleteShortcutDialog = false
+                        selectedShortcutForMenu = null
+                    }) { Text("Cancel") }
+                }
+            )
         }
 
         // Add to Home Bottom Sheet
@@ -641,177 +851,179 @@ fun HomeScreenContent(
         }
 
         // Discover Section Block (Dynamic News Feed)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
+        if (viewModel.showDiscoverFeed && !viewModel.isIncognitoMode) {
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = stringResource(id = R.string.discover_title),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(id = R.string.refresh_title),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable {
-                        viewModel.fetchNews(viewModel.selectedNewsCategory)
-                    }
-                )
-            }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.discover_title),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(id = R.string.refresh_title),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            viewModel.fetchNews(viewModel.selectedNewsCategory)
+                        }
+                    )
+                }
 
-            // Category Pill Tabs
-            val categories = listOf("Trending", "World", "Technology", "Sports", "Business", "Science", "Entertainment", "Health")
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(categories) { category ->
-                    val isSelected = viewModel.selectedNewsCategory == category
-                    val displayCategory = when (category) {
-                        "Trending" -> stringResource(id = R.string.cat_trending)
-                        "World" -> stringResource(id = R.string.cat_world)
-                        "Technology" -> stringResource(id = R.string.cat_technology)
-                        "Sports" -> stringResource(id = R.string.cat_sports)
-                        "Business" -> stringResource(id = R.string.cat_business)
-                        "Science" -> stringResource(id = R.string.cat_science)
-                        "Entertainment" -> stringResource(id = R.string.cat_entertainment)
-                        "Health" -> stringResource(id = R.string.cat_health)
-                        else -> category
-                    }
-                    Surface(
-                        onClick = { viewModel.fetchNews(category) },
-                        shape = RoundedCornerShape(32.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                        border = if (isSelected) null else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center
+                // Category Pill Tabs
+                val categories = listOf("Trending", "World", "Technology", "Sports", "Business", "Science", "Entertainment", "Health")
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(categories) { category ->
+                        val isSelected = viewModel.selectedNewsCategory == category
+                        val displayCategory = when (category) {
+                            "Trending" -> stringResource(id = R.string.cat_trending)
+                            "World" -> stringResource(id = R.string.cat_world)
+                            "Technology" -> stringResource(id = R.string.cat_technology)
+                            "Sports" -> stringResource(id = R.string.cat_sports)
+                            "Business" -> stringResource(id = R.string.cat_business)
+                            "Science" -> stringResource(id = R.string.cat_science)
+                            "Entertainment" -> stringResource(id = R.string.cat_entertainment)
+                            "Health" -> stringResource(id = R.string.cat_health)
+                            else -> category
+                        }
+                        Surface(
+                            onClick = { viewModel.fetchNews(category) },
+                            shape = RoundedCornerShape(32.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            border = if (isSelected) null else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier.height(32.dp)
                         ) {
-                            Text(
-                                text = displayCategory,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
+                            Box(
+                                modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = displayCategory,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            if (viewModel.isNewsLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-                }
-            } else if (viewModel.newsArticles.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No articles found in this category.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                }
-            } else {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Column {
-                        viewModel.newsArticles.take(30).forEachIndexed { index, article ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onNavigateTo(article.link) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                // Thumbnail — always present (real image or source favicon)
-                                coil.compose.AsyncImage(
-                                    model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                        .data(article.imageUrl)
-                                        .size(120, 120)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = null,
+                if (viewModel.isNewsLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                    }
+                } else if (viewModel.newsArticles.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No articles found in this category.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    }
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(32.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+                    ) {
+                        Column {
+                            viewModel.newsArticles.take(30).forEachIndexed { index, article ->
+                                Row(
                                     modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(RoundedCornerShape(20.dp)),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                    error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery),
-                                    placeholder = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery)
-                                )
-
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateTo(article.link) }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.Top
                                 ) {
-                                    Text(
-                                        text = article.title,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        lineHeight = 18.sp,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
+                                    // Thumbnail — always present (real image or source favicon)
+                                    coil.compose.AsyncImage(
+                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                            .data(article.imageUrl)
+                                            .size(120, 120)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(RoundedCornerShape(20.dp)),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                        error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery),
+                                        placeholder = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery)
                                     )
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Text(
-                                            text = article.source,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 10.sp,
+                                            text = article.title,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
+                                            lineHeight = 18.sp,
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis
                                         )
-                                        if (article.pubDate.isNotEmpty()) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Text(
-                                                text = "·",
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                                fontSize = 10.sp
+                                                text = article.source,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
-                                            Text(
-                                                text = article.pubDate,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 10.sp
-                                            )
+                                            if (article.pubDate.isNotEmpty()) {
+                                                Text(
+                                                    text = "·",
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                    fontSize = 10.sp
+                                                )
+                                                Text(
+                                                    text = article.pubDate,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            if (index < minOf(viewModel.newsArticles.size, 30) - 1) {
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
+                                if (index < minOf(viewModel.newsArticles.size, 30) - 1) {
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+                                }
                             }
                         }
+                    }
                 }
             }
         }
     }
-}
 }
 
 // ── Compact shortcut item: icon-only pill, no visible border box ────────────
@@ -914,7 +1126,284 @@ fun CompactDynamicShortcutItem(
         )
     }
 }
-// ────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun PhoneAddressBar(
+    viewModel: BrowserViewModel,
+    inputUrl: androidx.compose.ui.text.input.TextFieldValue,
+    onInputUrlChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    isInputFocused: Boolean,
+    onInputFocusedChange: (Boolean) -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester,
+    hasActiveUserExtensions: Boolean,
+    onShowExtensionsSheet: () -> Unit,
+    onShowToolsSheet: () -> Unit,
+    onShowMenu: () -> Unit,
+    onShowTabGroups: () -> Unit = {},
+    onShowSiteInfo: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AnimatedVisibility(visible = !isInputFocused) {
+            IconButton(
+                onClick = { viewModel.loadUrl("about:blank") },
+                modifier = Modifier.size(36.dp)
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.rebelroot.omni.R.drawable.ic_omni_logo),
+                    contentDescription = "Go Home",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .padding(horizontal = 4.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(20.dp)
+                )
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val isSecure = viewModel.currentUrl.startsWith("https://")
+                val isHttp = viewModel.currentUrl.startsWith("http://")
+                val showSecurityIcon = !isInputFocused && viewModel.currentUrl.isNotEmpty() && viewModel.currentUrl != "about:blank"
+
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .clickable(enabled = showSecurityIcon) { onShowSiteInfo() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = when {
+                            showSecurityIcon && isSecure -> Icons.Rounded.Lock
+                            showSecurityIcon && isHttp -> Icons.Rounded.LockOpen
+                            else -> Icons.Rounded.Search
+                        },
+                        contentDescription = "Search or Security icon",
+                        modifier = Modifier.size(16.dp),
+                        tint = when {
+                            showSecurityIcon && isSecure -> Color(0xFF34C759)
+                            showSecurityIcon && isHttp -> Color(0xFFFF9500)
+                            else -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        }
+                    )
+                }
+
+
+                BasicTextField(
+                    value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
+                    onValueChange = onInputUrlChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { onInputFocusedChange(it.isFocused) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Go
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onGo = {
+                            viewModel.loadUrl(inputUrl.text)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        }
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                )
+
+                if (inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable { onInputUrlChange(androidx.compose.ui.text.input.TextFieldValue("")) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Clear",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+
+                if (viewModel.currentUrl.isNotEmpty() && viewModel.currentUrl != "about:blank" && !isInputFocused) {
+                    val isBookmarked = viewModel.isBookmarked(viewModel.currentUrl)
+                    
+                    if (!viewModel.isReaderModeActive) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clickable { viewModel.toggleReaderMode() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                contentDescription = "Reader Mode",
+                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable {
+                                if (isBookmarked) {
+                                    viewModel.removeBookmark(viewModel.currentUrl)
+                                } else {
+                                    val activeTabTitle = viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: "Page"
+                                    viewModel.addToBookmarks(activeTabTitle, viewModel.currentUrl)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = "Bookmark",
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = isInputFocused) {
+            IconButton(
+                onClick = {
+                    viewModel.loadUrl(inputUrl.text)
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = "Submit",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        AnimatedVisibility(visible = isInputFocused) {
+            TextButton(
+                onClick = {
+                    onInputUrlChange(androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl))
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }
+            ) {
+                Text("Cancel", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+            }
+        }
+
+        AnimatedVisibility(visible = !isInputFocused) {
+            IconButton(
+                onClick = { viewModel.reload() },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "Reload",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
+        }
+
+        AnimatedVisibility(visible = !isInputFocused) {
+            IconButton(
+                onClick = onShowExtensionsSheet,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.TopEnd) {
+                    Icon(
+                        imageVector = Icons.Rounded.Extension,
+                        contentDescription = "Extensions",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (hasActiveUserExtensions) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .offset(x = 1.dp, y = (-1).dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = CircleShape
+                                )
+                                .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF0C1420) else Color.White, CircleShape)
+                        )
+                     }
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = !isInputFocused && !viewModel.showBottomNavBar) {
+            IconButton(
+                onClick = onShowTabGroups,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(5.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = !isInputFocused && !viewModel.showBottomNavBar) {
+            IconButton(
+                onClick = onShowMenu,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Menu,
+                    contentDescription = "Menu",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun ShortcutItem(
@@ -1102,6 +1591,7 @@ fun BrowserScreen(
 
     
     var showMenu by remember { mutableStateOf(false) }
+    var showSiteInfoSheet by remember { mutableStateOf(false) }
     var inputUrl by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)) }
     var isInputFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -1113,6 +1603,20 @@ fun BrowserScreen(
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
+
+    val navHideTopActive = isNavHideEnabled && viewModel.navBarHideTop
+    val navHideBottomActive = isNavHideEnabled && viewModel.navBarHideBottom
+    val topBarFraction by animateFloatAsState(
+        targetValue = if (!viewModel.isFullscreen && !showHomeScreen && navHideTopActive && !isScrollNavBarVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "topBarHide"
+    )
+    val bottomBarFraction by animateFloatAsState(
+        targetValue = if (!viewModel.isFullscreen && !showHomeScreen && navHideBottomActive && !isScrollNavBarVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "bottomBarHide"
+    )
+
     val hasActiveUserExtensions = remember(viewModel.userExtensions.toList()) {
         viewModel.userExtensions.any { it.metaData.enabled }
     }
@@ -1362,63 +1866,54 @@ fun BrowserScreen(
 
     val currentShowHomeScreen by rememberUpdatedState(showHomeScreen)
 
-    // Scroll delegate: registered once per tab session to drive nav bar hide/show.
-    //
-    // Why accumulated delta instead of raw diff:
-    // Sites with sticky/fixed footer navs sometimes fire a burst of small scroll
-    // events (position corrections, IntersectionObserver reflows, etc.) that reset
-    // lastScrollY without the user actually scrolling up.  A single-diff check
-    // interprets those corrections as "scrolled up → show nav" and the nav never
-    // hides.  Accumulating deltas across events means a site-triggered micro-scroll
-    // (+3 px) cannot cancel a user's deliberate downward scroll (+80 px).
+    // Scroll-driven nav-bar hide (Chrome-style)
+    // A CONFLATED channel acts as a debouncer: the scroll delegate (producer) emits
+    // at up to 60 Hz, but the consumer coroutine only wakes once per emission batch,
+    // so Compose state is updated at most once per frame — no jank.
+    val scrollChannel = remember { Channel<Int>(Channel.CONFLATED) }
+
     LaunchedEffect(activeTab?.session) {
         val session = activeTab?.session ?: return@LaunchedEffect
-        var lastScrollY = 0
-        var accumulatedDelta = 0  // running sum; reset when direction commits
         session.scrollDelegate = object : org.mozilla.geckoview.GeckoSession.ScrollDelegate {
             override fun onScrollChanged(sess: org.mozilla.geckoview.GeckoSession, scrollX: Int, scrollY: Int) {
-                // ── Always pin the nav bar on the home screen ──────────────────
-                if (currentShowHomeScreen) {
-                    isScrollNavBarVisible = true
-                    lastScrollY = scrollY
-                    accumulatedDelta = 0
-                    return
-                }
+                scrollChannel.trySend(scrollY)  // non-blocking; drops stale values automatically
+            }
+        }
+    }
 
-                if (!isNavHideEnabled) {
-                    isScrollNavBarVisible = true
-                    lastScrollY = scrollY
-                    accumulatedDelta = 0
-                    return
-                }
+    // Consumer: runs on main thread, receives only the latest scroll position per frame
+    LaunchedEffect(scrollChannel, isNavHideEnabled, viewModel.navBarHideTop, viewModel.navBarHideBottom) {
+        var lastScrollY = 0
+        var accumulated = 0
+        for (scrollY in scrollChannel) {          // suspends until next value arrives
+            // Always show on home screen or when nav-hide is disabled
+            if (currentShowHomeScreen || !isNavHideEnabled) {
+                if (!isScrollNavBarVisible) isScrollNavBarVisible = true
+                lastScrollY = scrollY; accumulated = 0
+                continue
+            }
 
+            // Always show when scrolled back to the very top
+            if (scrollY <= 0) {
+                isScrollNavBarVisible = true
+                lastScrollY = 0; accumulated = 0
+                continue
+            }
 
-                // Always show nav when the page is scrolled back to the very top
-                if (scrollY <= 0) {
-                    isScrollNavBarVisible = true
-                    lastScrollY = 0
-                    accumulatedDelta = 0
-                    return
-                }
+            val delta = scrollY - lastScrollY
+            lastScrollY = scrollY
 
-                val delta = scrollY - lastScrollY
-                lastScrollY = scrollY
+            // Ignore micro-jitter (< 5 px) from sticky/fixed site navs
+            if (delta in -4..4) continue
 
-                // Ignore near-zero jitter (≤ 4 px) — these are typically layout/
-                // reflow corrections fired by sites with sticky footer navs.
-                if (delta > -5 && delta < 5) return
+            accumulated += delta
 
-                accumulatedDelta += delta
-
-                // Commit hide only after accumulating a meaningful downward scroll
-                if (accumulatedDelta > 60) {
-                    isScrollNavBarVisible = false
-                    accumulatedDelta = 0
-                // Commit show only after accumulating a meaningful upward scroll
-                } else if (accumulatedDelta < -40) {
-                    isScrollNavBarVisible = true
-                    accumulatedDelta = 0
-                }
+            if (accumulated > 60) {          // deliberate downward scroll → hide
+                if (isScrollNavBarVisible) isScrollNavBarVisible = false
+                accumulated = 0
+            } else if (accumulated < -40) {  // deliberate upward scroll → show
+                if (!isScrollNavBarVisible) isScrollNavBarVisible = true
+                accumulated = 0
             }
         }
     }
@@ -1518,10 +2013,13 @@ fun BrowserScreen(
 
     Scaffold(
         topBar = {
-            AnimatedVisibility(
-                visible = !viewModel.isFullscreen && !showHomeScreen,
-                enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(durationMillis = 350, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeIn(animationSpec = tween(durationMillis = 350)),
-                exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeOut(animationSpec = tween(durationMillis = 300))
+        if (!viewModel.isFullscreen && !showHomeScreen &&
+                !(viewModel.addressBarPosition == "Bottom" && !isTablet)) {
+            // Top bar: always rendered; graphicsLayer slides it out without removing from composition
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = -size.height * topBarFraction }
             ) {
                 Column {
                     Surface(
@@ -1856,195 +2354,22 @@ fun BrowserScreen(
                                     }
                                 }
                             } else {
-                                // Existing Phone Top Bar
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AnimatedVisibility(visible = !isInputFocused) {
-                                        IconButton(
-                                            onClick = { viewModel.loadUrl("about:blank") },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            androidx.compose.foundation.Image(
-                                                painter = androidx.compose.ui.res.painterResource(id = com.rebelroot.omni.R.drawable.ic_omni_logo),
-                                                contentDescription = "Go Home",
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(48.dp)
-                                            .padding(horizontal = 4.dp)
-                                            .background(
-                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                                shape = RoundedCornerShape(20.dp)
-                                            )
-                                            .border(
-                                                width = 1.dp,
-                                                color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                                shape = RoundedCornerShape(20.dp)
-                                            )
-                                            .padding(horizontal = 16.dp),
-                                        contentAlignment = Alignment.CenterStart
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Search,
-                                                contentDescription = "Search icon",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                            )
-
-                                            BasicTextField(
-                                                value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
-                                                onValueChange = { inputUrl = it },
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .focusRequester(focusRequester)
-                                                    .onFocusChanged { isInputFocused = it.isFocused },
-                                                singleLine = true,
-                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                ),
-                                                keyboardOptions = KeyboardOptions(
-                                                    imeAction = ImeAction.Go
-                                                ),
-                                                keyboardActions = KeyboardActions(
-                                                    onGo = {
-                                                        viewModel.loadUrl(inputUrl.text)
-                                                        focusManager.clearFocus()
-                                                        keyboardController?.hide()
-                                                    }
-                                                ),
-                                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
-                                            )
-
-                                            if (inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(24.dp)
-                                                        .clickable { inputUrl = androidx.compose.ui.text.input.TextFieldValue("") },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Close,
-                                                        contentDescription = "Clear",
-                                                        modifier = Modifier.size(16.dp),
-                                                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                                                    )
-                                                }
-                                            }
-
-                                            // Bookmark and Reader Mode toggles inside the address bar (when not typing)
-                                            if (viewModel.currentUrl.isNotEmpty() && viewModel.currentUrl != "about:blank" && !isInputFocused) {
-                                                val isBookmarked = viewModel.isBookmarked(viewModel.currentUrl)
-                                                
-                                                // Only show reader toggle when NOT already in reader mode
-                                                if (!viewModel.isReaderModeActive) {
-                                                    // Reader Mode Toggler
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(24.dp)
-                                                            .clickable { viewModel.toggleReaderMode() },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                                            contentDescription = "Reader Mode",
-                                                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                    
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                }
-                                                
-                                                // Bookmark Star Toggler
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(24.dp)
-                                                        .clickable {
-                                                            if (isBookmarked) {
-                                                                viewModel.removeBookmark(viewModel.currentUrl)
-                                                            } else {
-                                                                val activeTabTitle = viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: "Page"
-                                                                viewModel.addToBookmarks(activeTabTitle, viewModel.currentUrl)
-                                                            }
-                                                        },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                                        contentDescription = "Bookmark",
-                                                        tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    AnimatedVisibility(visible = isInputFocused) {
-                                        TextButton(
-                                            onClick = {
-                                                inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
-                                                focusManager.clearFocus()
-                                                keyboardController?.hide()
-                                            }
-                                        ) {
-                                            Text("Cancel", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
-                                        }
-                                    }
-
-                                    AnimatedVisibility(visible = !isInputFocused) {
-                                        IconButton(
-                                            onClick = { viewModel.reload() },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Refresh,
-                                                contentDescription = "Reload",
-                                                tint = MaterialTheme.colorScheme.onBackground
-                                            )
-                                        }
-                                    }
-
-                                    AnimatedVisibility(visible = !isInputFocused) {
-                                        IconButton(
-                                            onClick = { showExtensionsSheet = true },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.TopEnd) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Extension,
-                                                    contentDescription = "Extensions",
-                                                    tint = MaterialTheme.colorScheme.onBackground
-                                                )
-                                                if (hasActiveUserExtensions) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(6.dp)
-                                                            .offset(x = 1.dp, y = (-1).dp)
-                                                            .background(
-                                                                color = MaterialTheme.colorScheme.primary,
-                                                                shape = CircleShape
-                                                            )
-                                                            .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF0C1420) else Color.White, CircleShape)
-                                                    )
-                                                 }
-                                            }
-                                        }
-                                    }
+                                // Phone Top Bar — only show address bar here when position is "Top"
+                                if (viewModel.addressBarPosition == "Top") {
+                                    PhoneAddressBar(
+                                        viewModel = viewModel,
+                                        inputUrl = inputUrl,
+                                        onInputUrlChange = { inputUrl = it },
+                                        isInputFocused = isInputFocused,
+                                        onInputFocusedChange = { isInputFocused = it },
+                                        focusRequester = focusRequester,
+                                        hasActiveUserExtensions = hasActiveUserExtensions,
+                                        onShowExtensionsSheet = { showExtensionsSheet = true },
+                                        onShowToolsSheet = { showToolsSheet = true },
+                                        onShowMenu = { showMenu = true },
+                                        onShowTabGroups = { showTabGroupsSheet = true },
+                                        onShowSiteInfo = { showSiteInfoSheet = true }
+                                    )
                                 }
                             }
 
@@ -2159,13 +2484,39 @@ fun BrowserScreen(
                     }
                 }
             }
+        }
         },
         bottomBar = {
-            AnimatedVisibility(
-                visible = !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused && (showHomeScreen || isScrollNavBarVisible),
-                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(durationMillis = 350, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeIn(animationSpec = tween(durationMillis = 350)),
-                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + fadeOut(animationSpec = tween(durationMillis = 300))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = size.height * bottomBarFraction }
             ) {
+                if (viewModel.addressBarPosition != "Top" && !isTablet && !showHomeScreen) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+                        shadowElevation = 8.dp,
+                        tonalElevation = 2.dp
+                    ) {
+                        PhoneAddressBar(
+                            viewModel = viewModel,
+                            inputUrl = inputUrl,
+                            onInputUrlChange = { inputUrl = it },
+                            isInputFocused = isInputFocused,
+                            onInputFocusedChange = { isInputFocused = it },
+                            focusRequester = focusRequester,
+                            hasActiveUserExtensions = hasActiveUserExtensions,
+                            onShowExtensionsSheet = { showExtensionsSheet = true },
+                            onShowToolsSheet = { showToolsSheet = true },
+                            onShowMenu = { showMenu = true },
+                            onShowTabGroups = { showTabGroupsSheet = true },
+                            onShowSiteInfo = { showSiteInfoSheet = true }
+                        )
+                    }
+                }
+
+                if (viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused) {
                 // Flat minimal bottom bar persisting exactly as requested in screenshots
                 val isDark = viewModel.isDarkThemeEnabled
                 val navBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
@@ -2322,6 +2673,7 @@ fun BrowserScreen(
                 }
             }
         }
+    }
     ) { paddingValues ->
 
     // ── Edge-style Grid Menu Bottom Sheet ──────────────────────────────
@@ -2368,9 +2720,7 @@ fun BrowserScreen(
                         iconBg = activeIconBg,
                         onClick = {
                             showMenu = false
-                            val activeTabTitle = viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: "Bookmark"
-                            viewModel.addToHistory(activeTabTitle, viewModel.currentUrl)
-                            Toast.makeText(context, "Added to Bookmarks", Toast.LENGTH_SHORT).show()
+                            onOpenBookmarks()
                         }
                     )
                     // History
@@ -2472,21 +2822,6 @@ fun BrowserScreen(
                             }
                         }
                     )
-                    // Auto-Scroll
-                    MenuGridCell(
-                        icon = Icons.Rounded.ArrowDownward,
-                        label = "Auto-Scroll",
-                        iconTint = if (isAutoScrollActive) activeIconTint else inactiveIconTint,
-                        iconBg = if (isAutoScrollActive) activeIconBg else inactiveIconBg,
-                        onClick = {
-                            showMenu = false
-                            if (showHomeScreen || activeTab == null) {
-                                Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                            } else {
-                                isAutoScrollActive = !isAutoScrollActive
-                            }
-                        }
-                    )
                     // Burn Data
                     MenuGridCell(
                         icon = Icons.Rounded.LocalFireDepartment,
@@ -2500,6 +2835,24 @@ fun BrowserScreen(
                                 FireButton(runtime, context).burn()
                                 Toast.makeText(context, "🔥 Browsing data burned", Toast.LENGTH_SHORT).show()
                                 viewModel.loadUrl("about:blank")
+                            }
+                        }
+                    )
+                    // Add to Shortcuts
+                    MenuGridCell(
+                        icon = Icons.Rounded.Add,
+                        label = "Add to\nShortcuts",
+                        iconTint = inactiveIconTint,
+                        iconBg = inactiveIconBg,
+                        onClick = {
+                            showMenu = false
+                            if (showHomeScreen || activeTab == null) {
+                                Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val currentUrl = viewModel.currentUrl
+                                val currentTitle = activeTab.title ?: "Webpage"
+                                viewModel.addShortcut(currentTitle, currentUrl)
+                                Toast.makeText(context, "Added to Home Shortcuts", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -2526,7 +2879,14 @@ fun BrowserScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                // Animate content padding in sync with bar slide — eliminates the blank
+                // space left when topBar/bottomBar are translated off-screen via graphicsLayer.
+                .padding(
+                    top = paddingValues.calculateTopPadding() * (1f - topBarFraction),
+                    bottom = paddingValues.calculateBottomPadding() * (1f - bottomBarFraction),
+                    start = paddingValues.calculateStartPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    end = paddingValues.calculateEndPadding(androidx.compose.ui.unit.LayoutDirection.Ltr)
+                )
                 .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0B0B0C) else Color(0xFFFFFFFF))
         ) {
             Box(
@@ -4484,6 +4844,153 @@ fun BrowserScreen(
                 }
             }
 
+            // 3.5 Site Info (Cookies, Privacy, Security) Bottom Sheet
+            if (showSiteInfoSheet) {
+                val currentDomain = remember(viewModel.currentUrl) {
+                    try { Uri.parse(viewModel.currentUrl).host ?: viewModel.currentUrl } catch (e: Exception) { viewModel.currentUrl }
+                }
+                val isHttps = viewModel.currentUrl.startsWith("https://")
+
+                ModalBottomSheet(
+                    onDismissRequest = { showSiteInfoSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color.White
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            coil.compose.AsyncImage(
+                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                    .data("https://www.google.com/s2/favicons?sz=128&domain=$currentDomain")
+                                    .size(64, 64)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Favicon",
+                                modifier = Modifier.size(24.dp).clip(CircleShape),
+                                error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
+                            )
+                            Column {
+                                Text(
+                                    text = currentDomain,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                                )
+                                Text(
+                                    text = if (isHttps) "Secure connection" else "Insecure connection",
+                                    fontSize = 11.sp,
+                                    color = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500)
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isHttps) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                                contentDescription = "Connection status",
+                                tint = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isHttps) "Connection is secure" else "Connection is not secure",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                                )
+                                Text(
+                                    text = if (isHttps)
+                                        "Your information (for example, passwords or credit card numbers) is private when it is sent to this site."
+                                    else
+                                        "Your connection to this site is not secure. You should not enter any sensitive information (like passwords or cards).",
+                                    fontSize = 12.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Folder,
+                                contentDescription = "Cookies and Site Data",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Cookies & site data",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                                )
+                                Text(
+                                    text = "Cookies are used to keep you signed in, remember your preferences, and provide localized content.",
+                                    fontSize = 12.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    viewModel.clearSiteData(context)
+                                    showSiteInfoSheet = false
+                                }
+                            ) {
+                                Text("Clear", color = Color(0xFFFF4444), fontSize = 13.sp)
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shield,
+                                contentDescription = "Privacy settings",
+                                tint = Color(0xFF30D158),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Privacy & Site Settings",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                                )
+                                Text(
+                                    text = "JavaScript is active. Built-in Tracking Blockers are actively filtering ads and analytics for optimal speed.",
+                                    fontSize = 12.sp,
+                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
             // 4. Web Extensions Manager Bottom Sheet
             if (showExtensionsSheet) {
                 ModalBottomSheet(
@@ -4615,20 +5122,22 @@ fun BrowserScreen(
                                             viewModel.loadUrl(optionsUrl)
                                         }
                                     } else null,
-                                    onPopupClick = if (viewModel.extensionActions.containsKey(ext.id) || !ext.metaData?.optionsPageUrl.isNullOrBlank()) {
-                                        {
-                                            showExtensionsSheet = false
-                                            val action = viewModel.extensionActions[ext.id]
-                                            if (action != null) {
-                                                action.click()
-                                            } else {
-                                                val optionsUrl = ext.metaData?.optionsPageUrl
-                                                if (!optionsUrl.isNullOrBlank()) {
-                                                    viewModel.loadUrl(optionsUrl)
+                                    onPopupClick = run {
+                                        val activeAction = viewModel.getActionForExtension(ext.id)
+                                        if (activeAction != null || !ext.metaData?.optionsPageUrl.isNullOrBlank()) {
+                                            {
+                                                showExtensionsSheet = false
+                                                if (activeAction != null) {
+                                                    activeAction.click()
+                                                } else {
+                                                    val optionsUrl = ext.metaData?.optionsPageUrl
+                                                    if (!optionsUrl.isNullOrBlank()) {
+                                                        viewModel.loadUrl(optionsUrl)
+                                                    }
                                                 }
                                             }
-                                        }
-                                    } else null
+                                        } else null
+                                    }
                                 )
                             }
                         }

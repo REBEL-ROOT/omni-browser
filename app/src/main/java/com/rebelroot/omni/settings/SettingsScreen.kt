@@ -59,9 +59,10 @@ fun SettingsScreen(
     viewModel: BrowserViewModel,
     onNavigateBack: () -> Unit,
     onOpenUrl: (String) -> Unit,
-    onLanguageChanged: () -> Unit = {}
+    onLanguageChanged: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
+    onOpenWallpapers: () -> Unit = {}
 ) {
-    val accentThemes = AccentThemesLight.keys.toList()
     BackHandler {
         onNavigateBack()
     }
@@ -104,32 +105,7 @@ fun SettingsScreen(
     var showLanguageSelector by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
 
-    val gso = remember {
-        com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestProfile()
-            .build()
-    }
-    val googleSignInClient = remember {
-        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-    }
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
-            viewModel.handleGoogleSignInResult(account)
-            Toast.makeText(context, "Signed in successfully as ${account.displayName}", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(context, "Google Sign-In failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.checkGoogleSignInStatus(context)
-    }
 
     val languages = listOf(
         "en" to "English",
@@ -208,123 +184,7 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // 1. Profile Avatar Header Card (Google SSO integrated)
-            val isSignedIn = viewModel.googleAccountIsSignedIn
-            val email = viewModel.googleAccountEmail ?: "Sign in to sync your bookmarks & tabs"
-            val displayName = viewModel.googleAccountDisplayName ?: "Sign In with Google"
-            val photoUrl = viewModel.googleAccountPhotoUrl
-
-            var showSignOutConfirmation by remember { mutableStateOf(false) }
             var showClearCacheConfirmation by remember { mutableStateOf(false) }
-
-            val showProfileSignIn = false
-            if (showProfileSignIn) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable {
-                            if (isSignedIn) {
-                                showSignOutConfirmation = true
-                            } else {
-                                try {
-                                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Google Play Services not available", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
-                    color = cardColor,
-                    border = BorderStroke(0.5.dp, cardBorderColor)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(accentColor.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSignedIn && !photoUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                        .data(photoUrl)
-                                        .size(96, 96)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = "Profile Picture",
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Rounded.Person,
-                                    contentDescription = "Avatar",
-                                    tint = accentColor,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                        
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = displayName,
-                                color = textPrimaryColor,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = email,
-                                color = textSecondaryColor,
-                                fontSize = 11.sp
-                            )
-                        }
-                        
-                        if (isSignedIn) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
-                                contentDescription = "Sign Out",
-                                tint = Color(0xFFFF4444)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
-                            )
-                        }
-                    }
-                }
-
-                if (showSignOutConfirmation) {
-                    AlertDialog(
-                        onDismissRequest = { showSignOutConfirmation = false },
-                        title = { Text(stringResource(id = R.string.sign_out_title), color = textPrimaryColor, fontWeight = FontWeight.Bold) },
-                        text = { Text(stringResource(id = R.string.sign_out_confirm_desc), color = textPrimaryColor) },
-                        containerColor = cardColor,
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    showSignOutConfirmation = false
-                                    viewModel.googleSignOut(context) {
-                                        Toast.makeText(context, "Signed out successfully", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            ) {
-                                Text(stringResource(id = R.string.sign_out_title), color = Color(0xFFFF4444))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showSignOutConfirmation = false }) {
-                                Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor)
-                            }
-                        }
-                    )
-                }
-            }
 
             if (showClearCacheConfirmation) {
                 AlertDialog(
@@ -531,6 +391,70 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                            
+                            HorizontalDivider(
+                                color = dividerColor,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+
+                            // Discover Feed Toggle
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Rounded.Newspaper, contentDescription = null, tint = accentColor)
+                                    Column {
+                                        Text("Discover Feed", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Show news recommendations on the home page", color = textSecondaryColor, fontSize = 11.sp)
+                                    }
+                                }
+                                Switch(
+                                    checked = viewModel.showDiscoverFeed,
+                                    onCheckedChange = { viewModel.saveShowDiscoverFeed(context, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = accentColor
+                                    )
+                                )
+                            }
+
+                            HorizontalDivider(
+                                color = dividerColor,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            )
+
+                            // Bottom Navigation Bar Toggle
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Rounded.ViewAgenda, contentDescription = null, tint = accentColor)
+                                    Column {
+                                        Text("Bottom Navigation Bar", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Show bottom toolbar with main navigation buttons", color = textSecondaryColor, fontSize = 11.sp)
+                                    }
+                                }
+                                Switch(
+                                    checked = viewModel.showBottomNavBar,
+                                    onCheckedChange = { viewModel.saveShowBottomNavBar(context, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = accentColor
+                                    )
+                                )
+                            }
                         }
                         
                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
@@ -641,6 +565,52 @@ fun SettingsScreen(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = accentColor
                                 )
+                            )
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // Row 4.6: Appearance Settings
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenAppearance() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Palette, contentDescription = null, tint = accentColor)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Appearance", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Theme, App Icon, Navigation visibility, Address bar", color = textSecondaryColor, fontSize = 11.sp)
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = textSecondaryColor
+                            )
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // Row 4.7: Wallpaper Settings
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenWallpapers() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Wallpaper, contentDescription = null, tint = accentColor)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Wallpapers", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Browser background, Change daily", color = textSecondaryColor, fontSize = 11.sp)
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = textSecondaryColor
                             )
                         }
 
@@ -1131,25 +1101,6 @@ fun SettingsScreen(
                             Text("Clear Cache & Site Data", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
                         }
-                        
-                        if (isSignedIn) {
-                            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                            
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        showSignOutConfirmation = true
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null, tint = Color(0xFFFF4444))
-                                Text(stringResource(id = R.string.sign_out_title), color = Color(0xFFFF4444), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = Color(0xFFFF4444))
-                            }
-                        }
                     }
                 }
             }
@@ -1217,8 +1168,8 @@ fun SettingsScreen(
     }
 
     if (showFeedbackDialog) {
-        var name by remember { mutableStateOf(viewModel.googleAccountDisplayName ?: "") }
-        var email by remember { mutableStateOf(viewModel.googleAccountEmail ?: "") }
+        var name by remember { mutableStateOf("") }
+        var email by remember { mutableStateOf("") }
         var rating by remember { mutableStateOf(5) }
         var comment by remember { mutableStateOf("") }
         var isSubmitting by remember { mutableStateOf(false) }

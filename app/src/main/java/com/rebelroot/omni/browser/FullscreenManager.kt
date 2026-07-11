@@ -36,6 +36,12 @@ object FullscreenManager {
         val window = activity.window
         val decorView = window.decorView
 
+        if (isFullscreen) {
+            activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val controller = decorView.windowInsetsController
             if (controller != null) {

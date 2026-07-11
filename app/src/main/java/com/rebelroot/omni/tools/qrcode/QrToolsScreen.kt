@@ -59,10 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.rebelroot.omni.R
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+// ML Kit removed for FOSS F-Droid compatibility; QrCodeDecoder (ZXing) is used instead.
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
@@ -105,25 +102,12 @@ fun QrToolsScreen(
     ) { uri: android.net.Uri? ->
         if (uri != null) {
             try {
-                val options = BarcodeScannerOptions.Builder()
-                    .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-                    .build()
-                val scanner = BarcodeScanning.getClient(options)
-                val inputImage = InputImage.fromFilePath(context, uri)
-                scanner.process(inputImage)
-                    .addOnSuccessListener { barcodes ->
-                        val result = barcodes.firstOrNull()?.rawValue
-                        if (result != null) {
-                            scannedResult = result
-                        } else {
-                            Toast.makeText(context, "No QR codes found in this image", Toast.LENGTH_SHORT).show()
-                        }
-                        scanner.close()
-                    }
-                    .addOnFailureListener { e ->
-                        Toast.makeText(context, "Scan failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                        scanner.close()
-                    }
+                val result = QrCodeDecoder.decodeUri(context, uri)
+                if (result != null) {
+                    scannedResult = result
+                } else {
+                    Toast.makeText(context, "No QR codes found in this image", Toast.LENGTH_SHORT).show()
+                }
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to load image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }
@@ -575,30 +559,16 @@ fun CameraPreviewScanner(
 class QrCodeAnalyzer(
     private val onSuccess: (String) -> Unit
 ) : ImageAnalysis.Analyzer {
-    private val options = BarcodeScannerOptions.Builder()
-        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
-        .build()
-    private val scanner = BarcodeScanning.getClient(options)
     private var isScanning = true
 
-    @androidx.camera.core.ExperimentalGetImage
     override fun analyze(imageProxy: androidx.camera.core.ImageProxy) {
-        val mediaImage = imageProxy.image
-        if (mediaImage != null && isScanning) {
-            val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-            scanner.process(image)
-                .addOnSuccessListener { barcodes ->
-                    val rawValue = barcodes.firstOrNull()?.rawValue
-                    if (rawValue != null) {
-                        isScanning = false
-                        onSuccess(rawValue)
-                    }
-                }
-                .addOnCompleteListener {
-                    imageProxy.close()
-                }
-        } else {
-            imageProxy.close()
+        if (isScanning) {
+            val result = QrCodeDecoder.decodeImageProxy(imageProxy)
+            if (result != null) {
+                isScanning = false
+                onSuccess(result)
+            }
         }
+        imageProxy.close()
     }
 }

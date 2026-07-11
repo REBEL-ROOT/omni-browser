@@ -6,6 +6,6 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowBackground">@color/slaty_black</item>
         <item name="android:windowSplashScreenBackground">@color/slaty_black</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_omni_logo</item>
     </style>
 </resources>

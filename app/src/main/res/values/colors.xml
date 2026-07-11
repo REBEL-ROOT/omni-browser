@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="slaty_black">#070A0F</color>
+    <color name="white">#FFFFFF</color>
 </resources>

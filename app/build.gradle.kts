@@ -172,15 +172,8 @@ dependencies {
     implementation("dev.chrisbanes.haze:haze:0.7.3")
 
     // === QR / Barcode ===
-    // Play Code Scanner: zero-permission, dynamically loaded via Play Services
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-    // Bundled ML Kit for offline / screenshot QR scanning
-    implementation("com.google.mlkit:barcode-scanning:17.3.0")
-    // ZXing: QR code generator only (tiny, no scanner runtime)
+    // ZXing: QR code decoder and generator (pure open-source FOSS, no play services)
     implementation("com.google.zxing:core:3.5.3")
-
-    // === Google Sign-In ===
-    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     // === Security & Storage ===
     implementation("androidx.biometric:biometric:1.2.0-alpha05")

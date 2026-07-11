@@ -42,6 +42,8 @@ import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.media.DownloadManagerScreen
 import com.rebelroot.omni.media.player.VideoPlayerScreen
 import com.rebelroot.omni.settings.SettingsScreen
+import com.rebelroot.omni.settings.AppearanceScreen
+import com.rebelroot.omni.settings.WallpaperScreen
 import com.rebelroot.omni.history.HistoryScreen
 import com.rebelroot.omni.bookmarks.BookmarksScreen
 import com.rebelroot.omni.tools.locker.PrivateLockerScreen
@@ -339,7 +341,29 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onLanguageChanged = {
                                     this@MainActivity.recreate()
+                                },
+                                onOpenAppearance = {
+                                    navController.navigate("appearance")
+                                },
+                                onOpenWallpapers = {
+                                    navController.navigate("wallpapers")
                                 }
+                            )
+                        }
+
+                        // Appearance Settings Screen
+                        composable("appearance") {
+                            AppearanceScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // Wallpaper Settings Screen
+                        composable("wallpapers") {
+                            WallpaperScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

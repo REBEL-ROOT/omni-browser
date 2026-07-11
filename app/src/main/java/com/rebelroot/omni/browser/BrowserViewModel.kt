@@ -57,10 +57,7 @@ import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebExtension
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+import com.rebelroot.omni.tools.qrcode.QrCodeDecoder
 import java.lang.ref.WeakReference
 import java.io.File
 import android.content.Intent
@@ -165,7 +162,17 @@ class BrowserViewModel : ViewModel() {
         val EXTENSIONS_OVERVIEW_SEEN_KEY = booleanPreferencesKey("extensions_overview_seen")
         val EDIT_PAGE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("edit_page_overview_seen")
         val CONSOLE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("console_overview_seen")
-        val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
+        val FORCE_DARK_WEBSITES_KEY = booleanPreferencesKey("force_dark_websites")
+        val NAV_BAR_HIDE_TOP_KEY = booleanPreferencesKey("nav_bar_hide_top")
+        val NAV_BAR_HIDE_BOTTOM_KEY = booleanPreferencesKey("nav_bar_hide_bottom")
+        val ADDRESS_BAR_POSITION_KEY = stringPreferencesKey("address_bar_position")
+        val APP_ICON_STATE_KEY = stringPreferencesKey("app_icon_state")
+        val BROWSER_WALLPAPER_URI_KEY = stringPreferencesKey("browser_wallpaper_uri")
+        val CHANGE_WALLPAPER_DAILY_KEY = booleanPreferencesKey("change_wallpaper_daily")
+        val SHOW_DISCOVER_FEED_KEY = booleanPreferencesKey("show_discover_feed")
+        val SHOW_BOTTOM_NAV_BAR_KEY = booleanPreferencesKey("show_bottom_nav_bar")
+
+
 
         // Native Player Settings Keys
         val PLAYER_DEFAULT_QUALITY_KEY = stringPreferencesKey("player_default_quality")
@@ -175,6 +182,7 @@ class BrowserViewModel : ViewModel() {
         val PLAYER_VOLUME_GESTURE_KEY = booleanPreferencesKey("player_volume_gesture")
         val PLAYER_RESUME_PLAYBACK_KEY = booleanPreferencesKey("player_resume_playback")
         val PLAYER_BACKGROUND_PLAYBACK_KEY = booleanPreferencesKey("player_background_playback")
+        val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
 
         @Volatile
         private var geckoRuntime: GeckoRuntime? = null
@@ -190,12 +198,29 @@ class BrowserViewModel : ViewModel() {
 
     // Extension Action System (Compose-friendly maps & states)
     val extensionActions = mutableStateMapOf<String, WebExtension.Action>()
+    val defaultExtensionActions = mutableStateMapOf<String, WebExtension.Action>()
+    val sessionExtensionActions = mutableStateMapOf<String, MutableMap<String, WebExtension.Action>>()
     var activeExtensionPopupSession by mutableStateOf<GeckoSession?>(null)
     var activeExtensionPopupName by mutableStateOf("")
 
-    fun registerExtensionAction(id: String, action: WebExtension.Action) {
+    fun registerExtensionAction(id: String, session: GeckoSession?, action: WebExtension.Action) {
         extensionActions[id] = action
+        if (session != null) {
+            val tab = tabs.find { it.session == session }
+            if (tab != null) {
+                val extMap = sessionExtensionActions.getOrPut(tab.id) { mutableMapOf() }
+                extMap[id] = action
+            }
+        } else {
+            defaultExtensionActions[id] = action
+        }
     }
+
+    fun getActionForExtension(extensionId: String): WebExtension.Action? {
+        val activeId = activeTabId ?: return defaultExtensionActions[extensionId] ?: extensionActions[extensionId]
+        return sessionExtensionActions[activeId]?.get(extensionId) ?: defaultExtensionActions[extensionId] ?: extensionActions[extensionId]
+    }
+
 
     fun handleExtensionOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession> {
         val result = GeckoResult<GeckoSession>()
@@ -299,11 +324,18 @@ class BrowserViewModel : ViewModel() {
     var selectedLanguageCode by mutableStateOf("en")
     var isLanguageSelectionDone by mutableStateOf(false)
     var isOnboardingCompleted by mutableStateOf(false)
-    var googleAccountEmail by mutableStateOf<String?>(null)
-    var googleAccountDisplayName by mutableStateOf<String?>(null)
-    var googleAccountPhotoUrl by mutableStateOf<String?>(null)
-    var googleAccountIsSignedIn by mutableStateOf(false)
     var selectedAccentTheme by mutableStateOf("Ocean Blue")
+    var forceDarkWebsites by mutableStateOf(false)
+    var navBarHideTop by mutableStateOf(false)
+    var navBarHideBottom by mutableStateOf(false)
+    var addressBarPosition by mutableStateOf("Top")
+    var appIconState by mutableStateOf("Default")
+    var browserWallpaperUri by mutableStateOf<String?>(null)
+    var changeWallpaperDaily by mutableStateOf(false)
+    var showDiscoverFeed by mutableStateOf(true)
+    var showBottomNavBar by mutableStateOf(true)
+
+
 
     // --- Custom Site Style Config ---
     var siteStyleFontSize by mutableStateOf(100)
@@ -365,32 +397,16 @@ class BrowserViewModel : ViewModel() {
                 return@then GeckoResult.fromValue(false)
             }
 
-            // Run ML Kit barcode detection on the captured bitmap
-            val options = BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE, Barcode.FORMAT_ALL_FORMATS)
-                .build()
-            val scanner = BarcodeScanning.getClient(options)
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
-
-            scanner.process(inputImage)
-                .addOnSuccessListener { barcodes ->
-                    val results = barcodes.mapNotNull { it.rawValue }.distinct()
-                    viewModelScope.launch(Dispatchers.Main) {
-                        isQrScanning = false
-                        qrScanResults = results
-                        if (results.isEmpty()) {
-                            qrScanError = "No QR codes found on this page"
-                        }
-                    }
-                    scanner.close()
+            // Run FOSS ZXing barcode detection on the captured bitmap
+            val result = QrCodeDecoder.decodeBitmap(bitmap)
+            val results = if (result != null) listOf(result) else emptyList()
+            viewModelScope.launch(Dispatchers.Main) {
+                isQrScanning = false
+                qrScanResults = results
+                if (results.isEmpty()) {
+                    qrScanError = "No QR codes found on this page"
                 }
-                .addOnFailureListener { e ->
-                    viewModelScope.launch(Dispatchers.Main) {
-                        isQrScanning = false
-                        qrScanError = "Scan failed: ${e.localizedMessage}"
-                    }
-                    scanner.close()
-                }
+            }
 
             GeckoResult.fromValue(true)
         }.exceptionally { throwable ->
@@ -408,31 +424,15 @@ class BrowserViewModel : ViewModel() {
         qrScanError = null
 
         try {
-            val options = BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE, Barcode.FORMAT_ALL_FORMATS)
-                .build()
-            val scanner = BarcodeScanning.getClient(options)
-            val inputImage = InputImage.fromFilePath(context, uri)
-
-            scanner.process(inputImage)
-                .addOnSuccessListener { barcodes ->
-                    val results = barcodes.mapNotNull { it.rawValue }.distinct()
-                    viewModelScope.launch(Dispatchers.Main) {
-                        isQrScanning = false
-                        qrScanResults = results
-                        if (results.isEmpty()) {
-                            qrScanError = "No QR codes found in this image"
-                        }
-                    }
-                    scanner.close()
+            val result = QrCodeDecoder.decodeUri(context, uri)
+            val results = if (result != null) listOf(result) else emptyList()
+            viewModelScope.launch(Dispatchers.Main) {
+                isQrScanning = false
+                qrScanResults = results
+                if (results.isEmpty()) {
+                    qrScanError = "No QR codes found in this image"
                 }
-                .addOnFailureListener { e ->
-                    viewModelScope.launch(Dispatchers.Main) {
-                        isQrScanning = false
-                        qrScanError = "Scan failed: ${e.localizedMessage}"
-                    }
-                    scanner.close()
-                }
+            }
         } catch (e: Exception) {
             isQrScanning = false
             qrScanError = "Failed to load image: ${e.localizedMessage}"
@@ -1830,6 +1830,32 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun clearSiteData(context: Context) {
+        val runtime = geckoRuntime
+        if (runtime != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val flags = org.mozilla.geckoview.StorageController.ClearFlags.COOKIES or
+                                org.mozilla.geckoview.StorageController.ClearFlags.DOM_STORAGES or
+                                org.mozilla.geckoview.StorageController.ClearFlags.SITE_DATA
+                    
+                    withContext(Dispatchers.Main) {
+                        runtime.storageController.clearData(flags).accept(
+                            { Toast.makeText(context, "Cookies and site data cleared", Toast.LENGTH_SHORT).show() },
+                            { err -> Toast.makeText(context, "Clear failed", Toast.LENGTH_SHORT).show() }
+                        )
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } else {
+            Toast.makeText(context, "Browser engine not running", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun pruneTemporaryStorage(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -2026,6 +2052,22 @@ class BrowserViewModel : ViewModel() {
                 hasSeenConsoleOverview = getConsoleOverviewSeenPreference(appCtx).first()
                 hasSeenDevNotesOverview = getDevNotesOverviewSeenPreference(appCtx).first()
             }
+
+            viewModelScope.launch {
+                appCtx.dataStore.data.first().let { prefs ->
+                    forceDarkWebsites = prefs[FORCE_DARK_WEBSITES_KEY] ?: false
+                    navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: false
+                    navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: false
+                    addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Top"
+                    appIconState = prefs[APP_ICON_STATE_KEY] ?: "Default"
+                    browserWallpaperUri = prefs[BROWSER_WALLPAPER_URI_KEY]
+                    changeWallpaperDaily = prefs[CHANGE_WALLPAPER_DAILY_KEY] ?: false
+                    showDiscoverFeed = prefs[SHOW_DISCOVER_FEED_KEY] ?: true
+                    showBottomNavBar = prefs[SHOW_BOTTOM_NAV_BAR_KEY] ?: true
+                }
+            }
+
+
 
             viewModelScope.launch {
                 loadPlayerSettings(appCtx)
@@ -2495,6 +2537,74 @@ class BrowserViewModel : ViewModel() {
             selectedAccentTheme = theme
         }
     }
+
+    fun saveForceDarkWebsites(context: Context, forceDark: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[FORCE_DARK_WEBSITES_KEY] = forceDark }
+            forceDarkWebsites = forceDark
+        }
+    }
+
+    fun saveNavBarHideTop(context: Context, hideTop: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[NAV_BAR_HIDE_TOP_KEY] = hideTop }
+            navBarHideTop = hideTop
+        }
+    }
+
+    fun saveNavBarHideBottom(context: Context, hideBottom: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[NAV_BAR_HIDE_BOTTOM_KEY] = hideBottom }
+            navBarHideBottom = hideBottom
+        }
+    }
+
+    fun saveAddressBarPosition(context: Context, position: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[ADDRESS_BAR_POSITION_KEY] = position }
+            addressBarPosition = position
+        }
+    }
+
+    fun saveAppIconState(context: Context, state: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[APP_ICON_STATE_KEY] = state }
+            appIconState = state
+        }
+    }
+
+    fun saveBrowserWallpaperUri(context: Context, uri: String?) {
+        viewModelScope.launch {
+            context.dataStore.edit { prefs ->
+                if (uri == null) prefs.remove(BROWSER_WALLPAPER_URI_KEY)
+                else prefs[BROWSER_WALLPAPER_URI_KEY] = uri
+            }
+            browserWallpaperUri = uri
+        }
+    }
+
+    fun saveChangeWallpaperDaily(context: Context, changeDaily: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[CHANGE_WALLPAPER_DAILY_KEY] = changeDaily }
+            changeWallpaperDaily = changeDaily
+        }
+    }
+
+    fun saveShowDiscoverFeed(context: Context, show: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[SHOW_DISCOVER_FEED_KEY] = show }
+            showDiscoverFeed = show
+        }
+    }
+
+    fun saveShowBottomNavBar(context: Context, show: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[SHOW_BOTTOM_NAV_BAR_KEY] = show }
+            showBottomNavBar = show
+        }
+    }
+
+
 
     fun getLanguagePreference(context: Context): Flow<String> {
         return context.dataStore.data.map { preferences ->
@@ -3218,10 +3328,10 @@ class BrowserViewModel : ViewModel() {
                         ext.setActionDelegate(object : WebExtension.ActionDelegate {
 
                             override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                registerExtensionAction(extension.id, action)
+                                registerExtensionAction(extension.id, session, action)
                             }
                             override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                registerExtensionAction(extension.id, action)
+                                registerExtensionAction(extension.id, session, action)
                             }
                             override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
                                 return handleExtensionOpenPopup(extension, action)
@@ -3250,18 +3360,23 @@ class BrowserViewModel : ViewModel() {
         runtime.webExtensionController.list()
             .accept(
                 { list ->
-                    val coreIds = listOf(UBLOCK_ID, GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID)
+                    val coreIds = listOf(UBLOCK_ID, GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app")
                     val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
+                    val leftoverAgent = list?.find { it.id == "omni-agent@omnibrowser.app" }
+                    if (leftoverAgent != null) {
+                        Log.i(TAG, "Leftover Omni Agent extension found in profile database. Uninstalling...")
+                        runtime.webExtensionController.uninstall(leftoverAgent)
+                    }
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         filtered.forEach { ext ->
                             runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
                             ext.setActionDelegate(object : WebExtension.ActionDelegate {
 
                                 override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                    registerExtensionAction(extension.id, action)
+                                    registerExtensionAction(extension.id, session, action)
                                 }
                                 override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                    registerExtensionAction(extension.id, action)
+                                    registerExtensionAction(extension.id, session, action)
                                 }
                                 override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
                                     return handleExtensionOpenPopup(extension, action)
@@ -3470,7 +3585,12 @@ class BrowserViewModel : ViewModel() {
             return
         }
         
-        shortcutsList.removeAll { it.url == formattedUrl }
+        val exists = shortcutsList.any { it.url == formattedUrl }
+        if (exists) {
+            Toast.makeText(context, "Shortcut already exists", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         // Add to index 1 (just after permanent RebelRoot shortcut) if RebelRoot is at index 0
         if (shortcutsList.isNotEmpty() && shortcutsList[0].isPermanent) {
             shortcutsList.add(1, HomeShortcut(id, title, formattedUrl))
@@ -3478,6 +3598,20 @@ class BrowserViewModel : ViewModel() {
             shortcutsList.add(0, HomeShortcut(id, title, formattedUrl))
         }
         saveShortcuts(context)
+    }
+
+    fun editShortcut(shortcut: HomeShortcut, newTitle: String, newUrl: String) {
+        if (shortcut.isPermanent) return
+        val context = appContext ?: return
+        var formattedUrl = newUrl.trim()
+        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+            formattedUrl = "https://$formattedUrl"
+        }
+        val idx = shortcutsList.indexOfFirst { it.id == shortcut.id }
+        if (idx != -1) {
+            shortcutsList[idx] = shortcut.copy(title = newTitle, url = formattedUrl)
+            saveShortcuts(context)
+        }
     }
     
     fun deleteShortcut(shortcut: HomeShortcut) {
@@ -3999,73 +4133,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    // ── Google SSO Authentication Manager ──
 
-    @Suppress("DEPRECATION")
-    fun checkGoogleSignInStatus(context: Context) {
-        try {
-            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestEmail()
-                .requestProfile()
-                .build()
-            val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-            googleSignInClient.silentSignIn().addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val account = task.result
-                    googleAccountEmail = account.email
-                    googleAccountDisplayName = account.displayName
-                    googleAccountPhotoUrl = account.photoUrl?.toString()
-                    googleAccountIsSignedIn = true
-                    Log.i(TAG, "Google Sign-In: silentSignIn successful for ${account.email}")
-                } else {
-                    googleAccountEmail = null
-                    googleAccountDisplayName = null
-                    googleAccountPhotoUrl = null
-                    googleAccountIsSignedIn = false
-                    // Log the specific error code for debugging (Error 10 = DEVELOPER_ERROR = SHA-1 mismatch)
-                    val exception = task.exception
-                    if (exception is com.google.android.gms.common.api.ApiException) {
-                        Log.w(TAG, "Google Sign-In: silentSignIn failed with status code ${exception.statusCode} (${exception.message}). " +
-                                "Error 10 = DEVELOPER_ERROR: SHA-1 fingerprint not registered in Google Cloud Console for package ${context.packageName}")
-                    } else {
-                        Log.w(TAG, "Google Sign-In: silentSignIn failed", exception)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Google Sign-In: failed to initialize sign-in client", e)
-            googleAccountIsSignedIn = false
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    fun handleGoogleSignInResult(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount?) {
-        if (account != null) {
-            googleAccountEmail = account.email
-            googleAccountDisplayName = account.displayName
-            googleAccountPhotoUrl = account.photoUrl?.toString()
-            googleAccountIsSignedIn = true
-        } else {
-            googleAccountEmail = null
-            googleAccountDisplayName = null
-            googleAccountPhotoUrl = null
-            googleAccountIsSignedIn = false
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    fun googleSignOut(context: Context, onComplete: () -> Unit = {}) {
-        val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .build()
-        val googleSignInClient = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(context, gso)
-        googleSignInClient.signOut().addOnCompleteListener {
-            googleAccountEmail = null
-            googleAccountDisplayName = null
-            googleAccountPhotoUrl = null
-            googleAccountIsSignedIn = false
-            onComplete()
-        }
-    }
 
     fun sendFeedbackToTelegram(
         name: String,
