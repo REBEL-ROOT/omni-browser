@@ -41,6 +41,7 @@ fun AppearanceScreen(
     }
     
     val context = LocalContext.current
+    var showIconDialog by remember { mutableStateOf(false) }
     val isDarkMode = viewModel.isDarkThemeEnabled
     val accentColor = MaterialTheme.colorScheme.primary
     val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
@@ -143,7 +144,7 @@ fun AppearanceScreen(
                 }
             }
             
-            // App Icon Placeholder
+            // App Icon selection and dialog
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("App Icon", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
                 Row(
@@ -152,7 +153,7 @@ fun AppearanceScreen(
                         .clip(RoundedCornerShape(16.dp))
                         .background(cardColor)
                         .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                        .clickable { /* Future App Icon Picker */ }
+                        .clickable { showIconDialog = true }
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -161,6 +162,46 @@ fun AppearanceScreen(
                     Text(viewModel.appIconState, color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Change Icon", tint = textSecondaryColor)
                 }
+            }
+
+            if (showIconDialog) {
+                AlertDialog(
+                    onDismissRequest = { showIconDialog = false },
+                    title = { Text("Choose App Icon", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            listOf("Default", "Dark", "Blue", "Gold").forEach { state ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.saveAppIconState(context, state)
+                                            showIconDialog = false
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = viewModel.appIconState == state,
+                                        onClick = {
+                                            viewModel.saveAppIconState(context, state)
+                                            showIconDialog = false
+                                        },
+                                        colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(state, color = textPrimaryColor, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showIconDialog = false }) {
+                            Text("Cancel", color = accentColor)
+                        }
+                    },
+                    containerColor = cardColor
+                )
             }
 
             // Address Bar
