@@ -147,37 +147,6 @@
         }
     }
 
-    // ── Block window.open() and inject popup override ─────────────────────────
-    function blockWindowOpen() {
-        const adPopupDomains = [
-            "popads.net", "popcash.net", "exoclick.com", "trafficjunky.net",
-            "juicyads.com", "adsterra.com", "propellerads.com", "hilltopads.net",
-            "clickadu.com", "evadav.com", "megapush.com", "adf.ly", "linkvertise.com",
-            "trafficfactory.biz", "tsyndicate.com", "doublelift.net",
-        ];
-
-        const originalOpen = window.open;
-        window.open = function (url, target, features) {
-            if (!url) return null;
-            const lowerUrl = String(url).toLowerCase();
-            // Block if URL matches an ad popup domain
-            for (const domain of adPopupDomains) {
-                if (lowerUrl.includes(domain)) {
-                    console.debug("[Omni] Blocked popup to ad domain:", url);
-                    return null;
-                }
-            }
-            // Block popups that open "about:blank" then redirect (common trick)
-            if (lowerUrl === "about:blank" || lowerUrl === "") {
-                // Allow only if there's a legitimate feature request (like window size)
-                if (!features || features.length === 0) {
-                    console.debug("[Omni] Blocked suspicious about:blank popup");
-                    return null;
-                }
-            }
-            return originalOpen.call(window, url, target, features);
-        };
-    }
 
     // ── Block automatic redirects via meta refresh + JS location changes ──────
     function blockAutoRedirects() {
@@ -214,7 +183,7 @@
 
     // ── Entry point ───────────────────────────────────────────────────────────
     injectCosmeticCSS();
-    blockWindowOpen();
+
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", function () {

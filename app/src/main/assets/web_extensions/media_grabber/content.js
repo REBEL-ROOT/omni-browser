@@ -1,39 +1,46 @@
 // content.js
+const api = typeof browser !== "undefined" ? browser : chrome;
+var chrome = api;
 // Inject our page context hook script to detect media URLs (passive detection only)
 const script = document.createElement('script');
+
 script.src = chrome.runtime.getURL('inject.js');
 script.onload = function() { this.remove(); };
 (document.head || document.documentElement).appendChild(script);
 
 // On start, request the current native player state from the background script
 try {
-    chrome.runtime.sendMessage({ type: 'GET_NATIVE_PLAYER_STATE' }, (response) => {
-        if (response && response.hasOwnProperty('enabled')) {
-            console.log('[content.js] Received initial native player state:', response.enabled);
-            window.postMessage({
-                type: 'OMNI_SET_NATIVE_PLAYER',
-                enabled: response.enabled
-            }, '*');
-        }
-    });
+    chrome.runtime.sendMessage({ type: 'GET_NATIVE_PLAYER_STATE' })
+        .then((response) => {
+            if (response && response.hasOwnProperty('enabled')) {
+                console.log('[content.js] Received initial native player state:', response.enabled);
+                window.postMessage({
+                    type: 'OMNI_SET_NATIVE_PLAYER',
+                    enabled: response.enabled
+                }, '*');
+            }
+        })
+        .catch(() => {});
 } catch (e) {
     console.error('[content.js] Failed to request native player state:', e);
 }
 
 // Request previously cached media URLs for this tab on startup
 try {
-    chrome.runtime.sendMessage({ type: 'GET_TAB_MEDIA' }, (response) => {
-        if (response && Array.isArray(response)) {
-            console.log('[content.js] Received cached tab media items:', response.length);
-            response.forEach(item => {
-                window.postMessage({
-                    type: 'ADD_DETECTED_MANIFEST',
-                    url: item.url,
-                    mimeType: item.mimeType
-                }, '*');
-            });
-        }
-    });
+    chrome.runtime.sendMessage({ type: 'GET_TAB_MEDIA' })
+        .then((response) => {
+            if (response && Array.isArray(response)) {
+                console.log('[content.js] Received cached tab media items:', response.length);
+                response.forEach(item => {
+                    window.postMessage({
+                        type: 'ADD_DETECTED_MANIFEST',
+                        url: item.url,
+                        mimeType: item.mimeType
+                    }, '*');
+                });
+            }
+        })
+        .catch(() => {});
 } catch (e) {
     console.error('[content.js] Failed to request cached tab media:', e);
 }

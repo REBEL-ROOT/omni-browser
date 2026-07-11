@@ -1469,7 +1469,34 @@ class BrowserViewModel : ViewModel() {
                     mediaInterceptor.onMediaRequestDetected(uri)
                 }
 
+                // ── Popup & Ad-Tab Blocker ─────────────────────────────────────────────
+                if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
+                    if (isPopupBlockerEnabled) {
+                        // 1. Block if target is a known ad popup network
+                        val isAdPopup = POPUP_AD_DOMAINS.any { domain ->
+                            lowerUri.contains(domain)
+                        }
+                        if (isAdPopup) {
+                            Log.w(TAG, "🚫 onLoadRequest: Blocked ad popup to $uri")
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+
+                        // 2. Block suspicious blank popups
+                        if (request.uri.isEmpty() || lowerUri == "about:blank") {
+                            Log.w(TAG, "🚫 onLoadRequest: Blocked blank popup")
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+
+                        // 3. Block popups that have no user gesture (auto-popups / redirects)
+                        if (!request.hasUserGesture) {
+                            Log.w(TAG, "🚫 onLoadRequest: Blocked auto-popup (no user gesture) to $uri")
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+                    }
+                }
+
                 // 1. Intercept and block calendar spam subscription redirects from adware
+
                 if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") || 
                     lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") || 
                     lowerUri.contains(".ics?") || lowerUri.contains("calendar.google.com") ||
@@ -1675,7 +1702,7 @@ class BrowserViewModel : ViewModel() {
                         }
                         if (isAdPopup) {
                             Log.w(TAG, "🚫 Popup blocked — ad domain: $uri")
-                            return null   // returning null tells GeckoView to cancel the popup
+                            return GeckoResult.fromValue(null)
                         }
 
                         // Block suspicious blank popups that are script-injected (no real URL).
@@ -1683,9 +1710,10 @@ class BrowserViewModel : ViewModel() {
                         // passed in, e.g. for OAuth flows the URI is always a real https:// URL.
                         if (uri.isEmpty() || lowerUri == "about:blank") {
                             Log.w(TAG, "🚫 Popup blocked — suspicious blank popup with no URI")
-                            return null
+                            return GeckoResult.fromValue(null)
                         }
                     }
+
 
                     // ── Allow legitimate popup → open in new background tab ───────────────
                     Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
@@ -2005,24 +2033,8 @@ class BrowserViewModel : ViewModel() {
             initTabs(appCtx)
             loadDevNotes(appCtx)
 
-            // Load saved settings
-            viewModelScope.launch {
-                isAdblockerEnabled = getAdblockPreference(appCtx).first()
-                syncAdblockerState(shouldReload = false)
-            }
-
             viewModelScope.launch {
                 isPopupBlockerEnabled = getPopupBlockerPreference(appCtx).first()
-            }
-
-            viewModelScope.launch {
-                isUniversalCopyEnabled = getUniversalCopyPreference(appCtx).first()
-                syncUniversalCopyState(shouldReload = false)
-            }
-
-            viewModelScope.launch {
-                isAiBlockerEnabled = getAiBlockerPreference(appCtx).first()
-                aiBlockerManager?.installAndSync(isAiBlockerEnabled, onComplete = null)
             }
 
             viewModelScope.launch {
@@ -2030,10 +2042,6 @@ class BrowserViewModel : ViewModel() {
                 syncNativePlayerStateInPage()
             }
 
-            viewModelScope.launch {
-                isMediaGrabberEnabled = getMediaGrabberPreference(appCtx).first()
-                syncMediaGrabberState(shouldReload = false)
-            }
 
             viewModelScope.launch {
                 customVpnConfig = getCustomVpnConfig(appCtx).first()
@@ -2125,46 +2133,71 @@ class BrowserViewModel : ViewModel() {
                 loadPlayerSettings(appCtx)
             }
 
-            // Auto load MSE Aggressive Grabber Extension on Engine initialization
-            loadMediaGrabberExtension()
+            // Refresh and load all built-in extensions (grabber, ublock, universal copy, ai blocker)
+            refreshAndLoadBuiltInExtensions(appCtx)
         }
         return geckoRuntime!!
     }
 
-
-    private fun loadMediaGrabberExtension() {
+    private fun refreshAndLoadBuiltInExtensions(context: Context) {
         val runtime = geckoRuntime ?: return
-        Log.d(TAG, "Registering MSE Aggressive Media Grabber...")
+        Log.d(TAG, "Refreshing and loading built-in extensions...")
         
-        // Unconditionally uninstall the old version first during startup to ensure latest assets are loaded
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             runtime.webExtensionController.list().accept(
                 { extensions ->
-                    val oldExtension = extensions?.find { it.id == GRABBER_ID }
-                    if (oldExtension != null) {
-                        Log.d(TAG, "Uninstalling old grabber extension to reload new assets...")
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            runtime.webExtensionController.uninstall(oldExtension).accept(
+                    val coreIds = setOf(UBLOCK_ID, GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID)
+                    val toUninstall = extensions?.filter { it.id in coreIds } ?: emptyList()
+                    
+                    if (toUninstall.isNotEmpty()) {
+                        Log.d(TAG, "Uninstalling old built-in extensions to reload assets: ${toUninstall.map { it.id }}")
+                        var remaining = toUninstall.size
+                        toUninstall.forEach { ext ->
+                            runtime.webExtensionController.uninstall(ext).accept(
                                 {
-                                    installGrabberExtension(runtime)
+                                    remaining--
+                                    if (remaining == 0) {
+                                        loadExtensionsClean(context)
+                                    }
                                 },
                                 { error ->
-                                    Log.e(TAG, "Failed to uninstall old grabber extension", error)
-                                    installGrabberExtension(runtime)
+                                    Log.e(TAG, "Failed to uninstall extension ${ext.id}", error)
+                                    remaining--
+                                    if (remaining == 0) {
+                                        loadExtensionsClean(context)
+                                    }
                                 }
                             )
                         }
                     } else {
-                        installGrabberExtension(runtime)
+                        loadExtensionsClean(context)
                     }
                 },
                 { error ->
-                    Log.e(TAG, "Failed to list extensions for uninstall check", error)
-                    installGrabberExtension(runtime)
+                    Log.e(TAG, "Failed to list extensions on startup", error)
+                    loadExtensionsClean(context)
                 }
             )
         }
     }
+
+    private fun loadExtensionsClean(context: Context) {
+        val runtime = geckoRuntime ?: return
+        viewModelScope.launch {
+            isMediaGrabberEnabled = getMediaGrabberPreference(context).first()
+            installGrabberExtension(runtime)
+            
+            isAdblockerEnabled = getAdblockPreference(context).first()
+            syncAdblockerState(shouldReload = false)
+            
+            isUniversalCopyEnabled = getUniversalCopyPreference(context).first()
+            syncUniversalCopyState(shouldReload = false)
+            
+            isAiBlockerEnabled = getAiBlockerPreference(context).first()
+            aiBlockerManager?.installAndSync(isAiBlockerEnabled, onComplete = null)
+        }
+    }
+
 
     private fun installGrabberExtension(runtime: GeckoRuntime) {
         runtime.webExtensionController.ensureBuiltIn(
@@ -2207,9 +2240,10 @@ class BrowserViewModel : ViewModel() {
                     }
 
                     if (type == "GET_NATIVE_PLAYER_STATE") {
-                        val response = mutableMapOf<String, Any>("enabled" to isNativePlayerEnabled)
+                        val response = org.json.JSONObject()
+                        response.put("enabled", isNativePlayerEnabled)
                         pendingJsCommand?.let {
-                            response["pendingJs"] = it
+                            response.put("pendingJs", it)
                             pendingJsCommand = null
                         }
                         return GeckoResult.fromValue(response)
@@ -2289,8 +2323,7 @@ class BrowserViewModel : ViewModel() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing grabbed media extension port message", e)
                 }
-                val defaultResponse = mapOf("success" to true)
-                return GeckoResult.fromValue(defaultResponse)
+                return null
             }
         }, "omniApp")
     }
