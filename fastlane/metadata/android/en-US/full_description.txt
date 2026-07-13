@@ -1,0 +1,34 @@
+Omni Browser is a privacy-first, feature-rich Android web browser built on Mozilla's GeckoView engine.
+
+<b>Privacy & Security</b>
+• Built-in ad and tracker blocker (powered by a custom uBlock-style engine with 180+ domains)
+• Popup & ad-tab blocker — stops auto-jumping ad tabs and pop-under networks
+• AI-generated content filter — removes AI Overview panels and assistant cards on search engines
+• Incognito mode with private browsing
+• Vault — encrypted local file storage for sensitive downloads
+
+<b>Browser Features</b>
+• Full Firefox extension support — install any extension from addons.mozilla.org
+• QR code scanner — decode from screenshots, gallery images, or live camera
+• Save page as PDF
+• Native video player with background playback and HLS/DASH support
+• Media grabber — capture and download video/audio streams
+• Reader mode — clean, distraction-free article view
+• Desktop mode toggle
+• Universal text copy — bypass site copy restrictions
+• Custom site styling — font size, line spacing, dark/light theme per page
+
+<b>Tab Management</b>
+• Multi-tab browsing with visual tab switcher
+• Separate incognito tabs
+• Tab history and restore
+
+<b>Customisation</b>
+• Multiple accent colour themes
+• Top or bottom address bar
+• Custom home page wallpaper
+• Discover feed (optional)
+
+<b>100% Free and Open Source</b>
+No Google Play Services. No tracking. No ads. No data collection.
+Source code: https://github.com/RebelRoot/omni-browser

@@ -1,0 +1,37 @@
+{
+    "manifest_version": 2,
+    "name": "Omni AI Blocker",
+    "version": "1.0.0",
+    "description": "Removes generative AI overview cards and assistant response boxes from search result pages.",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "omni-ai-blocker@omnibrowser.app"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.google.com/*",
+                "*://*.google.co.uk/*",
+                "*://*.google.co.in/*",
+                "*://*.google.ca/*",
+                "*://*.google.com.au/*",
+                "*://*.google.de/*",
+                "*://*.google.fr/*",
+                "*://*.google.it/*",
+                "*://*.google.es/*",
+                "*://*.google.co.jp/*",
+                "*://*.google.com.br/*",
+                "*://*.google.com.mx/*",
+                "*://search.brave.com/*",
+                "*://*.bing.com/*",
+                "*://*.duckduckgo.com/*",
+                "*://*.yahoo.com/*",
+                "*://*.search.yahoo.com/*"
+            ],
+            "css": ["override.css"],
+            "run_at": "document_start",
+            "all_frames": true
+        }
+    ]
+}

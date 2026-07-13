@@ -1,0 +1,67 @@
+/* override.css - Hides AI Overviews, assistants, and summarizers on search engines */
+
+/* Google Search AI Overview (Gemini) */
+div#superroot,
+div.ULSxyf,
+div.Gy5B3f,
+div.p6vvo,
+div[data-la*="ai-overview"],
+div[data-la*="generative"],
+g-section-with-header:has(a[href*="generative-ai"]),
+div:has(> a[href*="generative-ai"]) {
+    display: none !important;
+    height: 0 !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Brave Search AI (Leo / Answer Engine) */
+div.search-result-answer,
+div#answer,
+div.answer-card,
+div.answer-wrapper,
+div.ai-summary,
+div.leo-chat-container,
+div.brave-ai-response {
+    display: none !important;
+    height: 0 !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* Bing Search AI (Copilot / Bing Chat) */
+div#b_copilot,
+div.b_ans_chat,
+div.copilot-chat-container,
+div.b_algo_copilot,
+div.bing-chat-card,
+li.b_ans:has(div.copilot-chat-container) {
+    display: none !important;
+    height: 0 !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* DuckDuckGo AI (DuckAssist) */
+div.duckassist,
+div.duckassist-wrapper,
+div.duckassist-card,
+div.react-results--sidebar:has(div.duckassist) {
+    display: none !important;
+    height: 0 !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* General AI containers and widgets on search pages */
+div.ai-overview-container,
+div.ai-block,
+div.ai-response,
+div.generative-ai-box,
+aside.ai-assistant {
+    display: none !important;
+    height: 0 !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
