@@ -113,6 +113,7 @@
         android:supportsRtl="true"
         android:resizeableActivity="true"
         android:largeHeap="true"
+        android:extractNativeLibs="true"
         android:theme="@style/Theme.OmniBrowser">
 
 
