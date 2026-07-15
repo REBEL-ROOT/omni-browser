@@ -1,0 +1,1194 @@
+diff --git a/app/src/main/java/com/rebelroot/omni/browser/BrowserScreen.kt b/app/src/main/java/com/rebelroot/omni/browser/BrowserScreen.kt
+index 47e296b..7163e0c 100644
+--- a/app/src/main/java/com/rebelroot/omni/browser/BrowserScreen.kt
++++ b/app/src/main/java/com/rebelroot/omni/browser/BrowserScreen.kt
+@@ -5,6 +5,7 @@ import android.view.ViewGroup
+ import android.widget.Toast
+ import androidx.activity.compose.rememberLauncherForActivityResult
+ import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.ui.graphics.vector.path
+ import androidx.compose.animation.AnimatedVisibility
+ import androidx.compose.animation.fadeIn
+ import androidx.compose.animation.fadeOut
+@@ -54,6 +55,8 @@ import androidx.compose.ui.unit.DpOffset
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.unit.sp
+ import androidx.compose.ui.viewinterop.AndroidView
++import androidx.compose.ui.res.stringResource
++import com.rebelroot.omni.R
+ 
+ import kotlinx.coroutines.launch
+ import org.mozilla.geckoview.GeckoView
+@@ -123,6 +126,7 @@ fun HomeScreenContent(
+     viewModel: BrowserViewModel,
+     onOpenDownloads: () -> Unit,
+     onOpenHistory: () -> Unit,
++    onOpenBookmarks: () -> Unit,
+     onOpenLocker: () -> Unit,
+     onOpenScanner: () -> Unit,
+     onOpenQrTools: () -> Unit,
+@@ -145,12 +149,19 @@ fun HomeScreenContent(
+ 
+         // Center branding OMNI stylized logo Image
+         androidx.compose.foundation.Image(
+-            painter = androidx.compose.ui.res.painterResource(id = com.rebelroot.omni.R.drawable.omni_home_logo),
++            painter = androidx.compose.ui.res.painterResource(
++                id = if (viewModel.isDarkThemeEnabled) {
++                    com.rebelroot.omni.R.drawable.omni_home_logo
++                } else {
++                    com.rebelroot.omni.R.drawable.omni_home_logo_light
++                }
++            ),
+             contentDescription = "Omni Browser Logo",
+             modifier = Modifier
+                 .fillMaxWidth()
+                 .height(180.dp) // Adjusted height for visibility
+-                .padding(horizontal = 16.dp),
++                .padding(horizontal = 16.dp)
++                .clickable { onNavigateTo("https://www.rebelroot.xyz/omnibrowser") },
+             contentScale = androidx.compose.ui.layout.ContentScale.Fit
+         )
+ 
+@@ -159,7 +170,7 @@ fun HomeScreenContent(
+             value = searchText,
+             onValueChange = { searchText = it },
+             modifier = Modifier.fillMaxWidth(),
+-            placeholder = { Text("Search or type web address", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
++            placeholder = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.search_placeholder), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
+             leadingIcon = {
+                 var expanded by remember { mutableStateOf(false) }
+                 val currentEngine = viewModel.selectedSearchEngine
+@@ -264,7 +275,7 @@ fun HomeScreenContent(
+                 ShortcutItem(title = "Twitter", icon = Icons.Rounded.Public, onClick = { onNavigateTo("https://twitter.com") })
+                 ShortcutItem(title = "Unsplash", icon = Icons.Rounded.CameraAlt, onClick = { onNavigateTo("https://unsplash.com") })
+                 ShortcutItem(title = "Pinterest", icon = Icons.Rounded.Image, onClick = { onNavigateTo("https://pinterest.com") })
+-                ShortcutItem(title = "Downloads", icon = Icons.Rounded.Download, isAccented = true, onClick = onOpenDownloads)
++                ShortcutItem(title = context.getString(com.rebelroot.omni.R.string.downloads_title), icon = Icons.Rounded.Download, isAccented = true, onClick = onOpenDownloads)
+             }
+             
+             // Row 2
+@@ -272,10 +283,8 @@ fun HomeScreenContent(
+                 modifier = Modifier.fillMaxWidth(),
+                 horizontalArrangement = Arrangement.SpaceBetween
+             ) {
+-                ShortcutItem(title = "History", icon = Icons.Rounded.History, onClick = onOpenHistory)
+-                ShortcutItem(title = "Bookmarks", icon = Icons.Rounded.Bookmark, onClick = {
+-                    Toast.makeText(context, "Bookmarks", Toast.LENGTH_SHORT).show()
+-                })
++                ShortcutItem(title = context.getString(com.rebelroot.omni.R.string.history_title), icon = Icons.Rounded.History, onClick = onOpenHistory)
++                ShortcutItem(title = context.getString(com.rebelroot.omni.R.string.bookmarks_title), icon = Icons.Rounded.Bookmark, onClick = onOpenBookmarks)
+                 ShortcutItem(
+                     title = "Incognito",
+                     icon = if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+@@ -293,7 +302,7 @@ fun HomeScreenContent(
+             verticalArrangement = Arrangement.spacedBy(12.dp)
+         ) {
+             Text(
+-                text = "Quick Tools",
++                text = androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.quick_tools_title),
+                 color = MaterialTheme.colorScheme.onSurface,
+                 fontSize = 16.sp,
+                 fontWeight = FontWeight.Bold,
+@@ -306,33 +315,37 @@ fun HomeScreenContent(
+             ) {
+                 item {
+                     ToolCard(
+-                        title = "Doc Scanner",
++                        title = context.getString(com.rebelroot.omni.R.string.doc_scanner_title),
+                         subtitle = "ML Scanner",
+                         icon = Icons.Rounded.DocumentScanner,
++                        isDark = viewModel.isDarkThemeEnabled,
+                         onClick = onOpenScanner
+                     )
+                 }
+                 item {
+                     ToolCard(
+-                        title = "QR Tools",
++                        title = context.getString(com.rebelroot.omni.R.string.qr_tools_title),
+                         subtitle = "Scan & Gen",
+                         icon = Icons.Rounded.QrCodeScanner,
++                        isDark = viewModel.isDarkThemeEnabled,
+                         onClick = onOpenQrTools
+                     )
+                 }
+                 item {
+                     ToolCard(
+-                        title = "Safe Locker",
++                        title = context.getString(com.rebelroot.omni.R.string.safe_locker_title),
+                         subtitle = "Secure Vault",
+                         icon = Icons.Rounded.Lock,
++                        isDark = viewModel.isDarkThemeEnabled,
+                         onClick = onOpenLocker
+                     )
+                 }
+                 item {
+                     ToolCard(
+-                        title = "Extensions",
++                        title = context.getString(com.rebelroot.omni.R.string.quick_tools_title),
+                         subtitle = "Web Addons",
+                         icon = Icons.Rounded.Extension,
++                        isDark = viewModel.isDarkThemeEnabled,
+                         onClick = onOpenExtensions
+                     )
+                 }
+@@ -490,46 +503,51 @@ fun ToolCard(
+     title: String,
+     subtitle: String,
+     icon: androidx.compose.ui.graphics.vector.ImageVector,
+-    modifier: Modifier = Modifier.width(136.dp),
++    modifier: Modifier = Modifier,
++    isDark: Boolean = true,
+     onClick: () -> Unit
+ ) {
++    val cardBg = if (isDark) Color(0xFF16222F) else Color(0xFFF8FAFC)
++    val cardBorder = if (isDark) Color(0xFF23374A) else Color(0xFFE2E8F0)
++
+     Surface(
+         modifier = modifier
+-            .clip(RoundedCornerShape(14.dp))
++            .clip(RoundedCornerShape(16.dp))
+             .clickable { onClick() },
+-        color = MaterialTheme.colorScheme.surface,
+-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
++        color = cardBg,
++        border = BorderStroke(0.5.dp, cardBorder),
++        shape = RoundedCornerShape(16.dp)
+     ) {
+         Column(
+-            modifier = Modifier.padding(12.dp),
+-            verticalArrangement = Arrangement.spacedBy(8.dp)
++            modifier = Modifier.padding(14.dp),
++            verticalArrangement = Arrangement.spacedBy(10.dp)
+         ) {
+             Box(
+                 modifier = Modifier
+-                    .size(32.dp)
+-                    .clip(RoundedCornerShape(8.dp))
+-                    .background(MaterialTheme.colorScheme.surfaceVariant),
++                    .size(38.dp)
++                    .clip(RoundedCornerShape(10.dp))
++                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                 contentAlignment = Alignment.Center
+             ) {
+                 Icon(
+                     imageVector = icon,
+                     contentDescription = title,
+-                    tint = Color(0xFF0088FF),
+-                    modifier = Modifier.size(18.dp)
++                    tint = MaterialTheme.colorScheme.primary,
++                    modifier = Modifier.size(20.dp)
+                 )
+             }
+-            Column {
++            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                 Text(
+                     text = title,
+                     color = MaterialTheme.colorScheme.onSurface,
+-                    fontSize = 12.sp,
+-                    fontWeight = FontWeight.Bold,
++                    fontSize = 13.sp,
++                    fontWeight = FontWeight.SemiBold,
+                     maxLines = 1,
+                     overflow = TextOverflow.Ellipsis
+                 )
+                 Text(
+                     text = subtitle,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
++                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                     fontSize = 10.sp,
+                     maxLines = 1,
+                     overflow = TextOverflow.Ellipsis
+@@ -539,6 +557,72 @@ fun ToolCard(
+     }
+ }
+ 
++@Composable
++fun QuickToolCard(
++    title: String,
++    icon: androidx.compose.ui.graphics.vector.ImageVector,
++    onClick: () -> Unit,
++    isActive: Boolean = false,
++    isDarkTheme: Boolean = true
++) {
++    val cardBg = if (isDarkTheme) Color(0xFF131920) else Color(0xFFF1F5F9)
++    val cardBorder = if (isActive) {
++        Color(0xFFFF3F6C)
++    } else {
++        if (isDarkTheme) Color(0xFF23374A).copy(alpha = 0.5f) else Color(0xFFE2E8F0)
++    }
++    
++    val iconBg = if (isActive) {
++        Color(0xFFFF3F6C).copy(alpha = 0.25f)
++    } else {
++        Color(0xFFFF3F6C).copy(alpha = 0.12f)
++    }
++    val iconTint = Color(0xFFFF3F6C)
++
++    Surface(
++        modifier = Modifier
++            .fillMaxWidth()
++            .clip(RoundedCornerShape(12.dp))
++            .clickable { onClick() },
++        color = cardBg,
++        border = BorderStroke(1.dp, cardBorder),
++        shape = RoundedCornerShape(12.dp)
++    ) {
++        Column(
++            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
++            horizontalAlignment = Alignment.CenterHorizontally,
++            verticalArrangement = Arrangement.spacedBy(8.dp)
++        ) {
++            Box(
++                modifier = Modifier
++                    .size(40.dp)
++                    .clip(RoundedCornerShape(10.dp))
++                    .background(iconBg),
++                contentAlignment = Alignment.Center
++            ) {
++                Icon(
++                    imageVector = icon,
++                    contentDescription = title,
++                    tint = iconTint,
++                    modifier = Modifier.size(20.dp)
++                )
++            }
++            Text(
++                text = title,
++                color = if (isDarkTheme) Color.White else Color(0xFF1E293B),
++                fontSize = 11.sp,
++                fontWeight = FontWeight.SemiBold,
++                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
++                maxLines = 2,
++                minLines = 2,
++                overflow = TextOverflow.Ellipsis,
++                lineHeight = 13.sp,
++                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
++            )
++        }
++    }
++}
++
+ @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+ @Composable
+ fun BrowserScreen(
+@@ -549,6 +633,7 @@ fun BrowserScreen(
+     onOpenDownloads: () -> Unit,
+     onOpenSettings: () -> Unit,
+     onOpenHistory: () -> Unit,
++    onOpenBookmarks: () -> Unit,
+     onPlayOnlineStream: (String, String) -> Unit
+ ) {
+     val context = LocalContext.current
+@@ -568,6 +653,7 @@ fun BrowserScreen(
+     var showDownloadSheet by remember { mutableStateOf(false) }
+     var selectedMediaItem by remember { mutableStateOf<MediaInterceptor.DetectedMedia?>(null) }
+     var showExtensionsSheet by remember { mutableStateOf(false) }
++    var showPlayerSettingsSheet by remember { mutableStateOf(false) }
+ 
+     // Fullscreen download overlay — hoisted outside the if-block so state survives
+     // fullscreen entry/exit transitions and doesn't reset on every recomposition.
+@@ -840,7 +926,7 @@ fun BrowserScreen(
+         },
+         bottomBar = {
+             AnimatedVisibility(
+-                visible = !viewModel.isFullscreen,
++                visible = !viewModel.isFullscreen && (!viewModel.isNavHideEnabled || showHomeScreen || viewModel.isBottomBarVisible),
+                 enter = fadeIn(),
+                 exit = fadeOut()
+             ) {
+@@ -888,32 +974,65 @@ fun BrowserScreen(
+                             },
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+-                        // Left: Tabs counter
++                        // 1. Back Button
+                         Box(
+-                            modifier = Modifier
+-                                .weight(1f)
+-                                .clickable { showTabGroupsSheet = true },
++                            modifier = Modifier.weight(1f),
+                             contentAlignment = Alignment.Center
+                         ) {
+-                            Box(
+-                                modifier = Modifier
+-                                    .size(28.dp)
+-                                    .border(1.5.dp, navContent, RoundedCornerShape(5.dp)),
+-                                contentAlignment = Alignment.Center
++                            IconButton(
++                                onClick = { viewModel.goBack() },
++                                enabled = viewModel.canGoBack,
++                                modifier = Modifier.size(48.dp)
+                             ) {
+-                                Text(
+-                                    text = viewModel.tabs.size.toString(),
+-                                    color = navContent,
+-                                    fontSize = 11.sp,
+-                                    fontWeight = FontWeight.Bold
++                                Icon(
++                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
++                                    contentDescription = "Back",
++                                    tint = if (viewModel.canGoBack) navContent else navContentMuted,
++                                    modifier = Modifier.size(20.dp)
+                                 )
+                             }
+                         }
+ 
+-                        // Center: Tools
++                        // 2. Forward Button
+                         Box(
+-                            modifier = Modifier
+-                                .weight(1f),
++                            modifier = Modifier.weight(1f),
++                            contentAlignment = Alignment.Center
++                        ) {
++                            IconButton(
++                                onClick = { viewModel.goForward() },
++                                enabled = viewModel.canGoForward,
++                                modifier = Modifier.size(48.dp)
++                            ) {
++                                Icon(
++                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
++                                    contentDescription = "Forward",
++                                    tint = if (viewModel.canGoForward) navContent else navContentMuted,
++                                    modifier = Modifier.size(20.dp)
++                                )
++                            }
++                        }
++
++                        // 3. New Tab Button (+)
++                        Box(
++                            modifier = Modifier.weight(1f),
++                            contentAlignment = Alignment.Center
++                        ) {
++                            IconButton(
++                                onClick = { viewModel.createNewTab(context, "about:blank") },
++                                modifier = Modifier.size(48.dp)
++                            ) {
++                                Icon(
++                                    imageVector = Icons.Rounded.Add,
++                                    contentDescription = "New Tab",
++                                    tint = navContent,
++                                    modifier = Modifier.size(20.dp)
++                                )
++                            }
++                        }
++
++                        // 4. Tools (Trident)
++                        Box(
++                            modifier = Modifier.weight(1f),
+                             contentAlignment = Alignment.Center
+                         ) {
+                             IconButton(
+@@ -921,7 +1040,7 @@ fun BrowserScreen(
+                                 modifier = Modifier.size(48.dp)
+                             ) {
+                                 Icon(
+-                                    imageVector = Icons.Rounded.Build,
++                                    imageVector = TridentIcon,
+                                     contentDescription = "Tools",
+                                     tint = navContent,
+                                     modifier = Modifier.size(20.dp)
+@@ -929,10 +1048,31 @@ fun BrowserScreen(
+                             }
+                         }
+ 
+-                        // Right: Menu
++                        // 5. Tabs counter (Switcher)
+                         Box(
+                             modifier = Modifier
+-                                .weight(1f),
++                                .weight(1f)
++                                .clickable { showTabGroupsSheet = true },
++                            contentAlignment = Alignment.Center
++                        ) {
++                            Box(
++                                modifier = Modifier
++                                    .size(28.dp)
++                                    .border(1.5.dp, navContent, RoundedCornerShape(5.dp)),
++                                contentAlignment = Alignment.Center
++                            ) {
++                                Text(
++                                    text = viewModel.tabs.size.toString(),
++                                    color = navContent,
++                                    fontSize = 11.sp,
++                                    fontWeight = FontWeight.Bold
++                                )
++                            }
++                        }
++
++                        // 6. Menu (Hamburger)
++                        Box(
++                            modifier = Modifier.weight(1f),
+                             contentAlignment = Alignment.Center
+                         ) {
+                             IconButton(
+@@ -978,7 +1118,12 @@ fun BrowserScreen(
+                     .padding(bottom = 20.dp),
+                 verticalArrangement = Arrangement.spacedBy(4.dp)
+             ) {
+-                // ── Row 1: Primary actions (colored, filled icons) ──
++                val accentRed = Color(0xFFFF3F6C)
++                val accentBlue = Color(0xFF0088FF)
++                val accentMuted = Color(0xFFAABBCC)
++                val bgMuted = Color(0xFF1A2A3A)
++
++                // ── Row 1 ──
+                 Row(
+                     modifier = Modifier.fillMaxWidth(),
+                     horizontalArrangement = Arrangement.SpaceEvenly
+@@ -987,38 +1132,45 @@ fun BrowserScreen(
+                     MenuGridCell(
+                         icon = Icons.Rounded.Bookmark,
+                         label = "Bookmarks",
+-                        iconTint = Color(0xFF0088FF),
+-                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
++                        iconTint = accentRed,
++                        iconBg = accentRed.copy(alpha = 0.12f),
+                         onClick = {
+                             showMenu = false
+-                            val activeTabTitle = viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: "Bookmark"
+-                            viewModel.addToHistory(activeTabTitle, viewModel.currentUrl)
+-                            Toast.makeText(context, "Added to Bookmarks", Toast.LENGTH_SHORT).show()
++                            onOpenBookmarks()
+                         }
+                     )
+                     // History
+                     MenuGridCell(
+                         icon = Icons.Rounded.History,
+                         label = "History",
+-                        iconTint = Color(0xFF0088FF),
+-                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+-                        onClick = { showMenu = false; onOpenHistory() }
++                        iconTint = accentRed,
++                        iconBg = accentRed.copy(alpha = 0.12f),
++                        onClick = {
++                            showMenu = false
++                            onOpenHistory()
++                        }
+                     )
+                     // Downloads
+                     MenuGridCell(
+                         icon = Icons.Rounded.Download,
+                         label = "Downloads",
+-                        iconTint = Color(0xFF0088FF),
+-                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+-                        onClick = { showMenu = false; onOpenDownloads() }
++                        iconTint = accentRed,
++                        iconBg = accentRed.copy(alpha = 0.12f),
++                        onClick = {
++                            showMenu = false
++                            onOpenDownloads()
++                        }
+                     )
+                     // Settings
+                     MenuGridCell(
+                         icon = Icons.Rounded.Settings,
+                         label = "Settings",
+-                        iconTint = Color(0xFF0088FF),
+-                        iconBg = Color(0xFF0088FF).copy(alpha = 0.12f),
+-                        onClick = { showMenu = false; onOpenSettings() }
++                        iconTint = accentRed,
++                        iconBg = accentRed.copy(alpha = 0.12f),
++                        onClick = {
++                            showMenu = false
++                            onOpenSettings()
++                        }
+                     )
+                 }
+ 
+@@ -1027,95 +1179,92 @@ fun BrowserScreen(
+                     modifier = Modifier.padding(vertical = 10.dp)
+                 )
+ 
+-                // ── Row 2: Secondary actions ──
++                // ── Row 2 ──
+                 Row(
+                     modifier = Modifier.fillMaxWidth(),
+                     horizontalArrangement = Arrangement.SpaceEvenly
+                 ) {
+-                    // New Tab
+-                    MenuGridCell(
+-                        icon = Icons.Rounded.Add,
+-                        label = "New Tab",
+-                        iconTint = Color(0xFFAABBCC),
+-                        iconBg = Color(0xFF1A2A3A),
+-                        onClick = { showMenu = false; viewModel.createNewTab(context, "about:blank") }
+-                    )
+                     // Incognito (with toggle state)
+                     MenuGridCell(
+                         icon = if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                         label = "Incognito",
+-                        iconTint = if (viewModel.isIncognitoMode) Color(0xFF0088FF) else Color(0xFFAABBCC),
+-                        iconBg = if (viewModel.isIncognitoMode) Color(0xFF0088FF).copy(alpha = 0.15f) else Color(0xFF1A2A3A),
+-                        onClick = { viewModel.toggleIncognitoMode(context) }
+-                    )
+-                    // Reload
+-                    MenuGridCell(
+-                        icon = Icons.Rounded.Refresh,
+-                        label = "Reload",
+-                        iconTint = Color(0xFFAABBCC),
+-                        iconBg = Color(0xFF1A2A3A),
+-                        onClick = { showMenu = false; viewModel.reload() }
++                        iconTint = accentBlue,
++                        iconBg = if (viewModel.isIncognitoMode) accentBlue.copy(alpha = 0.15f) else bgMuted,
++                        onClick = {
++                            viewModel.toggleIncognitoMode(context)
++                        }
+                     )
+-                    // Native Player
++                    // Player Settings
+                     MenuGridCell(
+                         icon = Icons.Rounded.PlayCircle,
+-                        label = "Native\nPlayer",
+-                        iconTint = Color(0xFFAABBCC),
+-                        iconBg = Color(0xFF1A2A3A),
++                        label = "Player\nSettings",
++                        iconTint = accentBlue,
++                        iconBg = accentBlue.copy(alpha = 0.12f),
+                         onClick = {
+                             showMenu = false
+-                            val activeTabUrl = viewModel.currentUrl
+-                            if (activeTabUrl.isNotEmpty() && activeTabUrl != "about:blank") {
+-                                viewModel.onPlayVideoRequestReceived?.invoke(activeTabUrl, activeTabUrl)
+-                            } else {
+-                                Toast.makeText(context, "No active video stream to play", Toast.LENGTH_SHORT).show()
+-                            }
++                            showPlayerSettingsSheet = true
++                        }
++                    )
++                    // Desktop Site
++                    MenuGridCell(
++                        icon = Icons.Rounded.Computer,
++                        label = "Desktop\nSite",
++                        iconTint = accentRed,
++                        iconBg = if (viewModel.isDesktopMode) accentRed.copy(alpha = 0.15f) else bgMuted,
++                        onClick = {
++                            viewModel.toggleDesktopMode(context)
++                        }
++                    )
++                    // Nav Hide On / Off
++                    MenuGridCell(
++                        icon = Icons.Rounded.OpenInFull,
++                        label = if (viewModel.isNavHideEnabled) "Nav Hide On" else "Nav Hide Off",
++                        iconTint = if (viewModel.isNavHideEnabled) accentRed else accentMuted,
++                        iconBg = if (viewModel.isNavHideEnabled) accentRed.copy(alpha = 0.15f) else bgMuted,
++                        onClick = {
++                            viewModel.saveNavHideEnabled(context, !viewModel.isNavHideEnabled)
+                         }
+                     )
+                 }
+ 
+                 Spacer(modifier = Modifier.height(4.dp))
+ 
+-                // ── Row 3: Power tools ──
++                // ── Row 3 ──
+                 Row(
+                     modifier = Modifier.fillMaxWidth(),
+                     horizontalArrangement = Arrangement.SpaceEvenly
+                 ) {
+-                    // Desktop Site
+-                    MenuGridCell(
+-                        icon = Icons.Rounded.Computer,
+-                        label = "Desktop\nSite",
+-                        iconTint = if (viewModel.isDesktopMode) Color(0xFF0088FF) else Color(0xFFAABBCC),
+-                        iconBg = if (viewModel.isDesktopMode) Color(0xFF0088FF).copy(alpha = 0.15f) else Color(0xFF1A2A3A),
+-                        onClick = { viewModel.toggleDesktopMode(context) }
+-                    )
+-                    // Extensions
+-                    MenuGridCell(
+-                        icon = Icons.Rounded.Extension,
+-                        label = "Extensions",
+-                        iconTint = Color(0xFFAABBCC),
+-                        iconBg = Color(0xFF1A2A3A),
+-                        onClick = { showMenu = false; showExtensionsSheet = true }
+-                    )
+                     // Reader Mode
+                     MenuGridCell(
+                         icon = Icons.Rounded.Book,
+                         label = "Reader\nMode",
+-                        iconTint = Color(0xFFAABBCC),
+-                        iconBg = Color(0xFF1A2A3A),
++                        iconTint = accentBlue,
++                        iconBg = if (viewModel.isReaderModeActive) accentBlue.copy(alpha = 0.15f) else bgMuted,
+                         onClick = {
+                             showMenu = false
+-                            try { viewModel.toggleReaderMode() } catch (e: Exception) {
++                            try {
++                                viewModel.toggleReaderMode()
++                            } catch (e: Exception) {
+                                 Toast.makeText(context, "Reader Mode not supported on this page", Toast.LENGTH_SHORT).show()
+                             }
+                         }
+                     )
++                    // Auto-Scroll
++                    MenuGridCell(
++                        icon = Icons.Rounded.ArrowDownward,
++                        label = "Auto-Scroll",
++                        iconTint = if (viewModel.isAutoScrollEnabled) accentBlue else accentMuted,
++                        iconBg = if (viewModel.isAutoScrollEnabled) accentBlue.copy(alpha = 0.15f) else bgMuted,
++                        onClick = {
++                            viewModel.toggleAutoScroll()
++                        }
++                    )
+                     // Burn Data
+                     MenuGridCell(
+                         icon = Icons.Rounded.LocalFireDepartment,
+                         label = "Burn\nData",
+-                        iconTint = Color(0xFFFF4444),
+-                        iconBg = Color(0xFFFF4444).copy(alpha = 0.12f),
++                        iconTint = accentRed,
++                        iconBg = accentRed.copy(alpha = 0.12f),
+                         onClick = {
+                             showMenu = false
+                             coroutineScope.launch {
+@@ -1126,6 +1275,188 @@ fun BrowserScreen(
+                             }
+                         }
+                     )
++                    // Extensions
++                    MenuGridCell(
++                        icon = Icons.Rounded.Extension,
++                        label = "Extensions",
++                        iconTint = accentBlue,
++                        iconBg = accentBlue.copy(alpha = 0.12f),
++                        onClick = {
++                            showMenu = false
++                            showExtensionsSheet = true
++                        }
++                    )
++                }
++            }
++        }
++    }
++
++    // ── Player Settings Bottom Sheet ───────────────────────────────────
++    if (showPlayerSettingsSheet) {
++        ModalBottomSheet(
++            onDismissRequest = { showPlayerSettingsSheet = false },
++            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
++            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White,
++            dragHandle = {
++                Box(
++                    modifier = Modifier
++                        .padding(top = 10.dp, bottom = 6.dp)
++                        .width(36.dp)
++                        .height(4.dp)
++                        .clip(RoundedCornerShape(2.dp))
++                        .background(Color(0xFF3A4A5A))
++                )
++            }
++        ) {
++            Column(
++                modifier = Modifier
++                    .fillMaxWidth()
++                    .navigationBarsPadding()
++                    .padding(horizontal = 20.dp)
++                    .padding(bottom = 24.dp),
++                verticalArrangement = Arrangement.spacedBy(16.dp)
++            ) {
++                Text(
++                    text = "Player Settings",
++                    fontWeight = FontWeight.Bold,
++                    fontSize = 18.sp,
++                    color = Color(0xFF0088FF)
++                )
++
++                HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.6f))
++
++                // Default Quality selector
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Default Quality", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Preferred stream quality", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    var qualityExpanded by remember { mutableStateOf(false) }
++                    Box {
++                        Button(
++                            onClick = { qualityExpanded = true },
++                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A2A3A)),
++                            shape = RoundedCornerShape(8.dp)
++                        ) {
++                            Text(viewModel.playerDefaultQuality, color = Color.White)
++                        }
++                        DropdownMenu(
++                            expanded = qualityExpanded,
++                            onDismissRequest = { qualityExpanded = false },
++                            modifier = Modifier.background(if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White)
++                        ) {
++                            val qualities = listOf("Auto", "1080p", "720p", "480p", "360p")
++                            qualities.forEach { quality ->
++                                DropdownMenuItem(
++                                    text = { Text(quality, color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black) },
++                                    onClick = {
++                                        viewModel.savePlayerSetting(context, "quality", quality)
++                                        qualityExpanded = false
++                                    }
++                                )
++                            }
++                        }
++                    }
++                }
++
++                // Autoplay Switch
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Autoplay", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Play videos automatically on open", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    Switch(
++                        checked = viewModel.isPlayerAutoPlayEnabled,
++                        onCheckedChange = { viewModel.savePlayerSetting(context, "autoplay", it) }
++                    )
++                }
++
++                // Loop Video Switch
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Loop Video", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Automatically replay when video ends", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    Switch(
++                        checked = viewModel.isPlayerLoopEnabled,
++                        onCheckedChange = { viewModel.savePlayerSetting(context, "loop", it) }
++                    )
++                }
++
++                // Swipe Gestures (Volume) Switch
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Volume Gestures", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Swipe vertically on right side of player", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    Switch(
++                        checked = viewModel.isPlayerVolumeGestureEnabled,
++                        onCheckedChange = { viewModel.savePlayerSetting(context, "volume_gesture", it) }
++                    )
++                }
++
++                // Swipe Gestures (Brightness) Switch
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Brightness Gestures", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Swipe vertically on left side of player", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    Switch(
++                        checked = viewModel.isPlayerBrightnessGestureEnabled,
++                        onCheckedChange = { viewModel.savePlayerSetting(context, "brightness_gesture", it) }
++                    )
++                }
++
++                // Resume Playback Switch
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Resume Playback", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Remember and resume last playback position", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    Switch(
++                        checked = viewModel.isPlayerResumePlaybackEnabled,
++                        onCheckedChange = { viewModel.savePlayerSetting(context, "resume", it) }
++                    )
++                }
++
++                // Background Playback Switch
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    verticalAlignment = Alignment.CenterVertically,
++                    horizontalArrangement = Arrangement.SpaceBetween
++                ) {
++                    Column {
++                        Text("Background Playback", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++                        Text("Continue audio playback when in background", color = Color(0xFF8E9AA8), fontSize = 11.sp)
++                    }
++                    Switch(
++                        checked = viewModel.isPlayerBackgroundPlaybackEnabled,
++                        onCheckedChange = { viewModel.savePlayerSetting(context, "background", it) }
++                    )
+                 }
+             }
+         }
+@@ -1239,6 +1570,7 @@ fun BrowserScreen(
+                         viewModel = viewModel,
+                         onOpenDownloads = onOpenDownloads,
+                         onOpenHistory = onOpenHistory,
++                        onOpenBookmarks = onOpenBookmarks,
+                         onOpenLocker = onOpenLocker,
+                         onOpenScanner = onOpenScanner,
+                         onOpenQrTools = onOpenQrTools,
+@@ -1490,18 +1822,18 @@ fun BrowserScreen(
+             if (showTranslationDialog) {
+                 AlertDialog(
+                     onDismissRequest = { showTranslationDialog = false; viewModel.translationManager.close() },
+-                    title = { Text("🌐 On-Device Offline Translator", fontWeight = FontWeight.Bold) },
++                    title = { Text("🌐 " + stringResource(R.string.translator_title), fontWeight = FontWeight.Bold) },
+                     text = {
+                         Column(
+                             verticalArrangement = Arrangement.spacedBy(8.dp),
+                             modifier = Modifier.fillMaxWidth()
+                         ) {
+-                            Text("Download translation packages offline. 100% private.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
++                            Text(stringResource(R.string.translator_desc), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                             
+                             OutlinedTextField(
+                                 value = translationSourceText,
+                                 onValueChange = { translationSourceText = it },
+-                                placeholder = { Text("Type text to translate...") },
++                                placeholder = { Text(stringResource(R.string.translator_placeholder)) },
+                                 modifier = Modifier.fillMaxWidth().height(90.dp),
+                                 shape = RoundedCornerShape(8.dp)
+                             )
+@@ -1513,7 +1845,7 @@ fun BrowserScreen(
+                                     modifier = Modifier.fillMaxWidth()
+                                 ) {
+                                     CircularProgressIndicator(modifier = Modifier.size(16.dp))
+-                                    Text("Processing offline model...", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
++                                    Text(stringResource(R.string.translator_processing), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                 }
+                             }
+ 
+@@ -1539,8 +1871,8 @@ fun BrowserScreen(
+                                 translationProgress = true
+                                 // Setup translation dynamically from Spanish to English offline
+                                 viewModel.translationManager.setupLanguage(
+-                                    com.google.mlkit.nl.translate.TranslateLanguage.SPANISH,
+-                                    com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH
++                                    "es",
++                                    "en"
+                                 ) {
+                                     coroutineScope.launch {
+                                         try {
+@@ -1555,12 +1887,12 @@ fun BrowserScreen(
+                             },
+                             shape = RoundedCornerShape(8.dp)
+                         ) {
+-                            Text("Translate (ES ➔ EN)")
++                            Text(stringResource(R.string.translator_action) + " (ES ➔ EN)")
+                         }
+                     },
+                     dismissButton = {
+                         TextButton(onClick = { showTranslationDialog = false; viewModel.translationManager.close() }) {
+-                            Text("Close")
++                            Text(stringResource(R.string.close_text))
+                         }
+                     }
+                 )
+@@ -1941,129 +2273,149 @@ fun BrowserScreen(
+ 
+             // 5. Quick Tools Bottom Sheet
+             if (showToolsSheet) {
++                val isDark = viewModel.isDarkThemeEnabled
+                 ModalBottomSheet(
+                     onDismissRequest = { showToolsSheet = false },
+                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
++                    containerColor = if (isDark) Color(0xFF0D1620) else Color.White
+                 ) {
+                     Column(
+                         modifier = Modifier
+                             .fillMaxWidth()
+-                            .verticalScroll(rememberScrollState())
+-                            .padding(horizontal = 20.dp, vertical = 8.dp)
+-                            .navigationBarsPadding(),
++                            .navigationBarsPadding()
++                            .padding(horizontal = 16.dp, vertical = 8.dp)
++                            .padding(bottom = 20.dp),
+                         verticalArrangement = Arrangement.spacedBy(16.dp)
+                     ) {
+                         Text(
+-                            text = "🛠️ Quick Tools",
++                            text = stringResource(R.string.quick_tools_title),
+                             fontWeight = FontWeight.Bold,
+                             fontSize = 18.sp,
+-                            color = Color(0xFF0088FF)
+-                        )
+-                        Text(
+-                            text = "Access offline ML-powered scanner, translation utilities, secure encrypted locker, and system tools.",
+-                            fontSize = 11.sp,
+-                            color = Color(0xFF8E9AA8)
++                            color = if (isDark) Color.White else Color(0xFF1E293B),
++                            modifier = Modifier.padding(horizontal = 4.dp)
+                         )
+ 
+-                        HorizontalDivider(color = Color(0xFF23374A).copy(alpha = 0.5f))
++                        HorizontalDivider(color = if (isDark) Color(0xFF23374A).copy(alpha = 0.5f) else Color(0xFFE2E8F0))
+ 
+-                        // Row 1
+-                        Row(
+-                            modifier = Modifier.fillMaxWidth(),
+-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+-                        ) {
+-                            Box(modifier = Modifier.weight(1f)) {
+-                                ToolCard(
+-                                    title = "Doc Scanner",
+-                                    subtitle = "ML Edge Detector",
+-                                    icon = Icons.Rounded.DocumentScanner,
+-                                    modifier = Modifier.fillMaxWidth(),
+-                                    onClick = {
+-                                        showToolsSheet = false
+-                                        onOpenScanner()
+-                                    }
+-                                )
+-                            }
+-                            Box(modifier = Modifier.weight(1f)) {
+-                                ToolCard(
+-                                    title = "QR Tools",
+-                                    subtitle = "Scan & Generate",
+-                                    icon = Icons.Rounded.QrCodeScanner,
+-                                    modifier = Modifier.fillMaxWidth(),
+-                                    onClick = {
+-                                        showToolsSheet = false
+-                                        onOpenQrTools()
+-                                    }
+-                                )
+-                            }
+-                        }
++                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
++                        val editModeActive = activeTab?.isEditModeEnabled == true
++                        val autoScrollActive = viewModel.isAutoScrollEnabled
+ 
+-                        // Row 2
+-                        Row(
+-                            modifier = Modifier.fillMaxWidth(),
+-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
++                        // Grid 4x2
++                        Column(
++                            verticalArrangement = Arrangement.spacedBy(12.dp),
++                            modifier = Modifier.fillMaxWidth()
+                         ) {
+-                            Box(modifier = Modifier.weight(1f)) {
+-                                ToolCard(
+-                                    title = "Safe Locker",
+-                                    subtitle = "Secure Vault",
+-                                    icon = Icons.Rounded.Lock,
+-                                    modifier = Modifier.fillMaxWidth(),
+-                                    onClick = {
+-                                        showToolsSheet = false
+-                                        onOpenLocker()
+-                                    }
+-                                )
+-                            }
+-                            Box(modifier = Modifier.weight(1f)) {
+-                                ToolCard(
+-                                    title = "Translator",
+-                                    subtitle = "On-Device ML",
+-                                    icon = Icons.Rounded.Translate,
+-                                    modifier = Modifier.fillMaxWidth(),
+-                                    onClick = {
+-                                        showToolsSheet = false
+-                                        translationSourceText = ""
+-                                        translationResultText = ""
+-                                        showTranslationDialog = true
+-                                    }
+-                                )
++                            // Row 1
++                            Row(
++                                modifier = Modifier.fillMaxWidth(),
++                                horizontalArrangement = Arrangement.spacedBy(8.dp)
++                            ) {
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.doc_scanner_title),
++                                        icon = Icons.Rounded.DocumentScanner,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            onOpenScanner()
++                                        }
++                                    )
++                                }
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.qr_tools_title),
++                                        icon = Icons.Rounded.QrCodeScanner,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            onOpenQrTools()
++                                        }
++                                    )
++                                }
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.safe_locker_title),
++                                        icon = Icons.Rounded.Lock,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            onOpenLocker()
++                                        }
++                                    )
++                                }
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.translator_tool_title),
++                                        icon = Icons.Rounded.Translate,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            translationSourceText = ""
++                                            translationResultText = ""
++                                            showTranslationDialog = true
++                                        }
++                                    )
++                                }
+                             }
+-                        }
+ 
+-                        // Row 3
+-                        Row(
+-                            modifier = Modifier.fillMaxWidth(),
+-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+-                        ) {
+-                            Box(modifier = Modifier.weight(1f)) {
+-                                ToolCard(
+-                                    title = "Downloads",
+-                                    subtitle = "Manage Files",
+-                                    icon = Icons.Rounded.Download,
+-                                    modifier = Modifier.fillMaxWidth(),
+-                                    onClick = {
+-                                        showToolsSheet = false
+-                                        onOpenDownloads()
+-                                    }
+-                                )
+-                            }
+-                            Box(modifier = Modifier.weight(1f)) {
+-                                ToolCard(
+-                                    title = "Extensions",
+-                                    subtitle = "Web Addons",
+-                                    icon = Icons.Rounded.Extension,
+-                                    modifier = Modifier.fillMaxWidth(),
+-                                    onClick = {
+-                                        showToolsSheet = false
+-                                        showExtensionsSheet = true
+-                                    }
+-                                )
++                            // Row 2
++                            Row(
++                                modifier = Modifier.fillMaxWidth(),
++                                horizontalArrangement = Arrangement.spacedBy(8.dp)
++                            ) {
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.edit_page_title),
++                                        icon = Icons.Rounded.Edit,
++                                        isActive = editModeActive,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            viewModel.toggleEditMode()
++                                        }
++                                    )
++                                }
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.save_pdf_title),
++                                        icon = Icons.Rounded.Print,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            viewModel.printCurrentPage(context)
++                                        }
++                                    )
++                                }
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.pin_web_app_title),
++                                        icon = Icons.Rounded.OpenInNew,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            if (activeTab != null) {
++                                                viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url)
++                                            } else {
++                                                Toast.makeText(context, context.getString(R.string.toast_no_active_page), Toast.LENGTH_SHORT).show()
++                                            }
++                                        }
++                                    )
++                                }
++                                Box(modifier = Modifier.weight(1f)) {
++                                    QuickToolCard(
++                                        title = stringResource(R.string.auto_scroll_title),
++                                        icon = Icons.Rounded.ArrowDownward,
++                                        isActive = autoScrollActive,
++                                        isDarkTheme = isDark,
++                                        onClick = {
++                                            showToolsSheet = false
++                                            viewModel.toggleAutoScroll()
++                                        }
++                                    )
++                                }
+                             }
+                         }
+-
+-                        Spacer(modifier = Modifier.height(16.dp))
+                     }
+                 }
+             }
+@@ -2500,3 +2852,44 @@ fun MenuGridCell(
+         )
+     }
+ }
++
++val TridentIcon: androidx.compose.ui.graphics.vector.ImageVector by lazy {
++    androidx.compose.ui.graphics.vector.ImageVector.Builder(
++        name = "Trident",
++        defaultWidth = 24.dp,
++        defaultHeight = 24.dp,
++        viewportWidth = 24f,
++        viewportHeight = 24f
++    ).apply {
++        path(
++            stroke = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.White),
++            strokeLineWidth = 2f,
++            strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round,
++            strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round
++        ) {
++            moveTo(12f, 21f)
++            lineTo(12f, 5f)
++
++            moveTo(6f, 7f)
++            lineTo(6f, 11f)
++            quadTo(6f, 15f, 12f, 15f)
++            quadTo(18f, 15f, 18f, 11f)
++            lineTo(18f, 7f)
++
++            // Left prong arrow/point
++            moveTo(4.5f, 8.5f)
++            lineTo(6f, 5f)
++            lineTo(7.5f, 8.5f)
++
++            // Right prong arrow/point
++            moveTo(16.5f, 8.5f)
++            lineTo(18f, 5f)
++            lineTo(19.5f, 8.5f)
++
++            // Central prong arrow/point
++            moveTo(10.5f, 6.5f)
++            lineTo(12f, 3f)
++            lineTo(13.5f, 6.5f)
++        }
++    }.build()
++}

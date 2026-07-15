@@ -1,0 +1,36 @@
+Categories:
+  - Internet
+License: GPL-3.0-or-later
+SourceCode: https://github.com/rebelroot/omni-browser
+IssueTracker: https://github.com/rebelroot/omni-browser/issues
+
+Name: Omni Browser
+Summary: Premium, private-first mobile web browser powered by GeckoView
+Description: |-
+  Omni Browser is a premium, privacy-first mobile web browser for Android built
+  with Jetpack Compose and the Mozilla GeckoView engine.
+
+  Features:
+  * Built-in uBlock Origin content blocker for rapid and ad-free loading
+  * Universal Text Copy to force-enable text selection on restricted pages
+  * QR Code decoder and generator using 100% open-source ZXing libraries
+  * Highly customizable settings: toggle bottom navigation bar, reader mode,
+    preset Unsplash wallpapers, accent themes, and news feed
+  * Secure and sandboxed storage with encrypted SQLCipher database
+
+RepoType: git
+Repo: https://github.com/rebelroot/omni-browser
+
+Builds:
+  - versionName: 1.2.4
+    versionCode: 23
+    commit: v1.2.4-stable
+    subdir: app
+    gradle:
+      - yes
+
+AutoName: Omni Browser
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 1.2.4
+CurrentVersionCode: 23

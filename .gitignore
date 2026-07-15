@@ -1,0 +1,64 @@
+# Android Gitignore File
+
+# Built development files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+release-new.keystore
+upload_certificate_new.pem
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ IDEA files
+.navigation/
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+
+# OS generated files
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Thumbs.db
+
+# Private security credentials / keys
+*.keystore
+*.jks
+*.p12
+*.pem
+secrets.properties
+
+# Local gradle cache directory
+gradle-user-home/
+
+# Local documents
+APK_SIZE_OPTIMIZATION_PLAN.md

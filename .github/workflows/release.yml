@@ -1,0 +1,140 @@
+name: 🚀 Build & Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_environment:
+        description: GitHub Environment name that holds the signing secrets
+        required: false
+        default: release
+  push:
+    tags:
+      - 'v*'   # ONLY triggers on version tags like v1.3.0, v2.0.0-beta
+
+jobs:
+  release:
+    name: Build and Release Signed APK
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.release_environment || 'release' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+          cache: gradle
+
+      - name: Grant Gradle execute permission
+        run: chmod +x gradlew
+
+      - name: Decode keystore from GitHub Secret
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+          echo "✅ Keystore decoded"
+
+      - name: Compile check before release
+        run: ./gradlew compileUniversalReleaseKotlin compileArmReleaseKotlin compileAarch64ReleaseKotlin --no-daemon --stacktrace
+
+      - name: Build & Sign Release APK
+        run: |
+          ./gradlew assembleArmRelease assembleAarch64Release assembleUniversalRelease --no-daemon --stacktrace --info
+          if [ -z "$(find app/build/outputs/apk/ -name "*.apk")" ]; then
+            echo "❌ APK build failed - no APK generated"
+            exit 1
+          fi
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+
+      - name: Build & Sign Release AAB
+        run: |
+          ./gradlew bundleArmRelease bundleAarch64Release bundleUniversalRelease --no-daemon --stacktrace --info
+          if [ -z "$(find app/build/outputs/bundle/ -name "*.aab")" ]; then
+            echo "❌ AAB build failed - no AAB generated"
+            exit 1
+          fi
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+
+      - name: Verify APK is signed
+        run: |
+          APK=$(find app/build/outputs/apk/ -name "*.apk" | head -1)
+          echo "APK path: $APK"
+          if [ -z "$APK" ]; then
+            echo "❌ No APK found in build output"
+            exit 1
+          fi
+          $JAVA_HOME/bin/jarsigner -verify "$APK" && echo "✅ APK signature verified" || (echo "❌ APK is NOT signed!" && exit 1)
+
+      - name: Rename APKs
+        run: |
+          VERSION=${{ github.ref_name }}
+          find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
+            file="$1"
+            filename=$(basename "$file")
+            if [[ "$filename" == app-arm-release.apk ]]; then
+              mv "$file" "app/build/outputs/apk/omni-browser-${VERSION}-arm.apk"
+            elif [[ "$filename" == app-aarch64-release.apk ]]; then
+              mv "$file" "app/build/outputs/apk/omni-browser-${VERSION}-aarch64.apk"
+            elif [[ "$filename" == app-universal-release.apk ]]; then
+              mv "$file" "app/build/outputs/apk/omni-browser-${VERSION}-universal.apk"
+            fi
+          ' bash {} \;
+          echo "✅ APKs renamed:"
+          ls -lh app/build/outputs/apk/
+
+      - name: Rename AAB
+        run: |
+          VERSION=${{ github.ref_name }}
+          find app/build/outputs/bundle/ -name "*.aab" -exec bash -c '
+            file="$1"
+            filename=$(basename "$file")
+            if [[ "$filename" == app-arm-release.aab ]]; then
+              mv "$file" "app/build/outputs/bundle/omni-browser-${VERSION}-arm.aab"
+            elif [[ "$filename" == app-aarch64-release.aab ]]; then
+              mv "$file" "app/build/outputs/bundle/omni-browser-${VERSION}-aarch64.aab"
+            elif [[ "$filename" == app-universal-release.aab ]]; then
+              mv "$file" "app/build/outputs/bundle/omni-browser-${VERSION}-universal.aab"
+            fi
+          ' bash {} \;
+          echo "✅ AABs renamed:"
+          ls -lh app/build/outputs/bundle/
+
+      - name: Wipe keystore from runner (security cleanup)
+        if: always()
+        run: |
+          rm -f app/release.keystore
+          echo "🔒 Keystore wiped from runner"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Omni Browser ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+          generate_release_notes: true
+          files: |
+            app/build/outputs/apk/omni-browser-*.apk
+            app/build/outputs/bundle/omni-browser-*.aab
+          body: |
+            ## Omni Browser ${{ github.ref_name }}
+
+            This release is built and signed from the GitHub Actions workflow using the signing secrets stored in the selected GitHub Environment.
+
+            The changelog has the full feature and fix list for this tag.
+
+            To install, download the APK asset that matches your device architecture. If you are not sure which one to use, grab the universal APK.
+
+            Android 8.0+ (API 26) is required.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
