@@ -1799,6 +1799,13 @@ class BrowserViewModel : ViewModel() {
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
+                // 3. Block addon install click
+                if (uri.endsWith(".xpi") || uri.contains("/firefox/downloads/file/")) {
+                    Log.d(TAG, "Intercepted addon install click: $uri")
+                    installExtensionFromUrl(uri, context)
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+
                 // 2a. Intercept generic file downloads — show a dialog so user picks local vs. vault
                 if (tab.id == activeTabId && isGenericDownloadUrl(uri) && !isYouTube) {
                     Log.i(TAG, "📥 Intercepted file download URL: $uri")
@@ -1810,13 +1817,6 @@ class BrowserViewModel : ViewModel() {
                             contentType = null
                         )
                     }
-                    return GeckoResult.fromValue(AllowOrDeny.DENY)
-                }
-                
-                // 3. Block addon install click
-                if (uri.endsWith(".xpi") || uri.contains("/firefox/downloads/file/")) {
-                    Log.d(TAG, "Intercepted addon install click: $uri")
-                    installExtensionFromUrl(uri, context)
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
