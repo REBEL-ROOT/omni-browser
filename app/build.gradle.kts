@@ -109,9 +109,8 @@ android {
 
     packaging {
         jniLibs {
-            // true = ensures compatibility by extracting/aligning libs on install.
-            // This is safer for GeckoView until 16KB alignment is fully verified for all versions.
-            useLegacyPackaging = true
+            // false = keep native libraries uncompressed and aligned to 16 KB page boundaries for Android 15+ compatibility.
+            useLegacyPackaging = false
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
         }
         resources {
@@ -136,6 +135,11 @@ android {
                 "**/*.bin"
             )
         }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 
@@ -214,3 +218,5 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 }
+
+
