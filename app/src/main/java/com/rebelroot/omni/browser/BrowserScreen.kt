@@ -205,6 +205,9 @@ fun HomeScreenContent(
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var searchText by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    LaunchedEffect(searchText.text) {
+        viewModel.fetchSearchSuggestions(searchText.text)
+    }
     var showAddShortcutSheet by remember { mutableStateOf(false) }
     var shortcutsExpanded by remember { mutableStateOf(false) }
     var selectedShortcutForMenu by remember { mutableStateOf<HomeShortcut?>(null) }
@@ -516,7 +519,68 @@ fun HomeScreenContent(
             )
         )
 
-        if (viewModel.showHomeShortcuts) {
+        if (searchText.text.isNotEmpty() && viewModel.searchSuggestions.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    viewModel.searchSuggestions.forEach { suggestion ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    searchText = androidx.compose.ui.text.input.TextFieldValue(suggestion, androidx.compose.ui.text.TextRange(suggestion.length))
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                    onNavigateTo(suggestion)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = suggestion,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            IconButton(
+                                onClick = {
+                                    searchText = androidx.compose.ui.text.input.TextFieldValue(suggestion, androidx.compose.ui.text.TextRange(suggestion.length))
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.TrendingFlat,
+                                    contentDescription = "Refine search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .graphicsLayer { rotationZ = -135f }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (viewModel.showHomeShortcuts && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
             // Dynamic Grid of Shortcuts — 5 per row, icon-only, no border boxes
             // Shows up to 15 items collapsed; "More" expands to show all.
             val shortcuts = viewModel.shortcutsList

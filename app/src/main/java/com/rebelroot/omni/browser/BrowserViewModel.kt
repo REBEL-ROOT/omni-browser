@@ -519,6 +519,7 @@ class BrowserViewModel : ViewModel() {
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
     var customSearchEngines by mutableStateOf<List<CustomSearchEngine>>(emptyList())
+    val searchSuggestions = androidx.compose.runtime.mutableStateListOf<String>()
     var isDarkThemeEnabled by mutableStateOf(true)
     var selectedLanguageCode by mutableStateOf("en")
     var isLanguageSelectionDone by mutableStateOf(false)
@@ -3844,6 +3845,67 @@ class BrowserViewModel : ViewModel() {
 
     fun disconnectVpn() {
         vpnManager.disconnect()
+    }
+
+    private var searchSuggestJob: kotlinx.coroutines.Job? = null
+
+    fun fetchSearchSuggestions(query: String) {
+        searchSuggestJob?.cancel()
+        if (query.trim().isBlank()) {
+            searchSuggestions.clear()
+            return
+        }
+        searchSuggestJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                kotlinx.coroutines.delay(200)
+                val encodedQuery = try {
+                    java.net.URLEncoder.encode(query, "UTF-8")
+                } catch (_: Exception) {
+                    query.replace(" ", "+")
+                }
+                
+                val urlString = when (selectedSearchEngine) {
+                    "DuckDuckGo" -> "https://ac.duckduckgo.com/ac/?q=$encodedQuery"
+                    "Brave" -> "https://search.brave.com/api/suggest?q=$encodedQuery"
+                    "Bing" -> "https://api.bing.com/osjson.aspx?query=$encodedQuery"
+                    else -> "https://suggestqueries.google.com/complete/search?client=chrome&q=$encodedQuery"
+                }
+
+                val url = java.net.URL(urlString)
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+                conn.connect()
+
+                if (conn.responseCode == 200) {
+                    val text = conn.inputStream.bufferedReader().use { it.readText() }
+                    val list = mutableListOf<String>()
+                    
+                    if (selectedSearchEngine == "DuckDuckGo") {
+                        val arr = org.json.JSONArray(text)
+                        for (i in 0 until arr.length()) {
+                            val obj = arr.getJSONObject(i)
+                            list.add(obj.getString("phrase"))
+                        }
+                    } else {
+                        val arr = org.json.JSONArray(text)
+                        if (arr.length() > 1) {
+                            val suggestionsArr = arr.getJSONArray(1)
+                            for (i in 0 until suggestionsArr.length()) {
+                                list.add(suggestionsArr.getString(i))
+                            }
+                        }
+                    }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        searchSuggestions.clear()
+                        searchSuggestions.addAll(list.take(8))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Error fetching suggestions", e)
+            }
+        }
     }
 
     fun getSearchUrlForQuery(query: String): String {
