@@ -120,7 +120,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "Omni Browser ${{ github.ref_name }}"
-          draft: false
+          draft: true
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
           generate_release_notes: true
           files: |
