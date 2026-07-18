@@ -553,6 +553,9 @@ class BrowserViewModel : ViewModel() {
     var siteStyleLetterSpacing by mutableStateOf(0f)
     var siteStyleFontFamily by mutableStateOf("inherit")
     var siteStyleAppliedGlobally by mutableStateOf(false)
+    var siteStyleHideImages by mutableStateOf(false)
+    var siteStyleGrayscale by mutableStateOf(false)
+    var siteStyleWarmFilter by mutableStateOf(false)
     var pdfExportTheme by mutableStateOf("default")
     var isReaderModeActive by mutableStateOf(false)
     var readerFontSize by mutableStateOf(18)
@@ -649,8 +652,11 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun applySiteStyleToActiveTab() {
-        val session = geckoSession
-        val hasCustomStyles = siteStyleTheme != "DEFAULT" || siteStyleFontSize != 100 || siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || siteStyleFontFamily != "inherit"
+        val session = geckoSession ?: return
+        val hasCustomStyles = siteStyleTheme != "DEFAULT" || siteStyleFontSize != 100 || 
+                siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || 
+                siteStyleFontFamily != "inherit" || siteStyleHideImages || 
+                siteStyleGrayscale || siteStyleWarmFilter
 
         val bgValue = when (siteStyleTheme) {
             "DARK" -> "#0B131E"
@@ -670,23 +676,67 @@ class BrowserViewModel : ViewModel() {
         val fontCss = if (siteStyleFontFamily != "inherit") "font-family: ${siteStyleFontFamily} !important;" else ""
         val bgCss = if (bgValue != null) "background-color: ${bgValue} !important; background: ${bgValue} !important;" else ""
         val textCss = if (textValue != null) "color: ${textValue} !important;" else ""
-        val sizeCss = "font-size: ${siteStyleFontSize}% !important;"
+        val sizeCss = """
+            font-size: ${siteStyleFontSize}% !important;
+            -webkit-text-size-adjust: ${siteStyleFontSize}% !important;
+            -moz-text-size-adjust: ${siteStyleFontSize}% !important;
+            text-size-adjust: ${siteStyleFontSize}% !important;
+        """.trimIndent()
         val lineSpacingCss = "line-height: ${siteStyleLineSpacing} !important;"
         val letterSpacingCss = "letter-spacing: ${siteStyleLetterSpacing}px !important;"
 
-        val cssRules = if (hasCustomStyles) {
-            """
-            html, body, p, span, div, h1, h2, h3, h4, h5, h6, li, a, section, article {
-                $bgCss
-                $textCss
-                $fontCss
-                $sizeCss
-                $lineSpacingCss
-                $letterSpacingCss
-            }
-            """.trimIndent().replace("\n", " ").replace("'", "\\'")
-        } else {
-            ""
+        var cssRules = ""
+        if (hasCustomStyles) {
+            val mainRules = """
+                html, body, p, span, div, h1, h2, h3, h4, h5, h6, li, a, section, article {
+                    $bgCss
+                    $textCss
+                    $fontCss
+                    $lineSpacingCss
+                    $letterSpacingCss
+                }
+            """.trimIndent()
+
+            val sizeRules = """
+                html, body {
+                    $sizeCss
+                }
+            """.trimIndent()
+            
+            val hideImagesRules = if (siteStyleHideImages) {
+                """
+                img, picture, figure, [style*="background-image"] {
+                    display: none !important;
+                }
+                """.trimIndent()
+            } else ""
+
+            val grayscaleRules = if (siteStyleGrayscale) {
+                """
+                html {
+                    filter: grayscale(100%) !important;
+                }
+                """.trimIndent()
+            } else ""
+
+            val warmFilterRules = if (siteStyleWarmFilter) {
+                """
+                html::before {
+                    content: "" !important;
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    background: rgba(255, 140, 0, 0.08) !important;
+                    pointer-events: none !important;
+                    z-index: 2147483647 !important;
+                }
+                """.trimIndent()
+            } else ""
+
+            cssRules = (mainRules + "\n" + sizeRules + "\n" + hideImagesRules + "\n" + grayscaleRules + "\n" + warmFilterRules)
+                .trimIndent().replace("\n", " ").replace("'", "\\'")
         }
 
         val js = """
@@ -717,7 +767,10 @@ class BrowserViewModel : ViewModel() {
         lineSpacing: Float,
         letterSpacing: Float,
         fontFamily: String,
-        appliedGlobally: Boolean
+        appliedGlobally: Boolean,
+        hideImages: Boolean,
+        grayscale: Boolean,
+        warmFilter: Boolean
     ) {
         siteStyleFontSize = fontSize
         siteStyleTheme = theme
@@ -725,6 +778,9 @@ class BrowserViewModel : ViewModel() {
         siteStyleLetterSpacing = letterSpacing
         siteStyleFontFamily = fontFamily
         siteStyleAppliedGlobally = appliedGlobally
+        siteStyleHideImages = hideImages
+        siteStyleGrayscale = grayscale
+        siteStyleWarmFilter = warmFilter
 
         val context = appContext ?: return
         val sp = context.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
@@ -735,6 +791,9 @@ class BrowserViewModel : ViewModel() {
             putFloat("site_style_letter_spacing", letterSpacing)
             putString("site_style_font_family", fontFamily)
             putBoolean("site_style_applied_globally", appliedGlobally)
+            putBoolean("site_style_hide_images", hideImages)
+            putBoolean("site_style_grayscale", grayscale)
+            putBoolean("site_style_warm_filter", warmFilter)
         }.apply()
 
         applySiteStyleToActiveTab()
@@ -747,7 +806,10 @@ class BrowserViewModel : ViewModel() {
             lineSpacing = 1.4f,
             letterSpacing = 0f,
             fontFamily = "inherit",
-            appliedGlobally = false
+            appliedGlobally = false,
+            hideImages = false,
+            grayscale = false,
+            warmFilter = false
         )
     }
 
@@ -2783,6 +2845,9 @@ class BrowserViewModel : ViewModel() {
                 siteStyleLetterSpacing = sp.getFloat("site_style_letter_spacing", 0f)
                 siteStyleFontFamily = sp.getString("site_style_font_family", "inherit") ?: "inherit"
                 siteStyleAppliedGlobally = sp.getBoolean("site_style_applied_globally", false)
+                siteStyleHideImages = sp.getBoolean("site_style_hide_images", false)
+                siteStyleGrayscale = sp.getBoolean("site_style_grayscale", false)
+                siteStyleWarmFilter = sp.getBoolean("site_style_warm_filter", false)
             }
 
             viewModelScope.launch {

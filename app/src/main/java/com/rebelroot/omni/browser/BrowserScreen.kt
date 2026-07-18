@@ -34,6 +34,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
@@ -4949,9 +4950,46 @@ fun BrowserScreen(
                                 ) {
                                     for (tab in chunk) {
                                         val isActive = tab.id == viewModel.activeTabId
+                                        val swipeOffsetX = remember(tab.id) { androidx.compose.animation.core.Animatable(0f) }
+                                        val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
+                                        val scope = rememberCoroutineScope()
+
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
+                                                .graphicsLayer {
+                                                    translationX = swipeOffsetX.value
+                                                    alpha = (1f - (kotlin.math.abs(swipeOffsetX.value) / (swipeThreshold * 1.5f))).coerceIn(0f, 1f)
+                                                }
+                                                .pointerInput(tab.id) {
+                                                    detectDragGestures(
+                                                        onDragStart = { },
+                                                        onDragEnd = {
+                                                            if (kotlin.math.abs(swipeOffsetX.value) > swipeThreshold) {
+                                                                scope.launch {
+                                                                    val target = if (swipeOffsetX.value > 0) swipeThreshold * 2f else -swipeThreshold * 2f
+                                                                    swipeOffsetX.animateTo(target, androidx.compose.animation.core.tween(150))
+                                                                    viewModel.closeTab(tab.id, context)
+                                                                }
+                                                            } else {
+                                                                scope.launch {
+                                                                    swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring())
+                                                                }
+                                                            }
+                                                        },
+                                                        onDragCancel = {
+                                                            scope.launch {
+                                                                swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring())
+                                                            }
+                                                        },
+                                                        onDrag = { change, dragAmount ->
+                                                            change.consume()
+                                                            scope.launch {
+                                                                swipeOffsetX.snapTo(swipeOffsetX.value + dragAmount.x)
+                                                            }
+                                                        }
+                                                    )
+                                                }
                                                 .clip(RoundedCornerShape(24.dp))
                                                 .background(if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
                                                 .border(
@@ -9796,6 +9834,9 @@ fun SiteStyleCustomizerSheetContent(
     var letterSpacing by remember { mutableStateOf(viewModel.siteStyleLetterSpacing) }
     var fontFamily by remember { mutableStateOf(viewModel.siteStyleFontFamily) }
     var appliedGlobally by remember { mutableStateOf(viewModel.siteStyleAppliedGlobally) }
+    var hideImages by remember { mutableStateOf(viewModel.siteStyleHideImages) }
+    var grayscale by remember { mutableStateOf(viewModel.siteStyleGrayscale) }
+    var warmFilter by remember { mutableStateOf(viewModel.siteStyleWarmFilter) }
 
     val presets = listOf(
         "DEFAULT" to ("Original" to Color.Gray),
@@ -9805,30 +9846,59 @@ fun SiteStyleCustomizerSheetContent(
         "FOREST" to ("Forest" to Color(0xFFE6F0E6))
     )
 
+    val isDark = viewModel.isDarkThemeEnabled
+    val sheetBg = if (isDark) Color(0xFF0B1017) else Color(0xFFF8FAFC)
+    val cardBg = if (isDark) Color(0xFF131D2A) else Color.White
+    val textPrimary = if (isDark) Color.White else Color(0xFF1E293B)
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val dividerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+        containerColor = sheetBg,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 12.dp)
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+            )
+        }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Site Style Customizer",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Palette,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "Customize Site Style",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = textPrimary
+                    )
+                }
                 TextButton(
                     onClick = {
                         viewModel.resetSiteStyle()
@@ -9838,164 +9908,362 @@ fun SiteStyleCustomizerSheetContent(
                         letterSpacing = 0f
                         fontFamily = "inherit"
                         appliedGlobally = false
+                        hideImages = false
+                        grayscale = false
+                        warmFilter = false
                     }
                 ) {
-                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        text = "Reset All",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 13.sp
+                    )
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Color Theme Presets", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    presets.forEach { (code, labelInfo) ->
-                        val (label, color) = labelInfo
-                        val isSelected = themePreset == code
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp)
-                                .background(
-                                    color = if (code == "DEFAULT") {
-                                        if (viewModel.isDarkThemeEnabled) Color(0xFF1C2C3E) else Color(0xFFF1F5F9)
-                                    } else color,
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.3f),
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .clickable {
-                                    themePreset = code
-                                    viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (code == "SEPIA" || code == "FOREST" || (code == "DEFAULT" && !viewModel.isDarkThemeEnabled)) Color.Black else Color.White
-                            )
-                        }
-                    }
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Font Size", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
-                    Text("${fontSize}%", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                }
-                androidx.compose.material3.Slider(
-                    value = fontSize.toFloat(),
-                    onValueChange = {
-                        fontSize = it.toInt()
-                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
-                    },
-                    valueRange = 80f..200f
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Line Spacing", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
-                    Text(String.format("%.2fx", lineSpacing), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                }
-                androidx.compose.material3.Slider(
-                    value = lineSpacing,
-                    onValueChange = {
-                        lineSpacing = it
-                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
-                    },
-                    valueRange = 1.0f..2.5f
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Letter Spacing", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
-                    Text(String.format("%.2fpx", letterSpacing), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                }
-                androidx.compose.material3.Slider(
-                    value = letterSpacing,
-                    onValueChange = {
-                        letterSpacing = it
-                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
-                    },
-                    valueRange = -1.0f..4.0f
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Font Style", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(
-                        "inherit" to "Default",
-                        "sans-serif" to "Sans-Serif",
-                        "serif" to "Serif",
-                        "monospace" to "Monospace"
-                    ).forEach { (code, label) ->
-                        val isSelected = fontFamily == code
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .background(
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
-                                    shape = RoundedCornerShape(32.dp)
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.3f),
-                                    shape = RoundedCornerShape(32.dp)
-                                )
-                                .clickable {
-                                    fontFamily = code
-                                    viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                fontFamily = when (code) {
-                                    "serif" -> androidx.compose.ui.text.font.FontFamily.Serif
-                                    "monospace" -> androidx.compose.ui.text.font.FontFamily.Monospace
-                                    else -> androidx.compose.ui.text.font.FontFamily.SansSerif
-                                },
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
-                            )
-                        }
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // SECTION 1: Color Presets & Font Family Card
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(0.5.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Apply to all sites", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black)
-                    Text("Save preferences to automatically load on every site.", fontSize = 11.sp, color = Color.Gray)
-                }
-                androidx.compose.material3.Switch(
-                    checked = appliedGlobally,
-                    onCheckedChange = {
-                        appliedGlobally = it
-                        viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally)
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Presets
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Theme Presets",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = textSecondary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            presets.forEach { (code, labelInfo) ->
+                                val (label, color) = labelInfo
+                                val isSelected = themePreset == code
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp)
+                                        .background(
+                                            color = if (code == "DEFAULT") {
+                                                if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                                            } else color,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable {
+                                            themePreset = code
+                                            viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label.split(" ").firstOrNull() ?: label,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (code == "SEPIA" || code == "FOREST" || (code == "DEFAULT" && !isDark)) Color.Black else Color.White
+                                    )
+                                }
+                            }
+                        }
                     }
-                )
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Fonts
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Font Family",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = textSecondary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                "inherit" to "Default",
+                                "sans-serif" to "Sans",
+                                "serif" to "Serif",
+                                "monospace" to "Mono"
+                            ).forEach { (code, label) ->
+                                val isSelected = fontFamily == code
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(32.dp)
+                                        .background(
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .clickable {
+                                            fontFamily = code
+                                            viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontFamily = when (code) {
+                                            "serif" -> androidx.compose.ui.text.font.FontFamily.Serif
+                                            "monospace" -> androidx.compose.ui.text.font.FontFamily.Monospace
+                                            else -> androidx.compose.ui.text.font.FontFamily.SansSerif
+                                        },
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // SECTION 2: Typography & Spacing Sliders Card
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(0.5.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Slider 1: Font Size
+                    Column {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Rounded.FormatSize, null, tint = textSecondary, modifier = Modifier.size(16.dp))
+                                Text("Font Size", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
+                            }
+                            Text("${fontSize}%", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Slider(
+                            value = fontSize.toFloat(),
+                            onValueChange = {
+                                fontSize = it.toInt()
+                                viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                            },
+                            valueRange = 80f..200f,
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Slider 2: Line Spacing
+                    Column {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Rounded.FormatLineSpacing, null, tint = textSecondary, modifier = Modifier.size(16.dp))
+                                Text("Line Spacing", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
+                            }
+                            Text(String.format("%.2fx", lineSpacing), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Slider(
+                            value = lineSpacing,
+                            onValueChange = {
+                                lineSpacing = it
+                                viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                            },
+                            valueRange = 1.0f..2.5f,
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Slider 3: Letter Spacing
+                    Column {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Rounded.TextFields, null, tint = textSecondary, modifier = Modifier.size(16.dp))
+                                Text("Letter Spacing", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
+                            }
+                            Text(String.format("%.2fpx", letterSpacing), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Slider(
+                            value = letterSpacing,
+                            onValueChange = {
+                                letterSpacing = it
+                                viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                            },
+                            valueRange = -1.0f..4.0f,
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            )
+                        )
+                    }
+                }
+            }
+
+            // SECTION 3: Content Filters & Helpers (Hide Images, Grayscale, Night Light)
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(0.5.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Row 1: Hide Images
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.BrokenImage,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text("Hide Images", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text("Do not load images for data-saving", fontSize = 10.sp, color = textSecondary)
+                            }
+                        }
+                        Switch(
+                            checked = hideImages,
+                            onCheckedChange = {
+                                hideImages = it
+                                viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                            },
+                            modifier = Modifier.scale(0.85f)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Row 2: Grayscale Focus
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.BrightnessMedium,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text("Grayscale Mode", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text("Desaturate colors for comfortable reading", fontSize = 10.sp, color = textSecondary)
+                            }
+                        }
+                        Switch(
+                            checked = grayscale,
+                            onCheckedChange = {
+                                grayscale = it
+                                viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                            },
+                            modifier = Modifier.scale(0.85f)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Row 3: Blue Light Filter (Night Light)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Nightlight,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text("Night Light", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text("Apply warm amber tint for eye care", fontSize = 10.sp, color = textSecondary)
+                            }
+                        }
+                        Switch(
+                            checked = warmFilter,
+                            onCheckedChange = {
+                                warmFilter = it
+                                viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                            },
+                            modifier = Modifier.scale(0.85f)
+                        )
+                    }
+                }
+            }
+
+            // SECTION 4: Application Scope Card (Apply to all)
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(0.5.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Apply to all sites", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                        Text("Automatically load styles on every site.", fontSize = 11.sp, color = textSecondary)
+                    }
+                    Switch(
+                        checked = appliedGlobally,
+                        onCheckedChange = {
+                            appliedGlobally = it
+                            viewModel.updateSiteStyle(fontSize, themePreset, lineSpacing, letterSpacing, fontFamily, appliedGlobally, hideImages, grayscale, warmFilter)
+                        },
+                        modifier = Modifier.scale(0.85f)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
