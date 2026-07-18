@@ -210,28 +210,43 @@ fun PrivateLockerScreen(
 
     Scaffold(
         topBar = {
-            Surface(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .hazeChild(state = hazeState)
-                    .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    shadowElevation = 4.dp,
+                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                 ) {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back_desc))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.back_desc),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.safe_locker_title),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "🔒 " + stringResource(R.string.safe_locker_title),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                    )
                 }
             }
         },
@@ -241,7 +256,7 @@ fun PrivateLockerScreen(
                     onClick = { filePickerLauncher.launch("*/*") },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(50.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
@@ -307,44 +322,61 @@ fun PrivateLockerScreen(
                             items(categories.chunked(2)) { pair ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     pair.forEach { item ->
                                         val key = item.first
                                         val label = item.second
                                         val icon = item.third
                                         val count = secureFiles.count { getFileCategory(it) == key }
-                                        Card(
+                                        Surface(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(120.dp)
-                                                .clickable { selectedCategory = key }
-                                                .border(BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)), RoundedCornerShape(16.dp)),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                                            ),
-                                            shape = RoundedCornerShape(16.dp)
+                                                .height(130.dp)
+                                                .clickable { selectedCategory = key },
+                                            shape = RoundedCornerShape(24.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                                            shadowElevation = 2.dp
                                         ) {
                                             Column(
-                                                modifier = Modifier.fillMaxSize().padding(16.dp),
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(horizontal = 16.dp, vertical = 18.dp),
                                                 verticalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = label,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(32.dp)
-                                                )
-                                                Column {
+                                                // Icon with gradient pill background
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(RoundedCornerShape(14.dp))
+                                                        .background(
+                                                            Brush.linearGradient(
+                                                                colors = listOf(
+                                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                                                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f)
+                                                                )
+                                                            )
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = label,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
+                                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                                     Text(
                                                         text = label,
-                                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                                        color = MaterialTheme.colorScheme.onBackground
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.onSurface
                                                     )
                                                     Text(
                                                         text = stringResource(R.string.locker_items_count, count),
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                                     )
                                                 }
                                             }

@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "Omni AI Blocker",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Removes generative AI overview cards and assistant response boxes from search result pages.",
     "browser_specific_settings": {
         "gecko": {
@@ -30,6 +30,7 @@
                 "*://*.search.yahoo.com/*"
             ],
             "css": ["override.css"],
+            "js": ["background.js"],
             "run_at": "document_start",
             "all_frames": true
         }

@@ -37,7 +37,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rebelroot.omni.browser.extensions.UniversalCopyManager
-import com.rebelroot.omni.browser.extensions.AiBlockerManager
+import com.rebelroot.omni.browser.extensions.BuiltInExtensionManager
 import com.rebelroot.omni.media.FFmpegBridge
 import com.rebelroot.omni.media.FFmpegLoader
 import com.rebelroot.omni.media.MediaInterceptor
@@ -136,6 +136,11 @@ data class MediaPermissionPrompt(
     val onDeny: () -> Unit
 )
 
+data class CustomSearchEngine(
+    val name: String,
+    val queryUrl: String
+)
+
 class BrowserViewModel : ViewModel() {
 
     companion object {
@@ -146,19 +151,43 @@ class BrowserViewModel : ViewModel() {
 
         /** Known ad popup / pop-under network domains.
          *  Popups opening any of these URLs are silently blocked regardless of user gesture. */
+        /** Known ad popup / pop-under network domains and suspicious host keywords.
+         *  Checked via String.contains() so subdomains are covered automatically. */
         private val POPUP_AD_DOMAINS = setOf(
-            "popads.net", "popcash.net", "popunder.net",
+            // Pop-under networks
+            "popads.net", "popcash.net", "popunder.net", "popmyads.com",
+            "pop.network", "popmagic.com", "trafficshop.com",
+            // Push / redirect ad networks
             "exoclick.com", "trafficjunky.net", "juicyads.com",
             "adsterra.com", "propellerads.com", "hilltopads.net",
             "clickadu.com", "evadav.com", "megapush.com",
             "push.house", "richpush.co", "pushground.com",
-            "mgpusher.com", "pu.sh", "adf.ly", "j.gs",
-            "link.tl", "linkvertise.com", "hrefli.com",
+            "mgpusher.com", "pu.sh",
+            // URL shorteners / cloakers used by ads
+            "adf.ly", "j.gs", "link.tl", "linkvertise.com", "hrefli.com",
+            "exe.io", "za.gl", "fc.lc", "shrinke.me",
+            // Traffic / redirect brokers
             "trafficfactory.biz", "tsyndicate.com", "doublelift.net",
             "adskeeper.com", "voluumtrk.com", "atominik.com",
-            "mondoagency.net", "trafficshop.com", "adnxs.com",
-            "openx.net", "rubiconproject.com", "doubleclick.net",
-            "googlesyndication.com"
+            "mondoagency.net", "traffik.io", "traffective.com",
+            // Ad infrastructure
+            "adnxs.com", "openx.net", "rubiconproject.com",
+            "doubleclick.net", "googlesyndication.com", "adtech.de",
+            "bidswitch.net", "contextweb.com", "casalemedia.com",
+            "pubmatic.com", "quantserve.com", "scorecardresearch.com",
+            // Malvertising / fake-update / browser-hijacker patterns
+            "cdn77.org/ad", "go2cloud.org", "bestads.com",
+            "clickfunnel.net", "adclickfunnels.com", "cpmrevenuegate.com",
+            "revcontent.com", "taboola.com", "outbrain.com",
+            "zergnet.com", "mgid.com", "shareaholic.com"
+        )
+
+        /** Suspicious sub-strings found in popup/redirect hostnames. */
+        private val POPUP_HOST_KEYWORDS = listOf(
+            "adserver", "adsystem", "adservice", "adnserver",
+            "clicksmart", "fastclick", "popunder", "popads",
+            "redirector", "onclick", "adcash", "adclick",
+            "track.", "trk.", "clk.", "redir.", "go.", "exit."
         )
         
 
@@ -166,10 +195,12 @@ class BrowserViewModel : ViewModel() {
         val UNIVERSAL_COPY_ENABLED_KEY = booleanPreferencesKey("universal_copy_enabled")
         val AI_BLOCKER_ENABLED_KEY = booleanPreferencesKey("ai_blocker_enabled")
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
+        val YOUTUBE_ENABLED_KEY = booleanPreferencesKey("youtube_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
         val SEARCH_ENGINE_KEY = stringPreferencesKey("default_search_engine")
         val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
+        val CUSTOM_SEARCH_ENGINES_KEY = stringPreferencesKey("custom_search_engines")
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
         val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
         val PDF_EXPORT_THEME_KEY = stringPreferencesKey("pdf_export_theme")
@@ -200,6 +231,7 @@ class BrowserViewModel : ViewModel() {
         val WALLPAPER_SCALE_KEY = floatPreferencesKey("wallpaper_scale")
         val WALLPAPER_OFFSET_X_KEY = floatPreferencesKey("wallpaper_offset_x")
         val WALLPAPER_OFFSET_Y_KEY = floatPreferencesKey("wallpaper_offset_y")
+        val QUICK_TOOLS_ORDER_KEY = stringPreferencesKey("quick_tools_order")
 
 
 
@@ -211,12 +243,19 @@ class BrowserViewModel : ViewModel() {
         val PLAYER_VOLUME_GESTURE_KEY = booleanPreferencesKey("player_volume_gesture")
         val PLAYER_RESUME_PLAYBACK_KEY = booleanPreferencesKey("player_resume_playback")
         val PLAYER_BACKGROUND_PLAYBACK_KEY = booleanPreferencesKey("player_background_playback")
+        val EXTENSION_ORDER_KEY = stringPreferencesKey("extension_order")
+        val EXTENSION_VIEW_MODE_KEY = stringPreferencesKey("extension_view_mode")
         val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
 
         @Volatile
         @Keep
         private var geckoRuntime: GeckoRuntime? = null
     }
+
+    /** Exposed to the UI so a native-library load failure renders GeckoErrorScreen
+     *  instead of a silent blank/black screen. Set to a non-null message when
+     *  [getGeckoRuntime] catches a Throwable (e.g. UnsatisfiedLinkError from dlopen). */
+    var geckoRuntimeError by mutableStateOf<String?>(null)
 
     // Engine Session & Runtime
     var geckoSession by mutableStateOf(GeckoSession())
@@ -253,24 +292,130 @@ class BrowserViewModel : ViewModel() {
     }
 
 
+    var activeExtensionPopupLoading by mutableStateOf(true)
+
     fun handleExtensionOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession> {
         val result = GeckoResult<GeckoSession>()
         if (isNativeSheetOpen) {
             result.completeExceptionally(IllegalStateException("Blocked: Native toolbox/notes sheet is active."))
             return result
         }
+        var completed = false
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            val run = geckoRuntime
-            if (run == null) {
-                result.completeExceptionally(IllegalStateException("GeckoRuntime not ready"))
-                return@post
+            try {
+                val run = geckoRuntime
+                if (run == null) {
+                    completed = true
+                    result.completeExceptionally(IllegalStateException("GeckoRuntime not ready"))
+                    return@post
+                }
+                activeExtensionPopupSession?.close() // close previous popup session to avoid leaks
+
+                // Use mobile viewport — desktop mode renders at ~1280px causing tiny popups on phones
+                val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+                    .allowJavascript(true)
+                    .userAgentMode(org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
+                    .viewportMode(org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+                    .build()
+
+                val session = GeckoSession(settings)
+
+                // Show spinner while the popup page loads
+                activeExtensionPopupLoading = true
+
+                // Content delegate — dismiss popup if the extension page closes itself
+                session.contentDelegate = object : GeckoSession.ContentDelegate {
+                    override fun onCloseRequest(session: GeckoSession) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            dismissExtensionPopup()
+                        }
+                    }
+                }
+
+                // Progress delegate — inject auto-fit CSS once page finishes loading
+                session.progressDelegate = object : GeckoSession.ProgressDelegate {
+                    override fun onPageStop(session: GeckoSession, success: Boolean) {
+                        // Inject CSS + viewport meta so the extension popup fills the phone screen.
+                        // Extensions like uBlock/Violentmonkey hardcode min-width; this strips it.
+                        val js = """
+                            (function(){
+                                try {
+                                    // Set/update viewport meta for device-width scaling
+                                    var vp = document.querySelector('meta[name="viewport"]');
+                                    if (!vp) {
+                                        vp = document.createElement('meta');
+                                        vp.name = 'viewport';
+                                        document.head.appendChild(vp);
+                                    }
+                                    vp.content = 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes';
+
+                                    // Strip desktop min-width constraints so the popup fills available width
+                                    var style = document.createElement('style');
+                                    style.id = '_omni_ext_fit';
+                                    style.textContent = [
+                                        'html { min-width: unset !important; width: 100% !important; box-sizing: border-box !important; }',
+                                        'body { min-width: unset !important; width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; overflow-x: hidden !important; }',
+                                        '* { max-width: 100% !important; }'
+                                    ].join('\n');
+                                    var old = document.getElementById('_omni_ext_fit');
+                                    if (old) old.remove();
+                                    document.head.appendChild(style);
+                                } catch(e) {}
+                            })();
+                        """.trimIndent()
+                        // Execute via javascript: URI — fires in the context of the current page
+                        try { session.loadUri("javascript:$js") } catch (_: Exception) {}
+
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            activeExtensionPopupLoading = false
+                        }
+                    }
+                    override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {}
+                }
+
+                // Navigation delegate — allow extension-internal navigation (moz-extension:// links)
+                session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+                    override fun onLocationChange(
+                        session: GeckoSession,
+                        url: String?,
+                        perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
+                        hasUserGesture: Boolean
+                    ) {}
+                    override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {}
+                    override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {}
+                    override fun onLoadRequest(
+                        session: GeckoSession,
+                        request: GeckoSession.NavigationDelegate.LoadRequest
+                    ): GeckoResult<AllowOrDeny>? {
+                        val url = request.uri ?: return null
+                        return when {
+                            // Allow all moz-extension:// and about: pages
+                            url.startsWith("moz-extension://") || url.startsWith("about:") -> null
+                            // Intercept external http(s) links — open in main browser
+                            url.startsWith("http://") || url.startsWith("https://") -> {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    dismissExtensionPopup()
+                                    loadUrl(url)
+                                }
+                                GeckoResult.fromValue(AllowOrDeny.DENY)
+                            }
+                            else -> null
+                        }
+                    }
+                }
+
+                session.open(run)
+                activeExtensionPopupSession = session
+                activeExtensionPopupName = try { extension.metaData?.name ?: extension.id } catch (_: Exception) { extension.id }
+                completed = true
+                result.complete(session)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to open popup for ${extension.id}", e)
+                if (!completed) {
+                    completed = true
+                    result.completeExceptionally(e)
+                }
             }
-            activeExtensionPopupSession?.close() // close previous popup session to avoid leaks
-            val session = GeckoSession()
-            session.open(run)
-            activeExtensionPopupSession = session
-            activeExtensionPopupName = extension.metaData?.name ?: extension.id
-            result.complete(session)
         }
         return result
     }
@@ -279,6 +424,7 @@ class BrowserViewModel : ViewModel() {
         activeExtensionPopupSession?.close()
         activeExtensionPopupSession = null
         activeExtensionPopupName = ""
+        activeExtensionPopupLoading = true
     }
     var pendingIntentUrl: String? = null
     var isVideoPlayerScreenActive by mutableStateOf(false)
@@ -317,7 +463,7 @@ class BrowserViewModel : ViewModel() {
     lateinit var vpnManager: VpnManager
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     private var copyManager: UniversalCopyManager? = null
-    private var aiBlockerManager: AiBlockerManager? = null
+    private var aiBlockerManager: BuiltInExtensionManager? = null
     private var appContext: Context? = null
 
     // GeckoView Reference for capturePixels
@@ -345,6 +491,17 @@ class BrowserViewModel : ViewModel() {
     var hasSeenConsoleOverview by mutableStateOf(false)
     var hasSeenDevNotesOverview by mutableStateOf(false)
 
+    val DEFAULT_QUICK_TOOLS_ORDER = listOf(
+        "qr_scanner", "safe_locker", "translator", "edit_page",
+        "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
+        "qr_generator", "console_log", "dev_notes", "site_style"
+    )
+    var quickToolsOrder by mutableStateOf(listOf(
+        "qr_scanner", "safe_locker", "translator", "edit_page",
+        "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
+        "qr_generator", "console_log", "dev_notes", "site_style"
+    ))
+
     // UI States
     var currentUrl by mutableStateOf("about:blank")
     var isFullscreen by mutableStateOf(false)
@@ -356,10 +513,12 @@ class BrowserViewModel : ViewModel() {
     var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
     var isNativePlayerEnabled by mutableStateOf(true)
+    var isYouTubeEnabled by mutableStateOf(false)
     var pendingVideoUrl: String? = null
     var customVpnConfig by mutableStateOf<String?>(null)
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
+    var customSearchEngines by mutableStateOf<List<CustomSearchEngine>>(emptyList())
     var isDarkThemeEnabled by mutableStateOf(true)
     var selectedLanguageCode by mutableStateOf("en")
     var isLanguageSelectionDone by mutableStateOf(false)
@@ -661,39 +820,73 @@ class BrowserViewModel : ViewModel() {
         }
         val cleanContentType = contentType?.trim()?.lowercase()
         return when {
-            cleanContentType == null -> "downloaded-file.bin"
+            cleanContentType == null -> "download.bin"
             cleanContentType.contains("pdf") -> "download.pdf"
             cleanContentType.contains("zip") -> "download.zip"
             cleanContentType.contains("msword") || cleanContentType.contains("wordprocessingml.document") -> "download.docx"
             cleanContentType.contains("excel") || cleanContentType.contains("spreadsheetml.sheet") -> "download.xlsx"
             cleanContentType.contains("presentation") || cleanContentType.contains("presentationml.presentation") -> "download.pptx"
             cleanContentType.contains("text/plain") -> "download.txt"
-            cleanContentType.contains("text/html") -> "downloaded-file.bin"
+            cleanContentType.contains("text/html") -> "download.html"
             cleanContentType.contains("json") -> "download.json"
             cleanContentType.contains("xml") -> "download.xml"
             cleanContentType.startsWith("image/") -> "download${cleanContentType.substringAfter("/")}"
             cleanContentType.startsWith("audio/") -> "download.audio"
             cleanContentType.startsWith("video/") -> "download.video"
-            cleanContentType.contains("octet-stream") -> "downloaded-file.bin"
-            else -> "downloaded-file.bin"
+            cleanContentType.contains("octet-stream") -> "download.bin"
+            else -> "download.bin"
         }
     }
 
     private fun isGenericDownloadUrl(url: String): Boolean {
         val lower = url.lowercase().trim()
         if (lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("about:")) return false
-        val path = lower.substringBeforeLast("?").substringAfterLast("/")
-        if (path.isBlank() || path.contains(" ")) return false
-        val ext = path.substringAfterLast('.', "").lowercase()
+
+        // Drop fragment (#...) and query (?...) — neither affects whether the
+        // *path* points at a downloadable file.
+        val noFrag = lower.substringBeforeLast("#")
+        val pathAndQuery = noFrag.substringBeforeLast("?")
+
+        // The final path segment (everything after the last '/').
+        val lastSegment = pathAndQuery.substringAfterLast("/")
+        if (lastSegment.isBlank() || lastSegment.contains(" ")) {
+            // URL ends in '/' (e.g. https://example.com/) or has no filename
+            // at all — it is a directory/domain, not a downloadable file.
+            return false
+        }
+
+        val ext = lastSegment.substringAfterLast('.', "").lowercase()
+
         if (ext.isEmpty()) {
-            val htmlExtensions = setOf("html", "htm", "php", "asp", "aspx", "jsp", "htmx", "xhtml")
-            val firstSegment = path.substringBefore('/').lowercase()
-            val looksLikeHtmlPage = firstSegment.isNotEmpty() && firstSegment !in setOf("download", "file", "get", "serve", "attachment", "export", "report") && firstSegment.none { it == '.' }
-            return !looksLikeHtmlPage
+            // No dot in the final segment at all (e.g. "/report", "/file").
+            // Treat as a page unless the segment is a known download endpoint word.
+            val downloadWords = setOf("download", "file", "get", "serve", "attachment", "export", "report")
+            return lastSegment.substringBefore('/').lowercase() in downloadWords
         }
         if (ext.length > 10) return false
+
         val htmlExtensions = setOf("html", "htm", "php", "asp", "aspx", "jsp", "htmx", "xhtml")
         if (ext in htmlExtensions) return false
+
+        // CRITICAL FIX: if the "extension" is actually a top-level domain
+        // (e.g. example.com, site.io, my.app), this is a *bare domain*, not a
+        // file. Previously the TLD was mistaken for a file extension, so every
+        // ".com" site was wrongly intercepted as a download (download.bin) and
+        // the main navigation was DENYed, leaving pages blank.
+        val commonTlds = setOf(
+            "com","net","org","io","co","ai","app","dev","xyz","info","biz","me","tv",
+            "us","uk","de","fr","ru","jp","cn","in","ca","au","gov","edu","mil","int",
+            "name","pro","mobi","tech","online","store","site","website","blog","cloud",
+            "live","news","shop","email","press","wiki","design","game","gg","sh","top",
+            "vip","work","space","fun","club","world","cyou","bid","trade","wang","ren",
+            "group","luxe","art","fit","run","plus","zone","care","sale","life","fund",
+            "band","cool","best","realty","properties","agency","expert","center","digital",
+            "systems","solutions","today","farm","city","town","cash","money","bet",
+            "casino","poker","loan","credit","insurance","investments","finance","tax",
+            "legal","host","web","law","yoga","pro","tech"
+        )
+        if (ext in commonTlds) return false
+
         return true
     }
 
@@ -719,7 +912,12 @@ class BrowserViewModel : ViewModel() {
         val headers = response.headers
         val disposition = headers["Content-Disposition"] ?: headers["content-disposition"]
         val contentType = headers["Content-Type"] ?: headers["content-type"]
-        if (response.requestExternalApp || disposition?.contains("attachment", true) == true) {
+        val isAttachment = disposition?.contains("attachment", true) == true
+        // Only treat this as a download when the server explicitly marks it as an
+        // attachment OR the URL clearly points at a downloadable file. This prevents
+        // normal HTML page navigations (content-type text/html) from being wrongly
+        // intercepted as a "downloaded-file.bin" download.
+        if ((isAttachment || response.requestExternalApp) && isGenericDownloadUrl(response.uri)) {
             Log.i(TAG, "Handling external download response: ${response.uri}")
             val filename = parseFilenameFromContentDisposition(disposition)
                 ?: guessDownloadFilename(response.uri, contentType)
@@ -851,11 +1049,81 @@ class BrowserViewModel : ViewModel() {
         pending.geckoResult.complete(pending.prompt.dismiss())
     }
 
+    // ── Find In Page ─────────────────────────────────────────────────────────────
+    var showFindInPage  by mutableStateOf(false)
+        private set
+    var findQuery       by mutableStateOf("")
+        private set
+    var findMatchCurrent by mutableStateOf(0)
+        private set
+    var findMatchTotal  by mutableStateOf(0)
+        private set
+    var findMatchFound  by mutableStateOf(true)
+        private set
+
+    fun openFindInPage() {
+        showFindInPage = true
+        findQuery = ""
+        findMatchCurrent = 0
+        findMatchTotal = 0
+        findMatchFound = true
+    }
+
+    fun closeFindInPage() {
+        showFindInPage = false
+        findQuery = ""
+        findMatchCurrent = 0
+        findMatchTotal = 0
+        // Clear GeckoView highlights on the current session
+        try { geckoSession.finder.clear() } catch (_: Exception) {}
+    }
+
+    /** Called by the UI on every keystroke in the search field. */
+    fun updateFindQuery(query: String) {
+        findQuery = query
+        if (query.isEmpty()) {
+            findMatchCurrent = 0
+            findMatchTotal = 0
+            findMatchFound = true
+            try { geckoSession.finder.clear() } catch (_: Exception) {}
+            return
+        }
+        geckoSession.finder.find(query, GeckoSession.FINDER_FIND_FORWARD)
+            .accept({ result ->
+                findMatchFound  = result?.found  ?: false
+                findMatchCurrent = result?.current ?: 0
+                findMatchTotal  = result?.total   ?: 0
+            }, null)
+    }
+
+    fun findNext() {
+        if (findQuery.isEmpty()) return
+        geckoSession.finder.find(findQuery, GeckoSession.FINDER_FIND_FORWARD)
+            .accept({ result ->
+                findMatchFound  = result?.found  ?: false
+                findMatchCurrent = result?.current ?: 0
+                findMatchTotal  = result?.total   ?: 0
+            }, null)
+    }
+
+    fun findPrev() {
+        if (findQuery.isEmpty()) return
+        geckoSession.finder.find(findQuery, GeckoSession.FINDER_FIND_BACKWARDS)
+            .accept({ result ->
+                findMatchFound  = result?.found  ?: false
+                findMatchCurrent = result?.current ?: 0
+                findMatchTotal  = result?.total   ?: 0
+            }, null)
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
+
     // Extensions References
 
     private var grabberExtension: WebExtension? = null
     
     val userExtensions = mutableStateListOf<WebExtension>()
+    val extensionIcons = mutableStateMapOf<String, android.graphics.Bitmap>()
+    var extensionViewMode by mutableStateOf("List") // "List" or "Grid"
     
     // Console Logs
     val consoleLogs = mutableStateListOf<ConsoleLogEntry>()
@@ -1333,6 +1601,8 @@ class BrowserViewModel : ViewModel() {
         // Clear media list when switching tabs to ensure only active tab's media is tracked
         mediaInterceptor.clear()
         isVideoPlayingInPage = false
+        // Dismiss Find-in-Page when switching tabs — GeckoView highlights are per-session
+        if (showFindInPage) closeFindInPage()
         
         // If the tab's URI was loaded lazily and hasn't actually been requested yet, load it now!
         if (!tab.isUriLoaded) {
@@ -1747,24 +2017,25 @@ class BrowserViewModel : ViewModel() {
                 // Intercept popups before new session triggers
                 if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
                     if (isPopupBlockerEnabled) {
-                        // 1. Block if target is a known ad popup network
-                        val isAdPopup = POPUP_AD_DOMAINS.any { domain ->
-                            lowerUri.contains(domain)
-                        }
-                        if (isAdPopup) {
-                            Log.w(TAG, "🚫 onLoadRequest: Blocked ad popup to $uri")
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-
-                        // 2. Block suspicious blank popups
-                        if (request.uri.isEmpty() || lowerUri == "about:blank") {
-                            Log.w(TAG, "🚫 onLoadRequest: Blocked blank popup")
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-
-                        // 3. Block popups that have no user gesture (auto-popups / redirects)
+                        // 1. Block auto-popups with no user gesture (the most common ad pattern)
                         if (!request.hasUserGesture) {
                             Log.w(TAG, "🚫 onLoadRequest: Blocked auto-popup (no user gesture) to $uri")
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+
+                        // 2. Block blank/script popups (pop-unders that redirect after opening)
+                        if (request.uri.isEmpty() || lowerUri == "about:blank" ||
+                            lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
+                            Log.w(TAG, "🚫 onLoadRequest: Blocked blank/script popup")
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+
+                        // 3. Block known ad network domains
+                        val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
+                        val isAdPopup = POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
+                            POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
+                        if (isAdPopup) {
+                            Log.w(TAG, "🚫 onLoadRequest: Blocked ad popup to $uri")
                             return GeckoResult.fromValue(AllowOrDeny.DENY)
                         }
                     }
@@ -1786,7 +2057,7 @@ class BrowserViewModel : ViewModel() {
 
                 // 2. Intercept clicks to direct video files and launch native player
                 val isYouTube = lowerUri.contains("youtube.com") || lowerUri.contains("youtu.be")
-                if (isNativePlayerEnabled && isDirectVideoUrl(uri) && !isYouTube) {
+                if (isNativePlayerEnabled && isDirectVideoUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
                     Log.i(TAG, "🎬 Intercepted direct video load request: $uri. Opening in native player...")
                     viewModelScope.launch(Dispatchers.Main) {
                         val callback = onPlayVideoRequestReceived
@@ -1807,7 +2078,7 @@ class BrowserViewModel : ViewModel() {
                 }
 
                 // 2a. Intercept generic file downloads — show a dialog so user picks local vs. vault
-                if (tab.id == activeTabId && isGenericDownloadUrl(uri) && !isYouTube) {
+                if (tab.id == activeTabId && isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
                     Log.i(TAG, "📥 Intercepted file download URL: $uri")
                     viewModelScope.launch(Dispatchers.Main) {
                         val filename = guessDownloadFilename(uri, null)
@@ -1964,43 +2235,35 @@ class BrowserViewModel : ViewModel() {
                     val lowerUri = uri.lowercase().trim()
 
                     if (isPopupBlockerEnabled) {
-                        // 1. Block if the URL matches a known popup ad network domain
-                        val isAdPopup = POPUP_AD_DOMAINS.any { domain ->
-                            lowerUri.contains(domain)
+                        // 1. Always block blank / script / data popups — the classic pop-under trick
+                        //    is to open about:blank first, then JS-redirect to the ad page.
+                        if (uri.isEmpty() || lowerUri == "about:blank" ||
+                            lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
+                            Log.w(TAG, "🚫 onNewSession: Blocked blank/script popup")
+                            return GeckoResult.fromValue(null)
                         }
+
+                        // 2. Block known ad network domains / host keywords
+                        val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
+                        val isAdPopup = POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
+                            POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
                         if (isAdPopup) {
-                            Log.w(TAG, "🚫 Popup blocked — ad domain: $uri")
+                            Log.w(TAG, "🚫 onNewSession: Blocked ad popup — $uri")
                             return GeckoResult.fromValue(null)
                         }
 
-                        // 2. Block suspicious blank/redirect script-injected popups
-                        if (uri.isEmpty() || lowerUri == "about:blank" || lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
-                            Log.w(TAG, "🚫 Popup blocked — suspicious blank or script URI")
-                            return GeckoResult.fromValue(null)
-                        }
-
-                        // 3. Block suspicious redirect hosts containing common ad keywords
-                        val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch(e: Exception) { "" }
-                        val isSuspiciousHost = host.isNotEmpty() && (
-                            host.contains("adserver") || host.contains("adsystem") ||
-                            host.contains("clicksmart") || host.contains("fastclick") ||
-                            host.contains("popunder") || host.contains("popads") ||
-                            host.contains("redirect") || host.contains("onclick") ||
-                            host.contains("adcash") || host.contains("popmyads")
-                        )
-                        if (isSuspiciousHost) {
-                            Log.w(TAG, "🚫 Popup blocked — suspicious redirect host: $uri")
-                            return GeckoResult.fromValue(null)
-                        }
-
-                        // 4. Force regular pages that open via target_blank to load in the SAME active tab
-                        //    (keeps the tab list clean, except for common social logins)
-                        val isOAuthLogin = lowerUri.contains("accounts.google") || 
-                                           lowerUri.contains("facebook.com/dialog") || 
-                                           lowerUri.contains("api.twitter") || 
-                                           lowerUri.contains("github.com/login/oauth")
+                        // 3. For all other HTTP URLs opened without user gesture: load in current tab
+                        //    rather than spawning a new tab — keeps the tab list clean.
+                        //    OAuth/login flows are the only legitimate reason for a new window; those
+                        //    always have a user gesture and a recognisable login host.
+                        val isOAuthLogin = lowerUri.contains("accounts.google") ||
+                                           lowerUri.contains("facebook.com/dialog") ||
+                                           lowerUri.contains("api.twitter") ||
+                                           lowerUri.contains("github.com/login/oauth") ||
+                                           lowerUri.contains("appleid.apple.com") ||
+                                           lowerUri.contains("login.microsoftonline.com")
                         if (!isOAuthLogin && lowerUri.startsWith("http")) {
-                            Log.i(TAG, "onNewSession: redirecting target_blank popup to active tab: $uri")
+                            Log.i(TAG, "🔀 onNewSession: reusing active tab for target_blank: $uri")
                             viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                                 loadUrl(uri)
                             }
@@ -2008,7 +2271,7 @@ class BrowserViewModel : ViewModel() {
                         }
                     }
 
-                    // Allow legitimate popups (like OAuth) in background tab
+                    // Allow legitimate OAuth / login popups in their own tab
                     Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                     val runtime = getGeckoRuntime(context)
                     val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -2162,6 +2425,49 @@ class BrowserViewModel : ViewModel() {
         saveHistory(context)
     }
 
+    /**
+     * "Burn Data" — wipes everything:
+     *  1. Clears in-memory + persisted browsing history.
+     *  2. Closes every open tab (both normal and incognito).
+     *  3. Opens a single fresh "about:blank" normal tab so the browser is usable.
+     *  4. Exits incognito mode if active.
+     *
+     * The GeckoView-side purge (cookies, cache, DOM storage, etc.) is handled by
+     * [com.rebelroot.omni.privacy.FireButton.burn], which the call site runs first.
+     */
+    fun burnAllData(context: Context) {
+        // 1. Wipe history list and its persisted JSON file
+        historyList.clear()
+        val ctx = appContext ?: context
+        saveHistory(ctx)
+
+        // 2. Close every GeckoSession without going through the normal "last tab" guard
+        val allTabs = tabs.toList()
+        for (tab in allTabs) {
+            try { tab.session.close() } catch (e: Exception) {
+                Log.e(TAG, "burnAllData: error closing session for tab ${tab.id}", e)
+            }
+        }
+        tabs.clear()
+
+        // 3. Reset all tab-tracking state
+        activeTabId = null
+        activeNormalTabId = null
+        activeIncognitoTabId = null
+        isIncognitoMode = false
+        currentUrl = "about:blank"
+        canGoBack = false
+        canGoForward = false
+
+        // 4. Persist the now-empty tab list so it survives a relaunch
+        saveTabs()
+
+        // 5. Open one clean normal tab — browser must always have at least one tab
+        createNewTab(ctx, "about:blank")
+
+        Log.i(TAG, "🔥 burnAllData: history wiped, all ${allTabs.size} tab(s) closed, fresh tab opened.")
+    }
+
     fun clearCacheAndSiteData(context: Context) {
         val runtime = geckoRuntime
         if (runtime != null) {
@@ -2265,6 +2571,14 @@ class BrowserViewModel : ViewModel() {
         val appCtx = context.applicationContext
         appContext = appCtx
 
+        // Load persistent extension view mode settings
+        viewModelScope.launch {
+            try {
+                val prefs = appCtx.dataStore.data.first()
+                extensionViewMode = prefs[EXTENSION_VIEW_MODE_KEY] ?: "List"
+            } catch (_: Exception) {}
+        }
+
         // 1. Static/Global runtime initialization (once per process)
         if (geckoRuntime == null) {
             val isDebug = (appCtx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -2278,7 +2592,17 @@ class BrowserViewModel : ViewModel() {
             }
 
             val cbSettings = org.mozilla.geckoview.ContentBlocking.Settings.Builder()
-                .antiTracking(org.mozilla.geckoview.ContentBlocking.AntiTracking.DEFAULT)
+                // Block known ad networks, social trackers, and fingerprinters at the network level.
+                // AD covers advertising trackers; SOCIAL covers Facebook/Twitter pixels; FINGERPRINTING
+                // covers canvas/font/audio fingerprinting scripts; CRYPTOMINING blocks crypto miners.
+                .antiTracking(
+                    org.mozilla.geckoview.ContentBlocking.AntiTracking.AD or
+                    org.mozilla.geckoview.ContentBlocking.AntiTracking.SOCIAL or
+                    org.mozilla.geckoview.ContentBlocking.AntiTracking.ANALYTIC or
+                    org.mozilla.geckoview.ContentBlocking.AntiTracking.FINGERPRINTING or
+                    org.mozilla.geckoview.ContentBlocking.AntiTracking.CRYPTOMINING
+                )
+                // Reject third-party tracking cookies; first-party cookies still work normally.
                 .cookieBehavior(org.mozilla.geckoview.ContentBlocking.CookieBehavior.ACCEPT_NON_TRACKERS)
                 .safeBrowsing(org.mozilla.geckoview.ContentBlocking.SafeBrowsing.DEFAULT)
                 .build()
@@ -2308,12 +2632,15 @@ class BrowserViewModel : ViewModel() {
 
             try {
                 geckoRuntime = GeckoRuntime.create(appCtx, settings)
+                geckoRuntimeError = null   // clear any previous failure
             } catch (t: Throwable) {
-                // GeckoRuntime.create can fail in release builds if R8 strips a
-                // class that GeckoView loads via reflection. Log and rethrow so
-                // the caller (MainActivity) can show a graceful error instead
-                // of an opaque black crash-loop screen.
-                Log.e(TAG, "GeckoRuntime.create FAILED", t)
+                // GeckoRuntime.create can fail when native .so loading fails at
+                // runtime (e.g. UnsatisfiedLinkError / dlopen on Android 15+ with
+                // unaligned libs). Log it, expose the error via state so the UI
+                // can render GeckoErrorScreen, and rethrow for the existing
+                // MainActivity catch block to also pick it up.
+                Log.e(TAG, "GeckoRuntime.create FAILED: ${t.javaClass.simpleName}: ${t.message}", t)
+                geckoRuntimeError = "${t.javaClass.simpleName}: ${t.message}"
                 throw t
             }
             pruneTemporaryStorage(appCtx)
@@ -2380,7 +2707,12 @@ class BrowserViewModel : ViewModel() {
             streamDownloadEngine = StreamDownloadEngine(appCtx, ffmpegBridge, locker)
             vpnManager = VpnManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
-            aiBlockerManager = AiBlockerManager(geckoRuntime!!)
+            aiBlockerManager = BuiltInExtensionManager(
+                runtime = geckoRuntime!!,
+                assetPath = "web_extensions/ai_blocker/",
+                extensionId = AI_BLOCKER_ID,
+                label = "AI Blocker"
+            )
             
             // Sync user extensions on start
             syncUserExtensions()
@@ -2399,6 +2731,11 @@ class BrowserViewModel : ViewModel() {
                 syncNativePlayerStateInPage()
             }
 
+            viewModelScope.launch {
+                isYouTubeEnabled = getYouTubePreference(appCtx).first()
+                mediaInterceptor.isYouTubeEnabled = isYouTubeEnabled
+            }
+
 
             viewModelScope.launch {
                 customVpnConfig = getCustomVpnConfig(appCtx).first()
@@ -2407,6 +2744,8 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 selectedSearchEngine = getSearchEnginePreference(appCtx).first()
                 customSearchUrl = getCustomSearchUrlPreference(appCtx).first()
+                val enginesJson = getCustomSearchEnginesPreference(appCtx).first()
+                customSearchEngines = parseCustomSearchEngines(enginesJson)
             }
 
             viewModelScope.launch {
@@ -2490,6 +2829,18 @@ class BrowserViewModel : ViewModel() {
                     wallpaperScale = prefs[WALLPAPER_SCALE_KEY] ?: 1.0f
                     wallpaperOffsetX = prefs[WALLPAPER_OFFSET_X_KEY] ?: 0f
                     wallpaperOffsetY = prefs[WALLPAPER_OFFSET_Y_KEY] ?: 0f
+                    quickToolsOrder = run {
+                        val saved = prefs[QUICK_TOOLS_ORDER_KEY]
+                        val default = listOf(
+                            "qr_scanner", "safe_locker", "translator", "edit_page",
+                            "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
+                            "qr_generator", "console_log", "dev_notes", "site_style"
+                        )
+                        if (!saved.isNullOrBlank()) {
+                            val savedList = saved.split(",").filter { it.isNotBlank() }
+                            savedList + default.filter { it !in savedList }
+                        } else default
+                    }
                 }
             }
 
@@ -2574,6 +2925,7 @@ class BrowserViewModel : ViewModel() {
                     if (type == "GET_NATIVE_PLAYER_STATE") {
                         val response = org.json.JSONObject()
                         response.put("enabled", isNativePlayerEnabled)
+                        response.put("youtubeEnabled", isYouTubeEnabled)
                         pendingJsCommand?.let {
                             response.put("pendingJs", it)
                             pendingJsCommand = null
@@ -2607,7 +2959,7 @@ class BrowserViewModel : ViewModel() {
                         Log.i(TAG, "🎬 received PLAY_IN_NATIVE message. url=$videoUrl, pageUrl=$pageUrl, isNativePlayerEnabled=$isNativePlayerEnabled")
                         val isYouTube = pageUrl.lowercase().contains("youtube.com") || pageUrl.lowercase().contains("youtu.be") ||
                                         (videoUrl != null && (videoUrl.lowercase().contains("youtube.com") || videoUrl.lowercase().contains("youtu.be")))
-                        if (videoUrl != null && isNativePlayerEnabled && !isYouTube) {
+                        if (videoUrl != null && isNativePlayerEnabled && (!isYouTube || isYouTubeEnabled)) {
                             viewModelScope.launch(Dispatchers.Main) {
                                 Log.i(TAG, "🎬 Native player takeover starting for: $videoUrl")
                                 if (onPlayVideoRequestReceived == null) {
@@ -2858,6 +3210,12 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    private fun getYouTubePreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[YOUTUBE_ENABLED_KEY] ?: false // Default OFF
+        }
+    }
+
     fun getCustomVpnConfig(context: Context): Flow<String?> {
         return context.dataStore.data.map { preferences ->
             preferences[CUSTOM_VPN_CONFIG_KEY]
@@ -2882,6 +3240,64 @@ class BrowserViewModel : ViewModel() {
     fun getCustomSearchUrlPreference(context: Context): Flow<String> {
         return context.dataStore.data.map { preferences ->
             preferences[CUSTOM_SEARCH_URL_KEY] ?: ""
+        }
+    }
+
+    fun getCustomSearchEnginesPreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_SEARCH_ENGINES_KEY] ?: "[]"
+        }
+    }
+
+    fun parseCustomSearchEngines(jsonStr: String): List<CustomSearchEngine> {
+        val list = mutableListOf<CustomSearchEngine>()
+        try {
+            val array = org.json.JSONArray(jsonStr)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val name = obj.optString("name", "")
+                val queryUrl = obj.optString("queryUrl", "")
+                if (name.isNotEmpty() && queryUrl.isNotEmpty()) {
+                    list.add(CustomSearchEngine(name, queryUrl))
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun serializeCustomSearchEngines(list: List<CustomSearchEngine>): String {
+        val array = org.json.JSONArray()
+        for (engine in list) {
+            val obj = org.json.JSONObject()
+            obj.put("name", engine.name)
+            obj.put("queryUrl", engine.queryUrl)
+            array.put(obj)
+        }
+        return array.toString()
+    }
+
+    fun addCustomSearchEngine(context: Context, name: String, queryUrl: String) {
+        val updatedList = customSearchEngines + CustomSearchEngine(name, queryUrl)
+        saveCustomSearchEnginesList(context, updatedList)
+    }
+
+    fun deleteCustomSearchEngine(context: Context, engine: CustomSearchEngine) {
+        val updatedList = customSearchEngines.filter { it.name != engine.name }
+        saveCustomSearchEnginesList(context, updatedList)
+        if (selectedSearchEngine == engine.name) {
+            saveSearchEngine(context, "Google")
+        }
+    }
+
+    private fun saveCustomSearchEnginesList(context: Context, list: List<CustomSearchEngine>) {
+        viewModelScope.launch {
+            val jsonStr = serializeCustomSearchEngines(list)
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_SEARCH_ENGINES_KEY] = jsonStr
+            }
+            customSearchEngines = list
         }
     }
 
@@ -2973,19 +3389,19 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[APP_ICON_STATE_KEY] = state }
             appIconState = state
-            
+
             val pm = context.packageManager
             val pkg = context.packageName
             val aliases = listOf(
                 "Default" to ".MainActivityDefault",
-                "Dark" to ".MainActivityDark"
+                "Dark"    to ".MainActivityDark",
+                "Blue"    to ".MainActivityBlue",
+                "Gold"    to ".MainActivityGold"
             )
-            
+
             aliases.forEach { (name, aliasName) ->
                 val comp = android.content.ComponentName(pkg, "$pkg$aliasName")
-                // For "Custom" state, keep Default enabled so app icon stays visible in launcher
-                // Custom icon is used in-app (new tab page) but cannot be set as system launcher icon
-                // since Android requires activity-aliases to be declared in manifest
+                // For "Custom" state, keep Default enabled so app stays visible in launcher
                 val enableState = when {
                     state == "Custom" && name == "Default" -> android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                     name == state -> android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
@@ -2998,11 +3414,12 @@ class BrowserViewModel : ViewModel() {
                         android.content.pm.PackageManager.DONT_KILL_APP
                     )
                 } catch (e: Exception) {
-                    // Ignore
+                    android.util.Log.w("BrowserViewModel", "Failed to set icon alias $aliasName: ${e.message}")
                 }
             }
         }
     }
+
 
     fun saveCustomIconPath(context: Context, path: String?) {
         viewModelScope.launch {
@@ -3274,6 +3691,15 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun saveQuickToolsOrder(context: Context, order: List<String>) {
+        viewModelScope.launch {
+            context.dataStore.edit { prefs ->
+                prefs[QUICK_TOOLS_ORDER_KEY] = order.joinToString(",")
+            }
+            quickToolsOrder = order
+        }
+    }
+
     // Player preferences persistence helper
 
     fun savePlayerSetting(context: Context, key: String, value: Any) {
@@ -3393,6 +3819,20 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun toggleYouTube(context: Context) {
+        viewModelScope.launch {
+            val newState = !isYouTubeEnabled
+            isYouTubeEnabled = newState
+            mediaInterceptor.isYouTubeEnabled = newState
+            context.dataStore.edit { preferences ->
+                preferences[YOUTUBE_ENABLED_KEY] = newState
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                reload()
+            }
+        }
+    }
+
     fun connectVpn(context: Context, serverIp: String, clientKey: String, serverKey: String) {
         vpnManager.connectContaboVps(serverIp, clientKey, serverKey)
     }
@@ -3425,8 +3865,18 @@ class BrowserViewModel : ViewModel() {
                 }
             }
             else -> {
-                val base = "https://www.google.com/search?q=$encodedQuery"
-                if (isAiBlockerEnabled) "$base&udm=14" else base
+                val match = customSearchEngines.find { it.name == selectedSearchEngine }
+                if (match != null) {
+                    val customUrl = match.queryUrl
+                    if (customUrl.contains("%s")) {
+                        customUrl.replace("%s", encodedQuery)
+                    } else {
+                        customUrl + encodedQuery
+                    }
+                } else {
+                    val base = "https://www.google.com/search?q=$encodedQuery"
+                    if (isAiBlockerEnabled) "$base&udm=14" else base
+                }
             }
         }
     }
@@ -3814,33 +4264,52 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun installExtensionFromUrl(url: String, context: Context) {
-        val runtime = geckoRuntime ?: return
+        val runtime = geckoRuntime ?: run {
+            Log.w(TAG, "installExtensionFromUrl: GeckoRuntime not ready yet")
+            return
+        }
         Log.d(TAG, "Installing external extension from URL: $url")
-        
+
+        // Run the install on the main thread. GeckoView's WebExtensionController callbacks
+        // fire on the calling thread, and an exception escaping an extension callback
+        // (e.g. a heavy/unsupported extension like uBlock Origin) can crash the whole
+        // app process. Containing it here keeps a bad extension from taking the app down.
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             Toast.makeText(context, "Installing extension...", Toast.LENGTH_SHORT).show()
-        }
-
-        runtime.webExtensionController.install(url)
-            .accept(
-                { ext ->
-                    Log.i(TAG, "Successfully installed extension: ${ext?.id}")
-                    if (ext != null) {
-                        runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
-                        runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                    }
-                    syncUserExtensions()
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        Toast.makeText(context, "🧩 Extension installed: ${ext?.id}", Toast.LENGTH_LONG).show()
-                    }
-                },
-                { error ->
-                    Log.e(TAG, "Failed to install extension from: $url", error)
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        Toast.makeText(context, "❌ Installation failed: ${error?.message}", Toast.LENGTH_LONG).show()
-                    }
+            try {
+                runtime.webExtensionController.install(url)
+                    .accept(
+                        { ext ->
+                            try {
+                                Log.i(TAG, "Successfully installed extension: ${ext?.id}")
+                                if (ext != null) {
+                                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                }
+                                syncUserExtensions()
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    Toast.makeText(context, "🧩 Extension installed: ${ext?.id}", Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error finalizing installed extension: ${ext?.id}", e)
+                            }
+                        },
+                        { error ->
+                            Log.e(TAG, "Failed to install extension from: $url", error)
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                Toast.makeText(context, "❌ Installation failed: ${error?.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    )
+            } catch (e: Exception) {
+                // Synchronous failure (malformed URL, unsupported package, etc.) must
+                // never propagate and crash the app.
+                Log.e(TAG, "Synchronous failure installing extension from: $url", e)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Toast.makeText(context, "❌ Installation failed: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-            )
+            }
+        }
     }
 
     fun syncUserExtensions() {
@@ -3861,21 +4330,75 @@ class BrowserViewModel : ViewModel() {
                             ext.setActionDelegate(object : WebExtension.ActionDelegate {
 
                                 override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                    registerExtensionAction(extension.id, session, action)
+                                    try {
+                                        registerExtensionAction(extension.id, session, action)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "onBrowserAction crashed for ${extension.id}", e)
+                                    }
                                 }
                                 override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                    registerExtensionAction(extension.id, session, action)
+                                    try {
+                                        registerExtensionAction(extension.id, session, action)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "onPageAction crashed for ${extension.id}", e)
+                                    }
                                 }
                                 override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
-                                    return handleExtensionOpenPopup(extension, action)
+                                    return try {
+                                        handleExtensionOpenPopup(extension, action)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "onOpenPopup crashed for ${extension.id}", e)
+                                        null
+                                    }
                                 }
                                 override fun onTogglePopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
-                                    return handleExtensionOpenPopup(extension, action)
+                                    return try {
+                                        handleExtensionOpenPopup(extension, action)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "onTogglePopup crashed for ${extension.id}", e)
+                                        null
+                                    }
                                 }
                             })
                         }
+                        val context = appContext
+                        val savedOrder = if (context != null) {
+                            runBlocking {
+                                try {
+                                    val prefs = context.dataStore.data.first()
+                                    prefs[EXTENSION_ORDER_KEY]?.split(",") ?: emptyList()
+                                } catch (e: Exception) {
+                                    emptyList()
+                                }
+                            }
+                        } else {
+                            emptyList()
+                        }
+
+                        val sorted = filtered.sortedWith(compareBy {
+                            val idx = savedOrder.indexOf(it.id)
+                            if (idx == -1) Int.MAX_VALUE else idx
+                        })
+
                         userExtensions.clear()
-                        userExtensions.addAll(filtered)
+                        userExtensions.addAll(sorted)
+
+                        // Load real icons for each extension asynchronously
+                        sorted.forEach { ext ->
+                            try {
+                                val iconImage = ext.metaData?.icon ?: return@forEach
+                                iconImage.getBitmap(128).accept(
+                                    { bitmap ->
+                                        if (bitmap != null) {
+                                            extensionIcons[ext.id] = bitmap
+                                        }
+                                    },
+                                    { err -> Log.w(TAG, "Could not load icon for ${ext.id}: $err") }
+                                )
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Icon load failed for ${ext.id}", e)
+                            }
+                        }
                     }
                 },
                 { error ->
@@ -3883,6 +4406,42 @@ class BrowserViewModel : ViewModel() {
                 }
             )
     }
+
+    fun saveExtensionOrder() {
+        val context = appContext ?: return
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { preferences ->
+                    val order = userExtensions.map { it.id }
+                    preferences[EXTENSION_ORDER_KEY] = order.joinToString(",")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save extension order", e)
+            }
+        }
+    }
+
+    fun reorderUserExtensions(fromIndex: Int, toIndex: Int) {
+        if (fromIndex in userExtensions.indices && toIndex in userExtensions.indices) {
+            val item = userExtensions.removeAt(fromIndex)
+            userExtensions.add(toIndex, item)
+            saveExtensionOrder()
+        }
+    }
+
+    fun saveExtensionViewMode(context: Context, mode: String) {
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { preferences ->
+                    preferences[EXTENSION_VIEW_MODE_KEY] = mode
+                }
+                extensionViewMode = mode
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save extension view mode", e)
+            }
+        }
+    }
+
 
     fun uninstallUserExtension(extension: WebExtension, context: Context) {
         val runtime = geckoRuntime ?: return
@@ -4086,6 +4645,7 @@ class BrowserViewModel : ViewModel() {
             shortcutsList.add(0, HomeShortcut(id, title, formattedUrl))
         }
         saveShortcuts(context)
+        Toast.makeText(context, "Added to Home Shortcuts", Toast.LENGTH_SHORT).show()
     }
 
     fun editShortcut(shortcut: HomeShortcut, newTitle: String, newUrl: String) {

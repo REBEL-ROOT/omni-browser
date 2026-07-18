@@ -36,7 +36,7 @@ jobs:
 
       - name: Decode keystore from GitHub Secret
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > release-new.keystore
           echo "✅ Keystore decoded"
 
       - name: Compile check before release
@@ -113,7 +113,7 @@ jobs:
       - name: Wipe keystore from runner (security cleanup)
         if: always()
         run: |
-          rm -f app/release.keystore
+          rm -f release-new.keystore
           echo "🔒 Keystore wiped from runner"
 
       - name: Create GitHub Release

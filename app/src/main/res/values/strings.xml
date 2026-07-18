@@ -15,6 +15,8 @@
     <string name="private_browsing_desc">Block trackers and cookies</string>
     <string name="native_player_title">Native Video Player</string>
     <string name="native_player_desc">Open videos in Omni Player with download</string>
+    <string name="youtube_player_title">Enable on YouTube</string>
+    <string name="youtube_player_desc">Allow native player &amp; downloader on YouTube videos</string>
     <string name="ai_blocker_title">AI Blocker</string>
     <string name="ai_blocker_desc">Block generative search summaries completely</string>
     <string name="default_browser_title">Default Browser</string>

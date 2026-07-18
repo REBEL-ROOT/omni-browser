@@ -174,6 +174,7 @@ fun OnboardingScreen(
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         viewModel.saveOnboardingCompleted(context, true)
+                        viewModel.pendingIntentUrl = "https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/"
                         onFinish()
                     }
                     .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -319,6 +320,7 @@ fun OnboardingScreen(
                 onClick = {
                     if (isLastPage) {
                         viewModel.saveOnboardingCompleted(context, true)
+                        viewModel.pendingIntentUrl = "https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/"
                         onFinish()
                     } else {
                         coroutineScope.launch {

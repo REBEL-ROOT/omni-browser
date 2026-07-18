@@ -174,6 +174,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 // Path 2: Content script MSE hook communication
 let nativePlayerEnabled = true; // Default to true
+let youtubeEnabled = false; // Default to false — YouTube restricted unless the user enables it in settings
 
 function broadcastStateToTabs() {
     chrome.tabs.query({}, (tabs) => {
@@ -182,7 +183,8 @@ function broadcastStateToTabs() {
                 try {
                     chrome.tabs.sendMessage(tab.id, {
                         type: 'OMNI_SET_NATIVE_PLAYER',
-                        enabled: nativePlayerEnabled
+                        enabled: nativePlayerEnabled,
+                        youtubeEnabled: youtubeEnabled
                     });
                 } catch (e) { /* ignore */ }
             }
@@ -200,6 +202,14 @@ function pollNativeSettings() {
                         nativePlayerEnabled = newState;
                         console.log('[background.js] Native player preference updated from app:', nativePlayerEnabled);
                         broadcastStateToTabs();
+                    }
+                    if (response.hasOwnProperty('youtubeEnabled')) {
+                        const newYt = !!response.youtubeEnabled;
+                        if (newYt !== youtubeEnabled) {
+                            youtubeEnabled = newYt;
+                            console.log('[background.js] YouTube preference updated from app:', youtubeEnabled);
+                            broadcastStateToTabs();
+                        }
                     }
                     
                     if (response.pendingJs) {
@@ -226,7 +236,7 @@ pollNativeSettings(); // Run immediately on start
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'GET_NATIVE_PLAYER_STATE') {
-        sendResponse({ enabled: nativePlayerEnabled });
+        sendResponse({ enabled: nativePlayerEnabled, youtubeEnabled: youtubeEnabled });
         return true;
     } else if (message.type === 'GET_TAB_MEDIA') {
         const tabId = sender.tab ? sender.tab.id : null;

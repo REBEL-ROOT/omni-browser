@@ -38,6 +38,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +58,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+
+
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -82,9 +90,9 @@ fun VideoPlayerScreen(
         onNavigateBack()
     }
     val context = LocalContext.current
-    val accentColor = if (viewModel != null) MaterialTheme.colorScheme.primary else Color(0xFF0088FF)
+    val accentColor = Color(0xFF00A5C4)
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    val decodedPath = remember(videoPath) {
+    val originalDecodedPath = remember(videoPath) {
         if (videoPath.startsWith("http://") || videoPath.startsWith("https://") || videoPath.startsWith("/")) {
             videoPath
         } else {
@@ -104,6 +112,8 @@ fun VideoPlayerScreen(
             }
         }
     }
+    var decodedPath by remember(originalDecodedPath) { mutableStateOf(originalDecodedPath) }
+
     val isOnline = remember(decodedPath) { decodedPath.startsWith("http://") || decodedPath.startsWith("https://") }
     var downloadToLocker by remember { mutableStateOf(false) }
     val activity = remember(context) {
@@ -113,6 +123,19 @@ fun VideoPlayerScreen(
             ctx = ctx.baseContext
         }
         (ctx as? Activity) ?: com.rebelroot.omni.MainActivity.getActiveActivity()
+    }
+    val setWindowBrightness = { value: Float ->
+        activity?.let { act ->
+            act.runOnUiThread {
+                try {
+                    val lp = act.window.attributes
+                    lp.screenBrightness = value.coerceIn(0.01f, 1f)
+                    act.window.attributes = lp
+                } catch (e: Exception) {
+                    android.util.Log.e("VideoPlayer", "Failed to set window brightness", e)
+                }
+            }
+        }
     }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val coroutineScope = rememberCoroutineScope()
@@ -127,6 +150,8 @@ fun VideoPlayerScreen(
     var volume by remember { mutableFloatStateOf(0.5f) }
     var showGestureIndicator by remember { mutableStateOf(false) }
     var gestureIndicatorText by remember { mutableStateOf("") }
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+
 
     var showControls by remember { mutableStateOf(true) }
 
@@ -137,6 +162,124 @@ fun VideoPlayerScreen(
     var isFetchingQualities by remember { mutableStateOf(false) }
     var showQualitySelector by remember { mutableStateOf(false) }
     var qualityOptions by remember { mutableStateOf<List<VideoQualityOption>>(emptyList()) }
+
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var selectedSettingsTab by remember { mutableStateOf("Speed") }
+    var currentSpeed by remember { mutableFloatStateOf(1.0f) }
+    var audioTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
+    var subtitleTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
+    var videoTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
+
+    val updateTracksList = { player: Player ->
+        val currentTracks = player.currentTracks
+        val audioList = mutableListOf<TrackOption>()
+        val subtitleList = mutableListOf<TrackOption>()
+        val videoList = mutableListOf<TrackOption>()
+
+        currentTracks.groups.forEachIndexed { groupIdx, group ->
+            val type = group.type
+            for (trackIdx in 0 until group.length) {
+                if (group.isTrackSupported(trackIdx)) {
+                    val format = group.getTrackFormat(trackIdx)
+                    val lang = format.language ?: "unknown"
+                    val label = when (type) {
+                        androidx.media3.common.C.TRACK_TYPE_AUDIO -> format.label ?: "Audio Track #${audioList.size + 1} (${lang.uppercase()})"
+                        androidx.media3.common.C.TRACK_TYPE_TEXT -> format.label ?: "Subtitle #${subtitleList.size + 1} (${lang.uppercase()})"
+                        androidx.media3.common.C.TRACK_TYPE_VIDEO -> {
+                            val h = format.height
+                            val w = format.width
+                            val labelStr = if (h > 0) "${h}p" else "${w}x${h}"
+                            when {
+                                h >= 2160 -> "$labelStr (4K Ultra HD)"
+                                h >= 1440 -> "$labelStr (2K Quad HD)"
+                                h >= 1080 -> "$labelStr (1080p Full HD)"
+                                h >= 720 -> "$labelStr (720p HD)"
+                                else -> labelStr
+                            }
+                        }
+                        else -> "Track"
+                    }
+                    val option = TrackOption(
+                        groupIndex = groupIdx,
+                        trackIndex = trackIdx,
+                        label = label,
+                        isSelected = group.isTrackSelected(trackIdx),
+                        mediaTrackGroup = group.mediaTrackGroup
+                    )
+                    if (type == androidx.media3.common.C.TRACK_TYPE_AUDIO) {
+                        audioList.add(option)
+                    } else if (type == androidx.media3.common.C.TRACK_TYPE_TEXT) {
+                        subtitleList.add(option)
+                    } else if (type == androidx.media3.common.C.TRACK_TYPE_VIDEO) {
+                        videoList.add(option)
+                    }
+                }
+            }
+        }
+        audioTracks = audioList
+        subtitleTracks = subtitleList
+        videoTracks = videoList.distinctBy { it.label }.sortedByDescending {
+            it.label.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+        }
+    }
+
+    val selectAudioTrack = { player: Player, option: TrackOption ->
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setOverrideForType(
+                androidx.media3.common.TrackSelectionOverride(
+                    option.mediaTrackGroup,
+                    option.trackIndex
+                )
+            )
+            .build()
+        updateTracksList(player)
+    }
+
+    val selectSubtitleTrack = { player: Player, option: TrackOption ->
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(
+                androidx.media3.common.TrackSelectionOverride(
+                    option.mediaTrackGroup,
+                    option.trackIndex
+                )
+            )
+            .build()
+        updateTracksList(player)
+    }
+
+    val disableSubtitles = { player: Player ->
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+            .build()
+        updateTracksList(player)
+    }
+
+    val selectAutoVideo = { player: Player ->
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_VIDEO)
+            .build()
+        updateTracksList(player)
+    }
+
+    val selectVideoTrack = { player: Player, option: TrackOption ->
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setOverrideForType(
+                androidx.media3.common.TrackSelectionOverride(
+                    option.mediaTrackGroup,
+                    option.trackIndex
+                )
+            )
+            .build()
+        updateTracksList(player)
+    }
+
+
 
     val jobs by downloadEngine?.jobs?.collectAsState() ?: remember { mutableStateOf(emptyList()) }
     val currentJob = remember(jobs, decodedPath) {
@@ -168,7 +311,19 @@ fun VideoPlayerScreen(
     // Track that the player screen is active so MainActivity can auto-enter PiP on home-press
     DisposableEffect(Unit) {
         viewModel?.isVideoPlayerScreenActive = true
-        onDispose { viewModel?.isVideoPlayerScreenActive = false }
+        onDispose {
+            viewModel?.isVideoPlayerScreenActive = false
+            // Reset screen brightness override to default on exit
+            activity?.let { act ->
+                act.runOnUiThread {
+                    try {
+                        val lp = act.window.attributes
+                        lp.screenBrightness = -1f // BRIGHTNESS_OVERRIDE_NONE
+                        act.window.attributes = lp
+                    } catch (e: Exception) {}
+                }
+            }
+        }
     }
 
     // Hide system bars in landscape (fullscreen), show them in portrait.
@@ -230,15 +385,40 @@ fun VideoPlayerScreen(
             }
 
             // Configure network data source with custom headers to bypass host protections
+            val isYouTubeStream = decodedPath.contains("googlevideo.com") ||
+                decodedPath.contains("youtube.com") || decodedPath.contains("youtu.be")
+
             val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
                 .setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
 
-            android.util.Log.d("VideoPlayer", "🎬 VideoPlayerScreen: decodedPath = $decodedPath, referrerUrl = $referrerUrl")
-            if (referrerUrl.isNotEmpty() && !isDirectVideoUrl(referrerUrl)) {
-                android.util.Log.d("VideoPlayer", "🎬 Setting Referer header to: $referrerUrl")
-                httpDataSourceFactory.setDefaultRequestProperties(mapOf("Referer" to referrerUrl))
+            // Build request headers
+            val requestHeaders = mutableMapOf<String, String>()
+
+            if (isYouTubeStream) {
+                // YouTube/googlevideo streams require these headers to prevent 403
+                requestHeaders["Origin"] = "https://www.youtube.com"
+                requestHeaders["Referer"] = "https://www.youtube.com/"
+                requestHeaders["Accept"] = "*/*"
+                requestHeaders["Accept-Language"] = "en-US,en;q=0.9"
+                requestHeaders["Sec-Fetch-Dest"] = "empty"
+                requestHeaders["Sec-Fetch-Mode"] = "cors"
+                requestHeaders["Sec-Fetch-Site"] = "cross-site"
+                android.util.Log.d("VideoPlayer", "🎬 YouTube stream detected — injecting required headers")
             } else {
-                android.util.Log.d("VideoPlayer", "🎬 Referer header NOT set. referrerUrl = $referrerUrl")
+                android.util.Log.d("VideoPlayer", "🎬 VideoPlayerScreen: decodedPath = $decodedPath, referrerUrl = $referrerUrl")
+                if (referrerUrl.isNotEmpty() && !isDirectVideoUrl(referrerUrl)) {
+                    android.util.Log.d("VideoPlayer", "🎬 Setting Referer header to: $referrerUrl")
+                    requestHeaders["Referer"] = referrerUrl
+                } else {
+                    android.util.Log.d("VideoPlayer", "🎬 Referer header NOT set. referrerUrl = $referrerUrl")
+                }
+            }
+
+            if (requestHeaders.isNotEmpty()) {
+                httpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
             }
 
             val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
@@ -247,22 +427,47 @@ fun VideoPlayerScreen(
 
             val mediaItemBuilder = MediaItem.Builder().setUri(uri)
             val urlLower = decodedPath.lowercase()
-            if (urlLower.contains(".m3u8") || urlLower.contains("m3u8") || urlLower.contains("/hls/")) {
-                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-            } else if (urlLower.contains(".mpd") || urlLower.contains("mpd")) {
-                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
-            } else if (urlLower.contains("index.php") || urlLower.contains(".php")) {
-                if (!urlLower.contains(".mp4") && !urlLower.contains(".mkv") && !urlLower.contains(".webm") && !urlLower.contains(".avi") && !urlLower.contains(".mov")) {
-                    android.util.Log.d("VideoPlayer", "🎬 PHP stream URL detected without progressive extension; setting mimeType to HLS (M3U8)")
+
+            // Detect MIME type: check URL query params first (googlevideo uses ?mime=video%2Fmp4)
+            val mimeFromQuery = try {
+                val parsedUri = android.net.Uri.parse(decodedPath)
+                parsedUri.getQueryParameter("mime")?.let {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                }
+            } catch (e: Exception) { null }
+
+            when {
+                mimeFromQuery != null -> {
+                    android.util.Log.d("VideoPlayer", "🎬 Detected MIME from query param: $mimeFromQuery")
+                    when {
+                        mimeFromQuery.contains("mp4") -> mediaItemBuilder.setMimeType("video/mp4")
+                        mimeFromQuery.contains("webm") -> mediaItemBuilder.setMimeType("video/webm")
+                        mimeFromQuery.contains("audio/mp4") -> mediaItemBuilder.setMimeType("audio/mp4")
+                        mimeFromQuery.contains("audio/webm") -> mediaItemBuilder.setMimeType("audio/webm")
+                    }
+                }
+                urlLower.contains(".m3u8") || urlLower.contains("m3u8") || urlLower.contains("/hls/") ->
                     mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                urlLower.contains(".mpd") || urlLower.contains("/dash/") ->
+                    mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+                urlLower.contains("index.php") || urlLower.contains(".php") -> {
+                    if (!urlLower.contains(".mp4") && !urlLower.contains(".mkv") &&
+                        !urlLower.contains(".webm") && !urlLower.contains(".avi") && !urlLower.contains(".mov")) {
+                        android.util.Log.d("VideoPlayer", "🎬 PHP stream URL detected without progressive extension; setting mimeType to HLS (M3U8)")
+                        mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    }
                 }
             }
+
+
+
             val mediaItem = mediaItemBuilder.build()
 
             val player = ExoPlayer.Builder(context)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .build().apply {
                     setMediaItem(mediaItem)
+
 
                     val initialPos = viewModel?.getVideoPosition(decodedPath) ?: 0L
                     if (initialPos > 0L) seekTo(initialPos)
@@ -293,7 +498,11 @@ fun VideoPlayerScreen(
                         override fun onPlaybackStateChanged(state: Int) {
                             if (state == Player.STATE_READY) {
                                 duration = this@apply.duration
+                                updateTracksList(this@apply)
                             }
+                        }
+                        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                            updateTracksList(this@apply)
                         }
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                             android.util.Log.e("VideoPlayer", "ExoPlayer playback error: ${error.message}", error)
@@ -389,81 +598,114 @@ fun VideoPlayerScreen(
         val isPiP = viewModel?.isInPictureInPictureMode == true
         if (!isPiP) {
 
-        // Volume and Brightness Drag Interceptors
-        if (!showControls) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                // Left Half: Brightness
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onTap = {
-                                    showControls = !showControls
-                                }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            if (viewModel?.isPlayerBrightnessGestureEnabled != false) {
-                                detectVerticalDragGestures(
-                                    onDragStart = {
-                                        showGestureIndicator = true
-                                    },
-                                    onDragEnd = {
-                                        showGestureIndicator = false
-                                    }
-                                ) { _, dragAmount ->
-                                    // Adjust brightness
-                                    brightness = (brightness - dragAmount / 1500f).coerceIn(0f, 1f)
-                                    activity?.let { act ->
-                                        val lp = act.window.attributes
-                                        lp.screenBrightness = brightness
-                                        act.window.attributes = lp
-                                    }
-                                    gestureIndicatorText = "🔆 Brightness: ${(brightness * 100).toInt()}%"
-                                }
-                            }
-                        }
-                )
+        // Volume and Brightness Drag Interceptors — always visible, handles both tap and drag
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Left Half: Brightness control
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(viewModel?.isPlayerBrightnessGestureEnabled) {
+                        val brightnessEnabled = viewModel?.isPlayerBrightnessGestureEnabled != false
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var isDragging = false
+                            var totalDrag = 0f
 
-                // Right Half: Volume
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onTap = {
-                                    showControls = !showControls
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+                                val dy = change.position.y - change.previousPosition.y
+
+                                if (kotlin.math.abs(dy) > 2f) {
+                                    isDragging = true
                                 }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            if (viewModel?.isPlayerVolumeGestureEnabled != false) {
-                                detectVerticalDragGestures(
-                                    onDragStart = {
-                                        showGestureIndicator = true
-                                    },
-                                    onDragEnd = {
+
+                                if (isDragging && brightnessEnabled) {
+                                    totalDrag += dy
+                                    brightness = (brightness - dy / 600f).coerceIn(0.01f, 1f)
+                                    setWindowBrightness(brightness)
+                                    gestureIndicatorText = "🔆 ${(brightness * 100).toInt()}%"
+                                    showGestureIndicator = true
+                                    change.consume()
+                                }
+                            } while (event.changes.any { it.pressed })
+
+                            if (!isDragging) {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastTapTime < 300) {
+                                    isFillMode = !isFillMode
+                                    gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
+                                    showGestureIndicator = true
+                                    coroutineScope.launch {
+                                        delay(1500)
                                         showGestureIndicator = false
                                     }
-                                ) { _, dragAmount ->
-                                    // Adjust audio
+                                } else {
+                                    showControls = !showControls
+                                }
+                                lastTapTime = currentTime
+                            }
+                            showGestureIndicator = false
+                        }
+                    }
+            )
+
+            // Right Half: Volume control
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(viewModel?.isPlayerVolumeGestureEnabled) {
+                        val volumeEnabled = viewModel?.isPlayerVolumeGestureEnabled != false
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var isDragging = false
+
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+                                val dy = change.position.y - change.previousPosition.y
+
+                                if (kotlin.math.abs(dy) > 2f) {
+                                    isDragging = true
+                                }
+
+                                if (isDragging && volumeEnabled) {
                                     val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                    volume = (volume - dragAmount / 1500f).coerceIn(0f, 1f)
+                                    volume = (volume - dy / 600f).coerceIn(0f, 1f)
                                     audioManager.setStreamVolume(
                                         AudioManager.STREAM_MUSIC,
                                         (volume * maxVol).toInt(),
                                         0
                                     )
-                                    gestureIndicatorText = "🔊 Volume: ${(volume * 100).toInt()}%"
+                                    gestureIndicatorText = "🔊 ${(volume * 100).toInt()}%"
+                                    showGestureIndicator = true
+                                    change.consume()
                                 }
+                            } while (event.changes.any { it.pressed })
+
+                            if (!isDragging) {
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastTapTime < 300) {
+                                    isFillMode = !isFillMode
+                                    gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
+                                    showGestureIndicator = true
+                                    coroutineScope.launch {
+                                        delay(1500)
+                                        showGestureIndicator = false
+                                    }
+                                } else {
+                                    showControls = !showControls
+                                }
+                                lastTapTime = currentTime
                             }
+                            showGestureIndicator = false
                         }
-                )
-            }
+                    }
+            )
         }
+
 
         // Swipe / Drag HUD indicator popup
         AnimatedVisibility(
@@ -514,29 +756,6 @@ fun VideoPlayerScreen(
                 }
         }
 
-        // Tap-to-toggle-controls layer — sits above the AndroidView but below
-        // the controls overlay, so taps reach here only when controls are not
-        // consuming the event. Supports double-tap to toggle video aspect ratio.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            isFillMode = !isFillMode
-                            gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
-                            showGestureIndicator = true
-                            coroutineScope.launch {
-                                delay(1500)
-                                showGestureIndicator = false
-                            }
-                        },
-                        onTap = {
-                            showControls = !showControls
-                        }
-                    )
-                }
-        )
 
         // Elegant Media Playback Overlays
         AnimatedVisibility(
@@ -638,6 +857,26 @@ fun VideoPlayerScreen(
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))
+
+                        // Playback Settings button
+                        IconButton(
+                            onClick = {
+                                exoPlayerInstance?.let { updateTracksList(it) }
+                                showSettingsDialog = true
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.6f)),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = "Playback Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         
                         // PiP Trigger Button
                         Button(
@@ -700,7 +939,12 @@ fun VideoPlayerScreen(
                             colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f)),
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("◀◀", color = Color.White, fontSize = 11.sp)
+                            Icon(
+                                imageVector = Icons.Rounded.FastRewind,
+                                contentDescription = "Rewind 10s",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
 
                         // Play/Pause Toggle
@@ -710,13 +954,14 @@ fun VideoPlayerScreen(
                                     if (isPlaying) it.pause() else it.play()
                                 }
                             },
-                            colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = accentColor),
                             modifier = Modifier.size(64.dp)
                         ) {
-                            Text(
-                                text = if (isPlaying) "⏸" else "▶",
-                                color = Color.White,
-                                fontSize = 24.sp
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
                             )
                         }
 
@@ -728,7 +973,12 @@ fun VideoPlayerScreen(
                             colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f)),
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Text("▶▶", color = Color.White, fontSize = 11.sp)
+                            Icon(
+                                imageVector = Icons.Rounded.FastForward,
+                                contentDescription = "Forward 10s",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
 
@@ -752,9 +1002,9 @@ fun VideoPlayerScreen(
                                 exoPlayerInstance?.seekTo((percent * duration).toLong())
                             },
                             colors = SliderDefaults.colors(
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = accentColor,
                                 inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-                                thumbColor = MaterialTheme.colorScheme.primary
+                                thumbColor = accentColor
                             )
                         )
                     }
@@ -792,6 +1042,361 @@ fun VideoPlayerScreen(
                 }
             }
         }
+
+        // Playback Settings Dialog (Speed, Audio Dub, Subtitles CC)
+        if (showSettingsDialog) {
+            val isDark = viewModel?.isDarkThemeEnabled != false
+            val dialogBg = if (isDark) Color(0xFF141416) else Color(0xFFFFFFFF)
+            val dialogBorder = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+            val textPrimary = if (isDark) Color.White else Color(0xFF1C1C1E)
+            val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+            val dividerColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
+            val itemSelectedBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { showSettingsDialog = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth(if (isLandscape) 0.65f else 0.9f)
+                        .height(if (isLandscape) 320.dp else 400.dp)
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = dialogBg,
+                    border = BorderStroke(1.dp, dialogBorder),
+                    shadowElevation = 24.dp
+                ) {
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // Left Sidebar: Categories
+                        Column(
+                            modifier = Modifier
+                                .weight(0.35f)
+                                .fillMaxHeight()
+                                .background(if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                                .padding(vertical = 12.dp)
+                        ) {
+                            val tabs = listOf("Speed", "Quality", "Audio (Dub)", "Subtitles (CC)", "Servers")
+                            tabs.forEach { tab ->
+                                val isSelected = selectedSettingsTab == tab
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedSettingsTab = tab }
+                                        .background(if (isSelected) itemSelectedBg else Color.Transparent)
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = tab,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        // Right Content Panel
+                        Box(
+                            modifier = Modifier
+                                .weight(0.65f)
+                                .fillMaxHeight()
+                                .padding(16.dp)
+                        ) {
+                            when (selectedSettingsTab) {
+                                "Speed" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Playback Speed", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                                        val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 5.0f)
+                                        speeds.forEach { speed ->
+                                            val isSelected = currentSpeed == speed
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        currentSpeed = speed
+                                                        exoPlayerInstance?.setPlaybackSpeed(speed)
+                                                        showSettingsDialog = false
+                                                    }
+                                                    .background(if (isSelected) itemSelectedBg else Color.Transparent)
+                                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = if (speed == 1.0f) "Normal (1.0x)" else "${speed}x",
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                                if (isSelected) {
+                                                    Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                "Quality" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Video Quality", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                                        val isAutoSelected = videoTracks.none { it.isSelected }
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    exoPlayerInstance?.let { player ->
+                                                        selectAutoVideo(player)
+                                                    }
+                                                }
+                                                .background(if (isAutoSelected) itemSelectedBg else Color.Transparent)
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Auto (Adaptive)",
+                                                color = if (isAutoSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isAutoSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                            if (isAutoSelected) {
+                                                Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+
+                                        if (videoTracks.isEmpty()) {
+                                            Text("Only Auto / Source quality available", color = textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                                        } else {
+                                            videoTracks.forEach { track ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            exoPlayerInstance?.let { player ->
+                                                                selectVideoTrack(player, track)
+                                                            }
+                                                        }
+                                                        .background(if (track.isSelected) itemSelectedBg else Color.Transparent)
+                                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = track.label,
+                                                        color = if (track.isSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = if (track.isSelected) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                    if (track.isSelected) {
+                                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                "Audio (Dub)" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Audio Channels / Tracks", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                                        if (audioTracks.isEmpty()) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("No audio tracks found", color = textSecondary, fontSize = 13.sp)
+                                            }
+                                        } else {
+                                            audioTracks.forEach { track ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            exoPlayerInstance?.let { player ->
+                                                                selectAudioTrack(player, track)
+                                                            }
+                                                        }
+                                                        .background(if (track.isSelected) itemSelectedBg else Color.Transparent)
+                                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = track.label,
+                                                        color = if (track.isSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = if (track.isSelected) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                    if (track.isSelected) {
+                                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                "Subtitles (CC)" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Subtitles / Captions", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                                        // Off option
+                                        val isSubtitlesDisabled = exoPlayerInstance?.trackSelectionParameters?.disabledTrackTypes?.contains(androidx.media3.common.C.TRACK_TYPE_TEXT) == true
+                                        val noSubtitleSelected = isSubtitlesDisabled || subtitleTracks.none { it.isSelected }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    exoPlayerInstance?.let { player ->
+                                                        disableSubtitles(player)
+                                                    }
+                                                }
+                                                .background(if (noSubtitleSelected) itemSelectedBg else Color.Transparent)
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Off / Disabled",
+                                                color = if (noSubtitleSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (noSubtitleSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                            if (noSubtitleSelected) {
+                                                Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+
+                                        if (subtitleTracks.isEmpty()) {
+                                            Text("No subtitles found", color = textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                                        } else {
+                                            subtitleTracks.forEach { track ->
+                                                val isSelected = track.isSelected && !isSubtitlesDisabled
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            exoPlayerInstance?.let { player ->
+                                                                selectSubtitleTrack(player, track)
+                                                            }
+                                                        }
+                                                        .background(if (isSelected) itemSelectedBg else Color.Transparent)
+                                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = track.label,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                    if (isSelected) {
+                                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                "Servers" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Switch Server / Source", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                                        val detectedMedia = viewModel?.mediaInterceptor?.detectedMedia?.collectAsState()?.value ?: emptyList()
+                                        if (detectedMedia.isEmpty()) {
+                                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                Text("No alternative servers detected", color = textSecondary, fontSize = 13.sp)
+                                            }
+                                        } else {
+                                            detectedMedia.forEachIndexed { idx, media ->
+                                                val isSelected = media.url == decodedPath
+                                                val host = remember(media.url) {
+                                                    try { Uri.parse(media.url).host ?: "Direct Stream" } catch (e: Exception) { "Direct Stream" }
+                                                }
+                                                val typeLabel = when (media.type) {
+                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.HLS -> "HLS Adaptive"
+                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.DASH -> "DASH Stream"
+                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> "WEBM Video"
+                                                    else -> "MP4 Video"
+                                                }
+
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .clickable {
+                                                            decodedPath = media.url
+                                                            showSettingsDialog = false
+                                                        }
+                                                        .background(if (isSelected) itemSelectedBg else Color.Transparent)
+                                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = "Server #${idx + 1} (${media.quality ?: "Auto Quality"})",
+                                                            color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary,
+                                                            fontSize = 14.sp,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                        )
+                                                        Text(
+                                                            text = "$typeLabel • $host",
+                                                            color = textSecondary,
+                                                            fontSize = 11.sp
+                                                        )
+                                                    }
+                                                    if (isSelected) {
+                                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
 
         // 2. Beautiful quality selector alert dialog
         if (showQualitySelector && downloadEngine != null) {
@@ -1179,3 +1784,12 @@ private suspend fun fetchVideoQualities(streamUrl: String): List<VideoQualityOpt
     
     return@withContext options.distinctBy { it.label }
 }
+
+data class TrackOption(
+    val groupIndex: Int,
+    val trackIndex: Int,
+    val label: String,
+    val isSelected: Boolean,
+    val mediaTrackGroup: androidx.media3.common.TrackGroup
+)
+

@@ -2,7 +2,7 @@
 <resources>
     <color name="slaty_black">#070A0F</color>
     <color name="white">#FFFFFF</color>
-    <color name="app_icon_dark_bg">#0B0B0C</color>
-    <color name="app_icon_blue_bg">#1D4ED8</color>
-    <color name="app_icon_gold_bg">#D97706</color>
+    <color name="app_icon_dark_bg">#1C1C1E</color>
+    <color name="app_icon_blue_bg">#0A84FF</color>
+    <color name="app_icon_gold_bg">#FFB800</color>
 </resources>

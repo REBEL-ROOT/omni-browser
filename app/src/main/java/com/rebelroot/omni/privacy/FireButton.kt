@@ -35,25 +35,17 @@ class FireButton(
     }
 
     /**
-     * Incinerates all temporary browsing data, cookies, caches, and storage.
+     * Incinerates ALL browsing data: cookies, caches, storage, history, permissions,
+     * and site settings via [StorageController.ClearFlags.ALL].
      */
     suspend fun burn() = withContext(Dispatchers.IO) {
         Log.i(TAG, "🔥 Initiating 1-tap data incineration...")
         
         try {
-            // 1. Clear GeckoView Session data (Cookies, Cache, History, Forms)
-            // We use static flag bitwise masks representing all session parameters
-            val flags = StorageController.ClearFlags.COOKIES or
-                        StorageController.ClearFlags.NETWORK_CACHE or
-                        StorageController.ClearFlags.IMAGE_CACHE or
-                        StorageController.ClearFlags.DOM_STORAGES or
-                        StorageController.ClearFlags.SITE_DATA or
-                        StorageController.ClearFlags.AUTH_SESSIONS
-
-            // storageController requires executing on main thread sometimes,
-            // but we run it safely via a thread-safe GeckoResult block
+            // 1. Clear ALL GeckoView storage — cookies, cache, DOM storage, history,
+            //    auth sessions, permissions, and site settings in one pass.
             withContext(Dispatchers.Main) {
-                runtime.storageController.clearData(flags).accept(
+                runtime.storageController.clearData(StorageController.ClearFlags.ALL).accept(
                     { Log.d(TAG, "GeckoView storageController clear completed successfully.") },
                     { err -> Log.e(TAG, "GeckoView storageController clear error", err) }
                 )

@@ -134,4 +134,29 @@ open class BuiltInExtensionManager(
 
     /** Returns true if the extension is currently installed (regardless of enabled state). */
     fun isInstalled(): Boolean = extension != null
+
+    /**
+     * Disables then fully uninstalls the extension. After this call the extension is gone
+     * from GeckoView; a fresh [installAndSync] call would be needed to re-install it.
+     */
+    fun uninstall(onComplete: (() -> Unit)? = null) {
+        val ext = extension
+        if (ext == null) {
+            onComplete?.invoke()
+            return
+        }
+        runtime.webExtensionController.disable(ext, WebExtensionController.EnableSource.APP)
+        runtime.webExtensionController.uninstall(ext).accept(
+            {
+                extension = null
+                Log.d(tag, "$label uninstalled")
+                onComplete?.invoke()
+            },
+            { error ->
+                Log.e(tag, "Failed to uninstall $label", error)
+                extension = null
+                onComplete?.invoke()
+            }
+        )
+    }
 }

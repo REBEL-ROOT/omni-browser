@@ -8,12 +8,14 @@
     // Configuration — set from native side via postMessage
     // =========================================================
     let nativePlayerEnabled = true; // Default ON — intercept fullscreen + play
+    let youtubeEnabled = false; // Default OFF — YouTube restricted unless the user enables it
 
     window.addEventListener('message', (event) => {
         if (event.source !== window) return;
         if (event.data?.type === 'OMNI_SET_NATIVE_PLAYER') {
             nativePlayerEnabled = !!event.data.enabled;
-            console.log('[inject.js] Received OMNI_SET_NATIVE_PLAYER. nativePlayerEnabled set to:', nativePlayerEnabled);
+            youtubeEnabled = !!event.data.youtubeEnabled;
+            console.log('[inject.js] Received OMNI_SET_NATIVE_PLAYER. nativePlayerEnabled set to:', nativePlayerEnabled, 'youtubeEnabled:', youtubeEnabled);
         } else if (event.data?.type === 'EVAL_JS') {
             const script = event.data.script;
             try {
@@ -307,7 +309,7 @@
     // --- Intercept requestFullscreen() on video elements and their containers ---
     const originalRequestFullscreen = Element.prototype.requestFullscreen;
     Element.prototype.requestFullscreen = function(...args) {
-        if (nativePlayerEnabled && !isYouTube) {
+        if (nativePlayerEnabled && (!isYouTube || youtubeEnabled)) {
             // Check if this element IS a video or CONTAINS a video
             const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
             if (video && !isLikelyAdOrBanner(video)) {
@@ -331,7 +333,7 @@
     if (Element.prototype.webkitRequestFullscreen) {
         const originalWebkit = Element.prototype.webkitRequestFullscreen;
         Element.prototype.webkitRequestFullscreen = function(...args) {
-            if (nativePlayerEnabled && !isYouTube) {
+            if (nativePlayerEnabled && (!isYouTube || youtubeEnabled)) {
                 const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
                 if (video && !isLikelyAdOrBanner(video)) {
                     if (video.duration && video.duration > 0 && video.duration < 15) {
@@ -353,7 +355,7 @@
     if (Element.prototype.webkitRequestFullScreen) {
         const originalWebkitAlt = Element.prototype.webkitRequestFullScreen;
         Element.prototype.webkitRequestFullScreen = function(...args) {
-            if (nativePlayerEnabled && !isYouTube) {
+            if (nativePlayerEnabled && (!isYouTube || youtubeEnabled)) {
                 const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
                 if (video && !isLikelyAdOrBanner(video)) {
                     if (video.duration && video.duration > 0 && video.duration < 15) {

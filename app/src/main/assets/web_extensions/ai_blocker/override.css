@@ -1,67 +1,121 @@
-/* override.css - Hides AI Overviews, assistants, and summarizers on search engines */
+/* override.css — Hides AI Overviews, assistants, and summarisers on search engines.
+   Selectors are intentionally broad (data-attribs + structural :has rules) so Google's
+   frequent class-name rotations don't break coverage. The companion background.js re-runs
+   the same removals via MutationObserver to catch content injected after document_start. */
 
-/* Google Search AI Overview (Gemini) */
-div#superroot,
+/* ── Google Search – AI Overview (Gemini / SGE) ──────────────────────────────────
+   Google rotates class names aggressively; we cover both old and new patterns.      */
+
+/* Structural: the outer AI overview container */
+div#appbar ~ div > div[data-ved][data-hveid]:has(> c-wiz),
 div.ULSxyf,
 div.Gy5B3f,
 div.p6vvo,
+div.M8OgIe,
+div.L3Ezfd,
+div.WpKAof,
+div.d6VFfa,
+div.K7pOsc,
+div.e3Fmkd,
+div.TzHB6b,
+div.rHmby,
+div.v9i61e,
+div.NFQFxe,
+div.wDYxhc:has(> samp),
 div[data-la*="ai-overview"],
 div[data-la*="generative"],
+div[data-attrid*="ai_overview"],
+div[jscontroller][jsaction*="aiOverview"],
+/* "AI-powered overview" banner blocks */
+div.g[data-hveid]:has(> div > g-section-with-header > div[data-cid="1"]),
 g-section-with-header:has(a[href*="generative-ai"]),
-div:has(> a[href*="generative-ai"]) {
+g-section-with-header:has(a[href*="search-labs"]),
+div:has(> a[href*="generative-ai"]),
+/* Google AI Mode panel */
+div#rcnt > div:first-child > div[data-has-ai-overview="true"],
+div.bNg8Rb,
+div.Kno3md,
+div.c2xzTb,
+/* Standalone Gemini answer chip */
+div[data-sgai],
+div.sg-answ,
+div.KST9uc,
+div.RqBzHd {
     display: none !important;
     height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-/* Brave Search AI (Leo / Answer Engine) */
+/* ── Brave Search – Leo / Answer Engine ────────────────────────────────────────── */
 div.search-result-answer,
 div#answer,
 div.answer-card,
 div.answer-wrapper,
 div.ai-summary,
 div.leo-chat-container,
-div.brave-ai-response {
+div.brave-ai-response,
+div[data-test-id="answer-summary"],
+aside.answer-box {
     display: none !important;
     height: 0 !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    overflow: hidden !important;
 }
 
-/* Bing Search AI (Copilot / Bing Chat) */
+/* ── Bing Search – Copilot / Bing Chat ─────────────────────────────────────────── */
 div#b_copilot,
 div.b_ans_chat,
 div.copilot-chat-container,
 div.b_algo_copilot,
 div.bing-chat-card,
-li.b_ans:has(div.copilot-chat-container) {
+li.b_ans:has(div.copilot-chat-container),
+div#b_sydConvCont,
+div.b_aiSuggest,
+div[aria-label="Copilot"],
+div[data-tag*="copilot"] {
     display: none !important;
     height: 0 !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    overflow: hidden !important;
 }
 
-/* DuckDuckGo AI (DuckAssist) */
+/* ── DuckDuckGo – DuckAssist / AI Answer ───────────────────────────────────────── */
 div.duckassist,
 div.duckassist-wrapper,
 div.duckassist-card,
-div.react-results--sidebar:has(div.duckassist) {
+div.react-results--sidebar:has(div.duckassist),
+article[data-testid="duckassist"],
+div[class*="AIAnswer"],
+div[class*="ai-answer"] {
     display: none !important;
     height: 0 !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    overflow: hidden !important;
 }
 
-/* General AI containers and widgets on search pages */
+/* ── Generic fallback – any AI summary container ───────────────────────────────── */
 div.ai-overview-container,
 div.ai-block,
 div.ai-response,
 div.generative-ai-box,
-aside.ai-assistant {
+aside.ai-assistant,
+div[class*="aiOverview"],
+div[class*="AiOverview"],
+div[id*="ai-overview"],
+div[id*="aiOverview"] {
     display: none !important;
     height: 0 !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    overflow: hidden !important;
 }

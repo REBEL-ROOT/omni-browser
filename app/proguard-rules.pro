@@ -11,6 +11,24 @@
     private volatile *** geckoRuntime;
 }
 
+# 0b. Honour @Keep explicitly (do not rely solely on transitive consumer rules
+# from androidx.annotation). Without this, any @Keep-annotated member that the
+# transitive rule misses would be stripped, which can break GeckoView init and
+# produce the black-screen / crash-loop in signed release builds.
+-keep @androidx.annotation.Keep class *
+-keepclassmembers class * {
+    @androidx.annotation.Keep <fields>;
+    @androidx.annotation.Keep <methods>;
+}
+
+# 0c. Explicitly keep the runtime accessor and the graceful error fallback so
+# that, even if GeckoView fails to initialize, the app shows GeckoErrorScreen
+# instead of an opaque black screen.
+-keepclassmembers class com.rebelroot.omni.browser.BrowserViewModel {
+    public *** getRuntime();
+}
+-keep class com.rebelroot.omni.MainActivityKt { *; }
+
 # 1. GeckoView (Firefox engine) — KEEP ALL; heavy reflection + JNI usage
 -keep class org.mozilla.geckoview.** { *; }
 -keep class org.mozilla.gecko.** { *; }
@@ -51,6 +69,15 @@
 -keepclassmembers class org.mozilla.geckoview.GeckoView { *; }
 -dontwarn org.mozilla.**
 -dontnote  org.mozilla.**
+
+# 1b. SnakeYAML — used by GeckoView's DebugConfig.fromFile() to parse the
+# geckoview-config.yaml the app writes for GeckoRuntimeSettings. R8 renames /
+# merges org.yaml.snakeyaml.TypeDescription so its static initializer's
+# getPackage().getName() returns null -> ExceptionInInitializerError ->
+# GeckoRuntime.create() throws -> launch crash-loop. Keep it fully intact.
+-keep class org.yaml.snakeyaml.** { *; }
+-keepattributes Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable,*Annotation*
+-dontwarn org.yaml.snakeyaml.**
 
 # 2. SQLCipher + Room
 -keep class net.zetetic.database.sqlcipher.** { *; }
@@ -157,3 +184,35 @@
 -keep class kotlinx.coroutines.** { *; }
 -keepclassmembers class kotlinx.coroutines.** { *; }
 -dontwarn kotlinx.coroutines.**
+
+# 15. App entry points & Compose UI singletons — R8 can strip the static
+# INSTANCE fields / lambda holders that Compose generates, which leaves the
+# screen blank (black screen) even though the class "exists". Keep them all.
+-keep class com.rebelroot.omni.MainActivity { *; }
+-keep class com.rebelroot.omni.MainActivity$* { *; }
+-keep class com.rebelroot.omni.**.ComposableSingletons* { *; }
+-keep class com.rebelroot.omni.**.ComposableSingletons*$* { *; }
+
+# 16. Native / JNI bridge classes — these call into bundled .so libraries
+# (FFmpeg, QR decoder). R8 strips native method bindings and the bridge classes
+# themselves, breaking media download/playback and QR scanning at runtime.
+-keep class com.rebelroot.omni.media.FFmpegBridge { *; }
+-keep class com.rebelroot.omni.media.FFmpegLoader { *; }
+-keep class com.rebelroot.omni.media.MediaInterceptor { *; }
+-keep class com.rebelroot.omni.media.StreamDownloadEngine { *; }
+-keep class com.rebelroot.omni.tools.qrcode.QrCodeDecoder { *; }
+-keepclasseswithmembernames class * { native <methods>; }
+
+# 17. Privacy / security managers and Room (SQLCipher) DAOs — loaded via the
+# ViewModel and DataStore; keep them so encrypted storage + VPN keep working.
+-keep class com.rebelroot.omni.privacy.VpnManager { *; }
+-keep class com.rebelroot.omni.tools.locker.PrivateLockerManager { *; }
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keep interface * extends androidx.room.Dao { *; }
+-keepclassmembers class * extends androidx.room.RoomDatabase { *; }
+-keepclassmembers class * extends androidx.room.Dao { *; }
+
+# 18. Built-in WebExtension management — GeckoView instantiates delegate
+# objects from these at runtime; keep the manager + its extension delegates.
+-keep class com.rebelroot.omni.browser.extensions.** { *; }
+-keep class com.rebelroot.omni.browser.tabs.** { *; }

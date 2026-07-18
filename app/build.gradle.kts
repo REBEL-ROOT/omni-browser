@@ -14,8 +14,8 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "1.2.4"
+        versionCode = 24
+        versionName = "1.2.4.1-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -79,8 +79,33 @@ android {
             isShrinkResources = false
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 (ProGuard) over-optimization caused two release-only regressions
+            // that never reproduced on the uncompressed test APK (minify off):
+            //   1. LAG: R8 inlined the browser-screen Compose tree into a single
+            //      mega-method (obfuscated as `xu.a`). On first render ART had to
+            //      JIT-compile ~6.5 MB of code on the main thread, producing
+            //      16-22s frame gaps and "Skipped 67 frames" stalls.
+            //   2. ExceptionInInitializerError after onboarding: R8 optimizing /
+            //      shrinking static initializers (the prior crash-loop was exactly
+            //      this — snakeyaml's <clinit> throwing and taking GeckoRuntime
+            //      init down with it).
+            // Disabling minify makes release behave like the smooth, stable
+            // uncompressed test APK. The APK is larger (~500 MB) but matches the
+            // reference build's smoothness and eliminates R8-induced crashes.
+            // proguard-rules.pro is retained (it is ignored when minify is off,
+            // but keeps @Keep honored if minify is ever re-enabled).
+            isMinifyEnabled = false
+            isShrinkResources = false
+            // Emit native debug symbols so Play Console can symbolicate GeckoView /
+            // SQLCipher NDK crash traces. SYMBOL_TABLE (not FULL) because the
+            // prebuilt .so files ship stripped — this still recovers function
+            // names. Generated at:
+            //   app/build/outputs/native-debug-symbols/<flavor>Release/native-debug-symbols.zip
+            // Upload that zip to Play Console per version; does not require
+            // re-uploading the AAB itself.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -162,10 +187,10 @@ dependencies {
 
     // === Mozilla GeckoView Engine (Architecture-specific) ===
     val geckoviewVersion = "145.0.20251124145406"
-    
+
     // Universal flavor: single artifact (avoids capability collision between ABIs)
     "universalImplementation"("org.mozilla.geckoview:geckoview:$geckoviewVersion")
-    
+
     // Architecture-specific flavors
     "armImplementation"("org.mozilla.geckoview:geckoview-armeabi-v7a:$geckoviewVersion")
     "aarch64Implementation"("org.mozilla.geckoview:geckoview-arm64-v8a:$geckoviewVersion")
@@ -218,5 +243,3 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 }
-
-

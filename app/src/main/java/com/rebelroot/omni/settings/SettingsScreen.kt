@@ -104,6 +104,7 @@ fun SettingsScreen(
 
     var showLanguageSelector by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showAddSearchEngineDialog by remember { mutableStateOf(false) }
 
 
 
@@ -543,6 +544,29 @@ fun SettingsScreen(
                             )
                         }
 
+                        // Row 4.1: Enable on YouTube (sub-setting of Native Video Player)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.PlayCircle, contentDescription = null, tint = accentColor)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(stringResource(id = R.string.youtube_player_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(id = R.string.youtube_player_desc), color = textSecondaryColor, fontSize = 11.sp)
+                            }
+                            Switch(
+                                checked = viewModel.isYouTubeEnabled,
+                                onCheckedChange = { viewModel.toggleYouTube(context) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = accentColor
+                                )
+                            )
+                        }
+
                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                         // Row 4.5: AI Blocker
@@ -731,7 +755,7 @@ fun SettingsScreen(
                         Text(stringResource(id = R.string.search_engine_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         
                         var expanded by remember { mutableStateOf(false) }
-                        val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
+                        val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom") + viewModel.customSearchEngines.map { it.name }
                         val currentEngine = viewModel.selectedSearchEngine
                         
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -755,6 +779,7 @@ fun SettingsScreen(
                                         "DuckDuckGo" -> Icons.Rounded.Security
                                         "Brave" -> Icons.Rounded.Security
                                         "Bing" -> Icons.Rounded.Language
+                                        "Custom" -> Icons.Rounded.Build
                                         else -> Icons.Rounded.Settings
                                     }
                                     Icon(
@@ -847,6 +872,63 @@ fun SettingsScreen(
                                 color = textSecondaryColor,
                                 fontSize = 11.sp
                             )
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Custom Search Engines",
+                                color = textPrimaryColor,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            TextButton(
+                                onClick = { showAddSearchEngineDialog = true }
+                            ) {
+                                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Add New", color = accentColor)
+                            }
+                        }
+
+                        if (viewModel.customSearchEngines.isEmpty()) {
+                            Text(
+                                text = "No custom search engines added yet.",
+                                color = textSecondaryColor,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        } else {
+                            viewModel.customSearchEngines.forEach { engine ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = engine.name, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        Text(text = engine.queryUrl, color = textSecondaryColor, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.deleteCustomSearchEngine(context, engine) },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Delete",
+                                            tint = Color.Red.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1303,6 +1385,131 @@ fun SettingsScreen(
                     enabled = !isSubmitting
                 ) {
                     Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor)
+                }
+            }
+        )
+    }
+
+    if (showAddSearchEngineDialog) {
+        var name by remember { mutableStateOf("") }
+        var url by remember { mutableStateOf("") }
+        var errorText by remember { mutableStateOf<String?>(null) }
+        
+        AlertDialog(
+            onDismissRequest = { 
+                showAddSearchEngineDialog = false
+                name = ""
+                url = ""
+                errorText = null
+            },
+            title = {
+                Text(
+                    text = "Add Custom Search Engine",
+                    color = textPrimaryColor,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            containerColor = cardColor,
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Enter the name and the search query URL for the custom search engine.",
+                        color = textSecondaryColor,
+                        fontSize = 13.sp
+                    )
+                    
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { 
+                            name = it
+                            errorText = null
+                        },
+                        label = { Text("Name (e.g. Startpage)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = inputBgColor,
+                            unfocusedContainerColor = inputBgColor
+                        )
+                    )
+                    
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { 
+                            url = it
+                            errorText = null
+                        },
+                        label = { Text("Search URL (with %s)") },
+                        singleLine = true,
+                        placeholder = { Text("https://example.com/search?q=%s") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = inputBgColor,
+                            unfocusedContainerColor = inputBgColor
+                        )
+                    )
+                    
+                    if (errorText != null) {
+                        Text(
+                            text = errorText!!,
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmedName = name.trim()
+                        val trimmedUrl = url.trim()
+                        if (trimmedName.isEmpty()) {
+                            errorText = "Name is required"
+                            return@Button
+                        }
+                        if (trimmedUrl.isEmpty()) {
+                            errorText = "URL is required"
+                            return@Button
+                        }
+                        if (!trimmedUrl.contains("%s")) {
+                            errorText = "URL must contain %s query placeholder"
+                            return@Button
+                        }
+                        val builtInNames = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
+                        if (builtInNames.any { it.equals(trimmedName, ignoreCase = true) }) {
+                            errorText = "Name matches a built-in search engine"
+                            return@Button
+                        }
+                        if (viewModel.customSearchEngines.any { it.name.equals(trimmedName, ignoreCase = true) }) {
+                            errorText = "A custom search engine with this name already exists"
+                            return@Button
+                        }
+                        viewModel.addCustomSearchEngine(context, trimmedName, trimmedUrl)
+                        showAddSearchEngineDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                ) {
+                    Text("Save", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        showAddSearchEngineDialog = false
+                    }
+                ) {
+                    Text("Cancel", color = textSecondaryColor)
                 }
             }
         )

@@ -42,16 +42,37 @@ class MediaInterceptor {
 
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
 
+    /**
+     * When false (default), media detected on YouTube / Google domains is ignored so the
+     * native player and downloader stay ToS-compliant. When the user enables "Enable on YouTube"
+     * in settings, this is flipped and those streams are captured like any other site.
+     */
+    var isYouTubeEnabled = false
+
     private fun isYouTubeUrl(url: String): Boolean {
         val lower = url.lowercase()
         return lower.contains("youtube.com") || lower.contains("youtu.be") || lower.contains("googlevideo.com")
+    }
+
+    private fun isTrackingOrStaticResource(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.contains("ping.gif") ||
+               lower.endsWith(".gif") || lower.contains(".gif?") ||
+               lower.endsWith(".png") || lower.contains(".png?") ||
+               lower.endsWith(".jpg") || lower.contains(".jpg?") ||
+               lower.endsWith(".jpeg") || lower.contains(".jpeg?") ||
+               lower.endsWith(".svg") || lower.contains(".svg?") ||
+               lower.endsWith(".webp") || lower.contains(".webp?") ||
+               lower.contains("analytics") || lower.contains("telemetry") ||
+               lower.contains("pixel") || lower.contains("/ping")
     }
 
     /**
      * Called when the network interceptor detects a media asset request.
      */
     fun onMediaRequestDetected(url: String, headers: Map<String, String>? = null) {
-        if (isYouTubeUrl(url)) return
+        if (isTrackingOrStaticResource(url)) return
+        if (isYouTubeUrl(url) && !isYouTubeEnabled) return
         val type = classifyUrl(url) ?: return
         val isDrm = url.contains("drm") || url.contains("widevine") || url.contains("license")
         
@@ -75,12 +96,14 @@ class MediaInterceptor {
      * Triggered by our injected WebExtension page script.
      */
     fun onAggressiveMediaGrabbed(url: String, mimeType: String) {
-        if (isYouTubeUrl(url)) return
+        if (isTrackingOrStaticResource(url)) return
+        if (isYouTubeUrl(url) && !isYouTubeEnabled) return
         val type = when {
             mimeType.contains("video/mp4") -> MediaType.MP4
             mimeType.contains("video/webm") -> MediaType.WEBM
             mimeType.contains("application/x-mpegURL") || mimeType.contains("mpegurl") -> MediaType.HLS
             mimeType.contains("dash+xml") -> MediaType.DASH
+
             mimeType.contains("audio/") -> MediaType.AUDIO
             else -> MediaType.MP4
         }
@@ -193,6 +216,25 @@ class MediaInterceptor {
 
     private fun classifyUrl(url: String): MediaType? {
         val lower = url.lowercase()
+
+        // Check for mime query param first (used by googlevideo.com / YouTube)
+        val mimeFromQuery = try {
+            android.net.Uri.parse(url).getQueryParameter("mime")?.let {
+                java.net.URLDecoder.decode(it, "UTF-8").lowercase()
+            }
+        } catch (e: Exception) { null }
+
+        if (mimeFromQuery != null) {
+            return when {
+                mimeFromQuery.contains("video/mp4") -> MediaType.MP4
+                mimeFromQuery.contains("video/webm") -> MediaType.WEBM
+                mimeFromQuery.contains("application/x-mpegurl") || mimeFromQuery.contains("mpegurl") -> MediaType.HLS
+                mimeFromQuery.contains("dash+xml") -> MediaType.DASH
+                mimeFromQuery.contains("audio/") -> MediaType.AUDIO
+                else -> null
+            }
+        }
+
         return when {
             lower.endsWith(".m3u8") || lower.contains(".m3u8") || lower.contains("m3u8") -> MediaType.HLS
             lower.endsWith(".mpd") || lower.contains(".mpd") || lower.contains("/dash/") -> MediaType.DASH
@@ -202,6 +244,7 @@ class MediaInterceptor {
             else -> null
         }
     }
+
 
     private fun extractQuality(url: String): String? {
         val regex = Regex("(\\d{3,4})p")

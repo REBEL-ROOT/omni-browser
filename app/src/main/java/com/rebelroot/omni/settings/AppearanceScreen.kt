@@ -41,6 +41,7 @@ import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -324,291 +325,238 @@ fun AppearanceScreen(
             }
 
             // App Icon selection
-            var tempImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
-            val galleryLauncher = rememberLauncherForActivityResult(
+            val coroutineScope = rememberCoroutineScope()
+            val customIconPickerLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.GetContent()
             ) { uri ->
                 if (uri != null) {
-                    tempImageUri = uri
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            // Copy to internal storage so path stays valid
+                            val inputStream = context.contentResolver.openInputStream(uri)
+                            val destFile = File(context.filesDir, "custom_app_icon.png")
+                            inputStream?.use { input ->
+                                destFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            withContext(Dispatchers.Main) {
+                                viewModel.saveCustomIconPath(context, destFile.absolutePath)
+                                viewModel.saveAppIconState(context, "Custom")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("AppearanceScreen", "Failed to copy custom icon: ${e.message}")
+                        }
+                    }
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("App Icon", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
-                
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    // Default Preset Icon Card
-                    Card(
-                        onClick = {
-                            viewModel.saveAppIconState(context, "Default")
-                            viewModel.saveCustomIconPath(context, null) // Clear custom icon
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 2.dp,
-                            color = if (viewModel.appIconState == "Default" && viewModel.customIconPath == null) accentColor else cardBorderColor
-                        ),
-                        colors = CardDefaults.cardColors(containerColor = cardColor),
-                        modifier = Modifier.weight(1f)
+                    Text("App Icon", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Surface(
+                        color = Color(0xFFFF9500).copy(alpha = 0.15f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White)
-                                    .border(1.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Explore,
-                                    contentDescription = null,
-                                    tint = Color(0xFF2C2C2E),
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                            Text("Default", color = textPrimaryColor, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        }
-                    }
-
-                    // Dark Preset Icon Card
-                    Card(
-                        onClick = {
-                            viewModel.saveAppIconState(context, "Dark")
-                            viewModel.saveCustomIconPath(context, null) // Clear custom icon
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 2.dp,
-                            color = if (viewModel.appIconState == "Dark" && viewModel.customIconPath == null) accentColor else cardBorderColor
-                        ),
-                        colors = CardDefaults.cardColors(containerColor = cardColor),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF1C1C1E))
-                                    .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Explore,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                            Text("Dark", color = textPrimaryColor, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        }
-                    }
-
-                    // Custom Gallery Icon Card
-                    Card(
-                        onClick = {
-                            galleryLauncher.launch("image/*")
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 2.dp,
-                            color = if (viewModel.customIconPath != null) accentColor else cardBorderColor
-                        ),
-                        colors = CardDefaults.cardColors(containerColor = cardColor),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (viewModel.customIconPath != null) {
-                                coil.compose.AsyncImage(
-                                    model = File(viewModel.customIconPath!!),
-                                    contentDescription = "Custom Icon Preview",
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(accentColor.copy(alpha = 0.15f))
-                                        .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.AddAPhoto,
-                                        contentDescription = null,
-                                        tint = accentColor,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                            }
-                            Text(if (viewModel.customIconPath != null) "Customized" else "Choose Custom", color = textPrimaryColor, fontWeight = FontWeight.Medium, fontSize = 12.sp, maxLines = 1)
-                        }
+                        Text(
+                            text = "⚠ Experimental",
+                            color = Color(0xFFFF9500),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
                 }
-            }
 
-            // Real-time crop and zoom editor dialog overlay
-            if (tempImageUri != null) {
-                var scale by remember { mutableStateOf(1f) }
-                var offset by remember { mutableStateOf(Offset.Zero) }
-                val coroutineScope = rememberCoroutineScope()
-                
-                AlertDialog(
-                    onDismissRequest = { tempImageUri = null },
-                    title = { Text("Crop & Position Icon", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
-                    text = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxWidth()
+                // 2×2 preset icon grid
+                // 2×2 preset icon grid using identity logo (ic_omni_logo)
+                val presets = listOf(
+                    Triple("Default", com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
+                    Triple("Dark",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.White),
+                    Triple("Blue",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0A84FF) to Color.White),
+                    Triple("Gold",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFFFFB800) to Color(0xFF1C1C1E))
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    presets.chunked(2).forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                "Pinch to zoom, drag to position. The icon will crop to the circle boundary.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = textSecondaryColor
-                            )
-                            
-                            Box(
-                                modifier = Modifier
-                                    .size(220.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color.Black)
-                                    .pointerInput(Unit) {
-                                        detectTransformGestures { _, pan, zoom, _ ->
-                                            scale = (scale * zoom).coerceIn(1f, 5f)
-                                            offset = Offset(
-                                                x = offset.x + pan.x,
-                                                y = offset.y + pan.y
+                            row.forEach { (label, resId, colors) ->
+                                val (bgCol, iconCol) = colors
+                                val isSelected = viewModel.appIconState == label && viewModel.customIconPath == null
+                                Card(
+                                    onClick = {
+                                        viewModel.saveAppIconState(context, label)
+                                        viewModel.saveCustomIconPath(context, null)
+                                    },
+                                    shape = RoundedCornerShape(18.dp),
+                                    border = BorderStroke(
+                                        width = if (isSelected) 2.5.dp else 1.dp,
+                                        color = if (isSelected) accentColor else cardBorderColor
+                                    ),
+                                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(bgCol)
+                                                .border(
+                                                    1.dp,
+                                                    if (label == "Default") Color.LightGray.copy(alpha = 0.4f)
+                                                    else Color.Transparent,
+                                                    RoundedCornerShape(14.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                painter = androidx.compose.ui.res.painterResource(id = resId),
+                                                contentDescription = null,
+                                                tint = iconCol,
+                                                modifier = Modifier.size(38.dp)
                                             )
                                         }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                coil.compose.AsyncImage(
-                                    model = tempImageUri,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer(
-                                            scaleX = scale,
-                                            scaleY = scale,
-                                            translationX = offset.x,
-                                            translationY = offset.y
-                                        ),
-                                    contentScale = ContentScale.Fit
-                                )
-                                
-                                // Circular preview highlight ring
-                                Box(
-                                    modifier = Modifier
-                                        .size(180.dp)
-                                        .border(2.dp, Color.White, CircleShape)
-                                        .background(Color.Transparent)
-                                )
-                            }
-                            
-                            Button(
-                                onClick = {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = cardBorderColor)
-                            ) {
-                                Icon(Icons.Rounded.Refresh, contentDescription = null, tint = textPrimaryColor, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Reset Position", color = textPrimaryColor)
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                val uriToCrop = tempImageUri
-                                if (uriToCrop != null) {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try {
-                                            val inputStream = context.contentResolver.openInputStream(uriToCrop)
-                                            val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                                            inputStream?.close()
-                                            if (originalBitmap != null) {
-                                                val targetSize = 512
-                                                val croppedBitmap = android.graphics.Bitmap.createBitmap(targetSize, targetSize, android.graphics.Bitmap.Config.ARGB_8888)
-                                                val canvas = android.graphics.Canvas(croppedBitmap)
-                                                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
-                                                
-                                                val matrix = android.graphics.Matrix()
-                                                val initScale = targetSize.toFloat() / Math.min(originalBitmap.width, originalBitmap.height)
-                                                matrix.postScale(initScale, initScale)
-                                                
-                                                val scaledWidth = originalBitmap.width * initScale
-                                                val scaledHeight = originalBitmap.height * initScale
-                                                
-                                                val dx = (targetSize - scaledWidth) / 2f
-                                                val dy = (targetSize - scaledHeight) / 2f
-                                                matrix.postTranslate(dx, dy)
-                                                
-                                                val displayRatio = targetSize.toFloat() / 220f
-                                                matrix.postScale(scale, scale, targetSize / 2f, targetSize / 2f)
-                                                matrix.postTranslate(offset.x * displayRatio, offset.y * displayRatio)
-                                                
-                                                canvas.drawBitmap(originalBitmap, matrix, paint)
-                                                
-                                                val outFile = File(context.filesDir, "custom_app_icon.png")
-                                                val outStream = java.io.FileOutputStream(outFile)
-                                                croppedBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, outStream)
-                                                outStream.flush()
-                                                outStream.close()
-                                                
-                                                withContext(Dispatchers.Main) {
-                                                    viewModel.saveCustomIconPath(context, outFile.absolutePath)
-                                                    viewModel.saveAppIconState(context, "Custom")
-                                                    tempImageUri = null
-                                                }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                label,
+                                                color = textPrimaryColor,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 13.sp
+                                            )
+                                            if (isSelected) {
+                                                Icon(
+                                                    Icons.Rounded.Check,
+                                                    contentDescription = "Selected",
+                                                    tint = accentColor,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
                                             }
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("CropIcon", "Cropping failed", e)
                                         }
                                     }
                                 }
                             }
+                            // Fill last row if odd number
+                            if (row.size < 2) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+
+                // Custom icon card
+                val isCustomSelected = viewModel.customIconPath != null
+                Card(
+                    onClick = { customIconPickerLauncher.launch("image/*") },
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(
+                        width = if (isCustomSelected) 2.5.dp else 1.dp,
+                        color = if (isCustomSelected) accentColor else cardBorderColor
+                    ),
+                    colors = CardDefaults.cardColors(containerColor = cardColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Preview or placeholder
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFF0F0F0)
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text("Apply Icon")
+                            if (viewModel.customIconPath != null) {
+                                val file = File(viewModel.customIconPath!!)
+                                if (file.exists()) {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = remember(viewModel.customIconPath) {
+                                            val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                                            bmp.asImageBitmap()
+                                        },
+                                        contentDescription = "Custom icon",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(28.dp))
+                                }
+                            } else {
+                                Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(28.dp))
+                            }
                         }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { tempImageUri = null }) {
-                            Text("Cancel")
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Custom Icon",
+                                color = textPrimaryColor,
+                                fontWeight = if (isCustomSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                if (isCustomSelected) "Tap to change image" else "Choose from gallery",
+                                color = textSecondaryColor,
+                                fontSize = 12.sp
+                            )
                         }
-                    },
-                    containerColor = cardColor
+
+                        // Clear button (only when custom is active)
+                        if (isCustomSelected) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.saveCustomIconPath(context, null)
+                                    viewModel.saveAppIconState(context, "Default")
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Remove custom icon",
+                                    tint = textSecondaryColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = textSecondaryColor
+                            )
+                        }
+                    }
+                }
+
+                // Info note
+                Text(
+                    "⚠️  Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.",
+                    color = textSecondaryColor,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
+
 
             // New Tab Page Customization Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
