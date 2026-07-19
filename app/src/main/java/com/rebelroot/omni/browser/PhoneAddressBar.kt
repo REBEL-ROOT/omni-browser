@@ -466,12 +466,12 @@ fun ChromeMenuDropdown(
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
     val isHome = viewModel.currentUrl == "about:blank" || activeTab == null
 
-    val cardBg = if (isDark) Color(0xFF1E1E20) else Color.White
+    val cardBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1E1E20) else Color.White
     val textPrimary = if (isDark) Color.White else Color(0xFF1C1C1E)
     val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
     val iconTint = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val dividerColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
-    val iconBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
+    val dividerColor = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
+    val iconBg = if (viewModel.isAmoledMode) Color(0xFF121212) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
 
     DropdownMenu(
         expanded = expanded,
@@ -750,8 +750,8 @@ fun FindInPageBar(
     modifier: Modifier = Modifier
 ) {
     val isDark = viewModel.isDarkThemeEnabled
-    val bg = if (isDark) Color(0xFF1C1C1E) else Color.White
-    val border = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
+    val bg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
+    val border = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
     val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
     val mutedColor = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
     val accentColor = MaterialTheme.colorScheme.primary

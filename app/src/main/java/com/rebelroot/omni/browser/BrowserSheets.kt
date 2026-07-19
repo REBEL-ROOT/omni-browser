@@ -973,8 +973,8 @@ fun SiteStyleCustomizerSheetContent(
     )
 
     val isDark = viewModel.isDarkThemeEnabled
-    val sheetBg = MaterialTheme.colorScheme.surface
-    val cardBg = MaterialTheme.colorScheme.surfaceVariant
+    val sheetBg = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+    val cardBg = if (viewModel.isAmoledMode) Color(0xFF0A0A0A) else MaterialTheme.colorScheme.surfaceVariant
     val textPrimary = MaterialTheme.colorScheme.onSurface
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
     val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
@@ -982,7 +982,7 @@ fun SiteStyleCustomizerSheetContent(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = sheetBg,
+        containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else sheetBg,
         dragHandle = {
             Box(
                 modifier = Modifier

@@ -415,7 +415,7 @@ fun HomeScreenContent(
                         expanded = expanded,
                         onDismissRequest = { expanded = false },
                         modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface)
                             
                     ) {
                         val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
