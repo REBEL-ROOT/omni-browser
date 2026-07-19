@@ -216,7 +216,8 @@ class StreamDownloadEngine(
         suggestedName: String,
         type: MediaInterceptor.MediaType,
         saveToLocker: Boolean,
-        referrerUrl: String? = null
+        referrerUrl: String? = null,
+        cookies: String? = null
     ): String {
         val jobId = UUID.randomUUID().toString()
         val extension = when (type) {
@@ -275,9 +276,9 @@ class StreamDownloadEngine(
         val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
                 if (type == MediaInterceptor.MediaType.HLS) {
-                    downloadHLS(jobId, url, filename, saveToLocker, referrerUrl, progressFlow)
+                    downloadHLS(jobId, url, filename, saveToLocker, referrerUrl, progressFlow, cookies)
                 } else {
-                    downloadDirect(jobId, url, filename, saveToLocker, referrerUrl, progressFlow)
+                    downloadDirect(jobId, url, filename, saveToLocker, referrerUrl, progressFlow, cookies)
                 }
             } catch (e: Exception) {
                 Log.e("DownloadEngine", "Download failed for job $jobId", e)
@@ -295,7 +296,9 @@ class StreamDownloadEngine(
         url: String,
         filename: String,
         contentType: String?,
-        saveToLocker: Boolean
+        saveToLocker: Boolean,
+        cookies: String? = null,
+        referrerUrl: String? = null
     ): String {
         val jobId = UUID.randomUUID().toString()
         val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
@@ -340,7 +343,7 @@ class StreamDownloadEngine(
 
         val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
-                downloadGenericFile(jobId, url, filename, contentType, saveToLocker, progressFlow)
+                downloadGenericFile(jobId, url, filename, contentType, saveToLocker, progressFlow, cookies, referrerUrl)
             } catch (e: Exception) {
                 Log.e("DownloadEngine", "Generic download failed for job $jobId", e)
                 progressFlow.value = DownloadProgress.Error(e.message ?: "Unknown download error")
@@ -359,21 +362,29 @@ class StreamDownloadEngine(
         filename: String,
         contentType: String?,
         saveToLocker: Boolean,
-        progressFlow: MutableStateFlow<DownloadProgress>
+        progressFlow: MutableStateFlow<DownloadProgress>,
+        cookies: String?,
+        referrerUrl: String?
     ) = withContext(Dispatchers.IO) {
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
         val targetFile = File(targetDir, filename)
         if (targetFile.exists()) targetFile.delete()
 
         try {
-            val url = URL(urlStr)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-            connection.instanceFollowRedirects = true
-            connection.connect()
+            val headers = mutableMapOf<String, String>()
+            if (!referrerUrl.isNullOrEmpty()) {
+                headers["Referer"] = referrerUrl
+            }
+            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            if (!cookies.isNullOrEmpty()) {
+                headers["Cookie"] = cookies
+            }
+
+            val connection = openConnectionWithRedirects(urlStr, headers)
 
             if (connection.responseCode !in 200..299) {
                 progressFlow.value = DownloadProgress.Error("Server returned code ${connection.responseCode}")
+                connection.disconnect()
                 return@withContext
             }
 
@@ -395,6 +406,7 @@ class StreamDownloadEngine(
             output.flush()
             output.close()
             input.close()
+            connection.disconnect()
 
             if (!isActive) {
                 targetFile.delete()
@@ -489,23 +501,28 @@ class StreamDownloadEngine(
         filename: String,
         saveToLocker: Boolean,
         referrerUrl: String?,
-        progressFlow: MutableStateFlow<DownloadProgress>
+        progressFlow: MutableStateFlow<DownloadProgress>,
+        cookies: String?
     ) = withContext(Dispatchers.IO) {
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
         val targetFile = File(targetDir, filename)
         if (targetFile.exists()) targetFile.delete()
 
         try {
-            val url = URL(urlStr)
-            val connection = url.openConnection() as HttpURLConnection
+            val headers = mutableMapOf<String, String>()
             if (!referrerUrl.isNullOrEmpty()) {
-                connection.setRequestProperty("Referer", referrerUrl)
+                headers["Referer"] = referrerUrl
             }
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-            connection.connect()
+            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            if (!cookies.isNullOrEmpty()) {
+                headers["Cookie"] = cookies
+            }
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+            val connection = openConnectionWithRedirects(urlStr, headers)
+
+            if (connection.responseCode !in 200..299) {
                 progressFlow.value = DownloadProgress.Error("Server returned code ${connection.responseCode}")
+                connection.disconnect()
                 return@withContext
             }
 
@@ -528,6 +545,7 @@ class StreamDownloadEngine(
             output.flush()
             output.close()
             input.close()
+            connection.disconnect()
 
             if (!isActive) {
                 targetFile.delete()
@@ -560,7 +578,8 @@ class StreamDownloadEngine(
         filename: String,
         saveToLocker: Boolean,
         referrerUrl: String?,
-        progressFlow: MutableStateFlow<DownloadProgress>
+        progressFlow: MutableStateFlow<DownloadProgress>,
+        cookies: String?
     ) = withContext(Dispatchers.IO) {
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
         val finalOutFile = File(targetDir, filename)
@@ -571,9 +590,17 @@ class StreamDownloadEngine(
             progressFlow.value = DownloadProgress.Muxing("Downloading and converting via FFmpeg...")
             val argsList = mutableListOf<String>()
             
-            if (!referrerUrl.isNullOrEmpty()) {
+            if (!referrerUrl.isNullOrEmpty() || !cookies.isNullOrEmpty()) {
                 argsList.add("-headers")
-                argsList.add("User-Agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36\r\nReferer: $referrerUrl\r\n")
+                val headersSb = StringBuilder()
+                headersSb.append("User-Agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36\r\n")
+                if (!referrerUrl.isNullOrEmpty()) {
+                    headersSb.append("Referer: $referrerUrl\r\n")
+                }
+                if (!cookies.isNullOrEmpty()) {
+                    headersSb.append("Cookie: $cookies\r\n")
+                }
+                argsList.add(headersSb.toString())
             }
             
             argsList.add("-i")
@@ -594,7 +621,7 @@ class StreamDownloadEngine(
             progressFlow.value = DownloadProgress.Muxing("Fetching HLS manifest...")
             
             var resolvedUrl = manifestUrl
-            var m3u8Content = fetchTextUrl(resolvedUrl, referrerUrl)
+            var m3u8Content = fetchTextUrl(resolvedUrl, referrerUrl, cookies)
             
             if (m3u8Content.isEmpty()) {
                 progressFlow.value = DownloadProgress.Error("Empty manifest or network error")
@@ -606,7 +633,7 @@ class StreamDownloadEngine(
                 val variants = parseM3U8MasterPlaylist(resolvedUrl, m3u8Content)
                 if (variants.isNotEmpty()) {
                     resolvedUrl = variants.first().first
-                    m3u8Content = fetchTextUrl(resolvedUrl, referrerUrl)
+                    m3u8Content = fetchTextUrl(resolvedUrl, referrerUrl, cookies)
                     if (m3u8Content.isEmpty()) {
                         progressFlow.value = DownloadProgress.Error("Failed to fetch variant playlist")
                         return@withContext
@@ -621,7 +648,7 @@ class StreamDownloadEngine(
             }
 
             val keyInfo = parseEncryptionKeyInfo(resolvedUrl, m3u8Content)
-            val keyBytes = keyInfo?.let { fetchKeyBytes(it.uri, referrerUrl) }
+            val keyBytes = keyInfo?.let { fetchKeyBytes(it.uri, referrerUrl, cookies) }
 
             val tempDir = File(context.cacheDir, "hls_${UUID.randomUUID()}").apply { mkdirs() }
             
@@ -649,7 +676,8 @@ class StreamDownloadEngine(
                                         keyInfo, 
                                         keyBytes, 
                                         index, 
-                                        referrerUrl
+                                        referrerUrl,
+                                        cookies
                                     ) { !isActive }
                                     segSuccess = true
                                 } catch (ce: kotlinx.coroutines.CancellationException) {
@@ -791,15 +819,83 @@ class StreamDownloadEngine(
         }
     }
 
-    private fun fetchTextUrl(urlStr: String, referrerUrl: String? = null): String {
-        return try {
-            val connection = URL(urlStr).openConnection() as HttpURLConnection
-            if (!referrerUrl.isNullOrEmpty()) {
-                connection.setRequestProperty("Referer", referrerUrl)
+    private fun openConnectionWithRedirects(
+        urlStr: String,
+        headers: Map<String, String>,
+        maxRedirects: Int = 5
+    ): HttpURLConnection {
+        var currentUrl = urlStr
+        var redirects = 0
+        var conn: HttpURLConnection? = null
+        while (redirects < maxRedirects) {
+            val url = URL(currentUrl)
+            val currentConn = url.openConnection() as HttpURLConnection
+            currentConn.instanceFollowRedirects = false // Manual handling to support protocol changes (http <-> https)
+            
+            // Set headers
+            headers.forEach { (key, value) ->
+                currentConn.setRequestProperty(key, value)
             }
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-            connection.connect()
-            connection.inputStream.bufferedReader().use { it.readText() }
+            
+            currentConn.connect()
+            
+            val status = currentConn.responseCode
+            if (status == HttpURLConnection.HTTP_MOVED_TEMP ||
+                status == HttpURLConnection.HTTP_MOVED_PERM ||
+                status == HttpURLConnection.HTTP_SEE_OTHER ||
+                status == 307 || status == 308
+            ) {
+                var newUrl = currentConn.getHeaderField("Location")
+                currentConn.disconnect()
+                if (newUrl != null) {
+                    // Handle relative redirect URLs
+                    if (!newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
+                        val base = URL(currentUrl)
+                        newUrl = URL(base, newUrl).toString()
+                    }
+                    currentUrl = newUrl
+                    redirects++
+                } else {
+                    conn = currentConn
+                    break
+                }
+            } else {
+                conn = currentConn
+                break
+            }
+        }
+        
+        if (conn == null) {
+            val url = URL(currentUrl)
+            val finalConn = url.openConnection() as HttpURLConnection
+            headers.forEach { (key, value) ->
+                finalConn.setRequestProperty(key, value)
+            }
+            finalConn.connect()
+            conn = finalConn
+        }
+        
+        return conn
+    }
+
+    private fun fetchTextUrl(urlStr: String, referrerUrl: String? = null, cookies: String? = null): String {
+        return try {
+            val headers = mutableMapOf<String, String>()
+            if (!referrerUrl.isNullOrEmpty()) {
+                headers["Referer"] = referrerUrl
+            }
+            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            if (!cookies.isNullOrEmpty()) {
+                headers["Cookie"] = cookies
+            }
+            val connection = openConnectionWithRedirects(urlStr, headers)
+            val result = if (connection.responseCode in 200..299) {
+                connection.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                ""
+            }
+            connection.disconnect()
+            result
         } catch (e: Exception) {
             ""
         }
@@ -830,19 +926,27 @@ class StreamDownloadEngine(
         keyBytes: ByteArray?,
         segmentIndex: Int,
         referrerUrl: String?,
+        cookies: String?,
         isCancelled: () -> Boolean
     ): Long {
-        val url = URL(urlStr)
-        val connection = url.openConnection() as HttpURLConnection
+        val headers = mutableMapOf<String, String>()
         if (!referrerUrl.isNullOrEmpty()) {
-            connection.setRequestProperty("Referer", referrerUrl)
+            headers["Referer"] = referrerUrl
         }
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-        connection.connect()
+        headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        if (!cookies.isNullOrEmpty()) {
+            headers["Cookie"] = cookies
+        }
+        val connection = openConnectionWithRedirects(urlStr, headers)
+        if (connection.responseCode !in 200..299) {
+            connection.disconnect()
+            throw Exception("Segment server returned code ${connection.responseCode}")
+        }
         
         val rawBytes = connection.inputStream.use { input ->
             input.readBytes()
         }
+        connection.disconnect()
         
         if (isCancelled()) {
             throw kotlinx.coroutines.CancellationException("Download cancelled")
@@ -896,21 +1000,126 @@ class StreamDownloadEngine(
     }
 
     private fun saveToPublicDownloads(sourceFile: File, filename: String): File {
-        val category = getCategoryForFile(filename)
-        // Store in the app's safe external files directory so ExoPlayer can read it directly
-        // without Scoped Storage permission blocks or runtime exceptions.
-        val downloadDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "OmniDownloads/$category").apply { mkdirs() }
-        val destFile = File(downloadDir, filename)
-        try {
-            sourceFile.copyTo(destFile, overwrite = true)
-            sourceFile.delete()
-            Log.i("DownloadEngine", "Saved download successfully to: ${destFile.absolutePath}")
-            return destFile
-        } catch (e: Exception) {
-            Log.e("DownloadEngine", "Failed to save download to external files dir, returning source file", e)
-            return sourceFile
+        val isVideo = filename.substringAfterLast('.', "").lowercase()
+            .let { it == "mp4" || it == "mkv" || it == "webm" || it == "avi" || it == "mov" || it == "ts" || it == "m4v" }
+        val isAudio = filename.substringAfterLast('.', "").lowercase()
+            .let { it == "mp3" || it == "aac" || it == "opus" || it == "flac" || it == "m4a" || it == "ogg" }
+
+        val mime = getMimeTypeForFile(filename)
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+: use MediaStore so the file is visible to every file manager / gallery
+            val collection = when {
+                isVideo -> MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                isAudio -> MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                else    -> MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            }
+            val relativeDir = when {
+                isVideo -> "${Environment.DIRECTORY_MOVIES}/OmniDownloads"
+                isAudio -> "${Environment.DIRECTORY_MUSIC}/OmniDownloads"
+                else    -> "${Environment.DIRECTORY_DOWNLOADS}/OmniDownloads"
+            }
+            val displayNameColumn = when {
+                isVideo -> MediaStore.Video.Media.DISPLAY_NAME
+                isAudio -> MediaStore.Audio.Media.DISPLAY_NAME
+                else    -> MediaStore.Downloads.DISPLAY_NAME
+            }
+            val mimeColumn = when {
+                isVideo -> MediaStore.Video.Media.MIME_TYPE
+                isAudio -> MediaStore.Audio.Media.MIME_TYPE
+                else    -> MediaStore.Downloads.MIME_TYPE
+            }
+            val relativeDirColumn = when {
+                isVideo -> MediaStore.Video.Media.RELATIVE_PATH
+                isAudio -> MediaStore.Audio.Media.RELATIVE_PATH
+                else    -> MediaStore.Downloads.RELATIVE_PATH
+            }
+            val isPendingColumn = when {
+                isVideo -> MediaStore.Video.Media.IS_PENDING
+                isAudio -> MediaStore.Audio.Media.IS_PENDING
+                else    -> MediaStore.Downloads.IS_PENDING
+            }
+
+            val values = ContentValues().apply {
+                put(displayNameColumn, filename)
+                put(mimeColumn, mime)
+                put(relativeDirColumn, relativeDir)
+                put(isPendingColumn, 1)
+            }
+            val resolver = context.contentResolver
+            val itemUri = resolver.insert(collection, values)
+            if (itemUri != null) {
+                try {
+                    resolver.openOutputStream(itemUri)?.use { out ->
+                        sourceFile.inputStream().use { it.copyTo(out) }
+                    }
+                    values.clear()
+                    values.put(isPendingColumn, 0)
+                    resolver.update(itemUri, values, null, null)
+                    sourceFile.delete()
+                    Log.i("DownloadEngine", "Saved to public MediaStore: $relativeDir/$filename")
+                } catch (e: Exception) {
+                    Log.e("DownloadEngine", "MediaStore write failed, falling back to external files dir", e)
+                    resolver.delete(itemUri, null, null)
+                    return fallbackSaveToExternalFiles(sourceFile, filename)
+                }
+                // Return a placeholder File — callers should prefer the MediaStore URI
+                File(Environment.getExternalStoragePublicDirectory(relativeDir.substringBefore('/')), "OmniDownloads/$filename")
+            } else {
+                Log.w("DownloadEngine", "MediaStore insert returned null, falling back")
+                fallbackSaveToExternalFiles(sourceFile, filename)
+            }
+        } else {
+            // Android 9 and below — direct write to public folder
+            val publicDir = when {
+                isVideo -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+                isAudio -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                else    -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            }
+            val destDir = File(publicDir, "OmniDownloads").apply { mkdirs() }
+            var destFile = File(destDir, filename)
+            var counter = 1
+            while (destFile.exists()) {
+                val nameWithoutExt = filename.substringBeforeLast('.')
+                val extension = filename.substringAfterLast('.', "")
+                destFile = if (extension.isNotEmpty())
+                    File(destDir, "$nameWithoutExt($counter).$extension")
+                else
+                    File(destDir, "$nameWithoutExt($counter)")
+                counter++
+            }
+            try {
+                sourceFile.copyTo(destFile, overwrite = true)
+                sourceFile.delete()
+                // Trigger MediaScanner so it appears in gallery/file manager immediately
+                android.media.MediaScannerConnection.scanFile(
+                    context, arrayOf(destFile.absolutePath), arrayOf(mime), null
+                )
+                Log.i("DownloadEngine", "Saved to public folder: ${destFile.absolutePath}")
+                destFile
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Failed to save to public folder", e)
+                sourceFile
+            }
         }
     }
+
+    /** Fallback when MediaStore is unavailable or fails — saves to app-scoped external dir */
+    private fun fallbackSaveToExternalFiles(sourceFile: File, filename: String): File {
+        val category = getCategoryForFile(filename)
+        val downloadDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "OmniDownloads/$category").apply { mkdirs() }
+        val destFile = File(downloadDir, filename)
+        return try {
+            sourceFile.copyTo(destFile, overwrite = true)
+            sourceFile.delete()
+            Log.i("DownloadEngine", "Fallback saved to: ${destFile.absolutePath}")
+            destFile
+        } catch (e: Exception) {
+            Log.e("DownloadEngine", "Fallback save also failed", e)
+            sourceFile
+        }
+    }
+
 
     private fun parseM3U8MasterPlaylist(baseUrl: String, content: String): List<Pair<String, String>> {
         val variants = mutableListOf<Pair<String, String>>()
@@ -1058,19 +1267,24 @@ class StreamDownloadEngine(
         return EncryptionKeyInfo(method, resolvedUri, ivBytes)
     }
 
-    private fun fetchKeyBytes(keyUrl: String, referrerUrl: String?): ByteArray? {
+    private fun fetchKeyBytes(keyUrl: String, referrerUrl: String?, cookies: String?): ByteArray? {
         return try {
-            val connection = URL(keyUrl).openConnection() as HttpURLConnection
+            val headers = mutableMapOf<String, String>()
             if (!referrerUrl.isNullOrEmpty()) {
-                connection.setRequestProperty("Referer", referrerUrl)
+                headers["Referer"] = referrerUrl
             }
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-            connection.connect()
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            if (!cookies.isNullOrEmpty()) {
+                headers["Cookie"] = cookies
+            }
+            val connection = openConnectionWithRedirects(keyUrl, headers)
+            val result = if (connection.responseCode in 200..299) {
                 connection.inputStream.readBytes()
             } else {
                 null
             }
+            connection.disconnect()
+            result
         } catch (e: Exception) {
             Log.e("DownloadEngine", "Failed to fetch encryption key: $keyUrl", e)
             null

@@ -41,8 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rebelroot.omni.browser.BrowserViewModel
-import com.rebelroot.omni.browser.BookmarkEntry
+import com.rebelroot.omni.browser.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

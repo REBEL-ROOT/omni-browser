@@ -9,6 +9,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.os.Build
 import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,12 +61,12 @@ fun AppearanceScreen(
     var showIconDialog by remember { mutableStateOf(false) }
     val isDarkMode = viewModel.isDarkThemeEnabled
     val accentColor = MaterialTheme.colorScheme.primary
-    val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
-    val cardColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val cardBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
-    val textSecondaryColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
-    val dividerColor = if (isDarkMode) Color(0xFF2C2C2E).copy(alpha = 0.5f) else Color(0xFFE5E5EA)
+    val bgColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surface
+    val cardBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val textPrimaryColor = MaterialTheme.colorScheme.onSurface
+    val textSecondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
 
     Scaffold(
         topBar = {
@@ -92,9 +95,155 @@ fun AppearanceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Navigation Visibility Toggles — FIRST (most important nav setting)
+            // ── THEME SECTION ─────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Navigation", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+                Text("Theme", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(0.5.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Theme Mode: Light | Dark | AMOLED
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Theme Mode", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        val themeMode = when {
+                            viewModel.isAmoledMode -> 2
+                            viewModel.isDarkThemeEnabled -> 1
+                            else -> 0
+                        }
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            val options = listOf("Light", "Dark", "AMOLED")
+                            val icons = listOf(
+                                Icons.Rounded.LightMode,
+                                Icons.Rounded.DarkMode,
+                                Icons.Rounded.Brightness1
+                            )
+                            options.forEachIndexed { index, label ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                                    onClick = {
+                                        when (index) {
+                                            0 -> {
+                                                viewModel.saveDarkTheme(context, false)
+                                                viewModel.saveAmoledMode(context, false)
+                                            }
+                                            1 -> {
+                                                viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveAmoledMode(context, false)
+                                            }
+                                            2 -> {
+                                                viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveAmoledMode(context, true)
+                                            }
+                                        }
+                                    },
+                                    selected = themeMode == index,
+                                    icon = {
+                                        SegmentedButtonDefaults.Icon(active = themeMode == index) {
+                                            Icon(imageVector = icons[index], contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                                        }
+                                    }
+                                ) {
+                                    Text(label, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor)
+
+                    // Material You toggle (Android 12+ only)
+                    AnimatedVisibility(
+                        visible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Rounded.Palette, contentDescription = null, tint = accentColor)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Material You", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Extract colors from wallpaper (Android 12+)", color = textSecondaryColor, fontSize = 11.sp)
+                                }
+                                Switch(
+                                    checked = viewModel.isDynamicColorEnabled,
+                                    onCheckedChange = { viewModel.saveDynamicColor(context, it) },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
+                                )
+                            }
+                            HorizontalDivider(color = dividerColor)
+                        }
+                    }
+
+                    // Accent Color selector
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Accent Color",
+                            color = if (viewModel.isDynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                                textSecondaryColor else textPrimaryColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (viewModel.isDynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            Text(
+                                "Wallpaper colors active — accent selection overridden",
+                                color = textSecondaryColor,
+                                fontSize = 11.sp
+                            )
+                        } else {
+                            val accentOptions = listOf(
+                                "Ocean Blue" to Color(0xFF0A84FF),
+                                "Crimson Red" to Color(0xFFFF3B5C),
+                                "Emerald Green" to Color(0xFF00C853),
+                                "Sunset Orange" to Color(0xFFFF6D00),
+                                "Royal Purple" to Color(0xFF7C4DFF),
+                                "Monochrome" to Color(0xFFAAAAAA)
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                accentOptions.forEach { (name, color) ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                            .then(
+                                                if (viewModel.selectedAccentTheme == name)
+                                                    Modifier.border(3.dp, textPrimaryColor.copy(alpha = 0.4f), CircleShape)
+                                                else Modifier
+                                            )
+                                            .clickable { viewModel.saveAccentTheme(context, name) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (viewModel.selectedAccentTheme == name) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = "Selected",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Navigation Visibility Toggles
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Navigation", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

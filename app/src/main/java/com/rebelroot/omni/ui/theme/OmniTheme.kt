@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
@@ -36,18 +37,29 @@ import androidx.activity.enableEdgeToEdge
 fun OmniTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     accentTheme: String = "Ocean Blue",
+    /** true → use pure-black AMOLED surfaces (only applies when darkTheme = true) */
+    amoledMode: Boolean = false,
+    /** true → extract palette from wallpaper via Material You (Android 12+ only) */
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = getColorScheme(accentTheme, darkTheme)
+    val context = LocalContext.current
+    val colorScheme = getColorScheme(
+        accentTheme = accentTheme,
+        isDark = darkTheme,
+        isAmoled = amoledMode,
+        isDynamic = dynamicColor,
+        context = context
+    )
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            var context = view.context
-            while (context is android.content.ContextWrapper) {
-                if (context is ComponentActivity) break
-                context = context.baseContext
+            var ctx = view.context
+            while (ctx is android.content.ContextWrapper) {
+                if (ctx is ComponentActivity) break
+                ctx = ctx.baseContext
             }
-            val activity = context as? ComponentActivity
+            val activity = ctx as? ComponentActivity
             activity?.enableEdgeToEdge(
                 statusBarStyle = SystemBarStyle.auto(
                     android.graphics.Color.TRANSPARENT,
@@ -62,7 +74,6 @@ fun OmniTheme(
             )
         }
     }
-
 
     MaterialTheme(
         colorScheme = colorScheme,

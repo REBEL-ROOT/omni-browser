@@ -5,30 +5,42 @@
 
 package com.rebelroot.omni.ui.theme
 
+import android.os.Build
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 // ── Google-Quality Design Tokens ──
 
-// Light mode neutrals (Calm, readable, low-strain)
-val LightBg = Color(0xFFF8F9FA)           // Google standard subtle background
-val LightSurface = Color(0xFFFFFFFF)      // Pure White surface for cards (elevation separation)
-val LightSurfaceVar = Color(0xFFF1F3F4)   // Google standard search bar / button surface
-val LightTextPrimary = Color(0xFF202124)  // Slate dark gray (not absolute black)
-val LightTextSec = Color(0xFF5F6368)      // Muted gray for subtitles/icons
-val LightBorder = Color(0xFFDADCE0)       // Extremely subtle divider
+// Light mode neutrals
+val LightBg = Color(0xFFF8F9FA)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceVar = Color(0xFFF1F3F4)
+val LightTextPrimary = Color(0xFF202124)
+val LightTextSec = Color(0xFF5F6368)
+val LightBorder = Color(0xFFDADCE0)
 val LightError = Color(0xFFB3261E)
 
-// Dark mode neutrals (Deep, professional, immersive)
-val DarkBg = Color(0xFF131314)            // Google standard dark background
-val DarkSurface = Color(0xFF1E1E1E)       // Slightly elevated dark surface
-val DarkSurfaceVar = Color(0xFF28292A)    // Elevated variant (search bars, menus)
-val DarkTextPrimary = Color(0xFFE3E3E3)   // Soft white
-val DarkTextSec = Color(0xFF9AA0A6)       // Readable muted gray
-val DarkBorder = Color(0xFF444746)        // Subtle dark divider
+// Dark mode neutrals
+val DarkBg = Color(0xFF131314)
+val DarkSurface = Color(0xFF1E1E1E)
+val DarkSurfaceVar = Color(0xFF28292A)
+val DarkTextPrimary = Color(0xFFE3E3E3)
+val DarkTextSec = Color(0xFF9AA0A6)
+val DarkBorder = Color(0xFF444746)
 val DarkError = Color(0xFFF2B8B5)
+
+// AMOLED mode neutrals — true black for OLED power savings
+val AmoledBg = Color(0xFF000000)
+val AmoledSurface = Color(0xFF0A0A0A)
+val AmoledSurfaceVar = Color(0xFF141414)
+val AmoledBorder = Color(0xFF2A2A2A)
 
 // ── Accent Theme Definitions ──
 
@@ -106,15 +118,93 @@ fun buildLightScheme(accent: AccentPalette): ColorScheme = lightColorScheme(
     error = accent.error
 )
 
+/**
+ * Builds an AMOLED (true-black) dark scheme — same accent as chosen dark theme
+ * but with pure-black background and near-black surfaces for OLED power savings.
+ */
+fun buildAmoledScheme(accent: AccentPalette): ColorScheme = darkColorScheme(
+    background = AmoledBg,
+    surface = AmoledSurface,
+    surfaceVariant = AmoledSurfaceVar,
+    primary = accent.primary,
+    secondary = accent.secondary,
+    tertiary = accent.tertiary,
+    onBackground = DarkTextPrimary,
+    onSurface = DarkTextPrimary,
+    onSurfaceVariant = DarkTextSec,
+    outline = AmoledBorder,
+    outlineVariant = AmoledBorder.copy(alpha = 0.5f),
+    error = accent.error
+)
+
 // Legacy schemes for backward compat (default Ocean Blue)
 val OmniDarkScheme = buildDarkScheme(OceanBlueDark)
 val OmniLightScheme = buildLightScheme(OceanBlueLight)
 
 /**
- * Returns the appropriate ColorScheme for the given accent theme name and dark/light mode.
+ * Returns the appropriate ColorScheme for the given theme mode, accent name, and context.
+ *
+ * @param accentTheme Accent name from [AccentThemesDark]/[AccentThemesLight]
+ * @param isDark true for dark/AMOLED, false for light
+ * @param isAmoled true to use pure-black AMOLED surfaces (only applies when isDark=true)
+ * @param isDynamic true to extract palette from wallpaper (Android 12+ only)
+ * @param context Android Context needed for dynamic color extraction
  */
-fun getColorScheme(accentTheme: String, isDark: Boolean): ColorScheme {
+fun getColorScheme(
+    accentTheme: String,
+    isDark: Boolean,
+    isAmoled: Boolean = false,
+    isDynamic: Boolean = false,
+    context: android.content.Context? = null
+): ColorScheme {
+    // Material You dynamic color (Android 12+)
+    if (isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && context != null) {
+        val dynamicScheme = if (isDark) {
+            dynamicDarkColorScheme(context)
+        } else {
+            dynamicLightColorScheme(context)
+        }
+        // Apply AMOLED override on top of dynamic scheme if requested
+        return if (isDark && isAmoled) {
+            dynamicScheme.copy(
+                background = AmoledBg,
+                surface = AmoledSurface,
+                surfaceVariant = AmoledSurfaceVar,
+                outline = AmoledBorder,
+                outlineVariant = AmoledBorder.copy(alpha = 0.5f)
+            )
+        } else {
+            dynamicScheme
+        }
+    }
+
+    // Static accent palette
     val paletteMap = if (isDark) AccentThemesDark else AccentThemesLight
     val palette = paletteMap[accentTheme] ?: paletteMap["Ocean Blue"]!!
-    return if (isDark) buildDarkScheme(palette) else buildLightScheme(palette)
+    return when {
+        isDark && isAmoled -> buildAmoledScheme(palette)
+        isDark             -> buildDarkScheme(palette)
+        else               -> buildLightScheme(palette)
+    }
 }
+
+// ── Single-source surface color helper ──
+
+/**
+ * Returns the correct sheet/dialog background color for the current theme.
+ * Use this in ALL ModalBottomSheets, Dialogs, Cards, and elevated Surfaces
+ * instead of hardcoding hex values.
+ *
+ * - AMOLED dark → Color.Black
+ * - Regular dark → MaterialTheme surface (#1E1E1E)
+ * - Light → MaterialTheme surface (White)
+ */
+@Composable
+fun omniSheetContainerColor(): Color = MaterialTheme.colorScheme.surface
+
+/**
+ * Returns the drag-handle color for bottom sheets.
+ * Always use this instead of hardcoded hex values.
+ */
+@Composable
+fun omniDragHandleColor(): Color = MaterialTheme.colorScheme.outlineVariant

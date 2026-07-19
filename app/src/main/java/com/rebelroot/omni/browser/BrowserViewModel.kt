@@ -72,88 +72,19 @@ import kotlinx.coroutines.Dispatchers
 
 val Context.dataStore by preferencesDataStore(name = "omni_settings")
 
-data class TabState(
-    val id: String,
-    val session: GeckoSession,
-    val title: String,
-    val url: String,
-    val canGoBack: Boolean = false,
-    val canGoForward: Boolean = false,
-    val loadError: String? = null,
-    val isEditModeEnabled: Boolean = false,
-    val settingsVersion: Int = 0,
-    val isUriLoaded: Boolean = true,
-    val isIncognito: Boolean = false
-)
-
-
-data class BookmarkEntry(
-    val title: String,
-    val url: String,
-    val timestamp: Long
-)
-
-data class HomeShortcut(
-    val id: String,
-    val title: String,
-    val url: String,
-    val isFeature: Boolean = false,
-    val isPermanent: Boolean = false
-)
-
-data class NewsArticle(
-    val title: String,
-    val link: String,
-    val source: String,
-    val pubDate: String,
-    val imageUrl: String
-)
-
-data class HistoryEntry(
-    val title: String,
-    val url: String,
-    val timestamp: Long
-)
-
-data class ContentPermissionPrompt(
-    val siteUri: String,
-    val permissionType: Int,
-    val onAllow: () -> Unit,
-    val onDeny: () -> Unit
-)
-
-data class SystemPermissionRequest(
-    val permissions: Array<String>?,
-    val onGranted: () -> Unit,
-    val onDenied: () -> Unit
-)
-
-data class MediaPermissionPrompt(
-    val siteUri: String,
-    val hasVideo: Boolean,
-    val hasAudio: Boolean,
-    val onAllow: (videoSource: org.mozilla.geckoview.GeckoSession.PermissionDelegate.MediaSource?, audioSource: org.mozilla.geckoview.GeckoSession.PermissionDelegate.MediaSource?) -> Unit,
-    val onDeny: () -> Unit
-)
-
-data class CustomSearchEngine(
-    val name: String,
-    val queryUrl: String
-)
-
 class BrowserViewModel : ViewModel() {
 
     companion object {
-        private const val TAG = "BrowserViewModel"
+        internal const val TAG = "BrowserViewModel"
 
-        private const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
-        private const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
+        internal const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
+        internal const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
 
         /** Known ad popup / pop-under network domains.
          *  Popups opening any of these URLs are silently blocked regardless of user gesture. */
         /** Known ad popup / pop-under network domains and suspicious host keywords.
          *  Checked via String.contains() so subdomains are covered automatically. */
-        private val POPUP_AD_DOMAINS = setOf(
+        internal val POPUP_AD_DOMAINS = setOf(
             // Pop-under networks
             "popads.net", "popcash.net", "popunder.net", "popmyads.com",
             "pop.network", "popmagic.com", "trafficshop.com",
@@ -183,7 +114,7 @@ class BrowserViewModel : ViewModel() {
         )
 
         /** Suspicious sub-strings found in popup/redirect hostnames. */
-        private val POPUP_HOST_KEYWORDS = listOf(
+        internal val POPUP_HOST_KEYWORDS = listOf(
             "adserver", "adsystem", "adservice", "adnserver",
             "clicksmart", "fastclick", "popunder", "popads",
             "redirector", "onclick", "adcash", "adclick",
@@ -202,6 +133,8 @@ class BrowserViewModel : ViewModel() {
         val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
         val CUSTOM_SEARCH_ENGINES_KEY = stringPreferencesKey("custom_search_engines")
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
+        val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
+        val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color_enabled")
         val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
         val PDF_EXPORT_THEME_KEY = stringPreferencesKey("pdf_export_theme")
         val SELECTED_LANGUAGE_KEY = stringPreferencesKey("selected_language")
@@ -249,7 +182,7 @@ class BrowserViewModel : ViewModel() {
 
         @Volatile
         @Keep
-        private var geckoRuntime: GeckoRuntime? = null
+        internal var geckoRuntime: GeckoRuntime? = null
     }
 
     /** Exposed to the UI so a native-library load failure renders GeckoErrorScreen
@@ -272,160 +205,8 @@ class BrowserViewModel : ViewModel() {
     val sessionExtensionActions = mutableStateMapOf<String, MutableMap<String, WebExtension.Action>>()
     var activeExtensionPopupSession by mutableStateOf<GeckoSession?>(null)
     var activeExtensionPopupName by mutableStateOf("")
-
-    fun registerExtensionAction(id: String, session: GeckoSession?, action: WebExtension.Action) {
-        extensionActions[id] = action
-        if (session != null) {
-            val tab = tabs.find { it.session == session }
-            if (tab != null) {
-                val extMap = sessionExtensionActions.getOrPut(tab.id) { mutableMapOf() }
-                extMap[id] = action
-            }
-        } else {
-            defaultExtensionActions[id] = action
-        }
-    }
-
-    fun getActionForExtension(extensionId: String): WebExtension.Action? {
-        val activeId = activeTabId ?: return defaultExtensionActions[extensionId] ?: extensionActions[extensionId]
-        return sessionExtensionActions[activeId]?.get(extensionId) ?: defaultExtensionActions[extensionId] ?: extensionActions[extensionId]
-    }
-
-
     var activeExtensionPopupLoading by mutableStateOf(true)
 
-    fun handleExtensionOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession> {
-        val result = GeckoResult<GeckoSession>()
-        if (isNativeSheetOpen) {
-            result.completeExceptionally(IllegalStateException("Blocked: Native toolbox/notes sheet is active."))
-            return result
-        }
-        var completed = false
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            try {
-                val run = geckoRuntime
-                if (run == null) {
-                    completed = true
-                    result.completeExceptionally(IllegalStateException("GeckoRuntime not ready"))
-                    return@post
-                }
-                activeExtensionPopupSession?.close() // close previous popup session to avoid leaks
-
-                // Use mobile viewport — desktop mode renders at ~1280px causing tiny popups on phones
-                val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
-                    .allowJavascript(true)
-                    .userAgentMode(org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
-                    .viewportMode(org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-                    .build()
-
-                val session = GeckoSession(settings)
-
-                // Show spinner while the popup page loads
-                activeExtensionPopupLoading = true
-
-                // Content delegate — dismiss popup if the extension page closes itself
-                session.contentDelegate = object : GeckoSession.ContentDelegate {
-                    override fun onCloseRequest(session: GeckoSession) {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            dismissExtensionPopup()
-                        }
-                    }
-                }
-
-                // Progress delegate — inject auto-fit CSS once page finishes loading
-                session.progressDelegate = object : GeckoSession.ProgressDelegate {
-                    override fun onPageStop(session: GeckoSession, success: Boolean) {
-                        // Inject CSS + viewport meta so the extension popup fills the phone screen.
-                        // Extensions like uBlock/Violentmonkey hardcode min-width; this strips it.
-                        val js = """
-                            (function(){
-                                try {
-                                    // Set/update viewport meta for device-width scaling
-                                    var vp = document.querySelector('meta[name="viewport"]');
-                                    if (!vp) {
-                                        vp = document.createElement('meta');
-                                        vp.name = 'viewport';
-                                        document.head.appendChild(vp);
-                                    }
-                                    vp.content = 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes';
-
-                                    // Strip desktop min-width constraints so the popup fills available width
-                                    var style = document.createElement('style');
-                                    style.id = '_omni_ext_fit';
-                                    style.textContent = [
-                                        'html { min-width: unset !important; width: 100% !important; box-sizing: border-box !important; }',
-                                        'body { min-width: unset !important; width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; overflow-x: hidden !important; }',
-                                        '* { max-width: 100% !important; }'
-                                    ].join('\n');
-                                    var old = document.getElementById('_omni_ext_fit');
-                                    if (old) old.remove();
-                                    document.head.appendChild(style);
-                                } catch(e) {}
-                            })();
-                        """.trimIndent()
-                        // Execute via javascript: URI — fires in the context of the current page
-                        try { session.loadUri("javascript:$js") } catch (_: Exception) {}
-
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            activeExtensionPopupLoading = false
-                        }
-                    }
-                    override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {}
-                }
-
-                // Navigation delegate — allow extension-internal navigation (moz-extension:// links)
-                session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-                    override fun onLocationChange(
-                        session: GeckoSession,
-                        url: String?,
-                        perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
-                        hasUserGesture: Boolean
-                    ) {}
-                    override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {}
-                    override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {}
-                    override fun onLoadRequest(
-                        session: GeckoSession,
-                        request: GeckoSession.NavigationDelegate.LoadRequest
-                    ): GeckoResult<AllowOrDeny>? {
-                        val url = request.uri ?: return null
-                        return when {
-                            // Allow all moz-extension:// and about: pages
-                            url.startsWith("moz-extension://") || url.startsWith("about:") -> null
-                            // Intercept external http(s) links — open in main browser
-                            url.startsWith("http://") || url.startsWith("https://") -> {
-                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                    dismissExtensionPopup()
-                                    loadUrl(url)
-                                }
-                                GeckoResult.fromValue(AllowOrDeny.DENY)
-                            }
-                            else -> null
-                        }
-                    }
-                }
-
-                session.open(run)
-                activeExtensionPopupSession = session
-                activeExtensionPopupName = try { extension.metaData?.name ?: extension.id } catch (_: Exception) { extension.id }
-                completed = true
-                result.complete(session)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to open popup for ${extension.id}", e)
-                if (!completed) {
-                    completed = true
-                    result.completeExceptionally(e)
-                }
-            }
-        }
-        return result
-    }
-
-    fun dismissExtensionPopup() {
-        activeExtensionPopupSession?.close()
-        activeExtensionPopupSession = null
-        activeExtensionPopupName = ""
-        activeExtensionPopupLoading = true
-    }
     var pendingIntentUrl: String? = null
     var isVideoPlayerScreenActive by mutableStateOf(false)
     var isInPictureInPictureMode by mutableStateOf(false)
@@ -444,11 +225,11 @@ class BrowserViewModel : ViewModel() {
 
     // Context Menu State
     var activeContextMenu by mutableStateOf<ContextMenuElement?>(null)
-        private set
+        internal set
 
     // Text Selection State
     var activeTextSelection by mutableStateOf<String?>(null)
-        private set
+        internal set
     var activeSelectionObject by mutableStateOf<org.mozilla.geckoview.GeckoSession.SelectionActionDelegate.Selection?>(null)
 
 
@@ -462,12 +243,12 @@ class BrowserViewModel : ViewModel() {
     lateinit var streamDownloadEngine: StreamDownloadEngine
     lateinit var vpnManager: VpnManager
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
-    private var copyManager: UniversalCopyManager? = null
-    private var aiBlockerManager: BuiltInExtensionManager? = null
-    private var appContext: Context? = null
+    internal var copyManager: UniversalCopyManager? = null
+    internal var aiBlockerManager: BuiltInExtensionManager? = null
+    internal var appContext: Context? = null
 
     // GeckoView Reference for capturePixels
-    private var activeGeckoViewRef: WeakReference<GeckoView>? = null
+    internal var activeGeckoViewRef: WeakReference<GeckoView>? = null
 
     fun setActiveGeckoView(geckoView: GeckoView) {
         activeGeckoViewRef = WeakReference(geckoView)
@@ -515,12 +296,15 @@ class BrowserViewModel : ViewModel() {
     var isNativePlayerEnabled by mutableStateOf(true)
     var isYouTubeEnabled by mutableStateOf(false)
     var pendingVideoUrl: String? = null
+    var activeVideoCookies by mutableStateOf<String?>(null)
     var customVpnConfig by mutableStateOf<String?>(null)
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
     var customSearchEngines by mutableStateOf<List<CustomSearchEngine>>(emptyList())
     val searchSuggestions = androidx.compose.runtime.mutableStateListOf<String>()
     var isDarkThemeEnabled by mutableStateOf(true)
+    var isAmoledMode by mutableStateOf(false)
+    var isDynamicColorEnabled by mutableStateOf(false)
     var selectedLanguageCode by mutableStateOf("en")
     var isLanguageSelectionDone by mutableStateOf(false)
     var isOnboardingCompleted by mutableStateOf(false)
@@ -588,235 +372,7 @@ class BrowserViewModel : ViewModel() {
     fun triggerOpenBrowserScreen() { openBrowserScreenEvent = true }
     fun consumeOpenBrowserScreenEvent() { openBrowserScreenEvent = false }
 
-    // QR code scanner support
-    fun scanPageForQrCodes() {
-        val geckoView = activeGeckoViewRef?.get()
-        if (geckoView == null) {
-            qrScanError = "No active page to scan"
-            return
-        }
 
-        isQrScanning = true
-        qrScanResults = emptyList()
-        qrScanError = null
-
-        geckoView.capturePixels().then { bitmap ->
-            if (bitmap == null) {
-                viewModelScope.launch(Dispatchers.Main) {
-                    isQrScanning = false
-                    qrScanError = "Could not capture page"
-                }
-                return@then GeckoResult.fromValue(false)
-            }
-
-            // Run FOSS ZXing barcode detection on the captured bitmap
-            val result = QrCodeDecoder.decodeBitmap(bitmap)
-            val results = if (result != null) listOf(result) else emptyList()
-            viewModelScope.launch(Dispatchers.Main) {
-                isQrScanning = false
-                qrScanResults = results
-                if (results.isEmpty()) {
-                    qrScanError = "No QR codes found on this page"
-                }
-            }
-
-            GeckoResult.fromValue(true)
-        }.exceptionally { throwable ->
-            viewModelScope.launch(Dispatchers.Main) {
-                isQrScanning = false
-                qrScanError = "Capture failed: ${throwable.localizedMessage}"
-            }
-            GeckoResult.fromValue(false)
-        }
-    }
-
-    fun scanImageForQrCodes(context: Context, uri: Uri) {
-        isQrScanning = true
-        qrScanResults = emptyList()
-        qrScanError = null
-
-        try {
-            val result = QrCodeDecoder.decodeUri(context, uri)
-            val results = if (result != null) listOf(result) else emptyList()
-            viewModelScope.launch(Dispatchers.Main) {
-                isQrScanning = false
-                qrScanResults = results
-                if (results.isEmpty()) {
-                    qrScanError = "No QR codes found in this image"
-                }
-            }
-        } catch (e: Exception) {
-            isQrScanning = false
-            qrScanError = "Failed to load image: ${e.localizedMessage}"
-        }
-    }
-
-    fun applySiteStyleToActiveTab() {
-        val session = geckoSession ?: return
-        val hasCustomStyles = siteStyleTheme != "DEFAULT" || siteStyleFontSize != 100 || 
-                siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || 
-                siteStyleFontFamily != "inherit" || siteStyleHideImages || 
-                siteStyleGrayscale || siteStyleWarmFilter
-
-        val bgValue = when (siteStyleTheme) {
-            "DARK" -> "#0B131E"
-            "SEPIA" -> "#F4ECD8"
-            "OLED" -> "#000000"
-            "FOREST" -> "#E6F0E6"
-            else -> null
-        }
-        val textValue = when (siteStyleTheme) {
-            "DARK" -> "#E2E8F0"
-            "SEPIA" -> "#5C4033"
-            "OLED" -> "#E5E7EB"
-            "FOREST" -> "#1E3F20"
-            else -> null
-        }
-        
-        val fontCss = if (siteStyleFontFamily != "inherit") "font-family: ${siteStyleFontFamily} !important;" else ""
-        val bgCss = if (bgValue != null) "background-color: ${bgValue} !important; background: ${bgValue} !important;" else ""
-        val textCss = if (textValue != null) "color: ${textValue} !important;" else ""
-        val sizeCss = """
-            font-size: ${siteStyleFontSize}% !important;
-            -webkit-text-size-adjust: ${siteStyleFontSize}% !important;
-            -moz-text-size-adjust: ${siteStyleFontSize}% !important;
-            text-size-adjust: ${siteStyleFontSize}% !important;
-        """.trimIndent()
-        val lineSpacingCss = "line-height: ${siteStyleLineSpacing} !important;"
-        val letterSpacingCss = "letter-spacing: ${siteStyleLetterSpacing}px !important;"
-
-        var cssRules = ""
-        if (hasCustomStyles) {
-            val mainRules = """
-                html, body, p, span, div, h1, h2, h3, h4, h5, h6, li, a, section, article {
-                    $bgCss
-                    $textCss
-                    $fontCss
-                    $lineSpacingCss
-                    $letterSpacingCss
-                }
-            """.trimIndent()
-
-            val sizeRules = """
-                html, body {
-                    $sizeCss
-                }
-            """.trimIndent()
-            
-            val hideImagesRules = if (siteStyleHideImages) {
-                """
-                img, picture, figure, [style*="background-image"] {
-                    display: none !important;
-                }
-                """.trimIndent()
-            } else ""
-
-            val grayscaleRules = if (siteStyleGrayscale) {
-                """
-                html {
-                    filter: grayscale(100%) !important;
-                }
-                """.trimIndent()
-            } else ""
-
-            val warmFilterRules = if (siteStyleWarmFilter) {
-                """
-                html::before {
-                    content: "" !important;
-                    position: fixed !important;
-                    top: 0 !important;
-                    left: 0 !important;
-                    width: 100vw !important;
-                    height: 100vh !important;
-                    background: rgba(255, 140, 0, 0.08) !important;
-                    pointer-events: none !important;
-                    z-index: 2147483647 !important;
-                }
-                """.trimIndent()
-            } else ""
-
-            cssRules = (mainRules + "\n" + sizeRules + "\n" + hideImagesRules + "\n" + grayscaleRules + "\n" + warmFilterRules)
-                .trimIndent().replace("\n", " ").replace("'", "\\'")
-        }
-
-        val js = """
-            javascript:(function() {
-                const styleId = 'omni-custom-site-style';
-                let styleEl = document.getElementById(styleId);
-                if ('$cssRules' === '') {
-                    if (styleEl) {
-                        styleEl.remove();
-                    }
-                } else {
-                    if (!styleEl) {
-                        styleEl = document.createElement('style');
-                        styleEl.id = styleId;
-                        document.head.appendChild(styleEl);
-                    }
-                    styleEl.innerHTML = '$cssRules';
-                }
-            })();
-        """.trimIndent()
-        
-        session.loadUri(js)
-    }
-
-    fun updateSiteStyle(
-        fontSize: Int,
-        theme: String,
-        lineSpacing: Float,
-        letterSpacing: Float,
-        fontFamily: String,
-        appliedGlobally: Boolean,
-        hideImages: Boolean,
-        grayscale: Boolean,
-        warmFilter: Boolean
-    ) {
-        siteStyleFontSize = fontSize
-        siteStyleTheme = theme
-        siteStyleLineSpacing = lineSpacing
-        siteStyleLetterSpacing = letterSpacing
-        siteStyleFontFamily = fontFamily
-        siteStyleAppliedGlobally = appliedGlobally
-        siteStyleHideImages = hideImages
-        siteStyleGrayscale = grayscale
-        siteStyleWarmFilter = warmFilter
-
-        val context = appContext ?: return
-        val sp = context.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
-        sp.edit().apply {
-            putInt("site_style_font_size", fontSize)
-            putString("site_style_theme", theme)
-            putFloat("site_style_line_spacing", lineSpacing)
-            putFloat("site_style_letter_spacing", letterSpacing)
-            putString("site_style_font_family", fontFamily)
-            putBoolean("site_style_applied_globally", appliedGlobally)
-            putBoolean("site_style_hide_images", hideImages)
-            putBoolean("site_style_grayscale", grayscale)
-            putBoolean("site_style_warm_filter", warmFilter)
-        }.apply()
-
-        applySiteStyleToActiveTab()
-    }
-
-    fun resetSiteStyle() {
-        updateSiteStyle(
-            fontSize = 100,
-            theme = "DEFAULT",
-            lineSpacing = 1.4f,
-            letterSpacing = 0f,
-            fontFamily = "inherit",
-            appliedGlobally = false,
-            hideImages = false,
-            grayscale = false,
-            warmFilter = false
-        )
-    }
-
-    fun clearQrScanResults() {
-        qrScanResults = emptyList()
-        qrScanError = null
-    }
 
     /**
      * Extracts the S.browser_fallback_url from an intent:// URI.
@@ -825,7 +381,7 @@ class BrowserViewModel : ViewModel() {
      *
      * Format: intent://...;S.browser_fallback_url=https%3A%2F%2Fexample.com;end
      */
-    private fun extractFallbackUrl(intentUri: String): String? {
+    internal fun extractFallbackUrl(intentUri: String): String? {
         return try {
             // The fallback URL is stored as an "extra" in the intent URI
             val intent = android.content.Intent.parseUri(intentUri, android.content.Intent.URI_INTENT_SCHEME)
@@ -869,7 +425,7 @@ class BrowserViewModel : ViewModel() {
         return match?.groupValues?.get(1)?.trim()?.trim('"')
     }
 
-    private fun guessDownloadFilename(url: String, contentType: String?): String {
+    internal fun guessDownloadFilename(url: String, contentType: String?): String {
         val parsed = try {
             Uri.parse(url).lastPathSegment
         } catch (e: Exception) {
@@ -901,7 +457,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    private fun isGenericDownloadUrl(url: String): Boolean {
+    internal fun isGenericDownloadUrl(url: String): Boolean {
         val lower = url.lowercase().trim()
         if (lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("about:")) return false
 
@@ -967,11 +523,13 @@ class BrowserViewModel : ViewModel() {
             url = download.url,
             filename = download.filename,
             contentType = download.contentType,
-            saveToLocker = saveToLocker
+            saveToLocker = saveToLocker,
+            cookies = activeVideoCookies,
+            referrerUrl = currentUrl
         )
     }
 
-    private fun handleExternalDownloadResponse(response: org.mozilla.geckoview.WebResponse, context: Context) {
+    internal fun handleExternalDownloadResponse(response: org.mozilla.geckoview.WebResponse, context: Context) {
         val headers = response.headers
         val disposition = headers["Content-Disposition"] ?: headers["content-disposition"]
         val contentType = headers["Content-Type"] ?: headers["content-type"]
@@ -1013,7 +571,7 @@ class BrowserViewModel : ViewModel() {
     var activePermissionPrompt by mutableStateOf<ContentPermissionPrompt?>(null)
     var activeSystemPermissionRequest by mutableStateOf<SystemPermissionRequest?>(null)
     var activeMediaPermissionPrompt by mutableStateOf<MediaPermissionPrompt?>(null)
-        private set
+        internal set
 
     fun clearActiveSystemPermissionRequest() {
         activeSystemPermissionRequest = null
@@ -1114,75 +672,21 @@ class BrowserViewModel : ViewModel() {
 
     // ── Find In Page ─────────────────────────────────────────────────────────────
     var showFindInPage  by mutableStateOf(false)
-        private set
+        internal set
     var findQuery       by mutableStateOf("")
-        private set
+        internal set
     var findMatchCurrent by mutableStateOf(0)
-        private set
+        internal set
     var findMatchTotal  by mutableStateOf(0)
-        private set
+        internal set
     var findMatchFound  by mutableStateOf(true)
-        private set
+        internal set
 
-    fun openFindInPage() {
-        showFindInPage = true
-        findQuery = ""
-        findMatchCurrent = 0
-        findMatchTotal = 0
-        findMatchFound = true
-    }
-
-    fun closeFindInPage() {
-        showFindInPage = false
-        findQuery = ""
-        findMatchCurrent = 0
-        findMatchTotal = 0
-        // Clear GeckoView highlights on the current session
-        try { geckoSession.finder.clear() } catch (_: Exception) {}
-    }
-
-    /** Called by the UI on every keystroke in the search field. */
-    fun updateFindQuery(query: String) {
-        findQuery = query
-        if (query.isEmpty()) {
-            findMatchCurrent = 0
-            findMatchTotal = 0
-            findMatchFound = true
-            try { geckoSession.finder.clear() } catch (_: Exception) {}
-            return
-        }
-        geckoSession.finder.find(query, GeckoSession.FINDER_FIND_FORWARD)
-            .accept({ result ->
-                findMatchFound  = result?.found  ?: false
-                findMatchCurrent = result?.current ?: 0
-                findMatchTotal  = result?.total   ?: 0
-            }, null)
-    }
-
-    fun findNext() {
-        if (findQuery.isEmpty()) return
-        geckoSession.finder.find(findQuery, GeckoSession.FINDER_FIND_FORWARD)
-            .accept({ result ->
-                findMatchFound  = result?.found  ?: false
-                findMatchCurrent = result?.current ?: 0
-                findMatchTotal  = result?.total   ?: 0
-            }, null)
-    }
-
-    fun findPrev() {
-        if (findQuery.isEmpty()) return
-        geckoSession.finder.find(findQuery, GeckoSession.FINDER_FIND_BACKWARDS)
-            .accept({ result ->
-                findMatchFound  = result?.found  ?: false
-                findMatchCurrent = result?.current ?: 0
-                findMatchTotal  = result?.total   ?: 0
-            }, null)
-    }
     // ─────────────────────────────────────────────────────────────────────────────
 
     // Extensions References
 
-    private var grabberExtension: WebExtension? = null
+    internal var grabberExtension: WebExtension? = null
     
     val userExtensions = mutableStateListOf<WebExtension>()
     val extensionIcons = mutableStateMapOf<String, android.graphics.Bitmap>()
@@ -1226,174 +730,6 @@ class BrowserViewModel : ViewModel() {
     /** True while DevNotes or Toolbox sheet is open — extensions are gated from opening their UI */
     var isNativeSheetOpen by mutableStateOf(false)
 
-    fun loadSavedPasswords(context: Context) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val file = java.io.File(context.filesDir, "saved_passwords.json")
-            if (file.exists()) {
-                try {
-                    val arr = org.json.JSONArray(file.readText())
-                    val list = mutableListOf<SavedPassword>()
-                    for (i in 0 until arr.length()) {
-                        val o = arr.getJSONObject(i)
-                        list.add(SavedPassword(
-                            id = o.optString("id", java.util.UUID.randomUUID().toString()),
-                            domain = o.optString("domain", ""),
-                            username = o.optString("username", ""),
-                            password = o.optString("password", ""),
-                            timestamp = o.optLong("timestamp", System.currentTimeMillis())
-                        ))
-                    }
-                    withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        savedPasswords.clear()
-                        savedPasswords.addAll(list)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading passwords", e)
-                }
-            }
-        }
-    }
-
-    private fun persistSavedPasswords() {
-        val ctx = appContext ?: return
-        val snapshot = savedPasswords.toList()
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val file = java.io.File(ctx.filesDir, "saved_passwords.json")
-            try {
-                val arr = org.json.JSONArray()
-                snapshot.forEach { p ->
-                    arr.put(org.json.JSONObject().apply {
-                        put("id", p.id)
-                        put("domain", p.domain)
-                        put("username", p.username)
-                        put("password", p.password)
-                        put("timestamp", p.timestamp)
-                    })
-                }
-                file.writeText(arr.toString())
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving passwords", e)
-            }
-        }
-    }
-
-    fun savePassword(domain: String, username: String, password: String) {
-        // Replace existing entry for same domain+username, or add new
-        val existing = savedPasswords.indexOfFirst { it.domain == domain && it.username == username }
-        val entry = SavedPassword(domain = domain, username = username, password = password)
-        if (existing != -1) savedPasswords[existing] = entry else savedPasswords.add(0, entry)
-        persistSavedPasswords()
-
-        // Also save to DevNotes so it appears in the notes list
-        val existingNote = devNotes.indexOfFirst { it.title == "Credentials for $domain" && it.type == "PASSWORD" }
-        val noteTitle = "Credentials for $domain"
-        val noteContent = "$username\n$password"
-        if (existingNote != -1) {
-            devNotes[existingNote] = devNotes[existingNote].copy(title = noteTitle, content = noteContent, timestamp = System.currentTimeMillis())
-            saveDevNotes()
-        } else {
-            addDevNote(noteTitle, noteContent, "PASSWORD")
-        }
-
-        pendingSaveCredential = null
-    }
-
-    fun deletePassword(id: String) {
-        savedPasswords.removeAll { it.id == id }
-        persistSavedPasswords()
-    }
-
-    fun getPasswordsForDomain(domain: String): List<SavedPassword> =
-        savedPasswords.filter { it.domain.contains(domain, ignoreCase = true) || domain.contains(it.domain, ignoreCase = true) }
-
-    fun checkAutofillForUrl(url: String) {
-        if (url.isBlank() || url == "about:blank") { autofillSuggestion = null; return }
-        try {
-            val host = java.net.URI(url).host ?: ""
-            val domain = host.removePrefix("www.")
-            val match = savedPasswords.firstOrNull {
-                it.domain == domain || domain.contains(it.domain) || it.domain.contains(domain)
-            }
-            autofillSuggestion = match
-        } catch (e: Exception) {
-            autofillSuggestion = null
-        }
-    }
-
-    fun dismissSaveCredential() { pendingSaveCredential = null }
-    fun dismissAutofill() { autofillSuggestion = null }
-
-    fun autofillCredential() {
-        val suggestion = autofillSuggestion ?: return
-        val activeId = activeTabId ?: return
-        val activeTab = tabs.find { it.id == activeId } ?: return
-        val userEscaped = suggestion.username.replace("'", "\\'")
-        val passEscaped = suggestion.password.replace("'", "\\'")
-
-        val js = """
-            (function() {
-                var passInputs = Array.from(document.querySelectorAll('input[type="password"]'));
-                if (passInputs.length === 0) return;
-                
-                var passInput = passInputs.find(function(el) {
-                    return el.offsetWidth > 0 || el.offsetHeight > 0;
-                }) || passInputs[0];
-                
-                var userInput = null;
-                var form = passInput.form;
-                
-                if (form) {
-                    var formInputs = Array.from(form.querySelectorAll('input'));
-                    var passIdx = formInputs.indexOf(passInput);
-                    for (var i = passIdx - 1; i >= 0; i--) {
-                        var inp = formInputs[i];
-                        var type = (inp.getAttribute('type') || 'text').toLowerCase();
-                        if (['text', 'email', 'tel', 'number', 'url'].indexOf(type) !== -1 || inp.name.indexOf('user') !== -1 || inp.id.indexOf('user') !== -1) {
-                            userInput = inp;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!userInput) {
-                    var allInputs = Array.from(document.querySelectorAll('input'));
-                    var passIdx = allInputs.indexOf(passInput);
-                    for (var i = passIdx - 1; i >= 0; i--) {
-                        var inp = allInputs[i];
-                        var type = (inp.getAttribute('type') || 'text').toLowerCase();
-                        if (['text', 'email', 'tel', 'number', 'url'].indexOf(type) !== -1) {
-                            userInput = inp;
-                            break;
-                        }
-                    }
-                }
-                
-                if (passInput) {
-                    passInput.focus();
-                    passInput.value = '$passEscaped';
-                    passInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    passInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    passInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                }
-                if (userInput) {
-                    userInput.focus();
-                    userInput.value = '$userEscaped';
-                    userInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    userInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    userInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                }
-            })();
-        """.trimIndent()
-
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            try {
-                activeTab.session.loadUri("javascript:${'$'}js")
-                autofillSuggestion = null
-            } catch (e: Exception) {
-                Log.e(TAG, "Autofill injection failed", e)
-            }
-        }
-    }
 
     val devNotes = mutableStateListOf<DevNote>()
 
@@ -1797,696 +1133,9 @@ class BrowserViewModel : ViewModel() {
         tab.session.loadUri(formattedUrl)
     }
 
-    private fun applyUserAgentForTab(tab: TabState) {
-        val ua = if (isDesktopMode) {
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
-        } else {
-            "Mozilla/5.0 (Android 13; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"
-        }
-        tab.session.settings.setUserAgentOverride(ua)
-    }
-
-    private fun setupTabSessionListeners(tab: TabState, context: Context) {
-        applyUserAgentForTab(tab)
-        tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
-            override fun onAndroidPermissionsRequest(
-                session: GeckoSession,
-                permissions: Array<String>?,
-                callback: GeckoSession.PermissionDelegate.Callback
-            ) {
-                Log.d(TAG, "onAndroidPermissionsRequest: ${permissions?.joinToString()}")
-                if (tab.id != activeTabId) {
-                    callback.reject()
-                    return
-                }
-                activeSystemPermissionRequest = SystemPermissionRequest(
-                    permissions = permissions,
-                    onGranted = { callback.grant() },
-                    onDenied = { callback.reject() }
-                )
-            }
-
-            override fun onContentPermissionRequest(
-                session: GeckoSession,
-                permission: GeckoSession.PermissionDelegate.ContentPermission
-            ): GeckoResult<Int>? {
-                Log.d(TAG, "onContentPermissionRequest: type=${permission.permission}, uri=${permission.uri}")
-                
-                if (permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE ||
-                    permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE) {
-                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
-                }
-
-                if (tab.id != activeTabId) {
-                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
-                }
-
-                val result = GeckoResult<Int>()
-                activePermissionPrompt = ContentPermissionPrompt(
-                    siteUri = permission.uri,
-                    permissionType = permission.permission,
-                    onAllow = {
-                        activePermissionPrompt = null
-                        result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
-                    },
-                    onDeny = {
-                        activePermissionPrompt = null
-                        result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
-                    }
-                )
-                return result
-            }
-
-            override fun onMediaPermissionRequest(
-                session: GeckoSession,
-                uri: String,
-                video: Array<GeckoSession.PermissionDelegate.MediaSource>?,
-                audio: Array<GeckoSession.PermissionDelegate.MediaSource>?,
-                callback: GeckoSession.PermissionDelegate.MediaCallback
-            ) {
-                Log.d(TAG, "onMediaPermissionRequest: uri=$uri, video=${video?.size}, audio=${audio?.size}")
-                
-                if (tab.id != activeTabId) {
-                    callback.reject()
-                    return
-                }
-
-                val hasVideo = !video.isNullOrEmpty()
-                val hasAudio = !audio.isNullOrEmpty()
-
-                if (!hasVideo && !hasAudio) {
-                    callback.reject()
-                    return
-                }
-
-                activeMediaPermissionPrompt = MediaPermissionPrompt(
-                    siteUri = uri,
-                    hasVideo = hasVideo,
-                    hasAudio = hasAudio,
-                    onAllow = { selectedVideo, selectedAudio ->
-                        activeMediaPermissionPrompt = null
-                        callback.grant(selectedVideo, selectedAudio)
-                    },
-                    onDeny = {
-                        activeMediaPermissionPrompt = null
-                        callback.reject()
-                    }
-                )
-            }
-        }
-
-        tab.session.promptDelegate = object : GeckoSession.PromptDelegate {
-            override fun onFilePrompt(
-                session: GeckoSession,
-                prompt: GeckoSession.PromptDelegate.FilePrompt
-            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
-                if (tab.id != activeTabId) {
-                    return GeckoResult.fromValue(prompt.dismiss())
-                }
-                val allowMultiple = prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.MULTIPLE
-                val mimeTypes = prompt.mimeTypes
-                Log.d(TAG, "onFilePrompt: multiple=$allowMultiple, mimes=${mimeTypes?.joinToString()}")
-                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
-                pendingFilePrompt = PendingFilePrompt(
-                    geckoResult = result,
-                    prompt = prompt,
-                    allowMultiple = allowMultiple,
-                    mimeTypes = mimeTypes
-                )
-                return result
-            }
-
-            override fun onLoginSave(
-                session: GeckoSession,
-                prompt: GeckoSession.PromptDelegate.AutocompleteRequest<org.mozilla.geckoview.Autocomplete.LoginSaveOption>
-            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
-                if (tab.id != activeTabId) return GeckoResult.fromValue(prompt.dismiss())
-                val entry = prompt.options.firstOrNull()?.value ?: return GeckoResult.fromValue(prompt.dismiss())
-                val host = try {
-                    val originHost = java.net.URI(entry.origin ?: "").host
-                    if (!originHost.isNullOrBlank()) {
-                        originHost.removePrefix("www.")
-                    } else {
-                        java.net.URI(tab.url).host?.removePrefix("www.") ?: ""
-                    }
-                } catch (e: Exception) {
-                    try { java.net.URI(tab.url).host?.removePrefix("www.") ?: "" } catch (ex: Exception) { "" }
-                }
-                if (host.isNotBlank() && entry.username.isNotEmpty() && entry.password.isNotEmpty()) {
-                    pendingSaveCredential = SavedPassword(
-                        domain = host,
-                        username = entry.username,
-                        password = entry.password
-                    )
-                }
-                return GeckoResult.fromValue(prompt.dismiss())
-            }
-        }
-
-        tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
-            override fun onCloseRequest(session: GeckoSession) {
-                Log.i(TAG, "onCloseRequest: closing session for tab ${tab.id}")
-                closeTab(tab.id, context)
-            }
-
-            override fun onExternalResponse(session: GeckoSession, response: org.mozilla.geckoview.WebResponse) {
-                if (tab.id != activeTabId) return
-                handleExternalDownloadResponse(response, context)
-            }
-
-            override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
-                if (tab.id == activeTabId) {
-                    isFullscreen = fullScreen
-                }
-            }
-
-            override fun onTitleChange(session: GeckoSession, title: String?) {
-                title?.let {
-                    val idx = tabs.indexOfFirst { it.id == tab.id }
-                    if (idx != -1) {
-                        val currentUrl = tabs[idx].url
-                        tabs[idx] = tabs[idx].copy(title = it)
-                        if (!isIncognitoMode) {
-                            addToHistory(it, currentUrl)
-                        }
-                        saveTabs()
-                    }
-                }
-            }
-
-            override fun onCrash(session: GeckoSession) {
-                // When renderer process crashes (e.g. OOM), auto-reload to recover from blank screen
-                android.util.Log.e(TAG, "GeckoSession crashed, auto-reloading...")
-                session.reload()
-            }
-
-            override fun onContextMenu(
-                session: GeckoSession,
-                screenX: Int,
-                screenY: Int,
-                element: GeckoSession.ContentDelegate.ContextElement
-            ) {
-                if (tab.id == activeTabId) {
-                    activeContextMenu = ContextMenuElement(
-                        linkUri = element.linkUri,
-                        srcUri = element.srcUri,
-                        linkText = element.textContent
-                    )
-                }
-            }
-        }
-
-        tab.session.selectionActionDelegate = object : GeckoSession.SelectionActionDelegate {
-            override fun onShowActionRequest(
-                session: GeckoSession,
-                selection: GeckoSession.SelectionActionDelegate.Selection
-            ) {
-                // When text is selected in web content, show custom selection menu
-                if (tab.id == activeTabId && selection.text.isNotEmpty()) {
-                    activeTextSelection = selection.text
-                    activeSelectionObject = selection
-                }
-            }
-
-            override fun onHideAction(session: GeckoSession, reason: Int) {
-                // Clear selection when hidden
-                if (tab.id == activeTabId) {
-                    activeTextSelection = null
-                    activeSelectionObject = null
-                }
-            }
-        }
 
 
-        tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(
-                session: GeckoSession,
-                url: String?,
-                perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
-                hasUserGesture: Boolean
-            ) {
-                url?.let {
-                    val idx = tabs.indexOfFirst { it.id == tab.id }
-                    if (idx != -1) {
-                        val currentTabUrl = tabs[idx].url
-                        // GeckoView often fires a stale "about:blank" location change when a session
-                        // is re-bound to the view. If we already have a real URL, ignore it.
-                        if (it == "about:blank" && currentTabUrl != "about:blank" && currentTabUrl.isNotEmpty()) {
-                            return
-                        }
-                        tabs[idx] = tabs[idx].copy(url = it, settingsVersion = currentSettingsVersion)
-                        saveTabs()
-                    }
-                    if (tab.id == activeTabId) {
-                        currentUrl = it
-                        checkAutofillForUrl(it)
-                        // Clear detected media on new page load in the active tab!
-                        mediaInterceptor.clear()
-                        isVideoPlayingInPage = false
-                    }
-                }
-            }
 
-            override fun onCanGoBack(session: GeckoSession, canGoBackValue: Boolean) {
-                // Always save to the tab's own state
-                val idx = tabs.indexOfFirst { it.id == tab.id }
-                if (idx != -1) {
-                    tabs[idx] = tabs[idx].copy(canGoBack = canGoBackValue)
-                }
-                if (tab.id == activeTabId) {
-                    canGoBack = canGoBackValue
-                }
-            }
-
-            override fun onCanGoForward(session: GeckoSession, canGoForwardValue: Boolean) {
-                // Always save to the tab's own state
-                val idx = tabs.indexOfFirst { it.id == tab.id }
-                if (idx != -1) {
-                    tabs[idx] = tabs[idx].copy(canGoForward = canGoForwardValue)
-                }
-                if (tab.id == activeTabId) {
-                    canGoForward = canGoForwardValue
-                }
-            }
-
-            override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
-                val uri = request.uri
-                val lowerUri = uri.lowercase().trim()
-
-                if (tab.id == activeTabId) {
-                    mediaInterceptor.onMediaRequestDetected(uri)
-                }
-
-                // Intercept popups before new session triggers
-                if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
-                    if (isPopupBlockerEnabled) {
-                        // 1. Block auto-popups with no user gesture (the most common ad pattern)
-                        if (!request.hasUserGesture) {
-                            Log.w(TAG, "🚫 onLoadRequest: Blocked auto-popup (no user gesture) to $uri")
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-
-                        // 2. Block blank/script popups (pop-unders that redirect after opening)
-                        if (request.uri.isEmpty() || lowerUri == "about:blank" ||
-                            lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
-                            Log.w(TAG, "🚫 onLoadRequest: Blocked blank/script popup")
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-
-                        // 3. Block known ad network domains
-                        val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
-                        val isAdPopup = POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
-                            POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
-                        if (isAdPopup) {
-                            Log.w(TAG, "🚫 onLoadRequest: Blocked ad popup to $uri")
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-                    }
-                }
-
-                // 1. Intercept and block calendar spam subscription redirects from adware
-
-                if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") || 
-                    lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") || 
-                    lowerUri.contains(".ics?") || lowerUri.contains("calendar.google.com") ||
-                    (lowerUri.startsWith("intent:") && (lowerUri.contains("calendar") || lowerUri.contains(".ics") || lowerUri.contains("webcal")))
-                ) {
-                    Log.w(TAG, "🚫 Intercepted and blocked potential spam calendar request: $uri")
-                    viewModelScope.launch(Dispatchers.Main) {
-                        Toast.makeText(context, "Blocked calendar spam attempt", Toast.LENGTH_SHORT).show()
-                    }
-                    return GeckoResult.fromValue(AllowOrDeny.DENY)
-                }
-
-                // 2. Intercept clicks to direct video files and launch native player
-                val isYouTube = lowerUri.contains("youtube.com") || lowerUri.contains("youtu.be")
-                if (isNativePlayerEnabled && isDirectVideoUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
-                    Log.i(TAG, "🎬 Intercepted direct video load request: $uri. Opening in native player...")
-                    viewModelScope.launch(Dispatchers.Main) {
-                        val callback = onPlayVideoRequestReceived
-                        if (callback != null) {
-                            callback.invoke(uri, tab.url)
-                        } else {
-                            pendingVideoUrl = uri
-                        }
-                    }
-                    return GeckoResult.fromValue(AllowOrDeny.DENY)
-                }
-
-                // 3. Block addon install click
-                if (uri.endsWith(".xpi") || uri.contains("/firefox/downloads/file/")) {
-                    Log.d(TAG, "Intercepted addon install click: $uri")
-                    installExtensionFromUrl(uri, context)
-                    return GeckoResult.fromValue(AllowOrDeny.DENY)
-                }
-
-                // 2a. Intercept generic file downloads — show a dialog so user picks local vs. vault
-                if (tab.id == activeTabId && isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
-                    Log.i(TAG, "📥 Intercepted file download URL: $uri")
-                    viewModelScope.launch(Dispatchers.Main) {
-                        val filename = guessDownloadFilename(uri, null)
-                        pendingGenericDownload = PendingGenericDownload(
-                            url = uri,
-                            filename = filename,
-                            contentType = null
-                        )
-                    }
-                    return GeckoResult.fromValue(AllowOrDeny.DENY)
-                }
-
-                // 4. Handle non-standard schemes (intent://, market://, mailto:, tel:, etc.)
-                if (!lowerUri.startsWith("http://") && 
-                    !lowerUri.startsWith("https://") && 
-                    !lowerUri.startsWith("about:") && 
-                    !lowerUri.startsWith("javascript:") && 
-                    !lowerUri.startsWith("data:")
-                ) {
-                    // Handle intent:// and market:// URIs (used by payment gateways, app deep links)
-                    if (lowerUri.startsWith("intent:") || lowerUri.startsWith("market:")) {
-                        Log.i(TAG, "Intercepted intent/market URI: $uri")
-                        
-                        try {
-                            val intent = android.content.Intent.parseUri(uri, android.content.Intent.URI_INTENT_SCHEME)
-                            val intentPackage = intent.getPackage()
-                            
-                            // Block calendar spam intents
-                            val isCalendarSpam = (intentPackage != null && (intentPackage.contains("calendar") || intentPackage.contains("cal"))) ||
-                                    (intent.dataString != null && (intent.dataString!!.contains("calendar") || intent.dataString!!.contains("webcal") || intent.dataString!!.contains(".ics")))
-                            
-                            if (isCalendarSpam) {
-                                Log.w(TAG, "🚫 Blocked calendar/adware intent: package=$intentPackage, data=${intent.dataString}")
-                                viewModelScope.launch(Dispatchers.Main) {
-                                    Toast.makeText(context, "Blocked calendar spam intent", Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                Log.i(TAG, "Launching external app intent safely: package=$intentPackage")
-                                viewModelScope.launch(Dispatchers.Main) {
-                                    try {
-                                        intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
-                                        intent.setComponent(null)
-                                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                                            intent.setSelector(null)
-                                        }
-                                        // Use createChooser so Android always shows the app picker
-                                        val chooser = android.content.Intent.createChooser(intent, "Open with")
-                                        chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(chooser)
-                                    } catch (e: android.content.ActivityNotFoundException) {
-                                        Log.w(TAG, "No app found for intent, checking for fallback URL", e)
-                                        // Extract S.browser_fallback_url from the intent:// URI
-                                        val fallbackUrl = extractFallbackUrl(uri)
-                                        if (fallbackUrl != null) {
-                                            Log.i(TAG, "Navigating to fallback URL: $fallbackUrl")
-                                            loadUrl(fallbackUrl)
-                                        } else if (intentPackage != null) {
-                                            // Open Play Store listing for the package
-                                            try {
-                                                val marketIntent = android.content.Intent(
-                                                    android.content.Intent.ACTION_VIEW,
-                                                    android.net.Uri.parse("market://details?id=$intentPackage")
-                                                )
-                                                marketIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                context.startActivity(marketIntent)
-                                            } catch (e2: Exception) {
-                                                // Fall back to web Play Store
-                                                loadUrl("https://play.google.com/store/apps/details?id=$intentPackage")
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "Failed to launch external intent", e)
-                                        val fallbackUrl = extractFallbackUrl(uri)
-                                        if (fallbackUrl != null) {
-                                            loadUrl(fallbackUrl)
-                                        } else {
-                                            Toast.makeText(context, "Could not open this link", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing intent URI", e)
-                        }
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
-
-                    // Handle other custom protocols like upi:, mailto:, tel:, sms:, geo:, whatsapp:, tg:
-                    Log.i(TAG, "Handling custom protocol URI: $uri")
-                    viewModelScope.launch(Dispatchers.Main) {
-                        try {
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))
-                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            intent.addCategory(android.content.Intent.CATEGORY_BROWSABLE)
-                            // Use createChooser to force the OS app picker (critical for UPI)
-                            val chooserTitle = when {
-                                lowerUri.startsWith("upi:") -> "Pay with"
-                                lowerUri.startsWith("mailto:") -> "Send email with"
-                                lowerUri.startsWith("tel:") -> "Call with"
-                                lowerUri.startsWith("sms:") || lowerUri.startsWith("smsto:") -> "Send SMS with"
-                                else -> "Open with"
-                            }
-                            val chooser = android.content.Intent.createChooser(intent, chooserTitle)
-                            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(chooser)
-                        } catch (e: android.content.ActivityNotFoundException) {
-                            Log.e(TAG, "No app found for custom protocol: $uri", e)
-                            val schemeName = uri.split(":").firstOrNull() ?: "link"
-                            Toast.makeText(context, "No app found to handle $schemeName links", Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to launch custom protocol intent for: $uri", e)
-                            val schemeName = uri.split(":").firstOrNull() ?: "link"
-                            Toast.makeText(context, "No app found to handle $schemeName", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    return GeckoResult.fromValue(AllowOrDeny.DENY)
-                }
-                
-                return GeckoResult.fromValue(AllowOrDeny.ALLOW)
-            }
-
-            override fun onLoadError(
-                session: GeckoSession,
-                uri: String?,
-                error: org.mozilla.geckoview.WebRequestError
-            ): GeckoResult<String>? {
-                Log.e(TAG, "GeckoView Load Error: code=${error.code}, category=${error.category}, uri=$uri")
-                
-                val errorMsg = when (error.code) {
-                    org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN_HOST -> "Unknown Host: The server's name could not be resolved. Make sure the URL is spelled correctly and you have an active network connection."
-                    org.mozilla.geckoview.WebRequestError.ERROR_CONNECTION_REFUSED -> "Connection Failed: Could not connect to the server."
-                    org.mozilla.geckoview.WebRequestError.ERROR_NET_TIMEOUT -> "Connection Timeout: The site took too long to respond."
-                    org.mozilla.geckoview.WebRequestError.ERROR_PROXY_CONNECTION_REFUSED -> "Proxy connection failed."
-                    org.mozilla.geckoview.WebRequestError.ERROR_NET_RESET, org.mozilla.geckoview.WebRequestError.ERROR_NET_INTERRUPT -> "Network Connection Error: Connection was reset or interrupted."
-                    org.mozilla.geckoview.WebRequestError.ERROR_REDIRECT_LOOP -> "Too many redirects."
-                    org.mozilla.geckoview.WebRequestError.ERROR_OFFLINE -> "Network Offline: Please check your internet connection."
-                    org.mozilla.geckoview.WebRequestError.ERROR_MALFORMED_URI -> "Malformed URL: The URL is invalid."
-                    else -> "Failed to load page (Error code: ${error.code})"
-                }
-                
-                val idx = tabs.indexOfFirst { it.id == tab.id }
-                if (idx != -1) {
-                    tabs[idx] = tabs[idx].copy(loadError = errorMsg)
-                }
-                
-                return null
-            }
-
-            override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
-                try {
-                    val lowerUri = uri.lowercase().trim()
-
-                    if (isPopupBlockerEnabled) {
-                        // 1. Always block blank / script / data popups — the classic pop-under trick
-                        //    is to open about:blank first, then JS-redirect to the ad page.
-                        if (uri.isEmpty() || lowerUri == "about:blank" ||
-                            lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
-                            Log.w(TAG, "🚫 onNewSession: Blocked blank/script popup")
-                            return GeckoResult.fromValue(null)
-                        }
-
-                        // 2. Block known ad network domains / host keywords
-                        val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
-                        val isAdPopup = POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
-                            POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
-                        if (isAdPopup) {
-                            Log.w(TAG, "🚫 onNewSession: Blocked ad popup — $uri")
-                            return GeckoResult.fromValue(null)
-                        }
-
-                        // 3. For all other HTTP URLs opened without user gesture: load in current tab
-                        //    rather than spawning a new tab — keeps the tab list clean.
-                        //    OAuth/login flows are the only legitimate reason for a new window; those
-                        //    always have a user gesture and a recognisable login host.
-                        val isOAuthLogin = lowerUri.contains("accounts.google") ||
-                                           lowerUri.contains("facebook.com/dialog") ||
-                                           lowerUri.contains("api.twitter") ||
-                                           lowerUri.contains("github.com/login/oauth") ||
-                                           lowerUri.contains("appleid.apple.com") ||
-                                           lowerUri.contains("login.microsoftonline.com")
-                        if (!isOAuthLogin && lowerUri.startsWith("http")) {
-                            Log.i(TAG, "🔀 onNewSession: reusing active tab for target_blank: $uri")
-                            viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                                loadUrl(uri)
-                            }
-                            return GeckoResult.fromValue(null)
-                        }
-                    }
-
-                    // Allow legitimate OAuth / login popups in their own tab
-                    Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
-                    val runtime = getGeckoRuntime(context)
-                    val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
-                        .usePrivateMode(isIncognitoMode)
-                        .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
-                        .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-                        .allowJavascript(true)
-                        .build()
-                    val newSession = GeckoSession(settings)
-                    val tabId = java.util.UUID.randomUUID().toString()
-                    val newTab = TabState(
-                        id = tabId,
-                        session = newSession,
-                        title = "New Tab",
-                        url = uri,
-                        isIncognito = isIncognitoMode
-                    )
-
-                    setupTabSessionListeners(newTab, context)
-                    tabs.add(newTab)
-                    newSession.open(runtime)
-                    selectTab(newTab.id)
-                    saveTabs()
-
-                    return GeckoResult.fromValue(newSession)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in onNewSession popup", e)
-                    return null
-                }
-            }
-        }
-
-        tab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
-            override fun onPageStart(session: GeckoSession, url: String) {
-                if (tab.id == activeTabId) {
-                    isLoading = true
-                    loadingProgress = 0.05f // Start with a tiny progress to show activity immediately
-                    isReaderModeActive = false
-                    stopTts()
-                }
-                val idx = tabs.indexOfFirst { it.id == tab.id }
-                if (idx != -1) {
-                    tabs[idx] = tabs[idx].copy(loadError = null)
-                }
-            }
-
-            override fun onPageStop(session: GeckoSession, success: Boolean) {
-                if (tab.id == activeTabId) {
-                    loadingProgress = 1f
-                    checkAutofillForUrl(tab.url)
-                    // Delay hiding the progress bar slightly so the user sees it reach 100%
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        if (loadingProgress >= 1f) isLoading = false
-                    }, 300)
-                }
-                if (success) {
-                    if (tab.id == activeTabId) {
-                        injectZoomEnabler()
-                        if (siteStyleAppliedGlobally) {
-                            applySiteStyleToActiveTab()
-                        }
-                    }
-                }
-            }
-
-            override fun onProgressChange(session: GeckoSession, progress: Int) {
-                if (tab.id == activeTabId) {
-                    // GeckoView gives progress 0-100. We need 0.0-1.0
-                    loadingProgress = (progress / 100f).coerceIn(0.05f, 1f)
-                }
-            }
-        }
-    }
-
-    // --- Persistent Browser History ---
-    private fun loadHistory(context: Context) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val file = File(context.filesDir, "browser_history.json")
-            if (!file.exists()) return@launch
-            try {
-                val jsonStr = file.readText()
-                val jsonArray = JSONArray(jsonStr)
-                val temp = mutableListOf<HistoryEntry>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    temp.add(
-                        HistoryEntry(
-                            title = obj.getString("title"),
-                            url = obj.getString("url"),
-                            timestamp = obj.getLong("timestamp")
-                        )
-                    )
-                }
-                temp.sortByDescending { it.timestamp }
-                withContext(Dispatchers.Main) {
-                    historyList.clear()
-                    historyList.addAll(temp)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading history", e)
-            }
-        }
-    }
-
-    private fun saveHistory(context: Context) {
-        val historySnapshot = historyList.toList()
-        viewModelScope.launch(Dispatchers.IO) {
-            val file = File(context.filesDir, "browser_history.json")
-            try {
-                val jsonArray = JSONArray()
-                historySnapshot.forEach { entry ->
-                    val obj = JSONObject().apply {
-                        put("title", entry.title)
-                        put("url", entry.url)
-                        put("timestamp", entry.timestamp)
-                    }
-                    jsonArray.put(obj)
-                }
-                file.writeText(jsonArray.toString())
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving history", e)
-            }
-        }
-    }
-
-    fun addToHistory(title: String, url: String) {
-        val context = appContext ?: return
-        if (url == "about:blank" || url.trim().isEmpty()) return
-        
-        // Prevent duplicate spam
-        historyList.removeAll { it.url == url }
-        historyList.add(0, HistoryEntry(title, url, System.currentTimeMillis()))
-        
-        // Cap history at 500 items for memory safety
-        if (historyList.size > 500) {
-            historyList.removeAt(historyList.lastIndex)
-        }
-        
-        saveHistory(context)
-    }
-
-    fun deleteHistoryEntry(entry: HistoryEntry) {
-        val context = appContext ?: return
-        historyList.remove(entry)
-        saveHistory(context)
-    }
-
-    fun clearAllHistory() {
-        val context = appContext ?: return
-        historyList.clear()
-        saveHistory(context)
-    }
 
     /**
      * "Burn Data" — wipes everything:
@@ -2826,6 +1475,14 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
+                isAmoledMode = getAmoledModePreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                isDynamicColorEnabled = getDynamicColorPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
                 selectedLanguageCode = getLanguagePreference(appCtx).first()
             }
 
@@ -3008,8 +1665,13 @@ class BrowserViewModel : ViewModel() {
                         } else {
                             (message as? Map<*, *>)?.get("mimeType") as? String
                         }
+                        val cookies = if (message is org.json.JSONObject) {
+                            if (message.has("cookies")) message.getString("cookies") else null
+                        } else {
+                            (message as? Map<*, *>)?.get("cookies") as? String
+                        }
                         if (url != null) {
-                            mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4")
+                            mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies)
                         }
                     } else if (type == "PLAY_IN_NATIVE") {
                         val videoUrl = if (message is org.json.JSONObject) {
@@ -3022,10 +1684,16 @@ class BrowserViewModel : ViewModel() {
                         } else {
                             (message as? Map<*, *>)?.get("pageUrl") as? String
                         }) ?: ""
+                        val cookies = if (message is org.json.JSONObject) {
+                            if (message.has("cookies")) message.getString("cookies") else null
+                        } else {
+                            (message as? Map<*, *>)?.get("cookies") as? String
+                        }
                         Log.i(TAG, "🎬 received PLAY_IN_NATIVE message. url=$videoUrl, pageUrl=$pageUrl, isNativePlayerEnabled=$isNativePlayerEnabled")
                         val isYouTube = pageUrl.lowercase().contains("youtube.com") || pageUrl.lowercase().contains("youtu.be") ||
                                         (videoUrl != null && (videoUrl.lowercase().contains("youtube.com") || videoUrl.lowercase().contains("youtu.be")))
                         if (videoUrl != null && isNativePlayerEnabled && (!isYouTube || isYouTubeEnabled)) {
+                            activeVideoCookies = cookies
                             viewModelScope.launch(Dispatchers.Main) {
                                 Log.i(TAG, "🎬 Native player takeover starting for: $videoUrl")
                                 if (onPlayVideoRequestReceived == null) {
@@ -3403,6 +2071,34 @@ class BrowserViewModel : ViewModel() {
             } else {
                 GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
             }
+        }
+    }
+
+    // AMOLED mode settings
+    fun getAmoledModePreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[AMOLED_MODE_KEY] ?: false
+        }
+    }
+
+    fun saveAmoledMode(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[AMOLED_MODE_KEY] = enabled }
+            isAmoledMode = enabled
+        }
+    }
+
+    // Dynamic color (Material You) settings
+    fun getDynamicColorPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DYNAMIC_COLOR_KEY] ?: false
+        }
+    }
+
+    fun saveDynamicColor(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[DYNAMIC_COLOR_KEY] = enabled }
+            isDynamicColorEnabled = enabled
         }
     }
 
@@ -4369,7 +3065,7 @@ class BrowserViewModel : ViewModel() {
 
 
 
-    private fun injectZoomEnabler() {
+    internal fun injectZoomEnabler() {
         val js = "javascript:(function() {" +
                  "  var meta = document.querySelector('meta[name=viewport]');" +
                  "  if (meta) {" +
@@ -4594,75 +3290,7 @@ class BrowserViewModel : ViewModel() {
     val bookmarksList = mutableStateListOf<BookmarkEntry>()
 
     
-    private fun loadBookmarks(context: Context) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val file = File(context.filesDir, "browser_bookmarks.json")
-            if (!file.exists()) return@launch
-            try {
-                val jsonArray = JSONArray(file.readText())
-                val temp = mutableListOf<BookmarkEntry>()
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    temp.add(BookmarkEntry(
-                        title = obj.getString("title"),
-                        url = obj.getString("url"),
-                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
-                    ))
-                }
-                withContext(Dispatchers.Main) {
-                    bookmarksList.clear()
-                    bookmarksList.addAll(temp)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading bookmarks", e)
-            }
-        }
-    }
-    
-    private fun saveBookmarks(context: Context) {
-        val bookmarksSnapshot = bookmarksList.toList()
-        viewModelScope.launch(Dispatchers.IO) {
-            val file = File(context.filesDir, "browser_bookmarks.json")
-            try {
-                val jsonArray = JSONArray()
-                bookmarksSnapshot.forEach { entry ->
-                    jsonArray.put(JSONObject().apply {
-                        put("title", entry.title)
-                        put("url", entry.url)
-                        put("timestamp", entry.timestamp)
-                    })
-                }
-                file.writeText(jsonArray.toString())
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving bookmarks", e)
-            }
-        }
-    }
-    
-    fun addToBookmarks(title: String, url: String) {
-        val context = appContext ?: return
-        if (url == "about:blank" || url.trim().isEmpty()) return
-        
-        bookmarksList.removeAll { it.url == url }
-        bookmarksList.add(0, BookmarkEntry(title, url, System.currentTimeMillis()))
-        saveBookmarks(context)
-    }
-    
-    fun removeBookmark(url: String) {
-        val context = appContext ?: return
-        bookmarksList.removeAll { it.url == url }
-        saveBookmarks(context)
-    }
 
-    fun clearAllBookmarks() {
-        val context = appContext ?: return
-        bookmarksList.clear()
-        saveBookmarks(context)
-    }
-    
-    fun isBookmarked(url: String): Boolean {
-        return bookmarksList.any { it.url == url }
-    }
 
     val shortcutsList = mutableStateListOf<HomeShortcut>()
     
@@ -5375,8 +4003,3 @@ class BrowserViewModel : ViewModel() {
     }
 }
 
-data class ContextMenuElement(
-    val linkUri: String?,
-    val srcUri: String?,
-    val linkText: String?
-)

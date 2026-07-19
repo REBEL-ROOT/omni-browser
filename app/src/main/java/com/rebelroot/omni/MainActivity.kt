@@ -219,7 +219,7 @@ class MainActivity : FragmentActivity() {
                 androidx.activity.compose.LocalActivityResultRegistryOwner provides this@MainActivity,
                 androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides this@MainActivity
             ) {
-                OmniTheme(darkTheme = browserViewModel.isDarkThemeEnabled, accentTheme = browserViewModel.selectedAccentTheme) {
+                OmniTheme(darkTheme = browserViewModel.isDarkThemeEnabled, accentTheme = browserViewModel.selectedAccentTheme, amoledMode = browserViewModel.isAmoledMode, dynamicColor = browserViewModel.isDynamicColorEnabled) {
                     Surface(
                         modifier = Modifier.fillMaxSize()
                     ) {

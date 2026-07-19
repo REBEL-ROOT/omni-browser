@@ -91,42 +91,59 @@ function reportToNative(url, mimeType, tabId) {
 
     console.log('[MediaGrabber] Detected media:', mimeType, url.substring(0, 120));
     
-    // Cache the media URL for this tab
-    if (tabId !== undefined && tabId !== null && tabId >= 0) {
-        if (!tabMediaMap.has(tabId)) {
-            tabMediaMap.set(tabId, new Set());
+    const sendReport = (cookieString) => {
+        // Cache the media URL for this tab
+        if (tabId !== undefined && tabId !== null && tabId >= 0) {
+            if (!tabMediaMap.has(tabId)) {
+                tabMediaMap.set(tabId, new Set());
+            }
+            const mediaItem = JSON.stringify({ url: url, mimeType: mimeType || 'video/mp4', cookies: cookieString || '' });
+            const tabSet = tabMediaMap.get(tabId);
+            tabSet.add(mediaItem);
+            
+            // Limit tab cache size to 50
+            if (tabSet.size > 50) {
+                const firstItem = tabSet.values().next().value;
+                tabSet.delete(firstItem);
+            }
         }
-        const mediaItem = JSON.stringify({ url: url, mimeType: mimeType || 'video/mp4' });
-        const tabSet = tabMediaMap.get(tabId);
-        tabSet.add(mediaItem);
-        
-        // Limit tab cache size to 50
-        if (tabSet.size > 50) {
-            const firstItem = tabSet.values().next().value;
-            tabSet.delete(firstItem);
+
+        try {
+            chrome.runtime.sendNativeMessage('omniApp', {
+                type: 'MEDIA_GRABBED',
+                url: url,
+                mimeType: mimeType || 'video/mp4',
+                cookies: cookieString || ''
+            }).catch(() => {});
+        } catch (e) {
+            console.error('[MediaGrabber] Native message failed:', e);
         }
-    }
+
+        if (tabId !== undefined && tabId >= 0) {
+            try {
+                chrome.tabs.sendMessage(tabId, {
+                    type: 'NETWORK_MEDIA_DETECTED',
+                    url: url,
+                    mimeType: mimeType || 'video/mp4',
+                    cookies: cookieString || ''
+                });
+            } catch (e) {
+                // Ignore if tab is not ready
+            }
+        }
+    };
 
     try {
-        chrome.runtime.sendNativeMessage('omniApp', {
-            type: 'MEDIA_GRABBED',
-            url: url,
-            mimeType: mimeType || 'video/mp4'
-        }).catch(() => {});
+        chrome.cookies.getAll({ url: url }, (cookiesList) => {
+            let cookiesStr = "";
+            if (cookiesList && cookiesList.length > 0) {
+                cookiesStr = cookiesList.map(c => `${c.name}=${c.value}`).join('; ');
+            }
+            sendReport(cookiesStr);
+        });
     } catch (e) {
-        console.error('[MediaGrabber] Native message failed:', e);
-    }
-
-    if (tabId !== undefined && tabId >= 0) {
-        try {
-            chrome.tabs.sendMessage(tabId, {
-                type: 'NETWORK_MEDIA_DETECTED',
-                url: url,
-                mimeType: mimeType || 'video/mp4'
-            });
-        } catch (e) {
-            // Ignore if tab is not ready
-        }
+        console.error('[MediaGrabber] Error getting cookies:', e);
+        sendReport("");
     }
 }
 
@@ -265,17 +282,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.type === 'PLAY_IN_NATIVE') {
         // Relay to native app — this triggers navigation to the native VideoPlayerScreen
         console.log('[background.js] Received PLAY_IN_NATIVE from content script for URL:', message.url);
+        const sendPlayInNative = (cookieString) => {
+            try {
+                console.log('[background.js] Dispatching sendNativeMessage to omniApp with PLAY_IN_NATIVE...');
+                chrome.runtime.sendNativeMessage('omniApp', {
+                    type: 'PLAY_IN_NATIVE',
+                    url: message.url,
+                    pageUrl: message.pageUrl,
+                    mimeType: message.mimeType || 'video/mp4',
+                    cookies: cookieString || ''
+                }).catch(() => {});
+                console.log('[background.js] sendNativeMessage successfully dispatched.');
+            } catch (e) {
+                console.error('[Omni] Native message failed for PLAY_IN_NATIVE:', e);
+            }
+        };
+
         try {
-            console.log('[background.js] Dispatching sendNativeMessage to omniApp with PLAY_IN_NATIVE...');
-            chrome.runtime.sendNativeMessage('omniApp', {
-                type: 'PLAY_IN_NATIVE',
-                url: message.url,
-                pageUrl: message.pageUrl,
-                mimeType: message.mimeType || 'video/mp4'
-            }).catch(() => {});
-            console.log('[background.js] sendNativeMessage successfully dispatched.');
+            chrome.cookies.getAll({ url: message.url }, (cookiesList) => {
+                let cookiesStr = "";
+                if (cookiesList && cookiesList.length > 0) {
+                    cookiesStr = cookiesList.map(c => `${c.name}=${c.value}`).join('; ');
+                }
+                sendPlayInNative(cookiesStr);
+            });
         } catch (e) {
-            console.error('[Omni] Native message failed for PLAY_IN_NATIVE:', e);
+            console.error('[MediaGrabber] Error getting cookies for play in native:', e);
+            sendPlayInNative("");
         }
     } else if (message.type === 'CONSOLE_LOG') {
         try {

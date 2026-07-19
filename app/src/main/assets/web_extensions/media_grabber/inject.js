@@ -45,9 +45,7 @@
         const lower = url.toLowerCase();
         
         // Exclude tracking, telemetry, and segments/chunks that cannot be played directly
-        if (lower.includes('googlevideo.com') || 
-            lower.includes('videoplayback') || 
-            lower.includes('/segment') || 
+        if (lower.includes('/segment') || 
             lower.includes('/fragment') || 
             lower.includes('.ts') || 
             lower.includes('.m4s') ||
@@ -64,7 +62,9 @@
                lower.includes('.mkv')  ||
                lower.includes('/hls/') ||
                lower.includes('/dash/') ||
-               lower.includes('mpegurl');
+               lower.includes('mpegurl') ||
+               lower.includes('googlevideo.com') ||
+               lower.includes('videoplayback');
     }
 
     function isLikelyAdOrBanner(video) {
@@ -408,8 +408,9 @@
         const lower = url.toLowerCase();
         if (lower.includes('m3u8'))  return 'application/x-mpegURL';
         if (lower.includes('mpd'))   return 'application/dash+xml';
-        if (lower.includes('.mp4'))  return 'video/mp4';
-        if (lower.includes('.webm')) return 'video/webm';
+        if (lower.includes('mime=video/webm') || lower.includes('mime=audio/webm') || lower.includes('.webm')) return 'video/webm';
+        if (lower.includes('mime=video/mp4') || lower.includes('mime=audio/mp4') || lower.includes('.mp4')) return 'video/mp4';
+        if (lower.includes('mime=audio/')) return 'audio/mpeg';
         return 'video/mp4';
     }
 })();

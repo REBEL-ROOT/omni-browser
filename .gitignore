@@ -19,8 +19,8 @@ out/
 
 # Gradle files
 .gradle/
-# build/
-# app/build/
+build/
+app/build/
 
 # Local configuration file (sdk path, etc)
 local.properties
@@ -62,3 +62,6 @@ gradle-user-home/
 
 # Local documents
 APK_SIZE_OPTIMIZATION_PLAN.md
+
+# Build deliverables
+build_deliverables/

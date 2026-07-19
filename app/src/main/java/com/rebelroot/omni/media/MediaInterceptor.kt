@@ -32,7 +32,8 @@ class MediaInterceptor {
         val type: MediaType,
         val quality: String? = null,
         val isDrmProtected: Boolean = false,
-        val sizeBytes: Long? = null
+        val sizeBytes: Long? = null,
+        val cookies: String? = null
     )
 
     enum class MediaType { MP4, WEBM, HLS, DASH, AUDIO }
@@ -75,16 +76,18 @@ class MediaInterceptor {
         if (isYouTubeUrl(url) && !isYouTubeEnabled) return
         val type = classifyUrl(url) ?: return
         val isDrm = url.contains("drm") || url.contains("widevine") || url.contains("license")
+        val cookies = headers?.get("Cookie") ?: headers?.get("cookie")
         
         if (type == MediaType.HLS) {
-            fetchAndParseHlsQualities(url, isDrm)
+            fetchAndParseHlsQualities(url, isDrm, cookies)
         } else {
             val media = DetectedMedia(
                 url = url,
                 type = type,
                 quality = extractQuality(url) ?: "Source HD",
                 isDrmProtected = isDrm,
-                sizeBytes = headers?.get("Content-Length")?.toLongOrNull()
+                sizeBytes = headers?.get("Content-Length")?.toLongOrNull(),
+                cookies = cookies
             )
             addMedia(media)
             Log.i("MediaInterceptor", "🎥 Intercepted Media: ${media.type} | DRM: ${media.isDrmProtected} | URL: $url")
@@ -95,7 +98,7 @@ class MediaInterceptor {
      * Aggressive capturing callback for MSE (Media Source Extensions) or Blob links.
      * Triggered by our injected WebExtension page script.
      */
-    fun onAggressiveMediaGrabbed(url: String, mimeType: String) {
+    fun onAggressiveMediaGrabbed(url: String, mimeType: String, cookies: String? = null) {
         if (isTrackingOrStaticResource(url)) return
         if (isYouTubeUrl(url) && !isYouTubeEnabled) return
         val type = when {
@@ -109,23 +112,28 @@ class MediaInterceptor {
         }
 
         if (type == MediaType.HLS) {
-            fetchAndParseHlsQualities(url, false)
+            fetchAndParseHlsQualities(url, false, cookies)
         } else {
             val media = DetectedMedia(
                 url = url,
                 type = type,
                 quality = "Source HD",
-                isDrmProtected = false // MSE intercepted are typically unencrypted or local streams
+                isDrmProtected = false, // MSE intercepted are typically unencrypted or local streams
+                cookies = cookies
             )
             addMedia(media)
             Log.i("MediaInterceptor", "⚡ Aggressively Captured Media: ${media.type} | URL: $url")
         }
     }
 
-    private fun fetchAndParseHlsQualities(urlStr: String, isDrm: Boolean) {
+    private fun fetchAndParseHlsQualities(urlStr: String, isDrm: Boolean, cookies: String? = null) {
         scope.launch {
             try {
                 val connection = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
+                if (!cookies.isNullOrEmpty()) {
+                    connection.setRequestProperty("Cookie", cookies)
+                }
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
                 connection.connect()
                 val manifestContent = connection.inputStream.bufferedReader().use { it.readText() }
                 
@@ -137,7 +145,8 @@ class MediaInterceptor {
                             url = variant.first,
                             type = MediaType.HLS,
                             quality = variant.second,
-                            isDrmProtected = isDrm
+                            isDrmProtected = isDrm,
+                            cookies = cookies
                         ))
                     }
                 } else {
@@ -146,7 +155,8 @@ class MediaInterceptor {
                         url = urlStr,
                         type = MediaType.HLS,
                         quality = "Auto / Source",
-                        isDrmProtected = isDrm
+                        isDrmProtected = isDrm,
+                        cookies = cookies
                     ))
                 }
             } catch (e: Exception) {
@@ -155,7 +165,8 @@ class MediaInterceptor {
                     url = urlStr,
                     type = MediaType.HLS,
                     quality = "Auto / Source",
-                    isDrmProtected = isDrm
+                    isDrmProtected = isDrm,
+                    cookies = cookies
                 ))
             }
         }

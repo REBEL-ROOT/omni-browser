@@ -41,8 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rebelroot.omni.browser.BrowserViewModel
-import com.rebelroot.omni.browser.HistoryEntry
+import com.rebelroot.omni.browser.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

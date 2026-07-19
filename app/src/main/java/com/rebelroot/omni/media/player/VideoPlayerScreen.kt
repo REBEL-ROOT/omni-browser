@@ -19,6 +19,8 @@
 package com.rebelroot.omni.media.player
 
 import android.app.Activity
+import android.content.Intent
+import android.provider.Settings
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.media.AudioManager
@@ -150,10 +152,13 @@ fun VideoPlayerScreen(
     var volume by remember { mutableFloatStateOf(0.5f) }
     var showGestureIndicator by remember { mutableStateOf(false) }
     var gestureIndicatorText by remember { mutableStateOf("") }
-    var lastTapTime by remember { mutableLongStateOf(0L) }
+    var lastLeftTapTime by remember { mutableLongStateOf(0L) }
+    var lastRightTapTime by remember { mutableLongStateOf(0L) }
 
 
     var showControls by remember { mutableStateOf(true) }
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekTargetPosition by remember { mutableLongStateOf(0L) }
 
     // Aspect ratio mode: fit (letterbox) vs fill (crop to screen)
     var isFillMode by remember { mutableStateOf(false) }
@@ -417,6 +422,12 @@ fun VideoPlayerScreen(
                 }
             }
 
+            val cookies = viewModel?.activeVideoCookies
+            if (!cookies.isNullOrEmpty()) {
+                requestHeaders["Cookie"] = cookies
+                android.util.Log.d("VideoPlayer", "🎬 Injecting active session cookies to request headers")
+            }
+
             if (requestHeaders.isNotEmpty()) {
                 httpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
             }
@@ -555,14 +566,19 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Progress updates tracking
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            exoPlayerInstance?.let {
-                playbackPosition = it.currentPosition
-                viewModel?.saveVideoPosition(decodedPath, it.currentPosition)
+    // Progress updates tracking — runs continuously regardless of play state
+    // so the slider stays accurate after seeks and during buffering
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (!isSeeking) {
+                exoPlayerInstance?.let {
+                    playbackPosition = it.currentPosition
+                    if (isPlaying) {
+                        viewModel?.saveVideoPosition(decodedPath, it.currentPosition)
+                    }
+                }
             }
-            delay(1000)
+            delay(200)
         }
     }
 
@@ -633,18 +649,21 @@ fun VideoPlayerScreen(
 
                             if (!isDragging) {
                                 val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastTapTime < 300) {
-                                    isFillMode = !isFillMode
-                                    gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
-                                    showGestureIndicator = true
-                                    coroutineScope.launch {
-                                        delay(1500)
-                                        showGestureIndicator = false
+                                if (currentTime - lastLeftTapTime < 300) {
+                                    exoPlayerInstance?.let { player ->
+                                        val newPos = (player.currentPosition - 10_000).coerceAtLeast(0L)
+                                        player.seekTo(newPos)
+                                        gestureIndicatorText = "⏪ -10s"
+                                        showGestureIndicator = true
+                                        coroutineScope.launch {
+                                            delay(1000)
+                                            showGestureIndicator = false
+                                        }
                                     }
                                 } else {
                                     showControls = !showControls
                                 }
-                                lastTapTime = currentTime
+                                lastLeftTapTime = currentTime
                             }
                             showGestureIndicator = false
                         }
@@ -687,18 +706,21 @@ fun VideoPlayerScreen(
 
                             if (!isDragging) {
                                 val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastTapTime < 300) {
-                                    isFillMode = !isFillMode
-                                    gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
-                                    showGestureIndicator = true
-                                    coroutineScope.launch {
-                                        delay(1500)
-                                        showGestureIndicator = false
+                                if (currentTime - lastRightTapTime < 300) {
+                                    exoPlayerInstance?.let { player ->
+                                        val newPos = (player.currentPosition + 10_000).coerceAtMost(duration)
+                                        player.seekTo(newPos)
+                                        gestureIndicatorText = "⏩ +10s"
+                                        showGestureIndicator = true
+                                        coroutineScope.launch {
+                                            delay(1000)
+                                            showGestureIndicator = false
+                                        }
                                     }
                                 } else {
                                     showControls = !showControls
                                 }
-                                lastTapTime = currentTime
+                                lastRightTapTime = currentTime
                             }
                             showGestureIndicator = false
                         }
@@ -858,6 +880,68 @@ fun VideoPlayerScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
+                        // CC (Closed Captions) toggle button
+                        val isSubtitlesDisabled = exoPlayerInstance?.trackSelectionParameters?.disabledTrackTypes?.contains(androidx.media3.common.C.TRACK_TYPE_TEXT) == true
+                        val isSubtitlesActive = !isSubtitlesDisabled && subtitleTracks.any { it.isSelected }
+
+                        IconButton(
+                            onClick = {
+                                exoPlayerInstance?.let { player ->
+                                    if (isSubtitlesActive) {
+                                        disableSubtitles(player)
+                                        Toast.makeText(context, "Subtitles Disabled", Toast.LENGTH_SHORT).show()
+                                    } else if (subtitleTracks.isNotEmpty()) {
+                                        selectSubtitleTrack(player, subtitleTracks.first())
+                                        Toast.makeText(context, "Subtitles Enabled: ${subtitleTracks.first().label}", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        // No embedded subtitles, redirect user to Live Caption settings
+                                        showSettingsDialog = true
+                                        selectedSettingsTab = "Subtitles (CC)"
+                                        Toast.makeText(context, "No embedded subtitles found. Try Live Caption.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = if (isSubtitlesActive) accentColor.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.ClosedCaption,
+                                contentDescription = "Toggle Subtitles (CC)",
+                                tint = if (isSubtitlesActive) Color.White else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Aspect Ratio (Fit / Fill) Button
+                        IconButton(
+                            onClick = {
+                                isFillMode = !isFillMode
+                                gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
+                                showGestureIndicator = true
+                                coroutineScope.launch {
+                                    delay(1500)
+                                    showGestureIndicator = false
+                                }
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = if (isFillMode) accentColor.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AspectRatio,
+                                contentDescription = "Aspect Ratio",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         // Playback Settings button
                         IconButton(
                             onClick = {
@@ -901,7 +985,7 @@ fun VideoPlayerScreen(
                                 onClick = {
                                     coroutineScope.launch {
                                         isFetchingQualities = true
-                                        val parsed = fetchVideoQualities(decodedPath)
+                                        val parsed = fetchVideoQualities(decodedPath, viewModel?.activeVideoCookies)
                                         isFetchingQualities = false
                                         
                                         if (decodedPath.contains(".m3u8") && parsed.size <= 2 && parsed.any { it.label.contains("Source Stream") }) {
@@ -999,7 +1083,20 @@ fun VideoPlayerScreen(
                         Slider(
                             value = if (duration > 0) playbackPosition.toFloat() / duration else 0f,
                             onValueChange = { percent ->
-                                exoPlayerInstance?.seekTo((percent * duration).toLong())
+                                // Update slider position locally while dragging for smooth UI,
+                                // but don't flood ExoPlayer with seek calls yet
+                                isSeeking = true
+                                seekTargetPosition = (percent * duration).toLong()
+                                playbackPosition = seekTargetPosition
+                            },
+                            onValueChangeFinished = {
+                                // Seek once when the user lifts their finger,
+                                // then explicitly resume playback so it never stays paused
+                                exoPlayerInstance?.let { player ->
+                                    player.seekTo(seekTargetPosition)
+                                    player.playWhenReady = true
+                                }
+                                isSeeking = false
                             },
                             colors = SliderDefaults.colors(
                                 activeTrackColor = accentColor,
@@ -1327,6 +1424,38 @@ fun VideoPlayerScreen(
                                                 }
                                             }
                                         }
+
+                                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 8.dp))
+
+                                        Text("Live Caption (Speech-to-Text)", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
+                                        Text("Automatically generate subtitles for any media playing on your device using Android system captions.", color = textSecondary, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                                        Button(
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Settings.ACTION_CAPTIONING_SETTINGS)
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    try {
+                                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                                        context.startActivity(intent)
+                                                    } catch (ex: Exception) {
+                                                        Toast.makeText(context, "Cannot open system settings", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.ClosedCaption, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                                Text("Open Caption Settings", color = Color.White, fontSize = 13.sp)
+                                            }
+                                        }
                                     }
                                 }
                                 "Servers" -> {
@@ -1521,7 +1650,9 @@ fun VideoPlayerScreen(
                                                 url = option.url,
                                                 suggestedName = "${suggestedName}_${option.label}",
                                                 type = mediaType,
-                                                saveToLocker = downloadToLocker
+                                                saveToLocker = downloadToLocker,
+                                                referrerUrl = if (referrerUrl.isNotEmpty()) referrerUrl else null,
+                                                cookies = viewModel?.activeVideoCookies
                                             )
                                             val toastMsg = if (downloadToLocker) context.getString(R.string.video_player_queued_locker) else context.getString(R.string.video_player_queued_download, option.label)
                                             Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
@@ -1734,7 +1865,7 @@ data class VideoQualityOption(
     val isAudioOnly: Boolean = false
 )
 
-private suspend fun fetchVideoQualities(streamUrl: String): List<VideoQualityOption> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+private suspend fun fetchVideoQualities(streamUrl: String, cookies: String?): List<VideoQualityOption> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val options = mutableListOf<VideoQualityOption>()
     
     if (!streamUrl.contains(".m3u8")) {
@@ -1745,6 +1876,10 @@ private suspend fun fetchVideoQualities(streamUrl: String): List<VideoQualityOpt
     
     try {
         val connection = java.net.URL(streamUrl).openConnection() as java.net.HttpURLConnection
+        if (!cookies.isNullOrEmpty()) {
+            connection.setRequestProperty("Cookie", cookies)
+        }
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
         connection.connect()
         val manifestContent = connection.inputStream.bufferedReader().use { it.readText() }
         

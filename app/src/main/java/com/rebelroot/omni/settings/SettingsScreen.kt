@@ -231,25 +231,29 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
                         // Appearance: Dark Mode + Accent Color
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            // Dark Mode toggle row
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Rounded.DarkMode, contentDescription = null, tint = accentColor)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(stringResource(id = R.string.dark_mode_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(stringResource(id = R.string.dark_mode_desc), color = textSecondaryColor, fontSize = 11.sp)
+                            // Theme Mode: Light | Dark | AMOLED
+                            Text(stringResource(id = R.string.dark_mode_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val themeMode = when {
+                                viewModel.isAmoledMode -> 2
+                                viewModel.isDarkThemeEnabled -> 1
+                                else -> 0
+                            }
+                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                val themeOptions = listOf("Light", "Dark", "AMOLED")
+                                themeOptions.forEachIndexed { index, label ->
+                                    SegmentedButton(
+                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = themeOptions.size),
+                                        onClick = {
+                                            when (index) {
+                                                0 -> { viewModel.saveDarkTheme(context, false); viewModel.saveAmoledMode(context, false) }
+                                                1 -> { viewModel.saveDarkTheme(context, true); viewModel.saveAmoledMode(context, false) }
+                                                2 -> { viewModel.saveDarkTheme(context, true); viewModel.saveAmoledMode(context, true) }
+                                            }
+                                        },
+                                        selected = themeMode == index
+                                    ) { Text(label, fontSize = 13.sp) }
                                 }
-                                Switch(
-                                    checked = isDarkMode,
-                                    onCheckedChange = { viewModel.saveDarkTheme(context, it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = accentColor
-                                    )
-                                )
                             }
 
                             HorizontalDivider(
