@@ -259,6 +259,8 @@ fun ExtensionItemCard(
                                 }
                             }
                         }
+                    } else {
+                        Spacer(modifier = Modifier.width(28.dp))
                     }
                 }
             }

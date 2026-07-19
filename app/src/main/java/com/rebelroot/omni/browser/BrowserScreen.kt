@@ -4161,8 +4161,7 @@ fun BrowserScreen(
                                 BuiltInExt(Icons.Rounded.FileCopy, "Universal Copy", "Omni Browser Team",
                                     "Bypass website restrictions to force-enable text selection and copying.",
                                     viewModel.isUniversalCopyEnabled, !viewModel.isUniversalCopyToggling,
-                                    { viewModel.toggleUniversalCopy(context) },
-                                    { builtInExtensionToDelete = "Universal Text Copy" }),
+                                    { viewModel.toggleUniversalCopy(context) }),
                                 BuiltInExt(Icons.Rounded.Download, "Media Sniffer", "Omni Browser Team",
                                     "Sniff and capture offline dynamic HLS/DASH segments and streams.",
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
@@ -4170,8 +4169,7 @@ fun BrowserScreen(
                                 BuiltInExt(Icons.Rounded.Block, "AI Blocker", "Omni Browser Team",
                                     "Block AI Overview summaries and assistant panels on search engines.",
                                     viewModel.isAiBlockerEnabled, !viewModel.isAiBlockerToggling,
-                                    { viewModel.toggleAiBlocker(context) },
-                                    { builtInExtensionToDelete = "AI Blocker" })
+                                    { viewModel.toggleAiBlocker(context) })
                             )
                         }
 
