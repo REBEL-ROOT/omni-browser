@@ -1481,7 +1481,7 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
-                isDynamicColorEnabled = getDynamicColorPreference(appCtx).first()
+                isDynamicColorEnabled = false
             }
 
             viewModelScope.launch {
@@ -2104,7 +2104,7 @@ class BrowserViewModel : ViewModel() {
     fun saveDynamicColor(context: Context, enabled: Boolean) {
         viewModelScope.launch {
             context.dataStore.edit { it[DYNAMIC_COLOR_KEY] = enabled }
-            isDynamicColorEnabled = enabled
+            isDynamicColorEnabled = false
         }
     }
 
@@ -2646,9 +2646,14 @@ class BrowserViewModel : ViewModel() {
                 }
                 
                 val urlString = when (selectedSearchEngine) {
+                    "Yahoo" -> "https://ff.search.yahoo.com/gossip?output=fxjson&command=$encodedQuery"
+                    "Yandex" -> "https://suggest.yandex.com/suggest-ff.cgi?part=$encodedQuery"
                     "DuckDuckGo" -> "https://ac.duckduckgo.com/ac/?q=$encodedQuery"
                     "Brave" -> "https://search.brave.com/api/suggest?q=$encodedQuery"
                     "Bing" -> "https://api.bing.com/osjson.aspx?query=$encodedQuery"
+                    "Ecosia" -> "https://ac.ecosia.org/autocomplete?q=$encodedQuery"
+                    "Startpage" -> "https://www.startpage.com/do/suggest?query=$encodedQuery"
+                    "Qwant" -> "https://api.qwant.com/v3/suggest?q=$encodedQuery"
                     else -> "https://suggestqueries.google.com/complete/search?client=chrome&q=$encodedQuery"
                 }
 
@@ -2696,9 +2701,14 @@ class BrowserViewModel : ViewModel() {
             query.replace(" ", "+")
         }
         return when (selectedSearchEngine) {
+            "Yahoo" -> "https://search.yahoo.com/search?p=$encodedQuery"
+            "Yandex" -> "https://yandex.com/search/?text=$encodedQuery"
             "DuckDuckGo" -> "https://duckduckgo.com/?q=$encodedQuery"
             "Brave" -> "https://search.brave.com/search?q=$encodedQuery"
             "Bing" -> "https://www.bing.com/search?q=$encodedQuery"
+            "Ecosia" -> "https://www.ecosia.org/search?q=$encodedQuery"
+            "Startpage" -> "https://www.startpage.com/sp/search?query=$encodedQuery"
+            "Qwant" -> "https://www.qwant.com/?q=$encodedQuery"
             "Custom" -> {
                 val customUrl = customSearchUrl
                 if (!customUrl.isNullOrBlank() && customUrl.contains("%s")) {

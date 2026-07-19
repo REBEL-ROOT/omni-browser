@@ -681,7 +681,7 @@ fun SettingsScreen(
                         Text(stringResource(id = R.string.search_engine_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         
                         var expanded by remember { mutableStateOf(false) }
-                        val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom") + viewModel.customSearchEngines.map { it.name }
+                        val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom") + viewModel.customSearchEngines.map { it.name }
                         val currentEngine = viewModel.selectedSearchEngine
                         
                         Box(modifier = Modifier.fillMaxWidth()) {

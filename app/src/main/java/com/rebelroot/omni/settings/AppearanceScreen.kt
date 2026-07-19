@@ -95,6 +95,31 @@ fun AppearanceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            // Force Websites to Use Dark Theme (Moved to top)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cardColor)
+                    .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Force Websites to Use Dark Theme", color = textPrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Requires app restart", color = textSecondaryColor, fontSize = 12.sp)
+                    }
+                    Switch(
+                        checked = viewModel.forceDarkWebsites,
+                        onCheckedChange = { viewModel.saveForceDarkWebsites(context, it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
+                    )
+                }
+            }
             // ── THEME SECTION ─────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Theme", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
@@ -197,43 +222,17 @@ fun AppearanceScreen(
 
                     HorizontalDivider(color = dividerColor)
 
-                    // Material You toggle (Android 12+ only)
-                    AnimatedVisibility(
-                        visible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Rounded.Palette, contentDescription = null, tint = accentColor)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Material You", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text("Extract colors from wallpaper (Android 12+)", color = textSecondaryColor, fontSize = 11.sp)
-                                }
-                                Switch(
-                                    checked = viewModel.isDynamicColorEnabled,
-                                    onCheckedChange = { viewModel.saveDynamicColor(context, it) },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
-                                )
-                            }
-                            HorizontalDivider(color = dividerColor)
-                        }
-                    }
+
 
                     // Accent Color selector
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "Accent Color",
-                            color = if (viewModel.isDynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                                textSecondaryColor else textPrimaryColor,
+                            color = textPrimaryColor,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
-                        if (viewModel.isDynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        if (false) {
                             Text(
                                 "Wallpaper colors active — accent selection overridden",
                                 color = textSecondaryColor,
@@ -488,31 +487,7 @@ fun AppearanceScreen(
                 }
             }
 
-            // Force Websites to Use Dark Theme
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(cardColor)
-                    .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Force Websites to Use Dark Theme", color = textPrimaryColor, fontSize = 16.sp)
-                        Text("Requires app restart", color = textSecondaryColor, fontSize = 12.sp)
-                    }
-                    Switch(
-                        checked = viewModel.forceDarkWebsites,
-                        onCheckedChange = { viewModel.saveForceDarkWebsites(context, it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
-                    )
-                }
-            }
+
 
             // App Icon selection
             val coroutineScope = rememberCoroutineScope()

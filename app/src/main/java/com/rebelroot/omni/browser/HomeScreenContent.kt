@@ -418,7 +418,7 @@ fun HomeScreenContent(
                             .background(if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface)
                             
                     ) {
-                        val engines = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
+                        val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom")
                         engines.forEach { engine ->
                             DropdownMenuItem(
                                 text = { Text(engine, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp) },
