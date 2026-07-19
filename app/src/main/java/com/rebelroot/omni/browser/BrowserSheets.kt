@@ -231,7 +231,7 @@ fun DevNotesSheetContent(
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = if (isDark) Color(0xFF070B13) else Color(0xFFF9FAFB)
+            color = MaterialTheme.colorScheme.background
         ) {
             if (isEditorOpen) {
                 // --- NOTE EDITOR (Full Screen Notepad style) ---
@@ -408,7 +408,7 @@ fun DevNotesSheetContent(
                     androidx.compose.foundation.lazy.LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -665,7 +665,7 @@ fun DevNotesSheetContent(
                         ) {
                             items(filteredNotes) { note ->
                                 val isPassVisible = passwordVisibilityMap[note.id] ?: false
-                                val cardColor = if (isDark) Color(0xFF0F172A) else Color.White
+                                val cardColor = MaterialTheme.colorScheme.surface
                                 val accentColor = when (note.type) {
                                     "PASSWORD" -> Color(0xFFEF4444)
                                     "KEY" -> Color(0xFFF59E0B)
@@ -973,11 +973,11 @@ fun SiteStyleCustomizerSheetContent(
     )
 
     val isDark = viewModel.isDarkThemeEnabled
-    val sheetBg = if (isDark) Color(0xFF0B1017) else Color(0xFFF8FAFC)
-    val cardBg = if (isDark) Color(0xFF131D2A) else Color.White
-    val textPrimary = if (isDark) Color.White else Color(0xFF1E293B)
-    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val dividerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    val sheetBg = MaterialTheme.colorScheme.surface
+    val cardBg = MaterialTheme.colorScheme.surfaceVariant
+    val textPrimary = MaterialTheme.colorScheme.onSurface
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,

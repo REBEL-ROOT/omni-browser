@@ -544,7 +544,7 @@ fun BrowserScreen(
                     Text("No", color = if (viewModel.isDarkThemeEnabled) Color.Gray else Color.DarkGray)
                 }
             },
-            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
+            containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(32.dp)
         )
     }
@@ -576,7 +576,7 @@ fun BrowserScreen(
                     Text("OK", color = Color.White)
                 }
             },
-            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
+            containerColor = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(32.dp)
         )
     }
@@ -884,7 +884,7 @@ fun BrowserScreen(
                                                             color = MaterialTheme.colorScheme.primary,
                                                             shape = CircleShape
                                                         )
-                                                        .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF0C1420) else Color.White, CircleShape)
+                                                        .border(1.dp, MaterialTheme.colorScheme.background, CircleShape)
                                                 )
                                             }
                                         }
@@ -1312,7 +1312,7 @@ fun BrowserScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .clip(androidx.compose.ui.graphics.RectangleShape)
-                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0B0B0C) else Color(0xFFFFFFFF))
+                .background(MaterialTheme.colorScheme.background)
         ) {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -1426,7 +1426,7 @@ fun BrowserScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0B0B0C) else Color(0xFFFFFFFF)),
+                                .background(MaterialTheme.colorScheme.background),
                             contentAlignment = Alignment.Center
                         ) {
                             Card(
@@ -1623,7 +1623,7 @@ fun BrowserScreen(
                             .align(Alignment.BottomEnd)
                             .padding(bottom = 80.dp, end = 16.dp)
                             .clip(RoundedCornerShape(24.dp))
-                            .background(if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE3F2FD))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             
                             .combinedClickable(
                                 onClick = {
@@ -1739,7 +1739,7 @@ fun BrowserScreen(
                             .clickable { isAutoScrollHUDExpanded = true },
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE3F2FD)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -1796,7 +1796,7 @@ fun BrowserScreen(
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFFAFAFA)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
@@ -2208,7 +2208,7 @@ fun BrowserScreen(
                             .clickable { isReaderSettingsExpanded = true },
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color(0xFFE3F2FD)
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
@@ -2790,7 +2790,7 @@ fun BrowserScreen(
 
                 AlertDialog(
                     onDismissRequest = { showTranslationDialog = false; viewModel.translationManager.close() },
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     title = {
                         Text(
                             text = "🌐 Site & Text Translator",
@@ -3025,7 +3025,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showTabGroupsSheet = false },
                     sheetState = rememberModalBottomSheetState(),
-                    containerColor = if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF070A0F) else MaterialTheme.colorScheme.surface
+                    containerColor = if (viewModel.isIncognitoMode) Color(0xFF070A0F) else MaterialTheme.colorScheme.surface
                 ) {
                     Column(
                         modifier = Modifier
@@ -3318,7 +3318,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showConsoleSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     Column(
                         modifier = Modifier
@@ -3347,8 +3347,8 @@ fun BrowserScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(320.dp)
-                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF05080C) else Color(0xFFF1F5F9), RoundedCornerShape(20.dp))
-                                .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                                .background(MaterialTheme.colorScheme.background, RoundedCornerShape(20.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                                 .padding(8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
@@ -3596,7 +3596,7 @@ fun BrowserScreen(
                             Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray)
                         }
                     },
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(24.dp)
                 )
             }
@@ -3626,7 +3626,7 @@ fun BrowserScreen(
                             Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray)
                         }
                     },
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1A26) else Color.White,
+                    containerColor = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(24.dp)
                 )
             }
@@ -3832,7 +3832,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showExtensionsSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     // Sync user extensions safely when sheet opens
                     LaunchedEffect(Unit) {
@@ -4253,7 +4253,7 @@ fun BrowserScreen(
                     ModalBottomSheet(
                         onDismissRequest = { viewModel.dismissExtensionPopup() },
                         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White,
+                        containerColor = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                     ) {
                         Column(
@@ -4447,7 +4447,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showToolsSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     Column(
                         modifier = Modifier
@@ -4716,7 +4716,7 @@ fun BrowserScreen(
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F172A) else Color.White
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -4781,7 +4781,7 @@ fun BrowserScreen(
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F172A) else Color.White
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -5002,7 +5002,7 @@ fun BrowserScreen(
                 ModalBottomSheet(
                     onDismissRequest = { viewModel.pendingGenericDownload = null },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     Column(
                         modifier = Modifier

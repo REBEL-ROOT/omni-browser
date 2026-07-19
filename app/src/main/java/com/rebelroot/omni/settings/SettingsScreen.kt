@@ -70,13 +70,13 @@ fun SettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     val isDarkMode = viewModel.isDarkThemeEnabled
     val accentColor = MaterialTheme.colorScheme.primary
-    val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
-    val cardColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val cardBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
-    val textSecondaryColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
-    val dividerColor = if (isDarkMode) Color(0xFF2C2C2E).copy(alpha = 0.5f) else Color(0xFFE5E5EA)
-    val inputBgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
+    val bgColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surface
+    val cardBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val textPrimaryColor = MaterialTheme.colorScheme.onSurface
+    val textSecondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    val inputBgColor = MaterialTheme.colorScheme.surfaceVariant
 
     var isNotificationsEnabled by remember {
         mutableStateOf(
@@ -229,86 +229,54 @@ fun SettingsScreen(
                     border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
                     Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                        // Appearance: Dark Mode + Accent Color
+                        // Row: Appearance Settings
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenAppearance() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Palette, contentDescription = null, tint = accentColor)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Appearance", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Theme mode, Accent colors, layout, and UI scale", color = textSecondaryColor, fontSize = 11.sp)
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = textSecondaryColor
+                            )
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // Row: Wallpaper Settings
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenWallpapers() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Wallpaper, contentDescription = null, tint = accentColor)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Wallpapers", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Browser background, dynamic wallpaper blur/dim", color = textSecondaryColor, fontSize = 11.sp)
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = textSecondaryColor
+                            )
+                        }
+
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // Column for remaining rows in Card 1 to keep their padding
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            // Theme Mode: Light | Dark | AMOLED
-                            Text(stringResource(id = R.string.dark_mode_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val themeMode = when {
-                                viewModel.isAmoledMode -> 2
-                                viewModel.isDarkThemeEnabled -> 1
-                                else -> 0
-                            }
-                            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                val themeOptions = listOf("Light", "Dark", "AMOLED")
-                                themeOptions.forEachIndexed { index, label ->
-                                    SegmentedButton(
-                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = themeOptions.size),
-                                        onClick = {
-                                            when (index) {
-                                                0 -> { viewModel.saveDarkTheme(context, false); viewModel.saveAmoledMode(context, false) }
-                                                1 -> { viewModel.saveDarkTheme(context, true); viewModel.saveAmoledMode(context, false) }
-                                                2 -> { viewModel.saveDarkTheme(context, true); viewModel.saveAmoledMode(context, true) }
-                                            }
-                                        },
-                                        selected = themeMode == index
-                                    ) { Text(label, fontSize = 13.sp) }
-                                }
-                            }
-
-                            HorizontalDivider(
-                                color = dividerColor,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-
-                            // Accent Color selector
-                            Text(
-                                stringResource(id = R.string.accent_color_title),
-                                color = textPrimaryColor,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            val accentOptions = listOf(
-                                "Ocean Blue" to Color(0xFF0A84FF),
-                                "Crimson Red" to Color(0xFFFF3B5C),
-                                "Emerald Green" to Color(0xFF00C853),
-                                "Sunset Orange" to Color(0xFFFF6D00),
-                                "Royal Purple" to Color(0xFF7C4DFF),
-                                "Monochrome" to Color(0xFFAAAAAA)
-                            )
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                accentOptions.forEach { (name, color) ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(color)
-                                            .clickable { viewModel.saveAccentTheme(context, name) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (viewModel.selectedAccentTheme == name) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Check,
-                                                contentDescription = "Selected",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            HorizontalDivider(
-                                color = dividerColor,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-
                             // PDF Export Theme
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -593,52 +561,6 @@ fun SettingsScreen(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = accentColor
                                 )
-                            )
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        // Row 4.6: Appearance Settings
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenAppearance() }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Palette, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Appearance", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Theme, App Icon, Navigation visibility, Address bar", color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
-                            )
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        // Row 4.7: Wallpaper Settings
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenWallpapers() }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Wallpaper, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Wallpapers", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Browser background, Change daily", color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
                             )
                         }
 

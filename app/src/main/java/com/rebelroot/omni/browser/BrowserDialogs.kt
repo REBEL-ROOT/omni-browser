@@ -155,10 +155,10 @@ fun PermissionPromptDialog(
         else -> "is requesting access to permissions."
     }
 
-    val textPrimary = if (isDarkThemeEnabled) Color.White else Color(0xFF202124)
-    val textSecondary = if (isDarkThemeEnabled) Color(0xFF8E9AA8) else Color(0xFF606266)
-    val cardColor = if (isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
-    val borderCol = if (isDarkThemeEnabled) Color(0xFF16222F) else Color(0x1F000000)
+    val textPrimary = MaterialTheme.colorScheme.onSurface
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val cardColor = MaterialTheme.colorScheme.surface
+    val borderCol = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
     AlertDialog(
         onDismissRequest = { prompt.onDeny() },
@@ -257,10 +257,10 @@ fun MediaPermissionPromptDialog(
         else -> Icons.Rounded.Mic
     }
 
-    val textPrimary = if (isDarkThemeEnabled) Color.White else Color(0xFF202124)
-    val textSecondary = if (isDarkThemeEnabled) Color(0xFF8E9AA8) else Color(0xFF606266)
-    val cardColor = if (isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
-    val borderCol = if (isDarkThemeEnabled) Color(0xFF16222F) else Color(0x1F000000)
+    val textPrimary = MaterialTheme.colorScheme.onSurface
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+    val cardColor = MaterialTheme.colorScheme.surface
+    val borderCol = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
     AlertDialog(
         onDismissRequest = { prompt.onDeny() },
@@ -668,7 +668,7 @@ fun PlayerSettingsDialog(
                 Text("Done", color = MaterialTheme.colorScheme.primary)
             }
         },
-        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0D1620) else Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -830,11 +830,11 @@ fun QrScanResultComposer(
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) Color(0xFF0D1620).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.9f)
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
             ),
             border = BorderStroke(
                 width = 1.dp,
-                color = if (isDarkTheme) Color(0xFF23374A).copy(alpha = 0.6f) else Color.LightGray.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             modifier = Modifier
@@ -1065,7 +1065,7 @@ fun QrGeneratorDialog(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = if (isDarkTheme) Color(0xFF0D1620) else Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
@@ -1248,9 +1248,9 @@ fun FeatureOverviewDialog(
     ) {
         Card(
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF1E2D3D) else accentColor.copy(alpha = 0.3f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
             colors = CardDefaults.cardColors(
-                containerColor = if (isDarkTheme) Color(0xFF0C1420) else Color.White
+                containerColor = MaterialTheme.colorScheme.surface
             ),
             modifier = Modifier
                 .fillMaxWidth()

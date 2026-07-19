@@ -88,11 +88,11 @@ fun WallpaperScreen(
 
     val isDarkMode = viewModel.isDarkThemeEnabled
     val accentColor = MaterialTheme.colorScheme.primary
-    val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
-    val cardColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val cardBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
-    val textSecondaryColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+    val bgColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surface
+    val cardBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val textPrimaryColor = MaterialTheme.colorScheme.onSurface
+    val textSecondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
     val selectedWallpaper = viewModel.browserWallpaperUri
 
     if (editingWallpaperUri != null) {
@@ -402,11 +402,11 @@ fun WallpaperEditorView(
     onApply: (String, Float, Float, Float, Float, Float) -> Unit
 ) {
     val isDarkMode = viewModel.isDarkThemeEnabled
-    val bgColor = if (isDarkMode) Color(0xFF0B0B0C) else Color(0xFFF2F3F5)
-    val cardColor = if (isDarkMode) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
-    val cardBorderColor = if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    val textPrimaryColor = if (isDarkMode) Color.White else Color(0xFF1C1C1E)
-    val textSecondaryColor = if (isDarkMode) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+    val bgColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surface
+    val cardBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val textPrimaryColor = MaterialTheme.colorScheme.onSurface
+    val textSecondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
     val accentColor = MaterialTheme.colorScheme.primary
 
     val isEditingCurrent = uri == viewModel.browserWallpaperUri

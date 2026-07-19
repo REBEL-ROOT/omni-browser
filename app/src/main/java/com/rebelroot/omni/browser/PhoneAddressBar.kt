@@ -363,7 +363,7 @@ fun PhoneAddressBar(
                                     color = MaterialTheme.colorScheme.primary,
                                     shape = CircleShape
                                 )
-                                .border(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF0C1420) else Color.White, CircleShape)
+                                .border(1.dp, MaterialTheme.colorScheme.background, CircleShape)
                         )
                      }
                 }
