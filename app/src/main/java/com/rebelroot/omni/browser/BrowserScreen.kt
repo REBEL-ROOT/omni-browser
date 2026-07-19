@@ -88,6 +88,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rebelroot.omni.ui.theme.getUiSizeConfig
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.viewinterop.AndroidView
 
@@ -141,6 +142,7 @@ fun BrowserScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
     val coroutineScope = rememberCoroutineScope()
+    val config = getUiSizeConfig(viewModel.uiSize)
     var dragAmountAccumulated by remember { mutableStateOf(0f) }
 
     val showHomeScreen = viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()
@@ -1163,7 +1165,7 @@ fun BrowserScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(config.bottomNavBarHeight)
                             .pointerInput(Unit) {
                                 detectHorizontalDragGestures(
                                     onDragEnd = {
@@ -1201,13 +1203,13 @@ fun BrowserScreen(
                             IconButton(
                                 onClick = { viewModel.goBack() },
                                 enabled = viewModel.canGoBack,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(config.barIconSize + 4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = "Back",
                                     tint = if (viewModel.canGoBack) navContent else navContentMuted,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(config.innerIconSize)
                                 )
                             }
                         }
@@ -1221,13 +1223,13 @@ fun BrowserScreen(
                             IconButton(
                                 onClick = { viewModel.goForward() },
                                 enabled = viewModel.canGoForward,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(config.barIconSize + 4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                     contentDescription = "Forward",
                                     tint = if (viewModel.canGoForward) navContent else navContentMuted,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(config.innerIconSize)
                                 )
                             }
                         }
@@ -1240,13 +1242,13 @@ fun BrowserScreen(
                         ) {
                             IconButton(
                                 onClick = { showToolsSheet = true },
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(config.barIconSize + 4.dp)
                             ) {
                                 Icon(
                                     imageVector = BlackholeIcon,
                                     contentDescription = "Tools",
                                     tint = navContent,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(config.innerIconSize)
                                 )
                             }
                         }
@@ -1260,16 +1262,16 @@ fun BrowserScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(config.innerIconSize + 4.dp)
                                     .border(1.dp, navContent, RoundedCornerShape(5.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
-                                    color = navContent,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                  Text(
+                                      text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
+                                      color = navContent,
+                                      fontSize = (config.fontSize.value * 0.66f).sp,
+                                      fontWeight = FontWeight.Bold
+                                  )
                             }
                         }
 
@@ -1281,13 +1283,13 @@ fun BrowserScreen(
                         ) {
                             IconButton(
                                 onClick = { showMenu = true },
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(config.barIconSize + 4.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Menu,
                                     contentDescription = "Menu",
                                     tint = navContent,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(config.innerIconSize)
                                 )
                             }
                         }
@@ -1323,7 +1325,7 @@ fun BrowserScreen(
                 if (activeTab != null && !showHomeScreen) {
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
-                    val topBarHeight = if (isTablet) 113.dp else 46.dp
+                    val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
                     
                     val isAtTop = currentScrollPos <= 0
                     val geckoTopPad = if (isAtTop && hasTopBar && !(isKeyboardVisible && !isInputFocused)) topBarHeight else 0.dp

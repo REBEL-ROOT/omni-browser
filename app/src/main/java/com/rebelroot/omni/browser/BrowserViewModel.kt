@@ -179,6 +179,7 @@ class BrowserViewModel : ViewModel() {
         val EXTENSION_ORDER_KEY = stringPreferencesKey("extension_order")
         val EXTENSION_VIEW_MODE_KEY = stringPreferencesKey("extension_view_mode")
         val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
+        val UI_SIZE_KEY = stringPreferencesKey("ui_size")
 
         @Volatile
         @Keep
@@ -322,6 +323,7 @@ class BrowserViewModel : ViewModel() {
     var showHomeShortcuts by mutableStateOf(true)
     var showBottomNavBar by mutableStateOf(true)
     var chromeNavBarEnabled by mutableStateOf(false)
+    var uiSize by mutableStateOf("Medium")
     var wallpaperDim by mutableStateOf(-1f)
     var wallpaperBlur by mutableStateOf(0f)
     var wallpaperScale by mutableStateOf(1.0f)
@@ -1495,6 +1497,10 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
+                uiSize = getUiSizePreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
                 val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
                 siteStyleFontSize = sp.getInt("site_style_font_size", 100)
                 siteStyleTheme = sp.getString("site_style_theme", "DEFAULT") ?: "DEFAULT"
@@ -2099,6 +2105,20 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[DYNAMIC_COLOR_KEY] = enabled }
             isDynamicColorEnabled = enabled
+        }
+    }
+
+    // UI Size Settings
+    fun getUiSizePreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[UI_SIZE_KEY] ?: "Medium"
+        }
+    }
+
+    fun saveUiSize(context: Context, size: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[UI_SIZE_KEY] = size }
+            uiSize = size
         }
     }
 

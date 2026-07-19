@@ -88,6 +88,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rebelroot.omni.ui.theme.getUiSizeConfig
+import com.rebelroot.omni.ui.theme.UiSizeConfig
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.viewinterop.AndroidView
 
@@ -149,22 +151,23 @@ fun PhoneAddressBar(
     val coroutineScope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val config = getUiSizeConfig(viewModel.uiSize)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = config.paddingHorizontal, vertical = config.paddingVertical),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedVisibility(visible = !isInputFocused) {
             IconButton(
                 onClick = { viewModel.loadUrl("about:blank") },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(config.barIconSize)
             ) {
                 androidx.compose.foundation.Image(
                     painter = androidx.compose.ui.res.painterResource(id = com.rebelroot.omni.R.drawable.ic_omni_logo),
                     contentDescription = "Go Home",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(config.innerIconSize)
                 )
             }
         }
@@ -172,18 +175,18 @@ fun PhoneAddressBar(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(38.dp)
+                .height(config.searchBoxHeight)
                 .padding(horizontal = 4.dp)
                 .background(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(config.searchBoxHeight / 2)
                 )
                 .border(
                     width = 1.dp,
                     color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(config.searchBoxHeight / 2)
                 )
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = config.searchBoxHeight * 0.35f),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(
@@ -198,7 +201,7 @@ fun PhoneAddressBar(
                 if (!isInputFocused) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(config.innerIconSize + 4.dp)
                             .clip(CircleShape)
                             .clickable(enabled = showSecurityIcon) { onShowSiteInfo() },
                         contentAlignment = Alignment.Center
@@ -211,7 +214,7 @@ fun PhoneAddressBar(
                                 else -> Icons.Rounded.Search
                             },
                             contentDescription = "Search or Security icon",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(config.innerIconSize * 0.75f),
                             tint = when {
                                 viewModel.isIncognitoMode -> Color(0xFFCBB2FF)
                                 showSecurityIcon && isSecure -> Color(0xFF34C759)
@@ -232,7 +235,8 @@ fun PhoneAddressBar(
                         .onFocusChanged { onInputFocusedChange(it.isFocused) },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = config.fontSize
                     ),
                     keyboardOptions = KeyboardOptions(
                         imeAction = ImeAction.Go
@@ -251,14 +255,14 @@ fun PhoneAddressBar(
                 if (isInputFocused && inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(config.innerIconSize + 4.dp)
                             .clickable { onInputUrlChange(androidx.compose.ui.text.input.TextFieldValue("")) },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Clear",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(config.innerIconSize * 0.75f),
                             tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                         )
                     }
@@ -269,7 +273,7 @@ fun PhoneAddressBar(
                     val isBookmarked = viewModel.isBookmarked(viewModel.currentUrl)
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(config.innerIconSize + 4.dp)
                             .clickable {
                                 if (isBookmarked) {
                                     viewModel.removeBookmark(viewModel.currentUrl)
@@ -284,7 +288,7 @@ fun PhoneAddressBar(
                             imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                             contentDescription = "Bookmark",
                             tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(config.innerIconSize)
                         )
                     }
                 }
@@ -298,12 +302,13 @@ fun PhoneAddressBar(
                     focusManager.clearFocus()
                     keyboardController?.hide()
                 },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(config.barIconSize)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                     contentDescription = "Submit",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(config.innerIconSize)
                 )
             }
         }
@@ -316,7 +321,7 @@ fun PhoneAddressBar(
                     keyboardController?.hide()
                 }
             ) {
-                Text("Cancel", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                Text("Cancel", color = MaterialTheme.colorScheme.primary, fontSize = (config.fontSize.value - 1f).sp)
             }
         }
 
@@ -326,13 +331,13 @@ fun PhoneAddressBar(
         AnimatedVisibility(visible = !isInputFocused && viewModel.chromeNavBarEnabled) {
             IconButton(
                 onClick = onShowToolsSheet,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(config.barIconSize)
             ) {
                 Icon(
                     imageVector = BlackholeIcon,
                     contentDescription = "Toolbox",
                     tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(config.innerIconSize)
                 )
             }
         }
@@ -340,18 +345,19 @@ fun PhoneAddressBar(
         AnimatedVisibility(visible = !isInputFocused) {
             IconButton(
                 onClick = onShowExtensionsSheet,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(config.barIconSize)
             ) {
                 Box(contentAlignment = Alignment.TopEnd) {
                     Icon(
                         imageVector = Icons.Rounded.Extension,
                         contentDescription = "Extensions",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(config.innerIconSize)
                     )
                     if (hasActiveUserExtensions) {
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
+                                .size(config.innerIconSize * 0.25f)
                                 .offset(x = 1.dp, y = (-1).dp)
                                 .background(
                                     color = MaterialTheme.colorScheme.primary,
@@ -367,18 +373,18 @@ fun PhoneAddressBar(
         AnimatedVisibility(visible = !isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             IconButton(
                 onClick = onShowTabGroups,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(config.barIconSize)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(config.innerIconSize + 4.dp)
                         .border(1.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(5.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 10.sp,
+                        fontSize = (config.fontSize.value * 0.66f).sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -389,12 +395,13 @@ fun PhoneAddressBar(
             Box {
                 IconButton(
                     onClick = { onShowMenuChange(true) },
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(config.barIconSize)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "Menu",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(config.innerIconSize)
                     )
                 }
 

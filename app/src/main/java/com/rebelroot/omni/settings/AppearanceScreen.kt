@@ -156,6 +156,47 @@ fun AppearanceScreen(
 
                     HorizontalDivider(color = dividerColor)
 
+                    // UI Scale Mode: Small | Medium | Large
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("UI Size", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        val uiMode = when (viewModel.uiSize) {
+                            "Small" -> 0
+                            "Large" -> 2
+                            else -> 1
+                        }
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            val options = listOf("Small", "Medium", "Large")
+                            val icons = listOf(
+                                Icons.Rounded.ZoomOut,
+                                Icons.Rounded.AspectRatio,
+                                Icons.Rounded.ZoomIn
+                            )
+                            options.forEachIndexed { index, label ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                                    onClick = {
+                                        val selectedSize = when (index) {
+                                            0 -> "Small"
+                                            2 -> "Large"
+                                            else -> "Medium"
+                                        }
+                                        viewModel.saveUiSize(context, selectedSize)
+                                    },
+                                    selected = uiMode == index,
+                                    icon = {
+                                        SegmentedButtonDefaults.Icon(active = uiMode == index) {
+                                            Icon(imageVector = icons[index], contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                                        }
+                                    }
+                                ) {
+                                    Text(label, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor)
+
                     // Material You toggle (Android 12+ only)
                     AnimatedVisibility(
                         visible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
