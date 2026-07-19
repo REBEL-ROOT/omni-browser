@@ -89,32 +89,60 @@ fun BrowserViewModel.deletePassword(id: String) {
     persistSavedPasswords()
 }
 
+fun BrowserViewModel.clearAllSavedPasswords() {
+    savedPasswords.clear()
+    persistSavedPasswords()
+}
+
+fun BrowserViewModel.clearSavedPasswordsSince(cutoffTime: Long) {
+    savedPasswords.removeAll { it.timestamp >= cutoffTime }
+    persistSavedPasswords()
+}
+
 fun BrowserViewModel.getPasswordsForDomain(domain: String): List<BrowserViewModel.SavedPassword> =
     savedPasswords.filter { it.domain.contains(domain, ignoreCase = true) || domain.contains(it.domain, ignoreCase = true) }
 
 fun BrowserViewModel.checkAutofillForUrl(url: String) {
-    if (url.isBlank() || url == "about:blank") { autofillSuggestion = null; return }
+    // Disabled to prevent auto-showing on page load
+    autofillSuggestion = null
+}
+
+fun BrowserViewModel.checkAutofillForFocus(url: String) {
+    if (url.isBlank() || url == "about:blank") {
+        autofillMatches = emptyList()
+        showAutofillBottomSheet = false
+        return
+    }
     try {
-        val host = URI(url).host ?: ""
+        val host = java.net.URI(url).host ?: ""
         val domain = host.removePrefix("www.")
-        val match = savedPasswords.firstOrNull {
+        val matches = savedPasswords.filter {
             it.domain == domain || domain.contains(it.domain) || it.domain.contains(domain)
         }
-        autofillSuggestion = match
+        if (matches.isNotEmpty()) {
+            autofillMatches = matches
+            showAutofillBottomSheet = true
+        } else {
+            autofillMatches = emptyList()
+            showAutofillBottomSheet = false
+        }
     } catch (e: Exception) {
-        autofillSuggestion = null
+        autofillMatches = emptyList()
+        showAutofillBottomSheet = false
     }
 }
 
 fun BrowserViewModel.dismissSaveCredential() { pendingSaveCredential = null }
-fun BrowserViewModel.dismissAutofill() { autofillSuggestion = null }
+fun BrowserViewModel.dismissAutofill() {
+    autofillSuggestion = null
+    showAutofillBottomSheet = false
+}
 
-fun BrowserViewModel.autofillCredential() {
-    val suggestion = autofillSuggestion ?: return
+fun BrowserViewModel.autofillCredential(credential: BrowserViewModel.SavedPassword) {
     val activeId = activeTabId ?: return
     val activeTab = tabs.find { it.id == activeId } ?: return
-    val userEscaped = suggestion.username.replace("'", "\\'")
-    val passEscaped = suggestion.password.replace("'", "\\'")
+    val userEscaped = credential.username.replace("'", "\\'")
+    val passEscaped = credential.password.replace("'", "\\'")
 
     val js = """
         (function() {
@@ -174,7 +202,7 @@ fun BrowserViewModel.autofillCredential() {
     android.os.Handler(android.os.Looper.getMainLooper()).post {
         try {
             activeTab.session.loadUri("javascript:\$js")
-            autofillSuggestion = null
+            showAutofillBottomSheet = false
         } catch (e: Exception) {
             Log.e(TAG, "Autofill injection failed", e)
         }

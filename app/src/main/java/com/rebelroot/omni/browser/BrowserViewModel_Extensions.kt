@@ -225,14 +225,15 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                 }
 
                 if (type == "GET_NATIVE_PLAYER_STATE") {
-                    val response = org.json.JSONObject()
-                    response.put("enabled", isNativePlayerEnabled)
-                    response.put("youtubeEnabled", isYouTubeEnabled)
-                    pendingJsCommand?.let {
-                        response.put("pendingJs", it)
-                        pendingJsCommand = null
+                    val response = org.json.JSONObject().apply {
+                        put("enabled", isNativePlayerEnabled)
+                        put("youtubeEnabled", isYouTubeEnabled)
+                        pendingJsCommand?.let {
+                            put("pendingJs", it)
+                            pendingJsCommand = null
+                        }
                     }
-                    return GeckoResult.fromValue(response)
+                    return GeckoResult.fromValue(response.toString())
                 } else if (type == "MEDIA_GRABBED") {
                     val url = if (message is org.json.JSONObject) {
                         if (message.has("url")) message.getString("url") else null

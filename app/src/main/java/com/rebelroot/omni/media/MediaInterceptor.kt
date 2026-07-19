@@ -19,11 +19,13 @@
 package com.rebelroot.omni.media
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MediaInterceptor {
 
@@ -40,6 +42,9 @@ class MediaInterceptor {
 
     private val _detectedMedia = MutableStateFlow<List<DetectedMedia>>(emptyList())
     val detectedMedia: StateFlow<List<DetectedMedia>> = _detectedMedia.asStateFlow()
+
+    /** Called whenever a genuinely NEW (non-duplicate) media item is added. Used to re-show a dismissed banner. */
+    var onNewMediaDetected: (() -> Unit)? = null
 
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
 
@@ -69,11 +74,56 @@ class MediaInterceptor {
     }
 
     /**
+     * Returns true if this URL looks like an advertisement video that should be filtered out.
+     * Catches: ad network URLs, YouTube ad segments, and any video shorter than 10 seconds.
+     */
+    private fun isAdVideo(url: String): Boolean {
+        val lower = url.lowercase()
+
+        // Known ad network / CDN patterns
+        val adPatterns = listOf(
+            "doubleclick.net", "googleadservices", "pagead", "/ads/", "/ad/",
+            "preroll", "midroll", "postroll", "adserver", "ad_stream",
+            "adsystem", "adnxs", "rubiconproject", "openx.net", "spotxchange",
+            "springserve", "brightcove.net/ads", "freewheel", "liverail",
+            "yieldmo", "smartadserver", "contextweb"
+        )
+        if (adPatterns.any { lower.contains(it) }) return true
+
+        // YouTube-specific ad URL markers
+        if (lower.contains("googlevideo.com") || lower.contains("youtube.com")) {
+            // &ad_type= is only on ad requests
+            if (lower.contains("ad_type=")) return true
+            // ctier=A marks YouTube ad segments (C-tier A = ad)
+            if (lower.contains("ctier=a")) return true
+            // oad= (original ad) parameter
+            if (lower.contains("&oad=") || lower.contains("?oad=")) return true
+        }
+
+        // Filter by duration param — skip videos shorter than 10 seconds
+        try {
+            val uri = android.net.Uri.parse(url)
+            val durStr = uri.getQueryParameter("dur")
+                ?: uri.getQueryParameter("duration")
+                ?: uri.getQueryParameter("t")
+            if (durStr != null) {
+                val dur = durStr.toDoubleOrNull()
+                if (dur != null && dur < 10.0) return true
+            }
+        } catch (_: Exception) { }
+
+        return false
+    }
+
+    /**
      * Called when the network interceptor detects a media asset request.
      */
     fun onMediaRequestDetected(url: String, headers: Map<String, String>? = null) {
         if (isTrackingOrStaticResource(url)) return
-        if (isYouTubeUrl(url) && !isYouTubeEnabled) return
+        if (isAdVideo(url)) {
+            Log.i("MediaInterceptor", "🚫 Skipping ad video: $url")
+            return
+        }
         val type = classifyUrl(url) ?: return
         val isDrm = url.contains("drm") || url.contains("widevine") || url.contains("license")
         val cookies = headers?.get("Cookie") ?: headers?.get("cookie")
@@ -100,7 +150,10 @@ class MediaInterceptor {
      */
     fun onAggressiveMediaGrabbed(url: String, mimeType: String, cookies: String? = null) {
         if (isTrackingOrStaticResource(url)) return
-        if (isYouTubeUrl(url) && !isYouTubeEnabled) return
+        if (isAdVideo(url)) {
+            Log.i("MediaInterceptor", "🚫 Skipping ad video (aggressive): $url")
+            return
+        }
         val type = when {
             mimeType.contains("video/mp4") -> MediaType.MP4
             mimeType.contains("video/webm") -> MediaType.WEBM
@@ -215,9 +268,16 @@ class MediaInterceptor {
     }
 
     private fun addMedia(media: DetectedMedia) {
+        var isNew = false
         _detectedMedia.update { current ->
             if (current.any { it.url == media.url }) current
-            else current + media
+            else { isNew = true; current + media }
+        }
+        if (isNew) {
+            // Dispatch to Main so Compose state setters called in the callback are thread-safe
+            scope.launch(Dispatchers.Main) {
+                onNewMediaDetected?.invoke()
+            }
         }
     }
 

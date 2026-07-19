@@ -28,6 +28,10 @@
     <!-- Haptic feedback vibration permission -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Read Google accounts from AccountManager for the native OAuth account picker.
+         This is a NORMAL permission (not dangerous) — no runtime dialog needed. -->
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+
     <!-- Declare package visibility queries for resolving custom scheme intents (Android 11+) -->
     <queries>
         <!-- Generic ACTION_VIEW catch-all — ensures chooser can discover apps for any scheme -->
@@ -165,34 +169,6 @@
             android:targetActivity=".MainActivity"
             android:icon="@mipmap/ic_launcher_dark"
             android:roundIcon="@mipmap/ic_launcher_dark_round"
-            android:label="@string/app_name"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityBlue"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher_blue"
-            android:roundIcon="@mipmap/ic_launcher_blue_round"
-            android:label="@string/app_name"
-            android:enabled="false"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MainActivityGold"
-            android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher_gold"
-            android:roundIcon="@mipmap/ic_launcher_gold_round"
             android:label="@string/app_name"
             android:enabled="false"
             android:exported="true">

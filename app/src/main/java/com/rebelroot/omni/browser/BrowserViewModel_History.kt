@@ -89,3 +89,9 @@ fun BrowserViewModel.clearAllHistory() {
     saveHistory(context)
 }
 
+fun BrowserViewModel.clearHistorySince(cutoffTime: Long) {
+    val context = appContext ?: return
+    historyList.removeAll { it.timestamp >= cutoffTime }
+    saveHistory(context)
+}
+

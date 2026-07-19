@@ -178,8 +178,32 @@ class BrowserViewModel : ViewModel() {
         val PLAYER_BACKGROUND_PLAYBACK_KEY = booleanPreferencesKey("player_background_playback")
         val EXTENSION_ORDER_KEY = stringPreferencesKey("extension_order")
         val EXTENSION_VIEW_MODE_KEY = stringPreferencesKey("extension_view_mode")
+        
+        val COOKIE_BEHAVIOR_KEY = androidx.datastore.preferences.core.intPreferencesKey("cookie_behavior")
+        val DO_NOT_TRACK_KEY = booleanPreferencesKey("do_not_track")
+        val SAFE_BROWSING_LEVEL_KEY = androidx.datastore.preferences.core.intPreferencesKey("safe_browsing_level")
+        val PRELOAD_PAGES_KEY = androidx.datastore.preferences.core.intPreferencesKey("preload_pages")
+        val LOCK_INCOGNITO_KEY = booleanPreferencesKey("lock_incognito")
+        val COMPROMISED_PASSWORD_WARNING_KEY = booleanPreferencesKey("compromised_password_warning")
+        val HTTPS_ONLY_MODE_KEY = booleanPreferencesKey("https_only_mode")
         val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
         val UI_SCALE_KEY = floatPreferencesKey("ui_scale")
+        
+        val TAB_LAYOUT_MODE_KEY = stringPreferencesKey("tab_layout_mode")
+        val AUTO_CLOSE_TABS_DAYS_KEY = androidx.datastore.preferences.core.intPreferencesKey("auto_close_tabs_days")
+        val OPEN_TABS_IN_BACKGROUND_KEY = booleanPreferencesKey("open_tabs_in_background")
+        val ACCESSIBILITY_TEXT_SCALE_KEY = floatPreferencesKey("accessibility_text_scale")
+        val ACCESSIBILITY_FORCE_ZOOM_KEY = booleanPreferencesKey("accessibility_force_zoom")
+        val ACCESSIBILITY_HIGH_CONTRAST_KEY = booleanPreferencesKey("accessibility_high_contrast")
+        val TAB_GROUPS_FILE = "browser_tab_groups.json"
+        
+        val DEFAULT_GEOLOCATION_KEY = stringPreferencesKey("default_geolocation")
+        val DEFAULT_CAMERA_KEY = stringPreferencesKey("default_camera")
+        val DEFAULT_MICROPHONE_KEY = stringPreferencesKey("default_microphone")
+        val DEFAULT_NOTIFICATIONS_KEY = stringPreferencesKey("default_notifications")
+        val DEFAULT_JAVASCRIPT_KEY = booleanPreferencesKey("default_javascript")
+        val DEFAULT_AUTOPLAY_KEY = booleanPreferencesKey("default_autoplay")
+        val SITE_PERMISSIONS_FILE = "browser_site_permissions.json"
 
         @Volatile
         @Keep
@@ -222,6 +246,9 @@ class BrowserViewModel : ViewModel() {
         private set
     var activeIncognitoTabId by mutableStateOf<String?>(null)
         private set
+
+    // Tab Groups
+    val tabGroups = mutableStateListOf<TabGroup>()
 
 
     // Context Menu State
@@ -306,6 +333,30 @@ class BrowserViewModel : ViewModel() {
     var isDarkThemeEnabled by mutableStateOf(true)
     var isAmoledMode by mutableStateOf(false)
     var isDynamicColorEnabled by mutableStateOf(false)
+    var isIncognitoUnlocked by mutableStateOf(false)
+    var cookieBehavior by mutableStateOf(3)
+    var doNotTrack by mutableStateOf(true)
+    var safeBrowsingLevel by mutableStateOf(1)
+    var preloadPages by mutableStateOf(1)
+    var lockIncognito by mutableStateOf(false)
+    var compromisedPasswordWarning by mutableStateOf(true)
+    var httpsOnlyMode by mutableStateOf(false)
+    var tabLayoutMode by mutableStateOf("Grid")
+    var autoCloseTabsDays by mutableStateOf(0)
+    var openTabsInBackground by mutableStateOf(false)
+    var accessibilityTextScale by mutableStateOf(1.0f)
+    var accessibilityForceZoom by mutableStateOf(false)
+    var accessibilityHighContrast by mutableStateOf(false)
+    
+    // Site settings defaults
+    var defaultGeolocation by mutableStateOf("ask")
+    var defaultCamera by mutableStateOf("ask")
+    var defaultMicrophone by mutableStateOf("ask")
+    var defaultNotifications by mutableStateOf("ask")
+    var defaultJavascriptAllowed by mutableStateOf(true)
+    var defaultAutoplayAllowed by mutableStateOf(true)
+    val sitePermissions = androidx.compose.runtime.mutableStateListOf<SitePermission>()
+    
     var selectedLanguageCode by mutableStateOf("en")
     var isLanguageSelectionDone by mutableStateOf(false)
     var isOnboardingCompleted by mutableStateOf(false)
@@ -648,6 +699,95 @@ class BrowserViewModel : ViewModel() {
     )
     var pendingFilePrompt by mutableStateOf<PendingFilePrompt?>(null)
 
+    // ── Google OAuth Native Account Picker ──────────────────────────────────────
+    // When a site triggers Google OAuth, we intercept the navigation and show a
+    // native Android account picker. Google only processes the site's token.
+    // The browser never calls any Google SDK — it uses standard AccountManager.
+
+    data class PendingGoogleOAuthRequest(
+        /** The original accounts.google.com OAuth URL intercepted from GeckoView */
+        val oauthUrl: String,
+        /** The tab ID that initiated the OAuth */
+        val tabId: String
+    )
+
+    var pendingGoogleOAuthRequest by mutableStateOf<PendingGoogleOAuthRequest?>(null)
+
+    /**
+     * Per-tab OAuth grace period: maps tabId → expiry epoch-ms.
+     * After the user picks an account (or taps "Continue"), ALL accounts.google.com
+     * navigations on that tab are allowed through until the expiry time.
+     * This covers multi-hop redirect chains (site → Google → callback → Google again → site).
+     * Cleared automatically when the tab navigates to a non-Google URL.
+     */
+    internal val oauthGracePeriodByTab = mutableMapOf<String, Long>()
+
+    /**
+     * Called when the user picks an account from the native picker.
+     * Injects the email as `login_hint` into the OAuth URL and loads it.
+     * If [email] is null, navigates to the raw OAuth URL without a hint.
+     */
+    fun resumeGoogleOAuth(email: String?) {
+        val pending = pendingGoogleOAuthRequest ?: return
+        pendingGoogleOAuthRequest = null
+        val finalUrl = if (email != null) {
+            try {
+                val uri = android.net.Uri.parse(pending.oauthUrl)
+                val encodedQuery = uri.encodedQuery
+                val newQueryParts = mutableListOf<String>()
+                
+                if (!encodedQuery.isNullOrEmpty()) {
+                    // Split the raw query by '&' to preserve all original encodings (+, %, etc.)
+                    encodedQuery.split("&").forEach { part ->
+                        val eqIdx = part.indexOf('=')
+                        val key = if (eqIdx != -1) part.substring(0, eqIdx) else part
+                        val decodedKey = try {
+                            java.net.URLDecoder.decode(key, "UTF-8")
+                        } catch (e: Exception) {
+                            key
+                        }
+                        if (!decodedKey.equals("login_hint", ignoreCase = true) && 
+                            !decodedKey.equals("Email", ignoreCase = true)) {
+                            newQueryParts.add(part)
+                        }
+                    }
+                }
+                
+                // Safely encode and append the new pre-fill hints
+                val encodedEmail = java.net.URLEncoder.encode(email, "UTF-8")
+                newQueryParts.add("login_hint=$encodedEmail")
+                newQueryParts.add("Email=$encodedEmail")
+                
+                val rebuiltQuery = newQueryParts.joinToString("&")
+                uri.buildUpon().encodedQuery(rebuiltQuery).build().toString()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to inject email hints into OAuth URL: ${e.message}")
+                pending.oauthUrl
+            }
+        } else {
+            pending.oauthUrl
+        }
+        viewModelScope.launch(Dispatchers.Main) {
+            Log.i(TAG, "🔑 Resuming Google OAuth${if (email != null) " with hint=$email" else " without hint"}: $finalUrl")
+            // Start a 15-second grace period so ALL subsequent accounts.google.com hops
+            // in the redirect chain are allowed through without triggering the picker again.
+            oauthGracePeriodByTab[pending.tabId] = System.currentTimeMillis() + 15_000L
+            // Use the specific tab's session so we load in the correct tab
+            // even if the user switched tabs while the picker was showing.
+            val targetSession = tabs.firstOrNull { it.id == pending.tabId }?.session ?: geckoSession
+            targetSession.loadUri(finalUrl)
+        }
+    }
+
+    /**
+     * Called when the user cancels the native account picker entirely.
+     * Clears the pending request without loading any URL.
+     */
+    fun dismissGoogleOAuth() {
+        Log.i(TAG, "🔑 Google OAuth account picker dismissed by user")
+        pendingGoogleOAuthRequest = null
+    }
+
     fun deliverFilePickerResult(uris: List<android.net.Uri>) {
         val pending = pendingFilePrompt ?: return
         pendingFilePrompt = null
@@ -728,6 +868,9 @@ class BrowserViewModel : ViewModel() {
 
     /** Set when user navigates to a site with a saved password — triggers the autofill bar */
     var autofillSuggestion by mutableStateOf<SavedPassword?>(null)
+    
+    var showAutofillBottomSheet by mutableStateOf(false)
+    var autofillMatches by mutableStateOf<List<SavedPassword>>(emptyList())
 
     /** True while DevNotes or Toolbox sheet is open — extensions are gated from opening their UI */
     var isNativeSheetOpen by mutableStateOf(false)
@@ -753,12 +896,320 @@ class BrowserViewModel : ViewModel() {
                         put("url", tab.url)
                         put("isActive", tab.id == currentActiveId)
                         put("isIncognito", tab.isIncognito)
+                        put("lastActiveTime", tab.lastActiveTime)
                     }
                     jsonArray.put(obj)
                 }
                 file.writeText(jsonArray.toString())
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving tabs", e)
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // Tab Groups: Chrome-style tab grouping with color labels and persistence
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    fun saveTabGroups() {
+        val context = appContext ?: return
+        val snapshot = tabGroups.toList()
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = File(context.filesDir, TAB_GROUPS_FILE)
+            try {
+                val jsonArray = JSONArray()
+                snapshot.forEach { group ->
+                    val obj = JSONObject().apply {
+                        put("id", group.id)
+                        put("title", group.title)
+                        put("color", group.color)
+                        val ids = JSONArray()
+                        group.tabIds.forEach { ids.put(it) }
+                        put("tabIds", ids)
+                    }
+                    jsonArray.put(obj)
+                }
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving tab groups", e)
+            }
+        }
+    }
+
+    fun loadTabGroups(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = File(context.filesDir, TAB_GROUPS_FILE)
+            if (!file.exists()) return@launch
+            try {
+                val jsonStr = file.readText()
+                val jsonArray = JSONArray(jsonStr)
+                val loaded = mutableListOf<TabGroup>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val idsArr = obj.optJSONArray("tabIds") ?: JSONArray()
+                    val tabIds = (0 until idsArr.length()).map { idsArr.getString(it) }
+                    loaded.add(
+                        TabGroup(
+                            id = obj.getString("id"),
+                            title = obj.getString("title"),
+                            color = obj.optLong("color", 0xFF4285F4),
+                            tabIds = tabIds
+                        )
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    tabGroups.clear()
+                    tabGroups.addAll(loaded)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading tab groups", e)
+            }
+        }
+    }
+
+    fun createTabGroup(title: String, color: Long, initialTabId: String? = null) {
+        val group = TabGroup(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            color = color,
+            tabIds = if (initialTabId != null) listOf(initialTabId) else emptyList()
+        )
+        tabGroups.add(group)
+        saveTabGroups()
+    }
+
+    fun addTabToGroup(tabId: String, groupId: String) {
+        // Remove from any existing group first
+        removeTabFromAllGroups(tabId)
+        val idx = tabGroups.indexOfFirst { it.id == groupId }
+        if (idx != -1) {
+            tabGroups[idx] = tabGroups[idx].copy(tabIds = tabGroups[idx].tabIds + tabId)
+            saveTabGroups()
+        }
+    }
+
+    fun removeTabFromGroup(tabId: String, groupId: String) {
+        val idx = tabGroups.indexOfFirst { it.id == groupId }
+        if (idx != -1) {
+            val updated = tabGroups[idx].copy(tabIds = tabGroups[idx].tabIds - tabId)
+            if (updated.tabIds.isEmpty()) {
+                tabGroups.removeAt(idx)
+            } else {
+                tabGroups[idx] = updated
+            }
+            saveTabGroups()
+        }
+    }
+
+    private fun removeTabFromAllGroups(tabId: String) {
+        val updatedGroups = tabGroups.map { g ->
+            g.copy(tabIds = g.tabIds - tabId)
+        }.filter { it.tabIds.isNotEmpty() }
+        tabGroups.clear()
+        tabGroups.addAll(updatedGroups)
+    }
+
+    fun deleteTabGroup(groupId: String) {
+        tabGroups.removeAll { it.id == groupId }
+        saveTabGroups()
+    }
+
+    fun renameTabGroup(groupId: String, newTitle: String) {
+        val idx = tabGroups.indexOfFirst { it.id == groupId }
+        if (idx != -1) {
+            tabGroups[idx] = tabGroups[idx].copy(title = newTitle)
+            saveTabGroups()
+        }
+    }
+
+    fun changeTabGroupColor(groupId: String, color: Long) {
+        val idx = tabGroups.indexOfFirst { it.id == groupId }
+        if (idx != -1) {
+            tabGroups[idx] = tabGroups[idx].copy(color = color)
+            saveTabGroups()
+        }
+    }
+
+    fun getGroupForTab(tabId: String): TabGroup? = tabGroups.find { tabId in it.tabIds }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // Site Settings: Manage global default permissions and site-specific overrides
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    fun getDomain(url: String): String {
+        if (url.isBlank() || url == "about:blank") return "about:blank"
+        return try {
+            val cleanUrl = if (!url.contains("://")) "https://$url" else url
+            val uri = java.net.URI(cleanUrl)
+            val host = uri.host ?: ""
+            if (host.startsWith("www.")) host.substring(4) else host
+        } catch (e: Exception) {
+            val hostPart = url.substringAfter("://").substringBefore("/")
+            if (hostPart.startsWith("www.")) hostPart.substring(4) else hostPart
+        }
+    }
+
+    fun saveSitePermissions() {
+        val context = appContext ?: return
+        val snapshot = sitePermissions.toList()
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = File(context.filesDir, SITE_PERMISSIONS_FILE)
+            try {
+                val jsonArray = org.json.JSONArray()
+                snapshot.forEach { perm ->
+                    val obj = org.json.JSONObject().apply {
+                        put("host", perm.host)
+                        put("location", perm.location)
+                        put("camera", perm.camera)
+                        put("microphone", perm.microphone)
+                        put("notifications", perm.notifications)
+                        put("javascript", perm.javascript)
+                        put("autoplay", perm.autoplay)
+                    }
+                    jsonArray.put(obj)
+                }
+                file.writeText(jsonArray.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving site permissions", e)
+            }
+        }
+    }
+
+    fun loadSitePermissions(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = File(context.filesDir, SITE_PERMISSIONS_FILE)
+            if (!file.exists()) return@launch
+            try {
+                val jsonStr = file.readText()
+                val jsonArray = org.json.JSONArray(jsonStr)
+                val loaded = mutableListOf<SitePermission>()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    loaded.add(
+                        SitePermission(
+                            host = obj.getString("host"),
+                            location = obj.optString("location", "ask"),
+                            camera = obj.optString("camera", "ask"),
+                            microphone = obj.optString("microphone", "ask"),
+                            notifications = obj.optString("notifications", "ask"),
+                            javascript = obj.optString("javascript", "allow"),
+                            autoplay = obj.optString("autoplay", "allow")
+                        )
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    sitePermissions.clear()
+                    sitePermissions.addAll(loaded)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading site permissions", e)
+            }
+        }
+    }
+
+    fun getSitePermissionValue(host: String, type: String): String {
+        val domain = getDomain(host)
+        val perm = sitePermissions.find { it.host.equals(domain, ignoreCase = true) }
+        return when (type) {
+            "location" -> perm?.location ?: defaultGeolocation
+            "camera" -> perm?.camera ?: defaultCamera
+            "microphone" -> perm?.microphone ?: defaultMicrophone
+            "notifications" -> perm?.notifications ?: defaultNotifications
+            "javascript" -> perm?.javascript ?: (if (defaultJavascriptAllowed) "allow" else "block")
+            "autoplay" -> perm?.autoplay ?: (if (defaultAutoplayAllowed) "allow" else "block")
+            else -> "ask"
+        }
+    }
+
+    fun updateSitePermission(host: String, type: String, value: String) {
+        val domain = getDomain(host)
+        val idx = sitePermissions.indexOfFirst { it.host.equals(domain, ignoreCase = true) }
+        val current = if (idx != -1) sitePermissions[idx] else SitePermission(host = domain)
+        val updated = when (type) {
+            "location" -> current.copy(location = value)
+            "camera" -> current.copy(camera = value)
+            "microphone" -> current.copy(microphone = value)
+            "notifications" -> current.copy(notifications = value)
+            "javascript" -> current.copy(javascript = value)
+            "autoplay" -> current.copy(autoplay = value)
+            else -> current
+        }
+        if (idx != -1) {
+            sitePermissions[idx] = updated
+        } else {
+            sitePermissions.add(updated)
+        }
+        saveSitePermissions()
+        
+        // Apply settings changes dynamically to open tabs matching this host
+        tabs.filter { getDomain(it.url).equals(domain, ignoreCase = true) }.forEach { tab ->
+            if (type == "javascript") {
+                tab.session.settings.allowJavascript = (value == "allow")
+            }
+        }
+    }
+
+    fun clearSitePermission(host: String) {
+        val domain = getDomain(host)
+        sitePermissions.removeAll { it.host.equals(domain, ignoreCase = true) }
+        saveSitePermissions()
+    }
+
+    fun clearAllSitePermissions() {
+        sitePermissions.clear()
+        saveSitePermissions()
+    }
+
+    fun updateGlobalSitePermission(type: String, value: String) {
+        val context = appContext ?: return
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                when (type) {
+                    "location" -> {
+                        defaultGeolocation = value
+                        preferences[DEFAULT_GEOLOCATION_KEY] = value
+                    }
+                    "camera" -> {
+                        defaultCamera = value
+                        preferences[DEFAULT_CAMERA_KEY] = value
+                    }
+                    "microphone" -> {
+                        defaultMicrophone = value
+                        preferences[DEFAULT_MICROPHONE_KEY] = value
+                    }
+                    "notifications" -> {
+                        defaultNotifications = value
+                        preferences[DEFAULT_NOTIFICATIONS_KEY] = value
+                    }
+                }
+            }
+        }
+    }
+
+    fun updateGlobalJavascriptAllowed(allowed: Boolean) {
+        val context = appContext ?: return
+        viewModelScope.launch {
+            defaultJavascriptAllowed = allowed
+            context.dataStore.edit { preferences ->
+                preferences[DEFAULT_JAVASCRIPT_KEY] = allowed
+            }
+            // Propagate to all tabs that don't have custom overrides
+            tabs.forEach { tab ->
+                val host = getDomain(tab.url)
+                val hasOverride = sitePermissions.any { it.host.equals(host, ignoreCase = true) }
+                if (!hasOverride) {
+                    tab.session.settings.allowJavascript = allowed
+                }
+            }
+        }
+    }
+
+    fun updateGlobalAutoplayAllowed(allowed: Boolean) {
+        val context = appContext ?: return
+        viewModelScope.launch {
+            defaultAutoplayAllowed = allowed
+            context.dataStore.edit { preferences ->
+                preferences[DEFAULT_AUTOPLAY_KEY] = allowed
             }
         }
     }
@@ -854,12 +1305,14 @@ class BrowserViewModel : ViewModel() {
                         val url = obj.getString("url")
                         val isActive = obj.optBoolean("isActive", false)
                         val isIncognito = obj.optBoolean("isIncognito", false)
+                        val lastActiveTime = obj.optLong("lastActiveTime", System.currentTimeMillis())
                         
+                        val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
                         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                             .usePrivateMode(isIncognito)
                             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
                             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-                            .allowJavascript(true)
+                            .allowJavascript(isJsAllowed)
                             .build()
                         val session = GeckoSession(settings)
                         
@@ -871,7 +1324,8 @@ class BrowserViewModel : ViewModel() {
                             title = title,
                             url = url,
                             isIncognito = isIncognito,
-                            isUriLoaded = shouldLoadNow
+                            isUriLoaded = shouldLoadNow,
+                            lastActiveTime = lastActiveTime
                         )
                         setupTabSessionListeners(tab, context)
                         tabs.add(tab)
@@ -898,6 +1352,8 @@ class BrowserViewModel : ViewModel() {
                         
                         val targetId = activeId ?: tabs.first().id
                         selectTab(targetId)
+                        checkAutoCloseTabs(context)
+                        loadTabGroups(context)
                         loaded = true
                     }
 
@@ -927,11 +1383,12 @@ class BrowserViewModel : ViewModel() {
 
     fun createNewTab(context: Context, url: String) {
         val runtime = getGeckoRuntime(context)
+        val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
             .usePrivateMode(isIncognitoMode)
             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-            .allowJavascript(true)
+            .allowJavascript(isJsAllowed)
             .build()
         val session = GeckoSession(settings)
         val tabId = java.util.UUID.randomUUID().toString()
@@ -946,7 +1403,16 @@ class BrowserViewModel : ViewModel() {
         setupTabSessionListeners(newTab, context)
         tabs.add(newTab)
         session.open(runtime)
-        selectTab(newTab.id)
+        if (!openTabsInBackground || tabs.size == 1) {
+            selectTab(newTab.id)
+        } else {
+            val isIncog = newTab.isIncognito
+            if (isIncog && activeIncognitoTabId == null) {
+                activeIncognitoTabId = newTab.id
+            } else if (!isIncog && activeNormalTabId == null) {
+                activeNormalTabId = newTab.id
+            }
+        }
         loadUrlInTab(newTab, url)
         saveTabs()
     }
@@ -959,6 +1425,7 @@ class BrowserViewModel : ViewModel() {
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
         val tab = tabs[tabIndex]
+        tabs[tabIndex] = tab.copy(lastActiveTime = System.currentTimeMillis())
         val oldSession = geckoSession
         activeTabId = tabId
         geckoSession = tab.session
@@ -1089,6 +1556,8 @@ class BrowserViewModel : ViewModel() {
             Log.e(TAG, "Error closing tab session", e)
         }
         tabs.removeAt(tabIndex)
+        // Clean up group membership for the closed tab
+        removeTabFromAllGroups(tabId)
         
         if (activeTabId == tabId) {
             val remainingModeTabs = tabs.filter { it.isIncognito == tabToClose.isIncognito }
@@ -1099,6 +1568,7 @@ class BrowserViewModel : ViewModel() {
             }
         }
         saveTabs()
+        saveTabGroups()
     }
 
 
@@ -1305,10 +1775,15 @@ class BrowserViewModel : ViewModel() {
                 "en"
             }
 
+            val prefs = runBlocking { appCtx.dataStore.data.first() }
+            val dnt = prefs[DO_NOT_TRACK_KEY] ?: true
+            val hom = prefs[HTTPS_ONLY_MODE_KEY] ?: false
+            val pl = prefs[PRELOAD_PAGES_KEY] ?: 1
+            val cookieBeh = prefs[COOKIE_BEHAVIOR_KEY] ?: 3
+            val sbLevel = prefs[SAFE_BROWSING_LEVEL_KEY] ?: 1
+            val hc = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
+
             val cbSettings = org.mozilla.geckoview.ContentBlocking.Settings.Builder()
-                // Block known ad networks, social trackers, and fingerprinters at the network level.
-                // AD covers advertising trackers; SOCIAL covers Facebook/Twitter pixels; FINGERPRINTING
-                // covers canvas/font/audio fingerprinting scripts; CRYPTOMINING blocks crypto miners.
                 .antiTracking(
                     org.mozilla.geckoview.ContentBlocking.AntiTracking.AD or
                     org.mozilla.geckoview.ContentBlocking.AntiTracking.SOCIAL or
@@ -1316,18 +1791,27 @@ class BrowserViewModel : ViewModel() {
                     org.mozilla.geckoview.ContentBlocking.AntiTracking.FINGERPRINTING or
                     org.mozilla.geckoview.ContentBlocking.AntiTracking.CRYPTOMINING
                 )
-                // Reject third-party tracking cookies; first-party cookies still work normally.
-                .cookieBehavior(org.mozilla.geckoview.ContentBlocking.CookieBehavior.ACCEPT_NON_TRACKERS)
-                .safeBrowsing(org.mozilla.geckoview.ContentBlocking.SafeBrowsing.DEFAULT)
+                .cookieBehavior(cookieBeh)
+                .safeBrowsing(if (sbLevel > 0) org.mozilla.geckoview.ContentBlocking.SafeBrowsing.DEFAULT else 0)
                 .build()
 
             val configFile = File(appCtx.filesDir, "geckoview-config.yaml")
             try {
-                configFile.writeText(
-                    "pref:\n" +
-                    "  dom.ipc.processCount: 1\n" +
-                    "  dom.ipc.processCount.webIsolated: 1\n"
-                )
+                val sb = java.lang.StringBuilder()
+                sb.append("pref:\n")
+                sb.append("  dom.ipc.processCount: 1\n")
+                sb.append("  dom.ipc.processCount.webIsolated: 1\n")
+                sb.append("  privacy.donottrackheader.enabled: ${dnt}\n")
+                sb.append("  dom.security.https_only_mode: ${hom || sbLevel == 2}\n")
+                sb.append("  ui.useAccessibilityTheme: ${if (hc) 1 else 0}\n")
+                if (pl == 0) {
+                    sb.append("  network.dns.disablePrefetch: true\n")
+                    sb.append("  network.prefetch-next: false\n")
+                } else {
+                    sb.append("  network.dns.disablePrefetch: false\n")
+                    sb.append("  network.prefetch-next: true\n")
+                }
+                configFile.writeText(sb.toString())
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to write geckoview-config.yaml", e)
             }
@@ -1446,8 +1930,15 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
-                isYouTubeEnabled = getYouTubePreference(appCtx).first()
-                mediaInterceptor.isYouTubeEnabled = isYouTubeEnabled
+                isYouTubeEnabled = false
+                mediaInterceptor.isYouTubeEnabled = false
+                try {
+                    appCtx.dataStore.edit { preferences ->
+                        preferences[YOUTUBE_ENABLED_KEY] = false
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error resetting YouTube preference", e)
+                }
             }
 
 
@@ -1499,6 +1990,33 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 uiScale = getUiScalePreference(appCtx).first()
             }
+
+            viewModelScope.launch {
+                val prefs = appCtx.dataStore.data.first()
+                cookieBehavior = prefs[COOKIE_BEHAVIOR_KEY] ?: 3
+                doNotTrack = prefs[DO_NOT_TRACK_KEY] ?: true
+                safeBrowsingLevel = prefs[SAFE_BROWSING_LEVEL_KEY] ?: 1
+                preloadPages = prefs[PRELOAD_PAGES_KEY] ?: 1
+                lockIncognito = prefs[LOCK_INCOGNITO_KEY] ?: false
+                compromisedPasswordWarning = prefs[COMPROMISED_PASSWORD_WARNING_KEY] ?: true
+                httpsOnlyMode = prefs[HTTPS_ONLY_MODE_KEY] ?: false
+                
+                tabLayoutMode = prefs[TAB_LAYOUT_MODE_KEY] ?: "Grid"
+                autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
+                openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
+                accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
+                accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
+                accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
+                
+                defaultGeolocation = prefs[DEFAULT_GEOLOCATION_KEY] ?: "ask"
+                defaultCamera = prefs[DEFAULT_CAMERA_KEY] ?: "ask"
+                defaultMicrophone = prefs[DEFAULT_MICROPHONE_KEY] ?: "ask"
+                defaultNotifications = prefs[DEFAULT_NOTIFICATIONS_KEY] ?: "ask"
+                defaultJavascriptAllowed = prefs[DEFAULT_JAVASCRIPT_KEY] ?: true
+                defaultAutoplayAllowed = prefs[DEFAULT_AUTOPLAY_KEY] ?: true
+            }
+
+            loadSitePermissions(appCtx)
 
             viewModelScope.launch {
                 val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
@@ -1652,14 +2170,15 @@ class BrowserViewModel : ViewModel() {
                     }
 
                     if (type == "GET_NATIVE_PLAYER_STATE") {
-                        val response = org.json.JSONObject()
-                        response.put("enabled", isNativePlayerEnabled)
-                        response.put("youtubeEnabled", isYouTubeEnabled)
-                        pendingJsCommand?.let {
-                            response.put("pendingJs", it)
-                            pendingJsCommand = null
+                        val response = org.json.JSONObject().apply {
+                            put("enabled", isNativePlayerEnabled)
+                            put("youtubeEnabled", isYouTubeEnabled)
+                            pendingJsCommand?.let {
+                                put("pendingJs", it)
+                                pendingJsCommand = null
+                            }
                         }
-                        return GeckoResult.fromValue(response)
+                        return GeckoResult.fromValue(response.toString())
                     } else if (type == "MEDIA_GRABBED") {
                         val url = if (message is org.json.JSONObject) {
                             if (message.has("url")) message.getString("url") else null
@@ -1741,6 +2260,17 @@ class BrowserViewModel : ViewModel() {
                                 if (consoleLogs.size > 200) {
                                     consoleLogs.removeAt(0)
                                 }
+                            }
+                        }
+                    } else if (type == "FOCUS_LOGIN_INPUT") {
+                        val pageUrl = if (message is org.json.JSONObject) {
+                            if (message.has("url")) message.getString("url") else null
+                        } else {
+                            (message as? Map<*, *>)?.get("url") as? String
+                        }
+                        if (pageUrl != null) {
+                            viewModelScope.launch(Dispatchers.Main) {
+                                checkAutofillForFocus(pageUrl)
                             }
                         }
                     }
@@ -1834,6 +2364,15 @@ class BrowserViewModel : ViewModel() {
             isPopupBlockerEnabled = newState
             context.dataStore.edit { preferences ->
                 preferences[POPUP_BLOCKER_ENABLED_KEY] = newState
+            }
+        }
+    }
+
+    fun updatePopupBlockerEnabled(enabled: Boolean, context: Context) {
+        viewModelScope.launch {
+            isPopupBlockerEnabled = enabled
+            context.dataStore.edit { preferences ->
+                preferences[POPUP_BLOCKER_ENABLED_KEY] = enabled
             }
         }
     }
@@ -2176,16 +2715,12 @@ class BrowserViewModel : ViewModel() {
             val pkg = context.packageName
             val aliases = listOf(
                 "Default" to ".MainActivityDefault",
-                "Dark"    to ".MainActivityDark",
-                "Blue"    to ".MainActivityBlue",
-                "Gold"    to ".MainActivityGold"
+                "Dark"    to ".MainActivityDark"
             )
 
             aliases.forEach { (name, aliasName) ->
                 val comp = android.content.ComponentName(pkg, "$pkg$aliasName")
-                // For "Custom" state, keep Default enabled so app stays visible in launcher
                 val enableState = when {
-                    state == "Custom" && name == "Default" -> android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                     name == state -> android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                     else -> android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
                 }
@@ -4023,6 +4558,245 @@ class BrowserViewModel : ViewModel() {
             .replace("\r", "\\r")
             .replace("\t", "\\t")
         return "\"$escaped\""
+    }
+
+    fun saveCookieBehavior(context: Context, value: Int) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[COOKIE_BEHAVIOR_KEY] = value }
+            cookieBehavior = value
+            updateRuntimeContentBlocking(context)
+        }
+    }
+    
+    fun saveDoNotTrack(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[DO_NOT_TRACK_KEY] = value }
+            doNotTrack = value
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+    
+    fun saveSafeBrowsingLevel(context: Context, value: Int) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[SAFE_BROWSING_LEVEL_KEY] = value }
+            safeBrowsingLevel = value
+            updateRuntimeContentBlocking(context)
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+    
+    fun savePreloadPages(context: Context, value: Int) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[PRELOAD_PAGES_KEY] = value }
+            preloadPages = value
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+    
+    fun saveLockIncognito(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[LOCK_INCOGNITO_KEY] = value }
+            lockIncognito = value
+        }
+    }
+    
+    fun saveCompromisedPasswordWarning(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[COMPROMISED_PASSWORD_WARNING_KEY] = value }
+            compromisedPasswordWarning = value
+        }
+    }
+    
+    fun saveHttpsOnlyMode(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[HTTPS_ONLY_MODE_KEY] = value }
+            httpsOnlyMode = value
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+
+    fun writeGeckoConfigFile(context: Context) {
+        val file = File(context.filesDir, "geckoview-config.yaml")
+        try {
+            val sb = java.lang.StringBuilder()
+            sb.append("pref:\n")
+            sb.append("  dom.ipc.processCount: 1\n")
+            sb.append("  dom.ipc.processCount.webIsolated: 1\n")
+            sb.append("  privacy.donottrackheader.enabled: ${doNotTrack}\n")
+            sb.append("  dom.security.https_only_mode: ${httpsOnlyMode || safeBrowsingLevel == 2}\n")
+            if (preloadPages == 0) {
+                sb.append("  network.dns.disablePrefetch: true\n")
+                sb.append("  network.prefetch-next: false\n")
+            } else {
+                sb.append("  network.dns.disablePrefetch: false\n")
+                sb.append("  network.prefetch-next: true\n")
+            }
+            file.writeText(sb.toString())
+            Log.d("BrowserViewModel", "Updated geckoview-config.yaml: \n$sb")
+        } catch (e: Exception) {
+            Log.e("BrowserViewModel", "Failed to write geckoview-config.yaml", e)
+        }
+    }
+
+    fun updateRuntimeContentBlocking(context: Context) {
+        writeGeckoConfigFile(context)
+    }
+
+    fun clearCustomBrowsingData(
+        context: Context,
+        clearHistory: Boolean,
+        clearCookies: Boolean,
+        clearCache: Boolean,
+        clearPasswords: Boolean,
+        clearAutofill: Boolean,
+        timeRangeMinutes: Int,
+        onComplete: () -> Unit
+    ) {
+        val runtime = geckoRuntime
+        val appCtx = context.applicationContext
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val cutoffTime = if (timeRangeMinutes == -1) 0L else System.currentTimeMillis() - (timeRangeMinutes * 60 * 1000L)
+                
+                if (clearHistory) {
+                    if (timeRangeMinutes == -1) {
+                        clearAllHistory()
+                    } else {
+                        clearHistorySince(cutoffTime)
+                    }
+                }
+                
+                if (clearPasswords) {
+                    if (timeRangeMinutes == -1) {
+                        clearAllSavedPasswords()
+                    } else {
+                        clearSavedPasswordsSince(cutoffTime)
+                    }
+                }
+                
+                if (runtime != null) {
+                    var flags: Long = 0L
+                    if (clearCookies) {
+                        flags = flags or org.mozilla.geckoview.StorageController.ClearFlags.COOKIES or
+                                  org.mozilla.geckoview.StorageController.ClearFlags.SITE_DATA or
+                                  org.mozilla.geckoview.StorageController.ClearFlags.DOM_STORAGES or
+                                  org.mozilla.geckoview.StorageController.ClearFlags.AUTH_SESSIONS
+                    }
+                    if (clearCache) {
+                        flags = flags or org.mozilla.geckoview.StorageController.ClearFlags.NETWORK_CACHE or
+                                  org.mozilla.geckoview.StorageController.ClearFlags.IMAGE_CACHE
+                    }
+                    
+                    if (flags != 0L) {
+                        withContext(Dispatchers.Main) {
+                            runtime.storageController.clearData(flags).accept(
+                                { Log.d("BrowserViewModel", "Gecko custom clear completed.") },
+                                { err -> Log.e("BrowserViewModel", "Gecko custom clear error", err) }
+                            )
+                        }
+                    }
+                }
+                
+                if (clearCache) {
+                    val cacheDir = appCtx.cacheDir
+                    if (cacheDir.exists()) {
+                        cacheDir.deleteRecursively()
+                        cacheDir.mkdirs()
+                    }
+                    val tempDownloadsDir = File(appCtx.filesDir, "temp_downloads")
+                    if (tempDownloadsDir.exists()) {
+                        tempDownloadsDir.deleteRecursively()
+                    }
+                }
+                
+                withContext(Dispatchers.Main) {
+                    onComplete()
+                }
+            } catch (e: Exception) {
+                Log.e("BrowserViewModel", "Failed to clear custom browsing data", e)
+                withContext(Dispatchers.Main) {
+                    onComplete()
+                }
+            }
+        }
+    }
+
+    fun saveTabLayoutMode(context: Context, mode: String) {
+        tabLayoutMode = mode
+        viewModelScope.launch(Dispatchers.IO) {
+            context.applicationContext.dataStore.edit { preferences ->
+                preferences[TAB_LAYOUT_MODE_KEY] = mode
+            }
+        }
+    }
+
+    fun saveAutoCloseTabsDays(context: Context, days: Int) {
+        autoCloseTabsDays = days
+        viewModelScope.launch(Dispatchers.IO) {
+            context.applicationContext.dataStore.edit { preferences ->
+                preferences[AUTO_CLOSE_TABS_DAYS_KEY] = days
+            }
+        }
+    }
+
+    fun saveOpenTabsInBackground(context: Context, value: Boolean) {
+        openTabsInBackground = value
+        viewModelScope.launch(Dispatchers.IO) {
+            context.applicationContext.dataStore.edit { preferences ->
+                preferences[OPEN_TABS_IN_BACKGROUND_KEY] = value
+            }
+        }
+    }
+
+    fun saveAccessibilityTextScale(context: Context, scale: Float) {
+        accessibilityTextScale = scale
+        viewModelScope.launch(Dispatchers.IO) {
+            context.applicationContext.dataStore.edit { preferences ->
+                preferences[ACCESSIBILITY_TEXT_SCALE_KEY] = scale
+            }
+            writeGeckoConfigFile(context.applicationContext)
+            viewModelScope.launch(Dispatchers.Main) {
+                reload()
+            }
+        }
+    }
+
+    fun saveAccessibilityForceZoom(context: Context, value: Boolean) {
+        accessibilityForceZoom = value
+        viewModelScope.launch(Dispatchers.IO) {
+            context.applicationContext.dataStore.edit { preferences ->
+                preferences[ACCESSIBILITY_FORCE_ZOOM_KEY] = value
+            }
+            viewModelScope.launch(Dispatchers.Main) {
+                reload()
+            }
+        }
+    }
+
+    fun saveAccessibilityHighContrast(context: Context, value: Boolean) {
+        accessibilityHighContrast = value
+        viewModelScope.launch(Dispatchers.IO) {
+            context.applicationContext.dataStore.edit { preferences ->
+                preferences[ACCESSIBILITY_HIGH_CONTRAST_KEY] = value
+            }
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+
+    fun checkAutoCloseTabs(context: Context) {
+        val days = autoCloseTabsDays
+        if (days <= 0) return
+        val cutoff = System.currentTimeMillis() - (days * 24 * 60 * 60 * 1000L)
+        val toClose = tabs.filter { it.id != activeTabId && it.lastActiveTime < cutoff }
+        if (toClose.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.Main) {
+                toClose.forEach { tab ->
+                    closeTab(tab.id, context)
+                }
+                saveTabs()
+                Log.d("BrowserViewModel", "Auto-closed ${toClose.size} inactive tabs.")
+            }
+        }
     }
 
     override fun onCleared() {

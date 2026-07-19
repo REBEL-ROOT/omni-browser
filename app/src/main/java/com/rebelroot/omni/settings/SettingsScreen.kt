@@ -61,7 +61,11 @@ fun SettingsScreen(
     onOpenUrl: (String) -> Unit,
     onLanguageChanged: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
-    onOpenWallpapers: () -> Unit = {}
+    onOpenWallpapers: () -> Unit = {},
+    onOpenPrivacySecurity: () -> Unit = {},
+    onOpenTabs: () -> Unit = {},
+    onOpenAccessibility: () -> Unit = {},
+    onOpenSiteSettings: () -> Unit = {}
 ) {
     BackHandler {
         onNavigateBack()
@@ -211,16 +215,20 @@ fun SettingsScreen(
                 )
             }
 
-            // 2. GENERAL Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // ── Helper composable ─────────────────────────────────────────────────
+            @Composable
+            fun SectionHeader(title: String) {
                 Text(
-                    text = stringResource(id = R.string.general_section),
+                    text = title,
                     color = accentColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp)
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                 )
-                
+            }
+
+            @Composable
+            fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -228,467 +236,274 @@ fun SettingsScreen(
                     color = cardColor,
                     border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                        // Row: Appearance Settings
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenAppearance() }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Palette, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Appearance", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Theme mode, Accent colors, layout, and UI scale", color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
-                            )
-                        }
+                    Column(modifier = Modifier.padding(vertical = 4.dp), content = content)
+                }
+            }
 
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        // Row: Wallpaper Settings
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenWallpapers() }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Wallpaper, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Wallpapers", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text("Browser background, dynamic wallpaper blur/dim", color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
-                            )
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        // Column for remaining rows in Card 1 to keep their padding
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            // PDF Export Theme
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Rounded.Print, contentDescription = null, tint = accentColor)
-                                    Column {
-                                        Text(stringResource(id = R.string.pdf_export_theme_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                        Text(stringResource(id = R.string.pdf_export_theme_desc), color = textSecondaryColor, fontSize = 11.sp)
-                                    }
-                                }
-
-                                var pdfExpanded by remember { mutableStateOf(false) }
-                                val pdfThemes = listOf(
-                                    "default" to stringResource(id = R.string.system_default),
-                                    "dark" to stringResource(id = R.string.dark_theme),
-                                    "light" to stringResource(id = R.string.light_theme)
-                                )
-                                val currentPdfThemeVal = viewModel.pdfExportTheme
-                                val currentPdfThemeLabel = pdfThemes.find { it.first == currentPdfThemeVal }?.second ?: "System Default"
-
-                                Box {
-                                    Row(
-                                        modifier = Modifier
-                                            .width(150.dp)
-                                            .height(36.dp)
-                                            .background(inputBgColor, RoundedCornerShape(8.dp))
-                                            .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))
-                                            .clickable { pdfExpanded = true }
-                                            .padding(horizontal = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = currentPdfThemeLabel,
-                                            color = textPrimaryColor,
-                                            fontSize = 12.sp,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Rounded.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            tint = textSecondaryColor,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = pdfExpanded,
-                                        onDismissRequest = { pdfExpanded = false },
-                                        modifier = Modifier
-                                            .width(150.dp)
-                                            .background(cardColor)
-                                            .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))
-                                    ) {
-                                        pdfThemes.forEach { (value, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label, color = textPrimaryColor, fontSize = 12.sp) },
-                                                onClick = {
-                                                    viewModel.savePdfExportTheme(context, value)
-                                                    pdfExpanded = false
-                                                },
-                                                colors = MenuDefaults.itemColors(
-                                                    textColor = textPrimaryColor
-                                                ),
-                                                trailingIcon = {
-                                                    if (currentPdfThemeVal == value) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Check,
-                                                            contentDescription = "Selected",
-                                                            tint = accentColor,
-                                                            modifier = Modifier.size(14.dp)
-                                                        )
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    }
+            @Composable
+            fun NavRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit, badge: String? = null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onClick() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(title, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            if (badge != null) {
+                                Surface(color = Color(0xFFFF9500).copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
+                                    Text(badge, color = Color(0xFFFF9500), fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                                 }
                             }
-                            
-                            HorizontalDivider(
-                                color = dividerColor,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-
-                            // Discover Feed Toggle
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Rounded.Newspaper, contentDescription = null, tint = accentColor)
-                                    Column {
-                                        Text("Discover Feed", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("Show news recommendations on the home page", color = textSecondaryColor, fontSize = 11.sp)
-                                    }
-                                }
-                                Switch(
-                                    checked = viewModel.showDiscoverFeed,
-                                    onCheckedChange = { viewModel.saveShowDiscoverFeed(context, it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = accentColor
-                                    )
-                                )
-                            }
-
-                            HorizontalDivider(
-                                color = dividerColor,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-
-                            // Bottom Navigation Bar Toggle
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Rounded.ViewAgenda, contentDescription = null, tint = accentColor)
-                                    Column {
-                                        Text("Bottom Navigation Bar", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("Show bottom toolbar with main navigation buttons", color = textSecondaryColor, fontSize = 11.sp)
-                                    }
-                                }
-                                Switch(
-                                    checked = viewModel.showBottomNavBar,
-                                    onCheckedChange = { viewModel.saveShowBottomNavBar(context, it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = accentColor
-                                    )
-                                )
-                            }
                         }
-                        
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                        
-                        // Row 2: Notifications
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Notifications, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.notifications_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(stringResource(id = R.string.notifications_desc), color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Switch(
-                                checked = isNotificationsEnabled,
-                                onCheckedChange = { checked ->
-                                    if (checked) {
-                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                        } else {
-                                            isNotificationsEnabled = true
-                                        }
-                                    } else {
-                                        isNotificationsEnabled = false
-                                        Toast.makeText(context, "Notifications disabled. Revoke system permission in settings if desired.", Toast.LENGTH_LONG).show()
-                                    }
-                                },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = accentColor
-                                )
-                            )
-                        }
-                        
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                        
-                        // Row 3: Private Browsing (Incognito Mode)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Security, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.private_browsing_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(stringResource(id = R.string.private_browsing_desc), color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Switch(
-                                checked = viewModel.isIncognitoMode,
-                                onCheckedChange = { viewModel.toggleIncognitoMode(context) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = accentColor
-                                )
-                            )
-                        }
-                        
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                        
-                        // Row 4: Native Video Player
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.PlayCircle, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.native_player_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(stringResource(id = R.string.native_player_desc), color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Switch(
-                                checked = viewModel.isNativePlayerEnabled,
-                                onCheckedChange = { viewModel.toggleNativePlayer(context) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = accentColor
-                                )
-                            )
-                        }
+                        Text(subtitle, color = textSecondaryColor, fontSize = 11.sp)
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                }
+            }
 
-                        // Row 4.1: Enable on YouTube (sub-setting of Native Video Player)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.PlayCircle, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.youtube_player_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(stringResource(id = R.string.youtube_player_desc), color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Switch(
-                                checked = viewModel.isYouTubeEnabled,
-                                onCheckedChange = { viewModel.toggleYouTube(context) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = accentColor
-                                )
-                            )
-                        }
+            @Composable
+            fun SwitchRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(title, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(subtitle, color = textSecondaryColor, fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = checked,
+                        onCheckedChange = onCheckedChange,
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
+                    )
+                }
+            }
 
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+            // ── 1. PERSONALIZATION ────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader("PERSONALIZATION")
+                SettingsCard {
+                    NavRow(Icons.Rounded.Palette, "Appearance", "Theme mode, accent colors, layout, and UI scale", onOpenAppearance)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Wallpaper, "Wallpapers", "Browser background, dynamic wallpaper blur/dim", onOpenWallpapers, badge = "Experimental")
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.AccessibilityNew, "Accessibility", "Text scaling, force enable zoom, and high contrast mode", onOpenAccessibility)
+                }
+            }
 
-                        // Row 4.5: AI Blocker
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Block, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.ai_blocker_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(stringResource(id = R.string.ai_blocker_desc), color = textSecondaryColor, fontSize = 11.sp)
-                            }
-                            Switch(
-                                checked = viewModel.isAiBlockerEnabled,
-                                onCheckedChange = { viewModel.toggleAiBlocker(context) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = accentColor
-                                )
-                            )
-                        }
+            // ── 2. BROWSING ───────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader("BROWSING")
+                SettingsCard {
+                    NavRow(Icons.Rounded.Tab, "Tabs", "Tab layouts, background tabs, and auto-closing settings", onOpenTabs)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Language, "Site Settings", "Manage site permissions, javascript, autoplay, and popups", onOpenSiteSettings)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        // Row 5: Default Browser
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    if (!isDefaultBrowser) {
-                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                            roleManager?.let { rm ->
-                                                if (rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER) && 
-                                                    !rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)) {
-                                                    val intent = rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER)
-                                                    defaultBrowserLauncher.launch(intent)
-                                                }
-                                            }
-                                        } else {
-                                            try {
-                                                val intent = android.content.Intent("android.intent.action.SET_DEFAULT").apply {
-                                                    addCategory(android.content.Intent.CATEGORY_DEFAULT)
-                                                    type = "text/html"
-                                                }
-                                                defaultBrowserLauncher.launch(intent)
-                                            } catch (e: Exception) {
-                                                try {
-                                                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                                                    defaultBrowserLauncher.launch(intent)
-                                                } catch (ex: Exception) {
-                                                    Toast.makeText(context, "Please set default browser in System Settings", Toast.LENGTH_LONG).show()
-                                                }
+                    // Default Browser
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (!isDefaultBrowser) {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                        roleManager?.let { rm ->
+                                            if (rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)) {
+                                                defaultBrowserLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER))
                                             }
                                         }
                                     } else {
-                                        Toast.makeText(context, "Omni Browser is already your default browser!", Toast.LENGTH_SHORT).show()
+                                        try {
+                                            defaultBrowserLauncher.launch(android.content.Intent("android.intent.action.SET_DEFAULT").apply { addCategory(android.content.Intent.CATEGORY_DEFAULT); type = "text/html" })
+                                        } catch (e: Exception) {
+                                            try { defaultBrowserLauncher.launch(android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
+                                            catch (ex: Exception) { Toast.makeText(context, "Please set default browser in System Settings", Toast.LENGTH_LONG).show() }
+                                        }
                                     }
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Language, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(id = R.string.default_browser_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    if (isDefaultBrowser) stringResource(id = R.string.default_browser_active) else stringResource(id = R.string.default_browser_inactive),
-                                    color = if (isDefaultBrowser) Color(0xFF30D158) else textSecondaryColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isDefaultBrowser) FontWeight.Bold else FontWeight.Normal
-                                )
+                                } else { Toast.makeText(context, "Omni Browser is already your default browser!", Toast.LENGTH_SHORT).show() }
                             }
-                            Icon(
-                                imageVector = if (isDefaultBrowser) Icons.Rounded.CheckCircle else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = if (isDefaultBrowser) Color(0xFF30D158) else textSecondaryColor
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(id = R.string.default_browser_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (isDefaultBrowser) stringResource(id = R.string.default_browser_active) else stringResource(id = R.string.default_browser_inactive),
+                                color = if (isDefaultBrowser) Color(0xFF30D158) else textSecondaryColor,
+                                fontSize = 11.sp,
+                                fontWeight = if (isDefaultBrowser) FontWeight.Bold else FontWeight.Normal
                             )
                         }
+                        Icon(
+                            imageVector = if (isDefaultBrowser) Icons.Rounded.CheckCircle else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = if (isDefaultBrowser) Color(0xFF30D158) else textSecondaryColor
+                        )
+                    }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    // App Language
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showLanguageSelector = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.Translate, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(id = R.string.app_language_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(currentLangName, color = textSecondaryColor, fontSize = 11.sp)
+                        }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                    }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                        // Row 6: App Language
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showLanguageSelector = true }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Translate, contentDescription = null, tint = accentColor)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(id = R.string.app_language_title),
-                                    color = textPrimaryColor,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = currentLangName,
-                                    color = textSecondaryColor,
-                                    fontSize = 11.sp
-                                )
+                    SwitchRow(Icons.Rounded.Newspaper, "Discover Feed", "Show news recommendations on the home page", viewModel.showDiscoverFeed) { viewModel.saveShowDiscoverFeed(context, it) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.ViewAgenda, "Bottom Navigation Bar", "Show bottom toolbar with main navigation buttons", viewModel.showBottomNavBar) { viewModel.saveShowBottomNavBar(context, it) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // PDF Export Theme
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Rounded.Print, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                            Column {
+                                Text(stringResource(id = R.string.pdf_export_theme_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(id = R.string.pdf_export_theme_desc), color = textSecondaryColor, fontSize = 11.sp)
                             }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
-                            )
+                        }
+                        var pdfExpanded by remember { mutableStateOf(false) }
+                        val pdfThemes = listOf("default" to stringResource(id = R.string.system_default), "dark" to stringResource(id = R.string.dark_theme), "light" to stringResource(id = R.string.light_theme))
+                        val currentPdfThemeVal = viewModel.pdfExportTheme
+                        val currentPdfThemeLabel = pdfThemes.find { it.first == currentPdfThemeVal }?.second ?: "System Default"
+                        Box {
+                            Row(
+                                modifier = Modifier
+                                    .width(150.dp).height(36.dp)
+                                    .background(inputBgColor, RoundedCornerShape(8.dp))
+                                    .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))
+                                    .clickable { pdfExpanded = true }
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(currentPdfThemeLabel, color = textPrimaryColor, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
+                            }
+                            DropdownMenu(expanded = pdfExpanded, onDismissRequest = { pdfExpanded = false },
+                                modifier = Modifier.width(150.dp).background(cardColor).border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))) {
+                                pdfThemes.forEach { (value, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label, color = textPrimaryColor, fontSize = 12.sp) },
+                                        onClick = { viewModel.savePdfExportTheme(context, value); pdfExpanded = false },
+                                        colors = MenuDefaults.itemColors(textColor = textPrimaryColor),
+                                        trailingIcon = { if (currentPdfThemeVal == value) Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor, modifier = Modifier.size(14.dp)) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-
-            // 3. SEARCH ENGINE Section
+            // ── 3. PRIVACY & SECURITY ─────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(id = R.string.search_engine_section),
-                    color = accentColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-                
+                SectionHeader("PRIVACY & SECURITY")
+                SettingsCard {
+                    NavRow(Icons.Rounded.Security, "Privacy and Security", "Clear browsing data, cookies, Safe Browsing, and device lock", onOpenPrivacySecurity)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.VisibilityOff, "Private Browsing", stringResource(id = R.string.private_browsing_desc), viewModel.isIncognitoMode) { viewModel.toggleIncognitoMode(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    // Notifications
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.Notifications, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(id = R.string.notifications_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.notifications_desc), color = textSecondaryColor, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = isNotificationsEnabled,
+                            onCheckedChange = { checked ->
+                                if (checked) {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    } else { isNotificationsEnabled = true }
+                                } else {
+                                    isNotificationsEnabled = false
+                                    Toast.makeText(context, "Notifications disabled. Revoke system permission in settings if desired.", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
+                        )
+                    }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showClearCacheConfirmation = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.DeleteSweep, contentDescription = null, tint = Color(0xFFFF4444), modifier = Modifier.size(22.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Clear Cache & Site Data", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Removes cookies, offline data, and frees storage", color = textSecondaryColor, fontSize = 11.sp)
+                        }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                    }
+                }
+            }
+
+            // ── 4. MEDIA ──────────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader("MEDIA")
+                SettingsCard {
+                    SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.native_player_title), stringResource(id = R.string.native_player_desc), viewModel.isNativePlayerEnabled) { viewModel.toggleNativePlayer(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
+                }
+            }
+
+            // ── 5. SEARCH ─────────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(stringResource(id = R.string.search_engine_section))
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp)),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
                     color = cardColor,
                     border = BorderStroke(0.5.dp, cardBorderColor)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(id = R.string.search_engine_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        
                         var expanded by remember { mutableStateOf(false) }
                         val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom") + viewModel.customSearchEngines.map { it.name }
                         val currentEngine = viewModel.selectedSearchEngine
-                        
                         Box(modifier = Modifier.fillMaxWidth()) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
                                     .background(inputBgColor, RoundedCornerShape(12.dp))
                                     .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(12.dp))
                                     .clickable { expanded = true }
@@ -696,162 +511,70 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     val icon = when (currentEngine) {
                                         "Google" -> Icons.Rounded.Search
-                                        "DuckDuckGo" -> Icons.Rounded.Security
-                                        "Brave" -> Icons.Rounded.Security
+                                        "DuckDuckGo", "Brave" -> Icons.Rounded.Security
                                         "Bing" -> Icons.Rounded.Language
                                         "Custom" -> Icons.Rounded.Build
                                         else -> Icons.Rounded.Settings
                                     }
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        tint = accentColor
-                                    )
-                                    Text(
-                                        text = currentEngine,
-                                        color = textPrimaryColor,
-                                        fontSize = 14.sp
-                                    )
+                                    Icon(icon, contentDescription = null, tint = accentColor)
+                                    Text(currentEngine, color = textPrimaryColor, fontSize = 14.sp)
                                 }
-                                Icon(
-                                    imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    tint = textSecondaryColor
-                                )
+                                Icon(if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = textSecondaryColor)
                             }
-                            
-                            DropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false },
-                                modifier = Modifier
-                                    .fillMaxWidth(0.9f)
-                                    .background(cardColor)
-                                    .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))
-                            ) {
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false },
+                                modifier = Modifier.fillMaxWidth(0.9f).background(cardColor).border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))) {
                                 engines.forEach { engine ->
                                     DropdownMenuItem(
                                         text = { Text(engine, color = textPrimaryColor) },
-                                        onClick = {
-                                            viewModel.saveSearchEngine(context, engine)
-                                            expanded = false
-                                        },
-                                        colors = MenuDefaults.itemColors(
-                                            textColor = textPrimaryColor,
-                                            trailingIconColor = accentColor
-                                        ),
-                                        trailingIcon = {
-                                            if (currentEngine == engine) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Check,
-                                                    contentDescription = "Selected",
-                                                    tint = accentColor
-                                                )
-                                            }
-                                        }
+                                        onClick = { viewModel.saveSearchEngine(context, engine); expanded = false },
+                                        colors = MenuDefaults.itemColors(textColor = textPrimaryColor, trailingIconColor = accentColor),
+                                        trailingIcon = { if (currentEngine == engine) Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor) }
                                     )
                                 }
                             }
                         }
-
                         if (currentEngine == "Custom") {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(id = R.string.custom_query_template),
-                                color = textPrimaryColor,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            
+                            Text(stringResource(id = R.string.custom_query_template), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             var customUrlText by remember(viewModel.customSearchUrl) { mutableStateOf(viewModel.customSearchUrl) }
-                            
                             OutlinedTextField(
                                 value = customUrlText,
-                                onValueChange = {
-                                    customUrlText = it
-                                    viewModel.saveCustomSearchUrl(context, it)
-                                },
-                                placeholder = {
-                                    Text("https://example.com/search?q=%s", color = textSecondaryColor)
-                                },
+                                onValueChange = { customUrlText = it; viewModel.saveCustomSearchUrl(context, it) },
+                                placeholder = { Text("https://example.com/search?q=%s", color = textSecondaryColor) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.Build, contentDescription = null, tint = textSecondaryColor)
-                                },
+                                leadingIcon = { Icon(Icons.Rounded.Build, contentDescription = null, tint = textSecondaryColor) },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = textPrimaryColor,
-                                    unfocusedTextColor = textPrimaryColor,
-                                    focusedBorderColor = accentColor,
-                                    unfocusedBorderColor = cardBorderColor,
-                                    focusedContainerColor = inputBgColor,
-                                    unfocusedContainerColor = inputBgColor
+                                    focusedTextColor = textPrimaryColor, unfocusedTextColor = textPrimaryColor,
+                                    focusedBorderColor = accentColor, unfocusedBorderColor = cardBorderColor,
+                                    focusedContainerColor = inputBgColor, unfocusedContainerColor = inputBgColor
                                 )
                             )
-                            Text(
-                                text = stringResource(id = R.string.custom_query_placeholder_desc),
-                                color = textSecondaryColor,
-                                fontSize = 11.sp
-                            )
+                            Text(stringResource(id = R.string.custom_query_placeholder_desc), color = textSecondaryColor, fontSize = 11.sp)
                         }
-
                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Custom Search Engines",
-                                color = textPrimaryColor,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            TextButton(
-                                onClick = { showAddSearchEngineDialog = true }
-                            ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("Custom Search Engines", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { showAddSearchEngineDialog = true }) {
                                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Add New", color = accentColor)
                             }
                         }
-
                         if (viewModel.customSearchEngines.isEmpty()) {
-                            Text(
-                                text = "No custom search engines added yet.",
-                                color = textSecondaryColor,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
+                            Text("No custom search engines added yet.", color = textSecondaryColor, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                         } else {
                             viewModel.customSearchEngines.forEach { engine ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = engine.name, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text(text = engine.queryUrl, color = textSecondaryColor, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        Text(engine.name, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        Text(engine.queryUrl, color = textSecondaryColor, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     }
-                                    IconButton(
-                                        onClick = { viewModel.deleteCustomSearchEngine(context, engine) },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Delete,
-                                            contentDescription = "Delete",
-                                            tint = Color.Red.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                    IconButton(onClick = { viewModel.deleteCustomSearchEngine(context, engine) }, modifier = Modifier.size(36.dp)) {
+                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
@@ -860,256 +583,85 @@ fun SettingsScreen(
                 }
             }
 
-            // 4. ABOUT Section
+            // ── 6. ABOUT ──────────────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(id = R.string.about_section),
-                    color = accentColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-                
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp)),
-                    color = cardColor,
-                    border = BorderStroke(0.5.dp, cardBorderColor)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        val appVersionName = remember {
-                            try {
-                                val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                                pInfo.versionName ?: "1.0.6"
-                            } catch (e: Exception) {
-                                "1.0.6"
+                SectionHeader(stringResource(id = R.string.about_section))
+                SettingsCard {
+                    val appVersionName = remember {
+                        try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.6" }
+                        catch (e: Exception) { "1.0.6" }
+                    }
+                    var isCheckingUpdate by remember { mutableStateOf(false) }
+                    var updateResult by remember { mutableStateOf<BrowserViewModel.UpdateCheckResult?>(null) }
+
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Rounded.Info, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(22.dp))
+                        Text(stringResource(id = R.string.app_version_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(appVersionName, color = textSecondaryColor, fontSize = 13.sp)
+                    }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !isCheckingUpdate) {
+                            isCheckingUpdate = true
+                            viewModel.checkAppUpdates(context) { result -> isCheckingUpdate = false; updateResult = result }
+                        }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(if (isCheckingUpdate) Icons.Rounded.Refresh else Icons.Rounded.Update, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        Text(if (isCheckingUpdate) stringResource(id = R.string.checking_text) else stringResource(id = R.string.check_updates_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        if (!isCheckingUpdate) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                    }
+
+                    updateResult?.let { result ->
+                        when (result) {
+                            is BrowserViewModel.UpdateCheckResult.NewUpdateAvailable -> {
+                                AlertDialog(
+                                    onDismissRequest = { updateResult = null },
+                                    title = { Text(stringResource(id = R.string.update_dialog_title), color = textPrimaryColor) },
+                                    text = { Text(stringResource(id = R.string.update_dialog_desc, result.versionName), color = textPrimaryColor) },
+                                    containerColor = cardColor,
+                                    confirmButton = {
+                                        Button(onClick = {
+                                            updateResult = null
+                                            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(result.playStoreUrl)).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                                            catch (e: Exception) { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                                        }) { Text(stringResource(id = R.string.update_dialog_btn)) }
+                                    },
+                                    dismissButton = { TextButton(onClick = { updateResult = null }) { Text(stringResource(id = R.string.update_dialog_later), color = textSecondaryColor) } }
+                                )
                             }
-                        }
-
-                        var isCheckingUpdate by remember { mutableStateOf(false) }
-                        var updateResult by remember { mutableStateOf<BrowserViewModel.UpdateCheckResult?>(null) }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Info, contentDescription = null, tint = textSecondaryColor)
-                            Text(stringResource(id = R.string.app_version_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Text(appVersionName, color = textSecondaryColor, fontSize = 13.sp)
-                        }
-                        
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = !isCheckingUpdate) {
-                                    isCheckingUpdate = true
-                                    viewModel.checkAppUpdates(context) { result ->
-                                        isCheckingUpdate = false
-                                        updateResult = result
-                                    }
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isCheckingUpdate) Icons.Rounded.Refresh else Icons.Rounded.Update,
-                                contentDescription = null,
-                                tint = accentColor
-                            )
-                            Text(
-                                text = if (isCheckingUpdate) stringResource(id = R.string.checking_text) else stringResource(id = R.string.check_updates_title),
-                                color = textPrimaryColor,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (!isCheckingUpdate) {
-                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                            is BrowserViewModel.UpdateCheckResult.NoUpdateAvailable -> { Toast.makeText(context, stringResource(id = R.string.update_no_update, appVersionName), Toast.LENGTH_SHORT).show(); updateResult = null }
+                            is BrowserViewModel.UpdateCheckResult.Error -> {
+                                AlertDialog(
+                                    onDismissRequest = { updateResult = null },
+                                    title = { Text(stringResource(id = R.string.update_failed_title), color = textPrimaryColor) },
+                                    text = { Text(stringResource(id = R.string.update_failed_desc, result.message), color = textPrimaryColor) },
+                                    containerColor = cardColor,
+                                    confirmButton = {
+                                        Button(onClick = {
+                                            updateResult = null
+                                            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=com.rebelroot.omni")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                                            catch (e: Exception) { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                                        }) { Text(stringResource(id = R.string.update_dialog_open_store)) }
+                                    },
+                                    dismissButton = { TextButton(onClick = { updateResult = null }) { Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor) } }
+                                )
                             }
-                        }
-
-                        updateResult?.let { result ->
-                            when (result) {
-                                is BrowserViewModel.UpdateCheckResult.NewUpdateAvailable -> {
-                                    AlertDialog(
-                                        onDismissRequest = { updateResult = null },
-                                        title = { Text(stringResource(id = R.string.update_dialog_title), color = textPrimaryColor) },
-                                        text = { Text(stringResource(id = R.string.update_dialog_desc, result.versionName), color = textPrimaryColor) },
-                                        confirmButton = {
-                                            Button(
-                                                onClick = {
-                                                    updateResult = null
-                                                    try {
-                                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(result.playStoreUrl)).apply {
-                                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        }
-                                                        context.startActivity(intent)
-                                                    } catch (e: Exception) {
-                                                        val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply {
-                                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        }
-                                                        context.startActivity(fallbackIntent)
-                                                    }
-                                                }
-                                            ) {
-                                                Text(stringResource(id = R.string.update_dialog_btn))
-                                            }
-                                        },
-                                        dismissButton = {
-                                            TextButton(onClick = { updateResult = null }) {
-                                                Text(stringResource(id = R.string.update_dialog_later), color = textSecondaryColor)
-                                            }
-                                        }
-                                    )
-                                }
-                                is BrowserViewModel.UpdateCheckResult.NoUpdateAvailable -> {
-                                    Toast.makeText(context, stringResource(id = R.string.update_no_update, appVersionName), Toast.LENGTH_SHORT).show()
-                                    updateResult = null
-                                }
-                                is BrowserViewModel.UpdateCheckResult.Error -> {
-                                    AlertDialog(
-                                        onDismissRequest = { updateResult = null },
-                                        title = { Text(stringResource(id = R.string.update_failed_title), color = textPrimaryColor) },
-                                        text = { Text(stringResource(id = R.string.update_failed_desc, result.message), color = textPrimaryColor) },
-                                        confirmButton = {
-                                            Button(
-                                                onClick = {
-                                                    updateResult = null
-                                                    try {
-                                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=com.rebelroot.omni")).apply {
-                                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        }
-                                                        context.startActivity(intent)
-                                                    } catch (e: Exception) {
-                                                        val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply {
-                                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        }
-                                                        context.startActivity(fallbackIntent)
-                                                    }
-                                                }
-                                            ) {
-                                                Text(stringResource(id = R.string.update_dialog_open_store))
-                                            }
-                                        },
-                                        dismissButton = {
-                                            TextButton(onClick = { updateResult = null }) {
-                                                Text(stringResource(id = R.string.cancel_text), color = textSecondaryColor)
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onOpenUrl("https://rebelroot.xyz/support")
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Rounded.Help, contentDescription = null, tint = accentColor)
-                            Text("Help & Support", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showFeedbackDialog = true
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Feedback, contentDescription = null, tint = accentColor)
-                            Text("Send Direct Feedback", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onOpenUrl("https://github.com/rebelroot")
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Rounded.Help, contentDescription = null, tint = accentColor)
-                            Text(stringResource(id = R.string.support_github), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
-                        }
-                        
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onOpenUrl("https://www.rebelroot.xyz/omnibrowser")
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Language, contentDescription = null, tint = accentColor)
-                            Text(stringResource(id = R.string.website_omnibrowser), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
-                        }
-                        
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onOpenUrl("https://www.rebelroot.xyz/omnibrowser/privacy-policy")
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Shield, contentDescription = null, tint = accentColor)
-                            Text(stringResource(id = R.string.privacy_policy_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
-                        }
-
-                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showClearCacheConfirmation = true
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Rounded.Delete, contentDescription = null, tint = accentColor)
-                            Text("Clear Cache & Site Data", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
                         }
                     }
+
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.AutoMirrored.Rounded.Help, "Help & Support", "Get help, FAQs, and contact us", onClick = { onOpenUrl("https://rebelroot.xyz/support") })
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Feedback, "Send Direct Feedback", "Report bugs, suggest features, share thoughts", onClick = { showFeedbackDialog = true })
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Code, stringResource(id = R.string.support_github), "View source code and file issues", onClick = { onOpenUrl("https://github.com/rebelroot") })
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Public, stringResource(id = R.string.website_omnibrowser), "Visit the official Omni Browser website", onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser") })
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Shield, stringResource(id = R.string.privacy_policy_title), "Read our privacy policy", onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser/privacy-policy") })
                 }
             }
         }

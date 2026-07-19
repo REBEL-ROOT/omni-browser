@@ -36,6 +36,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
@@ -138,6 +139,53 @@ fun BrowserScreen(
     onExitBrowser: () -> Unit
 ) {
     val context = LocalContext.current
+    val keyguardManager = remember(context) { context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
+    val unlockLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.isIncognitoUnlocked = true
+        } else {
+            viewModel.isIncognitoUnlocked = false
+        }
+    }
+    
+    fun tryUnlockIncognito() {
+        if (keyguardManager.isDeviceSecure) {
+            val intent = keyguardManager.createConfirmDeviceCredentialIntent(
+                "Unlock Incognito Tabs",
+                "Authenticate to view your private tabs"
+            )
+            if (intent != null) {
+                unlockLauncher.launch(intent)
+            } else {
+                viewModel.isIncognitoUnlocked = true
+            }
+        } else {
+            viewModel.isIncognitoUnlocked = true
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                if (viewModel.isIncognitoMode && viewModel.lockIncognito) {
+                    viewModel.isIncognitoUnlocked = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(viewModel.isIncognitoMode) {
+        if (viewModel.isIncognitoMode && viewModel.lockIncognito && !viewModel.isIncognitoUnlocked) {
+            tryUnlockIncognito()
+        }
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
@@ -161,6 +209,8 @@ fun BrowserScreen(
     val detectedMedia by viewModel.mediaInterceptor.detectedMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
+    val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
+    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -185,6 +235,18 @@ fun BrowserScreen(
     LaunchedEffect(viewModel.currentUrl) {
         isAlohaBannerDismissed = false
         isScrollNavBarVisible = true
+    }
+    // Re-show the banner whenever a brand-new video URL is detected (e.g. next video starts)
+    // Observing the count via flow is the thread-safe Compose-idiomatic approach.
+    LaunchedEffect(viewModel.mediaInterceptor.detectedMedia) {
+        var lastKnownCount = 0
+        viewModel.mediaInterceptor.detectedMedia.collect { mediaList ->
+            if (mediaList.size > lastKnownCount) {
+                // New media was added — re-show banner even if user dismissed it
+                isAlohaBannerDismissed = false
+            }
+            lastKnownCount = mediaList.size
+        }
     }
     LaunchedEffect(isNavHideEnabled) {
         if (!isNavHideEnabled) {
@@ -361,6 +423,26 @@ fun BrowserScreen(
             viewModel.deliverFilePickerResult(uris)
         } else {
             viewModel.cancelFilePrompt()
+        }
+    }
+
+    // Dedicated JS File picker for DevTools Console script loader
+    val jsFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val jsCode = stream.bufferedReader().readText()
+                    if (jsCode.isNotBlank()) {
+                        viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> [Loaded JS File: ${uri.lastPathSegment ?: "script.js"}]"))
+                        viewModel.pendingJsCommand = jsCode
+                        Toast.makeText(context, "Injected JS script into page!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to read JS file", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -581,7 +663,8 @@ fun BrowserScreen(
         )
     }
 
-    Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         topBar = {
         if (!viewModel.isFullscreen && !showHomeScreen &&
                 ((viewModel.chromeNavBarEnabled && viewModel.addressBarPosition != "Bottom") ||
@@ -992,108 +1075,31 @@ fun BrowserScreen(
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
                                 )
                             }
-                        }
-                    }
 
-                    val isRestrictedDomain = listOf("youtube.com", "youtu.be", "google.com", "googlevideo.com", "googleusercontent.com").any { viewModel.currentUrl.contains(it, ignoreCase = true) }
-                    val nonDrmMedia = if (isRestrictedDomain && !viewModel.isYouTubeEnabled) emptyList() else detectedMedia.filter { !it.isDrmProtected }
-                    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive
-
-                    AnimatedVisibility(
-                        visible = showAlohaBanner,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            color = Color(0xFF1B2234)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            AnimatedVisibility(
+                                visible = showAlohaBanner && viewModel.addressBarPosition != "Bottom",
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
                             ) {
-                                IconButton(
-                                    onClick = { isAlohaBannerDismissed = true },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = "Dismiss",
-                                        tint = Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                if (viewModel.isVideoPlayingInPage) {
-                                    EqualizerIcon(
-                                        modifier = Modifier.align(Alignment.CenterVertically),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PlayCircle,
-                                        contentDescription = "Video Detected",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                Text(
-                                    text = if (viewModel.isVideoPlayingInPage) "Video is playing" else "Video playing detected",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                IconButton(
-                                    onClick = {
-                                        val firstMedia = nonDrmMedia.firstOrNull()
-                                        if (firstMedia != null) {
-                                            onPlayOnlineStream(firstMedia.url, viewModel.currentUrl)
-                                        }
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PlayArrow,
-                                        contentDescription = "Play in Premium Player",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                IconButton(
-                                    onClick = {
+                                MediaSnifferBanner(
+                                    viewModel = viewModel,
+                                    nonDrmMedia = nonDrmMedia,
+                                    onDismiss = { isAlohaBannerDismissed = true },
+                                    onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
+                                    onDownloadClick = {
                                         if (!viewModel.hasSeenVideoOverview) {
                                             pendingVideoAction = { showDownloadSheet = true }
                                             showVideoOverviewDialog = true
                                         } else {
                                             showDownloadSheet = true
                                         }
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Download,
-                                        contentDescription = "Download Options",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
                     }
+
+
                 }
             }
         }
@@ -1306,34 +1312,105 @@ fun BrowserScreen(
         // the content area is never tied to Scaffold's measurement. GeckoView padding
         // snaps binary on isScrollNavBarVisible, so no reflow happens during the
         // graphicsLayer slide animation.
+        val needsStatusBarPadding = viewModel.addressBarPosition != "Bottom" || isTablet || showHomeScreen
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .navigationBarsPadding()
                 .clip(androidx.compose.ui.graphics.RectangleShape)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            Box(
+            Column(
                 modifier = Modifier.fillMaxSize()
             ) {
+                if (!needsStatusBarPadding && !viewModel.isFullscreen) {
+                    val isDark = viewModel.isDarkThemeEnabled
+                    val statusBarBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
+                    val dividerColor = if (viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(statusBarBg)
+                            .statusBarsPadding()
+                    )
+                    HorizontalDivider(
+                        color = dividerColor,
+                        thickness = 0.5.dp
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = showAlohaBanner && viewModel.addressBarPosition == "Bottom",
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    MediaSnifferBanner(
+                        viewModel = viewModel,
+                        nonDrmMedia = nonDrmMedia,
+                        onDismiss = { isAlohaBannerDismissed = true },
+                        onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
+                        onDownloadClick = {
+                            if (!viewModel.hasSeenVideoOverview) {
+                                pendingVideoAction = { showDownloadSheet = true }
+                                showVideoOverviewDialog = true
+                            } else {
+                                showDownloadSheet = true
+                            }
+                        }
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (needsStatusBarPadding && !viewModel.isFullscreen) Modifier.statusBarsPadding() else Modifier)
+                ) {
                 // GeckoView transitions from "static" to "overlap" based on scroll position.
                 // At the very top (currentScrollPos <= 0), it has padding so the site's own
                 // nav/header is fully visible and not covered by the browser's top bar.
                 // When scrolled down (currentScrollPos > 0), padding snaps to 0.dp so the browser
                 // bars overlap the site, allowing them to hide/show cleanly without white flashes.
                 if (activeTab != null && !showHomeScreen) {
+                    val hasBottomSiteNav = remember(viewModel.currentUrl) {
+                        val bottomNavDomains = listOf(
+                            "youtube.com", "m.youtube.com", 
+                            "instagram.com", "m.instagram.com",
+                            "twitter.com", "x.com", "mobile.twitter.com", 
+                            "tiktok.com", "m.tiktok.com",
+                            "threads.net", 
+                            "facebook.com", "m.facebook.com", 
+                            "reddit.com", "m.reddit.com", 
+                            "pinterest.com", "m.pinterest.com", 
+                            "linkedin.com", "mobile.linkedin.com",
+                            "github.com", "discord.com", "spotify.com", "twitch.tv"
+                        )
+                        bottomNavDomains.any { viewModel.currentUrl.contains(it, ignoreCase = true) }
+                    }
+                    val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.uiScale) {
+                        if (viewModel.addressBarPosition == "Bottom" && !isTablet && !showHomeScreen && !viewModel.isFullscreen) {
+                            val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
+                            if (viewModel.chromeNavBarEnabled) {
+                                searchHeight
+                            } else {
+                                searchHeight + config.bottomNavBarHeight
+                            }
+                        } else {
+                            0.dp
+                        }
+                    }
+
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                     val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
                     
                     val isAtTop = currentScrollPos <= 0
-                    val geckoTopPad = if (isAtTop && hasTopBar && !(isKeyboardVisible && !isInputFocused)) topBarHeight else 0.dp
+                    val geckoTopPad = if (isAtTop && hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused)) topBarHeight else 0.dp
+                    val geckoBottomPad = if (hasBottomSiteNav) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
                     
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = geckoTopPad)
+                            .padding(top = geckoTopPad, bottom = geckoBottomPad)
                     ) {
                         DisposableEffect(Unit) {
                             onDispose {
@@ -1784,6 +1861,7 @@ fun BrowserScreen(
                             }
                     )
                 }
+            }
             }
 
             // ─── Reader Mode Configuration Bar ─────────────────────────────────────
@@ -2253,9 +2331,9 @@ fun BrowserScreen(
 
             // ─── Unified smart download button ─────────────────────────────────────
             // • Fullscreen: fades while playing, stays / reappears while paused or on tap
-            val isRestrictedDomain = listOf("youtube.com", "youtu.be", "google.com", "googlevideo.com", "googleusercontent.com").any { viewModel.currentUrl.contains(it, ignoreCase = true) }
-            val nonDrmMedia = if (isRestrictedDomain) emptyList() else detectedMedia.filter { !it.isDrmProtected }
-            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive) {
+            val nonDrmMedia = detectedMedia.filter { !it.isDrmProtected }
+            val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
+            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
                 if (viewModel.isFullscreen) {
                     // Fullscreen mode — overlay with auto-fade controls
                     // Transparent tap-catcher; restores controls on any tap
@@ -2720,13 +2798,29 @@ fun BrowserScreen(
                                                 onClick = {
                                                     showDownloadSheet = false
                                                     coroutineScope.launch {
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                            nonDrmMedia.find { 
+                                                                it.url.contains("googlevideo.com") && 
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url
+                                                        } else null
+
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Video"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Video"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
                                                         viewModel.streamDownloadEngine.startDownload(
                                                             url = item.url,
-                                                            suggestedName = "Video-${System.currentTimeMillis()}",
+                                                            suggestedName = suggestedName,
                                                             type = item.type,
                                                             saveToLocker = false,
                                                             referrerUrl = viewModel.currentUrl,
-                                                            cookies = viewModel.activeVideoCookies
+                                                            cookies = viewModel.activeVideoCookies,
+                                                            audioUrl = audioUrl
                                                         )
                                                         Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
                                                     }
@@ -2742,13 +2836,29 @@ fun BrowserScreen(
                                                 onClick = {
                                                     showDownloadSheet = false
                                                     coroutineScope.launch {
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                            nonDrmMedia.find { 
+                                                                it.url.contains("googlevideo.com") && 
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url
+                                                        } else null
+
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Video"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Video"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
                                                         viewModel.streamDownloadEngine.startDownload(
                                                             url = item.url,
-                                                            suggestedName = "Video-${System.currentTimeMillis()}",
+                                                            suggestedName = suggestedName,
                                                             type = item.type,
                                                             saveToLocker = true,
                                                             referrerUrl = viewModel.currentUrl,
-                                                            cookies = viewModel.activeVideoCookies
+                                                            cookies = viewModel.activeVideoCookies,
+                                                            audioUrl = audioUrl
                                                         )
                                                         Toast.makeText(context, "Downloading to Locker...", Toast.LENGTH_SHORT).show()
                                                     }
@@ -2765,6 +2875,101 @@ fun BrowserScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // Autofill suggestion bottom sheet: appears when user taps a login input
+            if (viewModel.showAutofillBottomSheet && viewModel.autofillMatches.isNotEmpty()) {
+                ModalBottomSheet(
+                    onDismissRequest = { viewModel.showAutofillBottomSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF0C1322) else MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.VpnKey,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = "Saved Passwords",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                            )
+                        }
+
+                        Text(
+                            text = "Choose a credential to fill in for ${try { java.net.URI(viewModel.currentUrl).host?.removePrefix("www.") ?: "this site" } catch(e: Exception) { "this site" }}:",
+                            fontSize = 13.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(viewModel.autofillMatches) { credential ->
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+                                    onClick = {
+                                        viewModel.autofillCredential(credential)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = credential.username,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 15.sp,
+                                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Clip
+                                            )
+                                            Text(
+                                                text = "••••••••",
+                                                fontSize = 13.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                            contentDescription = null,
+                                            tint = Color.Gray,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
@@ -3024,7 +3229,7 @@ fun BrowserScreen(
                 }
                 ModalBottomSheet(
                     onDismissRequest = { showTabGroupsSheet = false },
-                    sheetState = rememberModalBottomSheetState(),
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                     containerColor = if (viewModel.isIncognitoMode) Color(0xFF070A0F) else MaterialTheme.colorScheme.surface
                 ) {
                     Column(
@@ -3127,271 +3332,1091 @@ fun BrowserScreen(
                             }
                         }
 
-                        val tabChunks = remember(currentModeTabs) { currentModeTabs.chunked(2) }
+                        // Tab group & context menu state
+                        var showGroupDialog by remember { mutableStateOf(false) }
+                        var groupDialogTargetTabId by remember { mutableStateOf<String?>(null) }
+                        var newGroupTitle by remember { mutableStateOf("") }
+                        var newGroupColorIndex by remember { mutableStateOf(0) }
+                        var showRenameGroupDialog by remember { mutableStateOf(false) }
+                        var renameGroupTarget by remember { mutableStateOf<TabGroup?>(null) }
+                        var renameGroupText by remember { mutableStateOf("") }
 
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            modifier = Modifier.fillMaxHeight(0.6f)
-                        ) {
-                            items(tabChunks) { chunk ->
+                        val groupColors = listOf(
+                            0xFF4285F4L, // Google Blue
+                            0xFF34A853L, // Google Green
+                            0xFFEA4335L, // Google Red
+                            0xFFFBBC05L, // Google Yellow
+                            0xFF9C27B0L, // Purple
+                            0xFFFF6D00L, // Orange
+                            0xFF00BCD4L, // Cyan
+                            0xFFE91E63L  // Pink
+                        )
+                        val groupColorLabels = listOf("Blue","Green","Red","Yellow","Purple","Orange","Cyan","Pink")
+
+                        // Organise tabs: grouped tabs → show under their group header; ungrouped → show at bottom
+                        val groupedTabIds = remember(viewModel.tabGroups.toList()) {
+                            viewModel.tabGroups.flatMap { it.tabIds }.toSet()
+                        }
+                        val ungroupedTabs = remember(currentModeTabs, groupedTabIds) {
+                            currentModeTabs.filter { it.id !in groupedTabIds }
+                        }
+
+                        // Helper composable: full-width list row for List mode
+                        @Composable
+                        fun TabListRow(tab: TabState) {
+                            val isActive = tab.id == viewModel.activeTabId
+                            val swipeOffsetX = remember(tab.id) { androidx.compose.animation.core.Animatable(0f) }
+                            val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 120.dp.toPx() }
+                            val scope = rememberCoroutineScope()
+                            val tabGroup = remember(viewModel.tabGroups.toList()) { viewModel.getGroupForTab(tab.id) }
+                            val groupColor = tabGroup?.let { Color(it.color) }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        translationX = swipeOffsetX.value
+                                        alpha = (1f - (kotlin.math.abs(swipeOffsetX.value) / (swipeThreshold * 1.5f))).coerceIn(0f, 1f)
+                                    }
+                                    .pointerInput(tab.id) {
+                                        detectHorizontalDragGestures(
+                                            onDragEnd = {
+                                                if (kotlin.math.abs(swipeOffsetX.value) > swipeThreshold) {
+                                                    scope.launch {
+                                                        val target = if (swipeOffsetX.value > 0) swipeThreshold * 2f else -swipeThreshold * 2f
+                                                        swipeOffsetX.animateTo(target, androidx.compose.animation.core.tween(150))
+                                                        viewModel.closeTab(tab.id, context)
+                                                    }
+                                                } else {
+                                                    scope.launch { swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring()) }
+                                                }
+                                            },
+                                            onDragCancel = { scope.launch { swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring()) } },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                scope.launch { swipeOffsetX.snapTo(swipeOffsetX.value + dragAmount) }
+                                            }
+                                        )
+                                    }
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        if (isActive)
+                                            (if (viewModel.isDarkThemeEnabled) Color(0xFF1A2C40) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                                        else
+                                            (if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
+                                    )
+                                    .border(
+                                        BorderStroke(
+                                            if (isActive) 1.5.dp else 0.5.dp,
+                                            if (isActive) MaterialTheme.colorScheme.primary
+                                            else groupColor?.copy(alpha = 0.5f)
+                                                ?: (if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                                        ),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .combinedClickable(
+                                        onClick = {
+                                            viewModel.selectTab(tab.id)
+                                            showTabGroupsSheet = false
+                                        },
+                                        onLongClick = {
+                                            groupDialogTargetTabId = tab.id
+                                            newGroupTitle = ""
+                                            newGroupColorIndex = 0
+                                            showGroupDialog = true
+                                        }
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    for (tab in chunk) {
-                                        val isActive = tab.id == viewModel.activeTabId
-                                        val swipeOffsetX = remember(tab.id) { androidx.compose.animation.core.Animatable(0f) }
-                                        val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
-                                        val scope = rememberCoroutineScope()
-
+                                    // Group color stripe (left edge accent if grouped)
+                                    if (groupColor != null) {
                                         Box(
                                             modifier = Modifier
-                                                .weight(1f)
-                                                .graphicsLayer {
-                                                    translationX = swipeOffsetX.value
-                                                    alpha = (1f - (kotlin.math.abs(swipeOffsetX.value) / (swipeThreshold * 1.5f))).coerceIn(0f, 1f)
-                                                }
-                                                .pointerInput(tab.id) {
-                                                    detectDragGestures(
-                                                        onDragStart = { },
-                                                        onDragEnd = {
-                                                            if (kotlin.math.abs(swipeOffsetX.value) > swipeThreshold) {
-                                                                scope.launch {
-                                                                    val target = if (swipeOffsetX.value > 0) swipeThreshold * 2f else -swipeThreshold * 2f
-                                                                    swipeOffsetX.animateTo(target, androidx.compose.animation.core.tween(150))
-                                                                    viewModel.closeTab(tab.id, context)
-                                                                }
-                                                            } else {
-                                                                scope.launch {
-                                                                    swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring())
-                                                                }
-                                                            }
-                                                        },
-                                                        onDragCancel = {
-                                                            scope.launch {
-                                                                swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring())
-                                                            }
-                                                        },
-                                                        onDrag = { change, dragAmount ->
-                                                            change.consume()
-                                                            scope.launch {
-                                                                swipeOffsetX.snapTo(swipeOffsetX.value + dragAmount.x)
-                                                            }
-                                                        }
-                                                    )
-                                                }
-                                                .clip(RoundedCornerShape(24.dp))
-                                                .background(if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
-                                                .border(
-                                                    BorderStroke(
-                                                        if (isActive) 1.5.dp else 0.5.dp,
-                                                        if (isActive) MaterialTheme.colorScheme.primary else (if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                                                    ),
-                                                    RoundedCornerShape(24.dp)
-                                                )
-                                                .clickable {
-                                                    viewModel.selectTab(tab.id)
-                                                    showTabGroupsSheet = false
-                                                }
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                // Header row of the tab window card
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.weight(1f),
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Language,
-                                                            contentDescription = null,
-                                                            tint = if (isActive) MaterialTheme.colorScheme.primary else (if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
-                                                            modifier = Modifier.size(12.dp)
-                                                        )
-                                                        Text(
-                                                            text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") "New Tab" else tab.title,
-                                                            color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
-                                                            fontWeight = FontWeight.Bold,
-                                                            fontSize = 11.sp,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                    }
-                                                    Box(
-                                                         modifier = Modifier
-                                                             .size(24.dp)
-                                                             .clip(CircleShape)
-                                                             .background(if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                                             .clickable {
-                                                                 viewModel.closeTab(tab.id, context)
-                                                             },
-                                                         contentAlignment = Alignment.Center
-                                                     ) {
-                                                         Icon(
-                                                             imageVector = Icons.Rounded.Close,
-                                                             contentDescription = "Close Tab",
-                                                             tint = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                             modifier = Modifier.size(12.dp)
-                                                         )
-                                                     }
-                                                }
+                                                .width(3.dp)
+                                                .height(36.dp)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(groupColor)
+                                        )
+                                    }
 
-                                                // Webpage Preview Placeholder Box (Chrome / Opera style)
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(84.dp)
-                                                        .padding(start = 6.dp, end = 6.dp, bottom = 6.dp)
-                                                        .clip(RoundedCornerShape(20.dp))
-                                                        .background(
-                                                            Brush.verticalGradient(
-                                                                colors = if (viewModel.isDarkThemeEnabled) {
-                                                                    listOf(Color(0xFF1E2D3F), Color(0xFF0F1B26))
-                                                                } else {
-                                                                    listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0))
-                                                                }
-                                                            )
-                                                        ),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    // Show snapshot / reference image using high-res favicon
-                                                    if (tab.url.isNotEmpty() && tab.url != "about:blank") {
-                                                        coil.compose.AsyncImage(
-                                                            model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                                                .data("https://www.google.com/s2/favicons?domain=${tab.url}&sz=128")
-                                                                .size(96, 96)
-                                                                .crossfade(true)
-                                                                .build(),
-                                                            contentDescription = "Site Thumbnail",
-                                                            modifier = Modifier.size(40.dp)
-                                                        )
-                                                    } else {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Explore,
-                                                            contentDescription = null,
-                                                            tint = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f),
-                                                            modifier = Modifier.size(40.dp)
-                                                        )
-                                                    }
-
-                                                    // Tiny URL overlay at the bottom of the card preview
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .padding(6.dp),
-                                                        contentAlignment = Alignment.BottomStart
-                                                    ) {
-                                                        Text(
-                                                            text = if (tab.url == "about:blank") "about:blank" else tab.url,
-                                                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8).copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                                            fontSize = 9.sp,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                    }
-                                                }
-                                            }
+                                    // Favicon box
+                                    Box(
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1E2D3F) else Color.White),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (tab.url.isNotEmpty() && tab.url != "about:blank") {
+                                            coil.compose.AsyncImage(
+                                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                    .data("https://www.google.com/s2/favicons?domain=${tab.url}&sz=64")
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Explore,
+                                                contentDescription = null,
+                                                tint = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.15f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
                                         }
                                     }
-                                    if (chunk.size == 1) {
-                                        Box(modifier = Modifier.weight(1f))
+
+                                    // Title and URL
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") "New Tab" else tab.title,
+                                            color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (tab.url.isNotEmpty() && tab.url != "about:blank") {
+                                            Text(
+                                                text = tab.url,
+                                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 10.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (groupColor != null && tabGroup != null) {
+                                            Text(
+                                                text = tabGroup.title,
+                                                color = groupColor,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+
+                                    // Active indicator
+                                    if (isActive) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary)
+                                        )
+                                    }
+
+                                    // Close button
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+                                            .clickable { viewModel.closeTab(tab.id, context) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Close Tab",
+                                            tint = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
                                     }
                                 }
                             }
+                        }
+
+                        // Helper composable: square grid card for Grid mode
+                        @Composable
+                        fun TabGridCard(tab: TabState, modifier: Modifier = Modifier) {
+                            val isActive = tab.id == viewModel.activeTabId
+                            val swipeOffsetX = remember(tab.id) { androidx.compose.animation.core.Animatable(0f) }
+                            val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
+                            val scope = rememberCoroutineScope()
+                            val tabGroup = remember(viewModel.tabGroups.toList()) { viewModel.getGroupForTab(tab.id) }
+                            val groupColor = tabGroup?.let { Color(it.color) }
+
+                            Box(
+                                modifier = modifier
+                                    .graphicsLayer {
+                                        translationX = swipeOffsetX.value
+                                        alpha = (1f - (kotlin.math.abs(swipeOffsetX.value) / (swipeThreshold * 1.5f))).coerceIn(0f, 1f)
+                                    }
+                                    .pointerInput(tab.id) {
+                                        detectHorizontalDragGestures(
+                                            onDragEnd = {
+                                                if (kotlin.math.abs(swipeOffsetX.value) > swipeThreshold) {
+                                                    scope.launch {
+                                                        val target = if (swipeOffsetX.value > 0) swipeThreshold * 2f else -swipeThreshold * 2f
+                                                        swipeOffsetX.animateTo(target, androidx.compose.animation.core.tween(150))
+                                                        viewModel.closeTab(tab.id, context)
+                                                    }
+                                                } else {
+                                                    scope.launch { swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring()) }
+                                                }
+                                            },
+                                            onDragCancel = { scope.launch { swipeOffsetX.animateTo(0f, androidx.compose.animation.core.spring()) } },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                scope.launch { swipeOffsetX.snapTo(swipeOffsetX.value + dragAmount) }
+                                            }
+                                        )
+                                    }
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        BorderStroke(
+                                            if (isActive) 1.5.dp else 0.5.dp,
+                                            if (isActive) MaterialTheme.colorScheme.primary
+                                            else groupColor?.copy(alpha = 0.6f)
+                                                ?: (if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                        ),
+                                        RoundedCornerShape(24.dp)
+                                    )
+                                    .combinedClickable(
+                                        onClick = {
+                                            viewModel.selectTab(tab.id)
+                                            showTabGroupsSheet = false
+                                        },
+                                        onLongClick = {
+                                            groupDialogTargetTabId = tab.id
+                                            newGroupTitle = ""
+                                            newGroupColorIndex = 0
+                                            showGroupDialog = true
+                                        }
+                                    )
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    // Header row
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Group color dot
+                                            if (groupColor != null) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(groupColor)
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Language,
+                                                    contentDescription = null,
+                                                    tint = if (isActive) MaterialTheme.colorScheme.primary else (if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") "New Tab" else tab.title,
+                                                color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                                                .clickable { viewModel.closeTab(tab.id, context) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Close,
+                                                contentDescription = "Close Tab",
+                                                tint = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Preview box
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(84.dp)
+                                            .padding(start = 6.dp, end = 6.dp, bottom = 6.dp)
+                                            .clip(RoundedCornerShape(20.dp))
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colors = if (viewModel.isDarkThemeEnabled) {
+                                                        listOf(Color(0xFF1E2D3F), Color(0xFF0F1B26))
+                                                    } else {
+                                                        listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0))
+                                                    }
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (tab.url.isNotEmpty() && tab.url != "about:blank") {
+                                            coil.compose.AsyncImage(
+                                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                    .data("https://www.google.com/s2/favicons?domain=${tab.url}&sz=128")
+                                                    .size(96, 96)
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = "Site Thumbnail",
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Explore,
+                                                contentDescription = null,
+                                                tint = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f),
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier.fillMaxSize().padding(6.dp),
+                                            contentAlignment = Alignment.BottomStart
+                                        ) {
+                                            Text(
+                                                text = if (tab.url == "about:blank") "about:blank" else tab.url,
+                                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8).copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                                fontSize = 9.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        val isList = viewModel.tabLayoutMode == "List"
+
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(if (isList) 8.dp else 12.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            // ── Tab Groups Section ──────────────────────────────────────────
+                            viewModel.tabGroups.forEach { group ->
+                                val groupTabsInMode = currentModeTabs.filter { it.id in group.tabIds }
+                                if (groupTabsInMode.isEmpty()) return@forEach
+
+                                item(key = "group_header_${group.id}") {
+                                    // Group header row
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(group.color).copy(alpha = if (viewModel.isDarkThemeEnabled) 0.15f else 0.10f))
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(group.color))
+                                        )
+                                        Text(
+                                            text = group.title,
+                                            color = Color(group.color),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            text = "${groupTabsInMode.size} tab${if (groupTabsInMode.size != 1) "s" else ""}",
+                                            color = Color(group.color).copy(alpha = 0.7f),
+                                            fontSize = 10.sp
+                                        )
+                                        // Rename group
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(group.color).copy(alpha = 0.2f))
+                                                .clickable {
+                                                    renameGroupTarget = group
+                                                    renameGroupText = group.title
+                                                    showRenameGroupDialog = true
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Edit,
+                                                contentDescription = "Rename Group",
+                                                tint = Color(group.color),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                        // Delete group
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFFF3B5C).copy(alpha = 0.12f))
+                                                .clickable { viewModel.deleteTabGroup(group.id) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Close,
+                                                contentDescription = "Delete Group",
+                                                tint = Color(0xFFFF3B5C),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Tabs in this group
+                                if (isList) {
+                                    items(groupTabsInMode, key = { "list_${it.id}" }) { tab ->
+                                        TabListRow(tab)
+                                    }
+                                } else {
+                                    val chunks = groupTabsInMode.chunked(2)
+                                    items(chunks, key = { "grid_group_${group.id}_${it.first().id}" }) { chunk ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            for (tab in chunk) {
+                                                TabGridCard(tab, modifier = Modifier.weight(1f))
+                                            }
+                                            if (chunk.size == 1) Box(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+
+                                item(key = "group_divider_${group.id}") {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+                            }
+
+                            // ── Ungrouped Tabs Section ──────────────────────────────────────
+                            if (ungroupedTabs.isNotEmpty() && viewModel.tabGroups.any { g -> currentModeTabs.any { t -> t.id in g.tabIds } }) {
+                                item(key = "ungrouped_header") {
+                                    Text(
+                                        text = "Other Tabs",
+                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            if (isList) {
+                                items(ungroupedTabs, key = { "list_ungrouped_${it.id}" }) { tab ->
+                                    TabListRow(tab)
+                                }
+                            } else {
+                                val chunks = ungroupedTabs.chunked(2)
+                                items(chunks, key = { "grid_${it.first().id}" }) { chunk ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        for (tab in chunk) {
+                                            TabGridCard(tab, modifier = Modifier.weight(1f))
+                                        }
+                                        if (chunk.size == 1) Box(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Add to Group dialog (long-press on tab) ────────────────────────
+                        if (showGroupDialog && groupDialogTargetTabId != null) {
+                            val targetTabId = groupDialogTargetTabId!!
+                            val currentGroup = remember(viewModel.tabGroups.toList()) { viewModel.getGroupForTab(targetTabId) }
+
+                            AlertDialog(
+                                onDismissRequest = { showGroupDialog = false },
+                                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
+                                title = {
+                                    Text(
+                                        "Tab Groups",
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        // Remove from group option
+                                        if (currentGroup != null) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(Color(0xFFFF3B5C).copy(alpha = 0.12f))
+                                                    .clickable {
+                                                        viewModel.removeTabFromGroup(targetTabId, currentGroup.id)
+                                                        showGroupDialog = false
+                                                    }
+                                                    .padding(10.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Rounded.Close, null, tint = Color(0xFFFF3B5C), modifier = Modifier.size(16.dp))
+                                                Text("Remove from \"${currentGroup.title}\"", color = Color(0xFFFF3B5C), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+
+                                        // Existing groups
+                                        val existingGroups = viewModel.tabGroups.filter { it.id != currentGroup?.id }
+                                        if (existingGroups.isNotEmpty()) {
+                                            Text(
+                                                "Add to existing group:",
+                                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                                            )
+                                            existingGroups.forEach { group ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(Color(group.color).copy(alpha = 0.12f))
+                                                        .clickable {
+                                                            viewModel.addTabToGroup(targetTabId, group.id)
+                                                            showGroupDialog = false
+                                                        }
+                                                        .padding(10.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(group.color)))
+                                                    Text(group.title, color = Color(group.color), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                                    Spacer(Modifier.weight(1f))
+                                                    Text("${group.tabIds.size} tab${if (group.tabIds.size != 1) "s" else ""}",
+                                                        color = Color(group.color).copy(alpha = 0.6f), fontSize = 10.sp)
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+
+                                        // Create new group
+                                        Text(
+                                            "Create new group:",
+                                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                                        )
+                                        androidx.compose.material3.OutlinedTextField(
+                                            value = newGroupTitle,
+                                            onValueChange = { newGroupTitle = it },
+                                            placeholder = { Text("Group name (e.g. Work, Social)", fontSize = 12.sp) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(groupColors[newGroupColorIndex]),
+                                                unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                                                focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                            )
+                                        )
+                                        // Color picker row
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            groupColors.forEachIndexed { i, colorLong ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(colorLong))
+                                                        .border(
+                                                            if (i == newGroupColorIndex) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
+                                                            CircleShape
+                                                        )
+                                                        .clickable { newGroupColorIndex = i }
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            if (newGroupTitle.isNotBlank()) {
+                                                viewModel.createTabGroup(
+                                                    title = newGroupTitle.trim(),
+                                                    color = groupColors[newGroupColorIndex],
+                                                    initialTabId = targetTabId
+                                                )
+                                            }
+                                            showGroupDialog = false
+                                        }
+                                    ) {
+                                        Text(if (newGroupTitle.isNotBlank()) "Create & Add" else "Close",
+                                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showGroupDialog = false }) {
+                                        Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            )
+                        }
+
+                        // ── Rename Group dialog ────────────────────────────────────────────
+                        if (showRenameGroupDialog && renameGroupTarget != null) {
+                            AlertDialog(
+                                onDismissRequest = { showRenameGroupDialog = false },
+                                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
+                                title = {
+                                    Text("Rename Group",
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold)
+                                },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        androidx.compose.material3.OutlinedTextField(
+                                            value = renameGroupText,
+                                            onValueChange = { renameGroupText = it },
+                                            placeholder = { Text("Group name") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        // Color change row
+                                        Text("Change color:", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            groupColors.forEach { colorLong ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(colorLong))
+                                                        .border(
+                                                            if (colorLong == renameGroupTarget!!.color) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
+                                                            CircleShape
+                                                        )
+                                                        .clickable {
+                                                            renameGroupTarget = renameGroupTarget!!.copy(color = colorLong)
+                                                            viewModel.changeTabGroupColor(renameGroupTarget!!.id, colorLong)
+                                                        }
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        if (renameGroupText.isNotBlank()) {
+                                            viewModel.renameTabGroup(renameGroupTarget!!.id, renameGroupText.trim())
+                                        }
+                                        showRenameGroupDialog = false
+                                    }) {
+                                        Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showRenameGroupDialog = false }) {
+                                        Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            )
                         }
                     }
                 }
             }
 
-            // 3. Web Extensions Manager Bottom Sheet
+            // 3. DevTools Pro Developer Console Bottom Sheet
             if (showConsoleSheet) {
                 var jsInputText by remember { mutableStateOf("") }
+                var selectedLogFilter by remember { mutableStateOf("ALL") }
+                var consoleSearchQuery by remember { mutableStateOf("") }
+                var showLoadScriptDialog by remember { mutableStateOf(false) }
+                var cdnUrlInput by remember { mutableStateOf("") }
+                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+                val allLogs = viewModel.consoleLogs.toList()
+                val errorLogs = remember(allLogs) { allLogs.filter { it.level == "ERROR" } }
+                val warnLogs = remember(allLogs) { allLogs.filter { it.level == "WARN" } }
+                val infoLogs = remember(allLogs) { allLogs.filter { it.level == "LOG" || it.level == "INFO" } }
+                val sysLogs = remember(allLogs) { allLogs.filter { it.level == "EVAL" || it.level == "RESULT" } }
+
+                val filteredLogs = remember(allLogs, selectedLogFilter, consoleSearchQuery) {
+                    val base = when (selectedLogFilter) {
+                        "ERRS" -> errorLogs
+                        "WARNS" -> warnLogs
+                        "LOGS" -> infoLogs
+                        "SYSTEM" -> sysLogs
+                        else -> allLogs
+                    }
+                    if (consoleSearchQuery.isBlank()) {
+                        base
+                    } else {
+                        base.filter { it.message.contains(consoleSearchQuery, ignoreCase = true) || it.level.contains(consoleSearchQuery, ignoreCase = true) }
+                    }
+                }
+
                 ModalBottomSheet(
                     onDismissRequest = { showConsoleSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else Color(0xFF161B22)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                             .navigationBarsPadding(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // Header Bar: Title + Badges + Controls
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = ">_ Developer Console",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            TextButton(onClick = { viewModel.consoleLogs.clear() }) {
-                                Text("Clear", color = Color(0xFFFF5555))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF21262D)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Terminal,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "DevTools Console",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "${allLogs.size} total log entries • Real-time Web Inspector",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF8B949E)
+                                    )
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { showLoadScriptDialog = true }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Code,
+                                        contentDescription = "Load & Inject Script",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        val formatted = allLogs.joinToString("\n") { log ->
+                                            val timeStr = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date(log.timestamp))
+                                            "[$timeStr] [${log.level}] ${log.message}"
+                                        }
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(formatted))
+                                        Toast.makeText(context, "Copied ${allLogs.size} logs to clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ContentCopy,
+                                        contentDescription = "Copy All Logs",
+                                        tint = Color(0xFF8B949E),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { viewModel.consoleLogs.clear() }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = "Clear Console",
+                                        tint = Color(0xFFF85149),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
 
-                        androidx.compose.foundation.lazy.LazyColumn(
+                        // Filter Chips Row
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(320.dp)
-                                .background(MaterialTheme.colorScheme.background, RoundedCornerShape(20.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                                .padding(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                .then(Modifier.horizontalScroll(rememberScrollState())),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            items(viewModel.consoleLogs.toList(), key = { "${it.timestamp}_${it.message.hashCode()}" }) { log ->
-                                val color = when (log.level) {
-                                    "ERROR" -> Color(0xFFFF5555)
-                                    "WARN" -> Color(0xFFFFB86C)
-                                    "INFO" -> if (viewModel.isDarkThemeEnabled) Color(0xFF8BE9FD) else Color(0xFF0284C7)
-                                    else -> if (viewModel.isDarkThemeEnabled) Color(0xFFF8F8F2) else Color(0xFF1E293B)
+                            val filterOptions = listOf(
+                                "ALL" to "All (${allLogs.size})",
+                                "ERRS" to "Errors (${errorLogs.size})",
+                                "WARNS" to "Warnings (${warnLogs.size})",
+                                "LOGS" to "Logs (${infoLogs.size})",
+                                "SYSTEM" to "Exec/System (${sysLogs.size})"
+                            )
+
+                            filterOptions.forEach { (key, label) ->
+                                val isSelected = selectedLogFilter == key
+                                val badgeBg = when (key) {
+                                    "ERRS" -> if (isSelected) Color(0xFFDA3633) else Color(0x33DA3633)
+                                    "WARNS" -> if (isSelected) Color(0xFFD29922) else Color(0x33D29922)
+                                    "LOGS" -> if (isSelected) Color(0xFF238636) else Color(0x33238636)
+                                    "SYSTEM" -> if (isSelected) Color(0xFF8957E5) else Color(0x338957E5)
+                                    else -> if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF21262D)
                                 }
-                                val formatter = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-                                val timeStr = formatter.format(java.util.Date(log.timestamp))
-                                
-                                Text(
-                                    text = "[$timeStr] ${log.level}: ${log.message}",
-                                    fontSize = 11.sp,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                    color = color,
-                                    lineHeight = 14.sp
-                                )
-                                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f))
+                                val textColor = if (isSelected) Color.White else Color(0xFFC9D1D9)
+
+                                Surface(
+                                    modifier = Modifier.clickable { selectedLogFilter = key },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = badgeBg
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = textColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
                             }
                         }
 
+                        // Search Filter Field
+                        OutlinedTextField(
+                            value = consoleSearchQuery,
+                            onValueChange = { consoleSearchQuery = it },
+                            placeholder = { Text("Filter console output...", fontSize = 12.sp, color = Color(0xFF484F58)) },
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            textStyle = LocalTextStyle.current.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                color = Color.White
+                            ),
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Search, contentDescription = null, tint = Color(0xFF484F58), modifier = Modifier.size(16.dp))
+                            },
+                            trailingIcon = {
+                                if (consoleSearchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { consoleSearchQuery = "" }) {
+                                        Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = Color(0xFF8B949E), modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = Color(0xFF30363D),
+                                focusedContainerColor = Color(0xFF0D1117),
+                                unfocusedContainerColor = Color(0xFF0D1117)
+                            )
+                        )
+
+                        // Main Console Logs Viewport
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(380.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0D1117))
+                                .border(1.dp, Color(0xFF30363D), RoundedCornerShape(12.dp))
+                                .padding(8.dp)
+                        ) {
+                            if (filteredLogs.isEmpty()) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Terminal,
+                                        contentDescription = null,
+                                        tint = Color(0xFF30363D),
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = if (consoleSearchQuery.isNotEmpty()) "No matching console logs" else "No console messages recorded",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF484F58),
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    )
+                                }
+                            } else {
+                                androidx.compose.foundation.lazy.LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    items(filteredLogs, key = { "${it.timestamp}_${it.message.hashCode()}" }) { log ->
+                                        val formatter = remember { java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()) }
+                                        val timeStr = formatter.format(java.util.Date(log.timestamp))
+
+                                        val levelBadgeBg = when (log.level) {
+                                            "ERROR" -> Color(0xFFDA3633)
+                                            "WARN" -> Color(0xFFD29922)
+                                            "INFO" -> Color(0xFF3FB950)
+                                            "EVAL" -> Color(0xFFA371F7)
+                                            "RESULT" -> Color(0xFF58A6FF)
+                                            else -> Color(0xFF30363D)
+                                        }
+                                        val levelBadgeText = when (log.level) {
+                                            "WARN", "INFO", "RESULT" -> Color.Black
+                                            else -> Color.White
+                                        }
+                                        val textColor = when (log.level) {
+                                            "ERROR" -> Color(0xFFFF6E6E)
+                                            "WARN" -> Color(0xFFFFC857)
+                                            "INFO" -> Color(0xFF7EE787)
+                                            "EVAL" -> Color(0xFFD2A8FF)
+                                            "RESULT" -> Color(0xFF79C0FF)
+                                            else -> Color(0xFFC9D1D9)
+                                        }
+                                        val rowBg = when (log.level) {
+                                            "ERROR" -> Color(0x22DA3633)
+                                            "WARN" -> Color(0x1AD29922)
+                                            "EVAL" -> Color(0x15A371F7)
+                                            "RESULT" -> Color(0x1558A6FF)
+                                            else -> Color.Transparent
+                                        }
+
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(log.message))
+                                                    Toast.makeText(context, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                },
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = rowBg
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.Top,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                // Time Tag
+                                                Text(
+                                                    text = timeStr,
+                                                    fontSize = 10.sp,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    color = Color(0xFF6E7681)
+                                                )
+
+                                                // Level Pill
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = levelBadgeBg
+                                                ) {
+                                                    Text(
+                                                        text = log.level.take(4),
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                        color = levelBadgeText,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+
+                                                // Log Content
+                                                Text(
+                                                    text = log.message,
+                                                    fontSize = 11.sp,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    color = textColor,
+                                                    lineHeight = 15.sp,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Quick Script Preset Chips
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(Modifier.horizontalScroll(rememberScrollState())),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val presetScripts = listOf(
+                                "console.log(document.title)" to "title",
+                                "console.log(location.href)" to "url",
+                                "console.log(document.cookie)" to "cookies",
+                                "console.log(navigator.userAgent)" to "userAgent",
+                                "document.body.style.backgroundColor = 'black'" to "darkMode"
+                            )
+                            presetScripts.forEach { (script, label) ->
+                                Surface(
+                                    modifier = Modifier.clickable {
+                                        jsInputText = script
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF21262D),
+                                    border = BorderStroke(0.5.dp, Color(0xFF30363D))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("+", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        Text(label, fontSize = 10.sp, color = Color(0xFF8B949E), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Code Execution Terminal Bar
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            androidx.compose.material3.OutlinedTextField(
+                            OutlinedTextField(
                                 value = jsInputText,
                                 onValueChange = { jsInputText = it },
-                                placeholder = { Text("console.log('Hello');", fontSize = 14.sp) },
+                                placeholder = { Text("eval JS (e.g. console.log('hello'))", fontSize = 12.sp, color = Color(0xFF484F58)) },
                                 modifier = Modifier.weight(1f),
                                 textStyle = LocalTextStyle.current.copy(
                                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                    fontSize = 13.sp
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF7EE787)
                                 ),
+                                leadingIcon = {
+                                    Text(">", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 12.dp))
+                                },
                                 singleLine = true,
-                                shape = RoundedCornerShape(20.dp),
-                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color.LightGray
+                                    unfocusedBorderColor = Color(0xFF30363D),
+                                    focusedContainerColor = Color(0xFF0D1117),
+                                    unfocusedContainerColor = Color(0xFF0D1117)
                                 ),
                                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                     imeAction = androidx.compose.ui.text.input.ImeAction.Send
@@ -3399,26 +4424,184 @@ fun BrowserScreen(
                                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                                     onSend = {
                                         if (jsInputText.isNotBlank()) {
+                                            viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> $jsInputText"))
                                             viewModel.pendingJsCommand = jsInputText
                                             jsInputText = ""
                                         }
                                     }
                                 )
                             )
-                            androidx.compose.material3.Button(
+                            Button(
                                 onClick = {
                                     if (jsInputText.isNotBlank()) {
+                                        viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> $jsInputText"))
                                         viewModel.pendingJsCommand = jsInputText
                                         jsInputText = ""
                                     }
                                 },
-                                shape = RoundedCornerShape(20.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                             ) {
-                                Text("Run", fontSize = 13.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Text("Run", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
+                }
+
+                // Load Script Dialog
+                if (showLoadScriptDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showLoadScriptDialog = false },
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Rounded.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Text("Load & Inject Script", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        },
+                        text = {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(Modifier.verticalScroll(rememberScrollState())),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text(
+                                    "Inject external JavaScript files, CDN libraries, or mobile developer tools into the active webpage.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF8B949E)
+                                )
+
+                                // 1. Local File Upload Button
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            showLoadScriptDialog = false
+                                            jsFilePickerLauncher.launch("*/*")
+                                        },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF21262D),
+                                    border = BorderStroke(1.dp, Color(0xFF30363D))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.UploadFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Pick JS File from Device", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text("Select a local .js or .txt file to run", fontSize = 11.sp, color = Color(0xFF8B949E))
+                                        }
+                                        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Color(0xFF8B949E), modifier = Modifier.size(16.dp))
+                                    }
+                                }
+
+                                HorizontalDivider(color = Color(0xFF30363D))
+
+                                // 2. CDN URL Injector
+                                Text("Inject Script from CDN / Web URL", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                OutlinedTextField(
+                                    value = cdnUrlInput,
+                                    onValueChange = { cdnUrlInput = it },
+                                    placeholder = { Text("https://cdn.example.com/script.js", fontSize = 12.sp, color = Color(0xFF484F58)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = Color.White),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = Color(0xFF30363D),
+                                        focusedContainerColor = Color(0xFF0D1117),
+                                        unfocusedContainerColor = Color(0xFF0D1117)
+                                    )
+                                )
+                                Button(
+                                    onClick = {
+                                        if (cdnUrlInput.isNotBlank()) {
+                                            val url = cdnUrlInput.trim()
+                                            val injectCode = "(function(){var s=document.createElement('script');s.src='$url';document.head.appendChild(s);console.log('Injected URL script: $url');})();"
+                                            viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> [Injected URL Script: $url]"))
+                                            viewModel.pendingJsCommand = injectCode
+                                            showLoadScriptDialog = false
+                                            Toast.makeText(context, "Injecting script from URL...", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    enabled = cdnUrlInput.isNotBlank(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Inject URL Script", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                HorizontalDivider(color = Color(0xFF30363D))
+
+                                // 3. Preset Dev Tools Libraries
+                                Text("Preset Developer Suite & Libraries", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                                val presets = listOf(
+                                    Triple(
+                                        "Eruda Mobile Inspector",
+                                        "Adds full DOM element inspector, network, & console overlay",
+                                        "(function () { var script = document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/eruda'; document.body.appendChild(script); script.onload = function () { eruda.init(); }; })();"
+                                    ),
+                                    Triple(
+                                        "vConsole Inspector",
+                                        "Tencent Mobile DevTools overlay for mobile web debugging",
+                                        "(function () { var script = document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/vconsole'; document.body.appendChild(script); script.onload = function () { new VConsole(); }; })();"
+                                    ),
+                                    Triple(
+                                        "jQuery 3.7.1",
+                                        "Load jQuery library for DOM manipulation in console",
+                                        "(function () { var script = document.createElement('script'); script.src='https://code.jquery.com/jquery-3.7.1.min.js'; document.body.appendChild(script); console.log('jQuery 3.7.1 loaded! Use $'); })();"
+                                    ),
+                                    Triple(
+                                        "Lodash 4.17.21",
+                                        "Load Lodash utility library for console data manipulation",
+                                        "(function () { var script = document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js'; document.body.appendChild(script); console.log('Lodash loaded! Use _'); })();"
+                                    )
+                                )
+
+                                presets.forEach { (title, desc, code) ->
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> [Injected Preset: $title]"))
+                                                viewModel.pendingJsCommand = code
+                                                showLoadScriptDialog = false
+                                                Toast.makeText(context, "Injected $title!", Toast.LENGTH_SHORT).show()
+                                            },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFF161B22),
+                                        border = BorderStroke(0.5.dp, Color(0xFF30363D))
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            Text(desc, fontSize = 10.sp, color = Color(0xFF8B949E))
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { showLoadScriptDialog = false }) {
+                                Text("Close", color = Color(0xFF8B949E))
+                            }
+                        },
+                        containerColor = Color(0xFF161B22)
+                    )
                 }
             }
 
@@ -4818,7 +6001,7 @@ fun BrowserScreen(
                                 Text("Dismiss", color = Color.Gray, fontSize = 13.sp)
                             }
                             Button(
-                                onClick = { viewModel.autofillCredential() },
+                                onClick = { autofillSuggestion?.let { viewModel.autofillCredential(it) } },
                                 shape = RoundedCornerShape(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
@@ -5089,8 +6272,93 @@ fun BrowserScreen(
             }
         }
     }
-}
 
+        // Lock Screen Overlay
+        if (viewModel.isIncognitoMode && viewModel.lockIncognito && !viewModel.isIncognitoUnlocked) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF070A0F))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.VisibilityOff,
+                        contentDescription = null,
+                        tint = Color(0xFFCBB2FF),
+                        modifier = Modifier.size(72.dp)
+                    )
+                    Text(
+                        text = "Incognito locked",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Authenticate to access your private tabs.",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { tryUnlockIncognito() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF), contentColor = Color.White),
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.height(48.dp).padding(horizontal = 16.dp)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Unlock", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // ── Google OAuth Native Account Picker ─────────────────────────────────
+        val accountLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                val accountName = result.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
+                android.util.Log.i("BrowserScreen", "🔑 User selected Google account: $accountName")
+                viewModel.resumeGoogleOAuth(accountName)
+            } else {
+                android.util.Log.i("BrowserScreen", "🔑 Google account picker dismissed/cancelled by user")
+                viewModel.dismissGoogleOAuth()
+            }
+        }
+
+        val pendingOAuth = viewModel.pendingGoogleOAuthRequest
+        LaunchedEffect(pendingOAuth) {
+            if (pendingOAuth != null) {
+                try {
+                    val intent = android.accounts.AccountManager.newChooseAccountIntent(
+                        null, // selectedAccount
+                        null, // allowableAccounts
+                        arrayOf("com.google"), // allowableAccountTypes
+                        true, // alwaysPromptForAccount
+                        null, // descriptionOverrideText
+                        null, // addAccountRequiredFeatures
+                        null, // addAccountAuthTokenType
+                        null  // options
+                    )
+                    accountLauncher.launch(intent)
+                } catch (e: Exception) {
+                    android.util.Log.e("BrowserScreen", "🔑 Error launching system account picker: ${e.message}")
+                    // Fallback: resume without hint so the user can sign in manually
+                    viewModel.resumeGoogleOAuth(null)
+                }
+            }
+        }
+    }
+}
 
 data class BuiltInExt(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -5102,3 +6370,95 @@ data class BuiltInExt(
     val onCheckedChange: (Boolean) -> Unit,
     val onUninstallClick: (() -> Unit)? = null
 )
+
+@Composable
+private fun MediaSnifferBanner(
+    viewModel: BrowserViewModel,
+    nonDrmMedia: List<com.rebelroot.omni.media.MediaInterceptor.DetectedMedia>,
+    onDismiss: () -> Unit,
+    onPlay: (String) -> Unit,
+    onDownloadClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        color = Color(0xFF1B2234)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Dismiss",
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            if (viewModel.isVideoPlayingInPage) {
+                EqualizerIcon(
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.PlayCircle,
+                    contentDescription = "Video Detected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = if (viewModel.isVideoPlayingInPage) "Video is playing" else "Video playing detected",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+
+            IconButton(
+                onClick = {
+                    val firstMedia = nonDrmMedia.firstOrNull()
+                    if (firstMedia != null) {
+                        onPlay(firstMedia.url)
+                    }
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = "Play in Premium Player",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = onDownloadClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = "Download Options",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}

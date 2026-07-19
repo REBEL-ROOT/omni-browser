@@ -191,7 +191,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 // Path 2: Content script MSE hook communication
 let nativePlayerEnabled = true; // Default to true
-let youtubeEnabled = false; // Default to false — YouTube restricted unless the user enables it in settings
+let youtubeEnabled = false; // Default OFF — play on original YouTube player by default
 
 function broadcastStateToTabs() {
     chrome.tabs.query({}, (tabs) => {
@@ -212,7 +212,8 @@ function broadcastStateToTabs() {
 function pollNativeSettings() {
     try {
         chrome.runtime.sendNativeMessage('omniApp', { type: 'GET_NATIVE_PLAYER_STATE' })
-            .then((response) => {
+            .then((rawResponse) => {
+                const response = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse;
                 if (response && response.hasOwnProperty('enabled')) {
                     const newState = !!response.enabled;
                     if (newState !== nativePlayerEnabled) {
@@ -319,6 +320,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }).catch(() => {});
         } catch (e) {
             console.error('[Omni] Native message failed:', e);
+        }
+    } else if (message.type === 'FOCUS_LOGIN_INPUT') {
+        try {
+            chrome.runtime.sendNativeMessage('omniApp', {
+                type: 'FOCUS_LOGIN_INPUT',
+                url: sender.tab ? sender.tab.url : ''
+            }).catch(() => {});
+        } catch (e) {
+            console.error('[Omni] Native message failed for FOCUS_LOGIN_INPUT:', e);
         }
     }
 });

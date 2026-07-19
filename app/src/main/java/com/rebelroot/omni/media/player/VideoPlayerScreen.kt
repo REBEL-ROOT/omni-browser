@@ -55,6 +55,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -115,6 +116,10 @@ fun VideoPlayerScreen(
         }
     }
     var decodedPath by remember(originalDecodedPath) { mutableStateOf(originalDecodedPath) }
+    val youtubeVideoId = remember {
+        val cleanUrl = if (decodedPath.contains("googlevideo.com") || decodedPath.contains("youtube.com") || decodedPath.contains("youtu.be")) decodedPath else referrerUrl
+        getYouTubeVideoId(cleanUrl)
+    }
 
     val isOnline = remember(decodedPath) { decodedPath.startsWith("http://") || decodedPath.startsWith("https://") }
     var downloadToLocker by remember { mutableStateOf(false) }
@@ -154,6 +159,9 @@ fun VideoPlayerScreen(
     var gestureIndicatorText by remember { mutableStateOf("") }
     var lastLeftTapTime by remember { mutableLongStateOf(0L) }
     var lastRightTapTime by remember { mutableLongStateOf(0L) }
+    var leftTapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var rightTapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var gestureIndicatorJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
 
     var showControls by remember { mutableStateOf(true) }
@@ -379,6 +387,9 @@ fun VideoPlayerScreen(
     }
 
     DisposableEffect(decodedPath, referrerUrl) {
+        if (youtubeVideoId != null) {
+            return@DisposableEffect onDispose {}
+        }
         var exoPlayer: ExoPlayer? = null
         var lifecycleObserver: androidx.lifecycle.LifecycleEventObserver? = null
 
@@ -587,32 +598,115 @@ fun VideoPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // ExoPlayer Canvas Surface
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    // Prevent the native PlayerView from intercepting touch events;
-                    // all touch handling is done by the Compose overlay layer.
-                    isClickable = false
-                    isFocusable = false
-                    resizeMode = if (isFillMode) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-            },
-            update = { playerView ->
-                playerView.player = exoPlayerInstance
-                playerView.resizeMode = if (isFillMode) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+        if (youtubeVideoId != null) {
+            AndroidView(
+                factory = { ctx ->
+                    android.webkit.WebView(ctx).apply {
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = true
+                            mediaPlaybackRequiresUserGesture = false
+                            useWideViewPort = true
+                            loadWithOverviewMode = true
+                            allowFileAccess = false
+                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        }
+                        webViewClient = android.webkit.WebViewClient()
+                        webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onShowCustomView(view: android.view.View?, callback: CustomViewCallback?) {
+                                // Allow native fullscreen inside the embed WebView
+                                super.onShowCustomView(view, callback)
+                            }
+                        }
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        // Use loadDataWithBaseURL so the iframe has a YouTube origin,
+                        // which is required for autoplay and the IFrame Player API to work.
+                        val embedHtml = """
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                            <style>
+                            * { margin:0; padding:0; box-sizing:border-box; background:#000; }
+                            html, body { width:100%; height:100%; overflow:hidden; }
+                            iframe { width:100%; height:100%; border:none; display:block; }
+                            </style>
+                            </head>
+                            <body>
+                            <iframe
+                                src="https://www.youtube.com/embed/$youtubeVideoId?autoplay=1&rel=0&showinfo=0&controls=1&playsinline=1&enablejsapi=1"
+                                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                                allowfullscreen>
+                            </iframe>
+                            </body>
+                            </html>
+                        """.trimIndent()
+                        loadDataWithBaseURL(
+                            "https://www.youtube.com",
+                            embedHtml,
+                            "text/html",
+                            "UTF-8",
+                            null
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // ExoPlayer Canvas Surface
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        useController = false
+                        // Prevent the native PlayerView from intercepting touch events;
+                        // all touch handling is done by the Compose overlay layer.
+                        isClickable = false
+                        isFocusable = false
+                        resizeMode = if (isFillMode) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                update = { playerView ->
+                    playerView.player = exoPlayerInstance
+                    playerView.resizeMode = if (isFillMode) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // All UI overlays are hidden in PiP mode — only raw video is shown in the floating window
         val isPiP = viewModel?.isInPictureInPictureMode == true
         if (!isPiP) {
+            if (youtubeVideoId != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .safeDrawingPadding()
+                        .padding(12.dp)
+                ) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Color.Black.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            } else {
 
         // Volume and Brightness Drag Interceptors — always visible, handles both tap and drag
         Row(modifier = Modifier.fillMaxSize()) {
@@ -650,22 +744,30 @@ fun VideoPlayerScreen(
                             if (!isDragging) {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastLeftTapTime < 300) {
+                                    leftTapJob?.cancel()
                                     exoPlayerInstance?.let { player ->
                                         val newPos = (player.currentPosition - 10_000).coerceAtLeast(0L)
                                         player.seekTo(newPos)
                                         gestureIndicatorText = "⏪ -10s"
                                         showGestureIndicator = true
-                                        coroutineScope.launch {
+                                        gestureIndicatorJob?.cancel()
+                                        gestureIndicatorJob = coroutineScope.launch {
                                             delay(1000)
                                             showGestureIndicator = false
                                         }
                                     }
                                 } else {
-                                    showControls = !showControls
+                                    leftTapJob?.cancel()
+                                    leftTapJob = coroutineScope.launch {
+                                        delay(300)
+                                        showControls = !showControls
+                                    }
                                 }
                                 lastLeftTapTime = currentTime
                             }
-                            showGestureIndicator = false
+                            if (isDragging) {
+                                showGestureIndicator = false
+                            }
                         }
                     }
             )
@@ -707,22 +809,30 @@ fun VideoPlayerScreen(
                             if (!isDragging) {
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastRightTapTime < 300) {
+                                    rightTapJob?.cancel()
                                     exoPlayerInstance?.let { player ->
                                         val newPos = (player.currentPosition + 10_000).coerceAtMost(duration)
                                         player.seekTo(newPos)
                                         gestureIndicatorText = "⏩ +10s"
                                         showGestureIndicator = true
-                                        coroutineScope.launch {
+                                        gestureIndicatorJob?.cancel()
+                                        gestureIndicatorJob = coroutineScope.launch {
                                             delay(1000)
                                             showGestureIndicator = false
                                         }
                                     }
                                 } else {
-                                    showControls = !showControls
+                                    rightTapJob?.cancel()
+                                    rightTapJob = coroutineScope.launch {
+                                        delay(300)
+                                        showControls = !showControls
+                                    }
                                 }
                                 lastRightTapTime = currentTime
                             }
-                            showGestureIndicator = false
+                            if (isDragging) {
+                                showGestureIndicator = false
+                            }
                         }
                     }
             )
@@ -1432,16 +1542,26 @@ fun VideoPlayerScreen(
 
                                         Button(
                                             onClick = {
-                                                try {
-                                                    val intent = Intent(Settings.ACTION_CAPTIONING_SETTINGS)
-                                                    context.startActivity(intent)
-                                                } catch (e: Exception) {
+                                                val captionIntents = listOf(
+                                                    Intent("android.settings.LIVE_CAPTION_SETTINGS"),
+                                                    Intent("com.google.android.settings.action.LIVE_CAPTION"),
+                                                    Intent(Settings.ACTION_CAPTIONING_SETTINGS),
+                                                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+                                                    Intent(Settings.ACTION_SETTINGS)
+                                                )
+                                                var launched = false
+                                                for (intent in captionIntents) {
                                                     try {
-                                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                         context.startActivity(intent)
-                                                    } catch (ex: Exception) {
-                                                        Toast.makeText(context, "Cannot open system settings", Toast.LENGTH_SHORT).show()
+                                                        launched = true
+                                                        break
+                                                    } catch (e: Exception) {
+                                                        // Try next intent
                                                     }
+                                                }
+                                                if (!launched) {
+                                                    Toast.makeText(context, "Cannot open system caption settings", Toast.LENGTH_SHORT).show()
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -1572,126 +1692,226 @@ fun VideoPlayerScreen(
                     }
                 },
                 text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.video_player_download_desc),
-                            color = Color(0xFF8E9AA8),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
-                        )
-                        
-                        // Switch for saving to secure private vault locker
-                        Row(
+                    val scrollState = rememberScrollState()
+                    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    
+                    val qualityItemContent = @Composable { option: VideoQualityOption ->
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF16222F))
-                                .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(10.dp))
-                                .clickable { downloadToLocker = !downloadToLocker }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .clickable {
+                                    showQualitySelector = false
+                                    val mediaType = when {
+                                        option.isAudioOnly -> MediaInterceptor.MediaType.AUDIO
+                                        option.url.contains(".m3u8") -> MediaInterceptor.MediaType.HLS
+                                        option.url.contains(".mpd") -> MediaInterceptor.MediaType.DASH
+                                        else -> MediaInterceptor.MediaType.MP4
+                                    }
+                                    coroutineScope.launch {
+                                        downloadEngine.startDownload(
+                                            url = option.url,
+                                            suggestedName = "${suggestedName}_${option.label}",
+                                            type = mediaType,
+                                            saveToLocker = downloadToLocker,
+                                            referrerUrl = if (referrerUrl.isNotEmpty()) referrerUrl else null,
+                                            cookies = viewModel?.activeVideoCookies
+                                        )
+                                        val toastMsg = if (downloadToLocker) context.getString(R.string.video_player_queued_locker) else context.getString(R.string.video_player_queued_download, option.label)
+                                        Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF16222F),
+                            border = BorderStroke(0.5.dp, Color(0xFF23374A))
                         ) {
                             Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Lock,
-                                    contentDescription = null,
-                                    tint = if (downloadToLocker) accentColor else Color(0xFF8E9AA8),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = stringResource(R.string.video_player_save_to_locker),
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.video_player_encrypt_desc),
-                                        color = Color(0xFF8E9AA8),
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = downloadToLocker,
-                                onCheckedChange = { downloadToLocker = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = accentColor,
-                                    uncheckedThumbColor = Color(0xFF8E9AA8),
-                                    uncheckedTrackColor = Color(0xFF070A0F)
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        qualityOptions.forEach { option ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        showQualitySelector = false
-                                        val mediaType = when {
-                                            option.isAudioOnly -> MediaInterceptor.MediaType.AUDIO
-                                            option.url.contains(".m3u8") -> MediaInterceptor.MediaType.HLS
-                                            option.url.contains(".mpd") -> MediaInterceptor.MediaType.DASH
-                                            else -> MediaInterceptor.MediaType.MP4
-                                        }
-                                        coroutineScope.launch {
-                                            downloadEngine.startDownload(
-                                                url = option.url,
-                                                suggestedName = "${suggestedName}_${option.label}",
-                                                type = mediaType,
-                                                saveToLocker = downloadToLocker,
-                                                referrerUrl = if (referrerUrl.isNotEmpty()) referrerUrl else null,
-                                                cookies = viewModel?.activeVideoCookies
-                                            )
-                                            val toastMsg = if (downloadToLocker) context.getString(R.string.video_player_queued_locker) else context.getString(R.string.video_player_queued_download, option.label)
-                                            Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFF16222F),
-                                border = BorderStroke(0.5.dp, Color(0xFF23374A))
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (option.isAudioOnly) Icons.Rounded.MusicNote else Icons.Rounded.Movie,
+                                        contentDescription = null,
+                                        tint = if (option.isAudioOnly) Color(0xFFFF9800) else accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = option.label,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                
+                                Icon(
+                                    imageVector = Icons.Rounded.Download,
+                                    contentDescription = stringResource(R.string.downloads_title),
+                                    tint = Color(0xFF8E9AA8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (isLandscape) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 180.dp)
+                        ) {
+                            // Left side: Description + Switch (scrollable if needed)
+                            val leftScroll = rememberScrollState()
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(leftScroll),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.video_player_download_desc),
+                                    color = Color(0xFF8E9AA8),
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                                
+                                // Switch for saving to secure private vault locker
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF16222F))
+                                        .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(10.dp))
+                                        .clickable { downloadToLocker = !downloadToLocker }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
                                     ) {
                                         Icon(
-                                            imageVector = if (option.isAudioOnly) Icons.Rounded.MusicNote else Icons.Rounded.Movie,
+                                            imageVector = Icons.Rounded.Lock,
                                             contentDescription = null,
-                                            tint = if (option.isAudioOnly) Color(0xFFFF9800) else accentColor,
-                                            modifier = Modifier.size(20.dp)
+                                            tint = if (downloadToLocker) accentColor else Color(0xFF8E9AA8),
+                                            modifier = Modifier.size(18.dp)
                                         )
-                                        Text(
-                                            text = option.label,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 14.sp
-                                        )
+                                        Column {
+                                            Text(
+                                                text = stringResource(R.string.video_player_save_to_locker),
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 12.sp
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.video_player_encrypt_desc),
+                                                color = Color(0xFF8E9AA8),
+                                                fontSize = 9.sp
+                                            )
+                                        }
                                     }
-                                    
-                                    Icon(
-                                        imageVector = Icons.Rounded.Download,
-                                        contentDescription = stringResource(R.string.downloads_title),
-                                        tint = Color(0xFF8E9AA8),
-                                        modifier = Modifier.size(16.dp)
+                                    Switch(
+                                        checked = downloadToLocker,
+                                        onCheckedChange = { downloadToLocker = it },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = accentColor,
+                                            uncheckedThumbColor = Color(0xFF8E9AA8),
+                                            uncheckedTrackColor = Color(0xFF070A0F)
+                                        ),
+                                        modifier = Modifier.scale(0.8f)
                                     )
                                 }
+                            }
+                            
+                            // Right side: Scrollable qualities list
+                            val rightScroll = rememberScrollState()
+                            Column(
+                                modifier = Modifier
+                                    .weight(1.1f)
+                                    .verticalScroll(rightScroll),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                qualityOptions.forEach { option ->
+                                    qualityItemContent(option)
+                                }
+                            }
+                        }
+                    } else {
+                        // Portrait view: original scrollable column
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .verticalScroll(scrollState)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.video_player_download_desc),
+                                color = Color(0xFF8E9AA8),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                            
+                            // Switch for saving to secure private vault locker
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF16222F))
+                                    .border(BorderStroke(0.5.dp, Color(0xFF23374A)), RoundedCornerShape(10.dp))
+                                    .clickable { downloadToLocker = !downloadToLocker }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Lock,
+                                        contentDescription = null,
+                                        tint = if (downloadToLocker) accentColor else Color(0xFF8E9AA8),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = stringResource(R.string.video_player_save_to_locker),
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.video_player_encrypt_desc),
+                                            color = Color(0xFF8E9AA8),
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = downloadToLocker,
+                                    onCheckedChange = { downloadToLocker = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = accentColor,
+                                        uncheckedThumbColor = Color(0xFF8E9AA8),
+                                        uncheckedTrackColor = Color(0xFF070A0F)
+                                    )
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            qualityOptions.forEach { option ->
+                                qualityItemContent(option)
                             }
                         }
                     }
@@ -1828,6 +2048,7 @@ fun VideoPlayerScreen(
                 }
             }
         }
+        } // end else
         } // end if (!isPiP) — no overlays rendered in PiP floating window
     }
 }
@@ -1927,4 +2148,30 @@ data class TrackOption(
     val isSelected: Boolean,
     val mediaTrackGroup: androidx.media3.common.TrackGroup
 )
+
+private fun getYouTubeVideoId(url: String): String? {
+    val clean = url.trim()
+    if (clean.contains("youtube.com/watch")) {
+        return try { android.net.Uri.parse(clean).getQueryParameter("v") } catch(e: Exception) { null }
+    }
+    if (clean.contains("youtu.be/")) {
+        return clean.substringAfter("youtu.be/").substringBefore("?").substringBefore("/")
+    }
+    if (clean.contains("youtube.com/shorts/")) {
+        return clean.substringAfter("youtube.com/shorts/").substringBefore("?").substringBefore("/")
+    }
+    if (clean.contains("youtube.com/embed/")) {
+        return clean.substringAfter("youtube.com/embed/").substringBefore("?").substringBefore("/")
+    }
+    if (clean.contains("youtube.com/live/")) {
+        return clean.substringAfter("youtube.com/live/").substringBefore("?").substringBefore("/")
+    }
+    if (clean.contains("googlevideo.com")) {
+        // googlevideo.com stream URLs don't reliably contain the video_id; rely on page URL instead
+        return try { android.net.Uri.parse(clean).getQueryParameter("video_id")
+            ?: android.net.Uri.parse(clean).getQueryParameter("docid")
+            ?: android.net.Uri.parse(clean).getQueryParameter("id") } catch(e: Exception) { null }
+    }
+    return null
+}
 

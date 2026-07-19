@@ -466,35 +466,36 @@ fun ChromeMenuDropdown(
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
     val isHome = viewModel.currentUrl == "about:blank" || activeTab == null
 
-    val cardBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1E1E20) else Color.White
+    val cardBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
     val textPrimary = if (isDark) Color.White else Color(0xFF1C1C1E)
     val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
     val iconTint = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val dividerColor = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
-    val iconBg = if (viewModel.isAmoledMode) Color(0xFF121212) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
+    val dividerColor = if (viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val iconBg = if (viewModel.isAmoledMode) Color(0xFF1C1C1E) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
 
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         modifier = Modifier
-            .width(250.dp)
-            .background(cardBg, RoundedCornerShape(16.dp))
+            .width(260.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBg)
             .border(
                 1.dp,
-                if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA),
-                RoundedCornerShape(16.dp)
+                if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA),
+                RoundedCornerShape(18.dp)
             )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp)
+                .padding(vertical = 6.dp)
         ) {
             // Row of circular actions
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -507,13 +508,13 @@ fun ChromeMenuDropdown(
                     },
                     enabled = canForward,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(iconBg, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                         contentDescription = "Forward",
-                        tint = if (canForward) iconTint else textSecondary.copy(alpha = 0.5f),
+                        tint = if (canForward) iconTint else textSecondary.copy(alpha = 0.4f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -533,7 +534,7 @@ fun ChromeMenuDropdown(
                     },
                     enabled = !isHome,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(iconBg, CircleShape)
                 ) {
                     Icon(
@@ -541,7 +542,7 @@ fun ChromeMenuDropdown(
                         contentDescription = "Bookmark",
                         tint = if (!isHome) {
                             if (isBookmarked) MaterialTheme.colorScheme.primary else iconTint
-                        } else textSecondary.copy(alpha = 0.5f),
+                        } else textSecondary.copy(alpha = 0.4f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -556,13 +557,13 @@ fun ChromeMenuDropdown(
                     },
                     enabled = !isHome,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(iconBg, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Download,
                         contentDescription = "Download",
-                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.5f),
+                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.4f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -577,13 +578,13 @@ fun ChromeMenuDropdown(
                     },
                     enabled = !isHome,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(iconBg, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Info,
                         contentDescription = "Site Info",
-                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.5f),
+                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.4f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -598,72 +599,108 @@ fun ChromeMenuDropdown(
                     },
                     enabled = !isHome,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(iconBg, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Refresh,
                         contentDescription = "Reload",
-                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.5f),
+                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.4f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
 
             // New Tab
-            DropdownMenuItem(
-                text = { Text("New tab", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.AddBox, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onNewTab
+            LuxuryMenuItem(
+                text = "New tab",
+                icon = Icons.Rounded.AddBox,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onNewTab()
+                }
             )
 
             // New Incognito Tab
-            DropdownMenuItem(
-                text = { Text("New Incognito tab", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.VisibilityOff, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onNewIncognitoTab
+            LuxuryMenuItem(
+                text = "New Incognito tab",
+                icon = Icons.Rounded.VisibilityOff,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onNewIncognitoTab()
+                }
             )
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
 
             // History
-            DropdownMenuItem(
-                text = { Text("History", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.History, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onOpenHistory
+            LuxuryMenuItem(
+                text = "History",
+                icon = Icons.Rounded.History,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onOpenHistory()
+                }
             )
 
             // Delete browsing data
-            DropdownMenuItem(
-                text = { Text("Delete browsing data", color = Color(0xFFFF4444), fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.LocalFireDepartment, contentDescription = null, tint = Color(0xFFFF4444), modifier = Modifier.size(18.dp)) },
-                onClick = onBurnData
+            LuxuryMenuItem(
+                text = "Delete browsing data",
+                icon = Icons.Rounded.LocalFireDepartment,
+                iconTint = Color(0xFFFF4444),
+                textColor = Color(0xFFFF4444),
+                onClick = {
+                    onDismissRequest()
+                    onBurnData()
+                }
             )
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
 
             // Downloads
-            DropdownMenuItem(
-                text = { Text("Downloads", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onOpenDownloads
+            LuxuryMenuItem(
+                text = "Downloads",
+                icon = Icons.Rounded.Download,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onOpenDownloads()
+                }
             )
 
             // Bookmarks
-            DropdownMenuItem(
-                text = { Text("Bookmarks", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.Bookmark, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onOpenBookmarks
+            LuxuryMenuItem(
+                text = "Bookmarks",
+                icon = Icons.Rounded.Bookmark,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onOpenBookmarks()
+                }
             )
 
             // Desktop Site (only show if not on Home screen)
             if (!isHome) {
-                DropdownMenuItem(
-                    text = { Text("Desktop site", color = textPrimary, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.Computer, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                    trailingIcon = {
+                LuxuryMenuItem(
+                    text = "Desktop site",
+                    icon = Icons.Rounded.Computer,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
+                    onClick = {
+                        onDismissRequest()
+                        viewModel.toggleDesktopMode(context)
+                    },
+                    trailingContent = {
                         Switch(
                             checked = viewModel.isDesktopMode,
                             onCheckedChange = {
@@ -673,19 +710,17 @@ fun ChromeMenuDropdown(
                             colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.scale(0.8f)
                         )
-                    },
-                    onClick = {
-                        onDismissRequest()
-                        viewModel.toggleDesktopMode(context)
                     }
                 )
             }
 
             // Find in page (only when a page is open)
             if (!isHome) {
-                DropdownMenuItem(
-                    text = { Text("Find in page", color = textPrimary, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
+                LuxuryMenuItem(
+                    text = "Find in page",
+                    icon = Icons.Rounded.Search,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
                         onFindInPage()
@@ -695,9 +730,11 @@ fun ChromeMenuDropdown(
 
             // Add to shortcuts (only when a page is open)
             if (!isHome) {
-                DropdownMenuItem(
-                    text = { Text("Add to shortcuts", color = textPrimary, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.AddCircle, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
+                LuxuryMenuItem(
+                    text = "Add to shortcuts",
+                    icon = Icons.Rounded.AddCircle,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
                         val currentUrl = viewModel.currentUrl
@@ -709,37 +746,93 @@ fun ChromeMenuDropdown(
 
             // Extensions (only show if not on Home screen)
             if (!isHome) {
-                DropdownMenuItem(
-                    text = { Text("Extensions", color = textPrimary, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.Extension, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                    onClick = onShowExtensions
+                LuxuryMenuItem(
+                    text = "Extensions",
+                    icon = Icons.Rounded.Extension,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
+                    onClick = {
+                        onDismissRequest()
+                        onShowExtensions()
+                    }
                 )
             }
 
             // Player Settings
-            DropdownMenuItem(
-                text = { Text("Player Settings", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.PlayCircle, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onShowPlayerSettings
+            LuxuryMenuItem(
+                text = "Player Settings",
+                icon = Icons.Rounded.PlayCircle,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onShowPlayerSettings()
+                }
             )
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
 
             // Settings
-            DropdownMenuItem(
-                text = { Text("Settings", color = textPrimary, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                onClick = onOpenSettings
+            LuxuryMenuItem(
+                text = "Settings",
+                icon = Icons.Rounded.Settings,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = {
+                    onDismissRequest()
+                    onOpenSettings()
+                }
             )
 
             // Customize home screen (only show if on Home screen)
             if (isHome) {
-                DropdownMenuItem(
-                    text = { Text("Customize Home", color = textPrimary, fontSize = 14.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp)) },
-                    onClick = onShowCustomizationSheet
+                LuxuryMenuItem(
+                    text = "Customize Home",
+                    icon = Icons.Rounded.Edit,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
+                    onClick = {
+                        onDismissRequest()
+                        onShowCustomizationSheet()
+                    }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LuxuryMenuItem(
+    text: String,
+    icon: ImageVector,
+    iconTint: Color,
+    textColor: Color,
+    onClick: () -> Unit,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = text,
+            color = textColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailingContent != null) {
+            trailingContent()
         }
     }
 }

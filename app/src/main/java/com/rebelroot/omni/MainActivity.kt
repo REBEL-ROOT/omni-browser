@@ -438,7 +438,51 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onOpenWallpapers = {
                                     navController.navigate("wallpapers")
+                                },
+                                onOpenPrivacySecurity = {
+                                    navController.navigate("privacy_security")
+                                },
+                                onOpenTabs = {
+                                    navController.navigate("settings_tabs")
+                                },
+                                onOpenAccessibility = {
+                                    navController.navigate("settings_accessibility")
+                                },
+                                onOpenSiteSettings = {
+                                    navController.navigate("settings_site")
                                 }
+                            )
+                        }
+
+                        // Privacy and Security Settings Screen
+                        composable("privacy_security") {
+                            com.rebelroot.omni.settings.PrivacySecurityScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // Tabs Settings Screen
+                        composable("settings_tabs") {
+                            com.rebelroot.omni.settings.TabsSettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // Accessibility Settings Screen
+                        composable("settings_accessibility") {
+                            com.rebelroot.omni.settings.AccessibilitySettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // Site Settings Screen
+                        composable("settings_site") {
+                            com.rebelroot.omni.settings.SiteSettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
@@ -446,7 +490,8 @@ class MainActivity : FragmentActivity() {
                         composable("appearance") {
                             AppearanceScreen(
                                 viewModel = browserViewModel,
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = { navController.popBackStack() },
+                                onOpenWallpapers = { navController.navigate("wallpapers") }
                             )
                         }
 

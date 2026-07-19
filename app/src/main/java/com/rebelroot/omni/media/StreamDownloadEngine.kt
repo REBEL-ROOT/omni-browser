@@ -217,7 +217,8 @@ class StreamDownloadEngine(
         type: MediaInterceptor.MediaType,
         saveToLocker: Boolean,
         referrerUrl: String? = null,
-        cookies: String? = null
+        cookies: String? = null,
+        audioUrl: String? = null
     ): String {
         val jobId = UUID.randomUUID().toString()
         val extension = when (type) {
@@ -275,7 +276,9 @@ class StreamDownloadEngine(
         // Launch asynchronous downloader in Coroutine Dispatcher context
         val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
-                if (type == MediaInterceptor.MediaType.HLS) {
+                if (!audioUrl.isNullOrEmpty()) {
+                    downloadSplitMux(jobId, url, audioUrl, filename, saveToLocker, referrerUrl, progressFlow, cookies)
+                } else if (type == MediaInterceptor.MediaType.HLS) {
                     downloadHLS(jobId, url, filename, saveToLocker, referrerUrl, progressFlow, cookies)
                 } else {
                     downloadDirect(jobId, url, filename, saveToLocker, referrerUrl, progressFlow, cookies)
@@ -569,6 +572,234 @@ class StreamDownloadEngine(
             if (progressFlow.value !is DownloadProgress.Complete && targetFile.exists()) {
                 targetFile.delete()
             }
+        }
+    }
+
+    private suspend fun downloadSplitMux(
+        jobId: String,
+        videoUrl: String,
+        audioUrl: String,
+        filename: String,
+        saveToLocker: Boolean,
+        referrerUrl: String?,
+        progressFlow: MutableStateFlow<DownloadProgress>,
+        cookies: String?
+    ) = withContext(Dispatchers.IO) {
+        val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
+        val finalOutFile = File(targetDir, filename)
+        if (finalOutFile.exists()) finalOutFile.delete()
+
+        val tempVideoFile = File(targetDir, "temp_video_${jobId}.mp4")
+        val tempAudioFile = File(targetDir, "temp_audio_${jobId}.m4a")
+
+        if (tempVideoFile.exists()) tempVideoFile.delete()
+        if (tempAudioFile.exists()) tempAudioFile.delete()
+
+        try {
+            val headers = mutableMapOf<String, String>()
+            if (!referrerUrl.isNullOrEmpty()) {
+                headers["Referer"] = referrerUrl
+            }
+            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            if (!cookies.isNullOrEmpty()) {
+                headers["Cookie"] = cookies
+            }
+
+            // 1. Download Video
+            progressFlow.value = DownloadProgress.Downloading(0, 0L)
+            Log.i("DownloadEngine", "Downloading split video track for job $jobId...")
+            
+            var videoBytes = 0L
+            var audioBytes = 0L
+            
+            val videoConn = openConnectionWithRedirects(videoUrl, headers)
+            if (videoConn.responseCode !in 200..299) {
+                progressFlow.value = DownloadProgress.Error("Video track HTTP ${videoConn.responseCode}")
+                videoConn.disconnect()
+                return@withContext
+            }
+            val videoLength = videoConn.contentLengthLong
+            val videoInput = BufferedInputStream(videoConn.inputStream, 8192)
+            val videoOutput = FileOutputStream(tempVideoFile)
+            val buffer = ByteArray(8192)
+            var count = 0
+            while (isActive && videoInput.read(buffer).also { count = it } != -1) {
+                videoOutput.write(buffer, 0, count)
+                videoBytes += count
+                val percent = if (videoLength > 0) ((videoBytes * 50) / videoLength).toInt() else 25
+                progressFlow.value = DownloadProgress.Downloading(percent, videoBytes)
+            }
+            videoOutput.flush()
+            videoOutput.close()
+            videoInput.close()
+            videoConn.disconnect()
+
+            if (!isActive) return@withContext
+
+            // 2. Download Audio
+            progressFlow.value = DownloadProgress.Downloading(50, videoBytes)
+            Log.i("DownloadEngine", "Downloading split audio track for job $jobId...")
+
+            val audioConn = openConnectionWithRedirects(audioUrl, headers)
+            if (audioConn.responseCode !in 200..299) {
+                progressFlow.value = DownloadProgress.Error("Audio track HTTP ${audioConn.responseCode}")
+                audioConn.disconnect()
+                return@withContext
+            }
+            val audioLength = audioConn.contentLengthLong
+            val audioInput = BufferedInputStream(audioConn.inputStream, 8192)
+            val audioOutput = FileOutputStream(tempAudioFile)
+            while (isActive && audioInput.read(buffer).also { count = it } != -1) {
+                audioOutput.write(buffer, 0, count)
+                audioBytes += count
+                val percent = 50 + (if (audioLength > 0) ((audioBytes * 50) / audioLength).toInt() else 25)
+                progressFlow.value = DownloadProgress.Downloading(percent, videoBytes + audioBytes)
+            }
+            audioOutput.flush()
+            audioOutput.close()
+            audioInput.close()
+            audioConn.disconnect()
+
+            if (!isActive) return@withContext
+
+            // 3. Mux/Merge using FFmpeg
+            progressFlow.value = DownloadProgress.Muxing("Merging video and audio...")
+            Log.i("DownloadEngine", "Muxing split tracks using FFmpeg...")
+            
+            var muxSuccess = false
+            if (ffmpegBridge.isNativeActive()) {
+                val result = ffmpegBridge.execute(
+                    "-y",
+                    "-i", tempVideoFile.absolutePath,
+                    "-i", tempAudioFile.absolutePath,
+                    "-c", "copy",
+                    finalOutFile.absolutePath
+                )
+                if (result == 0) {
+                    muxSuccess = true
+                } else {
+                    Log.e("DownloadEngine", "FFmpeg JNI muxing failed with code $result")
+                }
+            } else {
+                Log.e("DownloadEngine", "FFmpeg JNI not active, attempting native MediaMuxer...")
+            }
+
+            if (!muxSuccess) {
+                try {
+                    muxSuccess = androidMediaMuxerMerge(tempVideoFile, tempAudioFile, finalOutFile)
+                } catch (e: Exception) {
+                    Log.e("DownloadEngine", "Android MediaMuxer fallback failed", e)
+                }
+            }
+
+            if (!muxSuccess) {
+                progressFlow.value = DownloadProgress.Error("Muxing video and audio tracks failed")
+                return@withContext
+            }
+
+            // 4. Save/Encrypt complete file
+            val totalBytes = finalOutFile.length()
+            if (saveToLocker) {
+                progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                val mimeType = getMimeTypeForFile(filename)
+                val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutFile), filename, mimeType)
+                finalOutFile.delete()
+                val category = getCategoryForFile(filename)
+                val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
+                progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
+            } else {
+                progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
+                val savedFile = saveToPublicDownloads(finalOutFile, filename)
+                progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes)
+            }
+
+        } finally {
+            if (tempVideoFile.exists()) tempVideoFile.delete()
+            if (tempAudioFile.exists()) tempAudioFile.delete()
+            if (progressFlow.value !is DownloadProgress.Complete && finalOutFile.exists()) {
+                finalOutFile.delete()
+            }
+        }
+    }
+
+    private fun androidMediaMuxerMerge(videoFile: File, audioFile: File, outputFile: File): Boolean {
+        var videoExtractor: android.media.MediaExtractor? = null
+        var audioExtractor: android.media.MediaExtractor? = null
+        var muxer: android.media.MediaMuxer? = null
+        try {
+            videoExtractor = android.media.MediaExtractor().apply { setDataSource(videoFile.absolutePath) }
+            audioExtractor = android.media.MediaExtractor().apply { setDataSource(audioFile.absolutePath) }
+
+            muxer = android.media.MediaMuxer(outputFile.absolutePath, android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+
+            var videoTrackIndex = -1
+            for (i in 0 until videoExtractor.trackCount) {
+                val format = videoExtractor.getTrackFormat(i)
+                val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("video/")) {
+                    videoExtractor.selectTrack(i)
+                    videoTrackIndex = muxer.addTrack(format)
+                    break
+                }
+            }
+
+            var audioTrackIndex = -1
+            for (i in 0 until audioExtractor.trackCount) {
+                val format = audioExtractor.getTrackFormat(i)
+                val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    audioExtractor.selectTrack(i)
+                    audioTrackIndex = muxer.addTrack(format)
+                    break
+                }
+            }
+
+            if (videoTrackIndex == -1 && audioTrackIndex == -1) {
+                Log.e("DownloadEngine", "No video or audio tracks found to mux")
+                return false
+            }
+
+            muxer.start()
+
+            val buffer = java.nio.ByteBuffer.allocate(1024 * 1024)
+            val bufferInfo = android.media.MediaCodec.BufferInfo()
+
+            if (videoTrackIndex != -1) {
+                while (true) {
+                    bufferInfo.size = videoExtractor.readSampleData(buffer, 0)
+                    if (bufferInfo.size < 0) {
+                        break
+                    }
+                    bufferInfo.presentationTimeUs = videoExtractor.sampleTime
+                    bufferInfo.flags = videoExtractor.sampleFlags
+                    muxer.writeSampleData(videoTrackIndex, buffer, bufferInfo)
+                    videoExtractor.advance()
+                }
+            }
+
+            if (audioTrackIndex != -1) {
+                while (true) {
+                    bufferInfo.size = audioExtractor.readSampleData(buffer, 0)
+                    if (bufferInfo.size < 0) {
+                        break
+                    }
+                    bufferInfo.presentationTimeUs = audioExtractor.sampleTime
+                    bufferInfo.flags = audioExtractor.sampleFlags
+                    muxer.writeSampleData(audioTrackIndex, buffer, bufferInfo)
+                    audioExtractor.advance()
+                }
+            }
+
+            muxer.stop()
+            Log.i("DownloadEngine", "Android MediaMuxer successfully merged video and audio.")
+            return true
+        } catch (e: Exception) {
+            Log.e("DownloadEngine", "MediaMuxer merging failed", e)
+            return false
+        } finally {
+            videoExtractor?.release()
+            audioExtractor?.release()
+            try { muxer?.release() } catch(e: Exception) {}
         }
     }
 

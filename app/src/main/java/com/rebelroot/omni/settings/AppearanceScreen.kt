@@ -51,7 +51,8 @@ import java.io.File
 @Composable
 fun AppearanceScreen(
     viewModel: BrowserViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onOpenWallpapers: () -> Unit = {}
 ) {
     BackHandler {
         onNavigateBack()
@@ -490,32 +491,6 @@ fun AppearanceScreen(
 
 
             // App Icon selection
-            val coroutineScope = rememberCoroutineScope()
-            val customIconPickerLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.GetContent()
-            ) { uri ->
-                if (uri != null) {
-                    coroutineScope.launch(Dispatchers.IO) {
-                        try {
-                            // Copy to internal storage so path stays valid
-                            val inputStream = context.contentResolver.openInputStream(uri)
-                            val destFile = File(context.filesDir, "custom_app_icon.png")
-                            inputStream?.use { input ->
-                                destFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            withContext(Dispatchers.Main) {
-                                viewModel.saveCustomIconPath(context, destFile.absolutePath)
-                                viewModel.saveAppIconState(context, "Custom")
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("AppearanceScreen", "Failed to copy custom icon: ${e.message}")
-                        }
-                    }
-                }
-            }
-
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -523,27 +498,11 @@ fun AppearanceScreen(
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
                     Text("App Icon", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                    Surface(
-                        color = Color(0xFFFF9500).copy(alpha = 0.15f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = "⚠ Experimental",
-                            color = Color(0xFFFF9500),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                 }
 
-                // 2×2 preset icon grid
-                // 2×2 preset icon grid using identity logo (ic_omni_logo)
                 val presets = listOf(
                     Triple("Default", com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
-                    Triple("Dark",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.White),
-                    Triple("Blue",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0A84FF) to Color.White),
-                    Triple("Gold",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFFFFB800) to Color(0xFF1C1C1E))
+                    Triple("Dark",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified)
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -623,95 +582,6 @@ fun AppearanceScreen(
                     }
                 }
 
-                // Custom icon card
-                val isCustomSelected = viewModel.customIconPath != null
-                Card(
-                    onClick = { customIconPickerLauncher.launch("image/*") },
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(
-                        width = if (isCustomSelected) 2.5.dp else 1.dp,
-                        color = if (isCustomSelected) accentColor else cardBorderColor
-                    ),
-                    colors = CardDefaults.cardColors(containerColor = cardColor),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        // Preview or placeholder
-                        Box(
-                            modifier = Modifier
-                                .size(60.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFF0F0F0)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (viewModel.customIconPath != null) {
-                                val file = File(viewModel.customIconPath!!)
-                                if (file.exists()) {
-                                    androidx.compose.foundation.Image(
-                                        bitmap = remember(viewModel.customIconPath) {
-                                            val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-                                            bmp.asImageBitmap()
-                                        },
-                                        contentDescription = "Custom icon",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(28.dp))
-                                }
-                            } else {
-                                Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(28.dp))
-                            }
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Custom Icon",
-                                color = textPrimaryColor,
-                                fontWeight = if (isCustomSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 15.sp
-                            )
-                            Text(
-                                if (isCustomSelected) "Tap to change image" else "Choose from gallery",
-                                color = textSecondaryColor,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        // Clear button (only when custom is active)
-                        if (isCustomSelected) {
-                            IconButton(
-                                onClick = {
-                                    viewModel.saveCustomIconPath(context, null)
-                                    viewModel.saveAppIconState(context, "Default")
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Close,
-                                    contentDescription = "Remove custom icon",
-                                    tint = textSecondaryColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        } else {
-                            Icon(
-                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = textSecondaryColor
-                            )
-                        }
-                    }
-                }
-
                 // Info note
                 Text(
                     "⚠️  Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.",
@@ -772,6 +642,41 @@ fun AppearanceScreen(
                             checked = viewModel.showDiscoverFeed,
                             onCheckedChange = { viewModel.saveShowDiscoverFeed(context, it) },
                             colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenWallpapers() }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("Wallpaper", color = textPrimaryColor, fontSize = 16.sp)
+                                Surface(
+                                    color = Color(0xFFFF9500).copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Experimental",
+                                        color = Color(0xFFFF9500),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text("Browser background, dynamic wallpaper blur/dim", color = textSecondaryColor, fontSize = 11.sp)
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = textSecondaryColor
                         )
                     }
                 }

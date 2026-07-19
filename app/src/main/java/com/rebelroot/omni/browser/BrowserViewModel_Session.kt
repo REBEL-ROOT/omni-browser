@@ -50,7 +50,30 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             
             if (permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE ||
                 permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE) {
-                return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                val autoplayVal = getSitePermissionValue(permission.uri, "autoplay")
+                return if (autoplayVal == "allow") {
+                    GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                } else {
+                    GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+                }
+            }
+
+            val permissionTypeStr = when (permission.permission) {
+                1 -> "location"
+                2 -> "notifications"
+                3 -> "camera"
+                4 -> "microphone"
+                5 -> "drm"
+                else -> null
+            }
+
+            if (permissionTypeStr != null) {
+                val currentVal = getSitePermissionValue(permission.uri, permissionTypeStr)
+                if (currentVal == "allow") {
+                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                } else if (currentVal == "block") {
+                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+                }
             }
 
             if (tab.id != activeTabId) {
@@ -63,10 +86,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 permissionType = permission.permission,
                 onAllow = {
                     activePermissionPrompt = null
+                    if (permissionTypeStr != null) {
+                        updateSitePermission(permission.uri, permissionTypeStr, "allow")
+                    }
                     result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
                 },
                 onDeny = {
                     activePermissionPrompt = null
+                    if (permissionTypeStr != null) {
+                        updateSitePermission(permission.uri, permissionTypeStr, "block")
+                    }
                     result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
                 }
             )
@@ -95,16 +124,38 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return
             }
 
+            // Check permissions rules
+            val cameraVal = if (hasVideo) getSitePermissionValue(uri, "camera") else "allow"
+            val micVal = if (hasAudio) getSitePermissionValue(uri, "microphone") else "allow"
+
+            if (cameraVal == "block" || micVal == "block") {
+                Log.d(TAG, "onMediaPermissionRequest: Blocked media access based on settings rule")
+                callback.reject()
+                return
+            }
+
+            if (cameraVal == "allow" && micVal == "allow") {
+                Log.d(TAG, "onMediaPermissionRequest: Allowed media access based on settings rule")
+                val videoSource = video?.firstOrNull()
+                val audioSource = audio?.firstOrNull()
+                callback.grant(videoSource, audioSource)
+                return
+            }
+
             activeMediaPermissionPrompt = MediaPermissionPrompt(
                 siteUri = uri,
                 hasVideo = hasVideo,
                 hasAudio = hasAudio,
                 onAllow = { selectedVideo, selectedAudio ->
                     activeMediaPermissionPrompt = null
+                    if (hasVideo) updateSitePermission(uri, "camera", "allow")
+                    if (hasAudio) updateSitePermission(uri, "microphone", "allow")
                     callback.grant(selectedVideo, selectedAudio)
                 },
                 onDeny = {
                     activeMediaPermissionPrompt = null
+                    if (hasVideo) updateSitePermission(uri, "camera", "block")
+                    if (hasAudio) updateSitePermission(uri, "microphone", "block")
                     callback.reject()
                 }
             )
@@ -238,6 +289,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             hasUserGesture: Boolean
         ) {
             url?.let {
+                // Dynamically update allowJavascript setting for the new domain
+                session.settings.allowJavascript = (getSitePermissionValue(it, "javascript") == "allow")
+
                 val idx = tabs.indexOfFirst { it.id == tab.id }
                 if (idx != -1) {
                     val currentTabUrl = tabs[idx].url
@@ -284,6 +338,70 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 mediaInterceptor.onMediaRequestDetected(uri)
             }
 
+            // ── Google OAuth Native Account Picker ─────────────────────────────────
+            // MUST be the first check — before popup blocker — so that OAuth windows
+            // opened via window.open() (TARGET_WINDOW_NEW) are caught here and shown
+            // in the native account picker instead of being silently blocked.
+            //
+            // Grace period: after the user picks an account, oauthGracePeriodByTab[tab.id]
+            // is set for 15 seconds. During that window, ALL accounts.google.com navigations
+            // on this tab pass through — covering multi-hop redirect chains like:
+            //   site → accounts.google.com → site-callback → accounts.google.com (again) → site
+            // When the tab reaches a non-Google URL, the grace period is cleared so the
+            // next "Sign in with Google" on any site shows the picker again normally.
+            val isGoogleAuthHost = lowerUri.contains("accounts.google.com")
+
+            // Clear grace period once the OAuth redirect chain lands on a non-Google page
+            if (!isGoogleAuthHost && oauthGracePeriodByTab.containsKey(tab.id)) {
+                oauthGracePeriodByTab.remove(tab.id)
+                Log.i(TAG, "🔑 Google OAuth grace period cleared for tab ${tab.id} (reached non-Google URL)")
+            }
+
+            // If we are within the grace period for this tab, allow all accounts.google.com through
+            val gracePeriodExpiry = oauthGracePeriodByTab[tab.id]
+            val isInGracePeriod = gracePeriodExpiry != null && System.currentTimeMillis() < gracePeriodExpiry
+            if (isInGracePeriod && isGoogleAuthHost) {
+                Log.i(TAG, "🔑 Google Auth grace pass-through (${((gracePeriodExpiry!! - System.currentTimeMillis()) / 1000)}s remaining): $uri")
+                return null  // ALLOW — part of the active OAuth redirect chain
+            }
+            // Expired grace periods are cleaned up lazily
+            if (gracePeriodExpiry != null && !isInGracePeriod) {
+                oauthGracePeriodByTab.remove(tab.id)
+            }
+
+            // Intercept first-time navigation to Google sign-in and show native account picker.
+            // Covers all Google sign-in entry points:
+            //  - accounts.google.com/o/oauth2/       (classic OAuth 2.0 redirect)
+            //  - accounts.google.com/v3/signin/      (modern Gmail / Google app login)
+            //  - accounts.google.com/signin/v2/      (legacy Google login)
+            //  - accounts.google.com/ServiceLogin    (service login page)
+            //  - accounts.google.com/AccountChooser (account chooser)
+            //  - accounts.google.com/gsi/            (Google Sign-In JS library)
+            //  - accounts.google.com with client_id / response_type / continue params
+            val isGoogleOAuth = tab.id == activeTabId && isGoogleAuthHost &&
+                (lowerUri.contains("/o/oauth2/") ||
+                 lowerUri.contains("/v3/signin/") ||
+                 lowerUri.contains("/signin/v2/") ||
+                 lowerUri.contains("/signin/oauth") ||
+                 lowerUri.contains("/servicelogin") ||
+                 lowerUri.contains("/accountchooser") ||
+                 lowerUri.contains("/addsession") ||
+                 lowerUri.contains("/gsi/select") ||
+                 lowerUri.contains("/gsi/issue") ||
+                 lowerUri.contains("client_id=") ||
+                 lowerUri.contains("response_type=") ||
+                 lowerUri.contains("continue="))
+            if (isGoogleOAuth) {
+                Log.i(TAG, "🔑 Google Auth intercepted: $uri")
+                viewModelScope.launch(Dispatchers.Main) {
+                    pendingGoogleOAuthRequest = BrowserViewModel.PendingGoogleOAuthRequest(
+                        oauthUrl = uri,
+                        tabId = tab.id
+                    )
+                }
+                return GeckoResult.fromValue(AllowOrDeny.DENY)
+            }
+
             if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
                 if (isPopupBlockerEnabled) {
                     if (!request.hasUserGesture) {
@@ -307,8 +425,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 }
             }
 
-            if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") || 
-                lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") || 
+            if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") ||
+                lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") ||
                 lowerUri.contains(".ics?") || lowerUri.contains("calendar.google.com") ||
                 (lowerUri.startsWith("intent:") && (lowerUri.contains("calendar") || lowerUri.contains(".ics") || lowerUri.contains("webcal")))
             ) {
@@ -462,6 +580,25 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         ): GeckoResult<String>? {
             Log.e(TAG, "GeckoView Load Error: code=${error.code}, category=${error.category}, uri=$uri")
             
+            val lowerUri = uri?.lowercase() ?: ""
+            val isGoogleAuthHost = lowerUri.contains("accounts.google.com")
+            
+            // Check if this error is an ERROR_UNKNOWN (17) caused by us returning DENY
+            // in onLoadRequest for OAuth pages, direct videos, or spam calendars.
+            val isDeniedByCustomIntercept = error.code == org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN && (
+                isGoogleAuthHost ||
+                (isNativePlayerEnabled && isDirectVideoUrl(uri ?: "")) ||
+                lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") ||
+                lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") ||
+                lowerUri.contains(".ics?") || lowerUri.contains("calendar.google.com") ||
+                (lowerUri.startsWith("intent:") && (lowerUri.contains("calendar") || lowerUri.contains(".ics") || lowerUri.contains("webcal")))
+            )
+            
+            if (isDeniedByCustomIntercept) {
+                Log.i(TAG, "🔑 Ignored onLoadError (code 17) for custom denied URL: $uri")
+                return null
+            }
+            
             val errorMsg = when (error.code) {
                 org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN_HOST -> "Unknown Host: The server's name could not be resolved. Make sure the URL is spelled correctly and you have an active network connection."
                 org.mozilla.geckoview.WebRequestError.ERROR_CONNECTION_REFUSED -> "Connection Failed: Could not connect to the server."
@@ -518,11 +655,12 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
                 Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                 val runtime = getGeckoRuntime(context)
+                val isJsAllowed = getSitePermissionValue(uri, "javascript") == "allow"
                 val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                     .usePrivateMode(isIncognitoMode)
                     .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
                     .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-                    .allowJavascript(true)
+                    .allowJavascript(isJsAllowed)
                     .build()
                 val newSession = GeckoSession(settings)
                 val tabId = java.util.UUID.randomUUID().toString()

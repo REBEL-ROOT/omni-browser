@@ -99,5 +99,9 @@ window.addEventListener('message', (event) => {
             pageUrl: data.pageUrl,
             mimeType: data.mimeType
         });
+    } else if (data.type === 'OMNI_FOCUS_LOGIN_INPUT') {
+        chrome.runtime.sendMessage({
+            type: 'FOCUS_LOGIN_INPUT'
+        });
     }
 });
