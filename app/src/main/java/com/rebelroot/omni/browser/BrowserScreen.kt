@@ -142,7 +142,7 @@ fun BrowserScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
     val coroutineScope = rememberCoroutineScope()
-    val config = getUiSizeConfig(viewModel.uiSize)
+    val config = getUiSizeConfig(viewModel.uiScale)
     var dragAmountAccumulated by remember { mutableStateOf(0f) }
 
     val showHomeScreen = viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()

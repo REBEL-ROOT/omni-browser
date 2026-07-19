@@ -179,7 +179,7 @@ class BrowserViewModel : ViewModel() {
         val EXTENSION_ORDER_KEY = stringPreferencesKey("extension_order")
         val EXTENSION_VIEW_MODE_KEY = stringPreferencesKey("extension_view_mode")
         val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
-        val UI_SIZE_KEY = stringPreferencesKey("ui_size")
+        val UI_SCALE_KEY = floatPreferencesKey("ui_scale")
 
         @Volatile
         @Keep
@@ -323,7 +323,7 @@ class BrowserViewModel : ViewModel() {
     var showHomeShortcuts by mutableStateOf(true)
     var showBottomNavBar by mutableStateOf(true)
     var chromeNavBarEnabled by mutableStateOf(false)
-    var uiSize by mutableStateOf("Medium")
+    var uiScale by mutableStateOf(1.0f)
     var wallpaperDim by mutableStateOf(-1f)
     var wallpaperBlur by mutableStateOf(0f)
     var wallpaperScale by mutableStateOf(1.0f)
@@ -1497,7 +1497,7 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
-                uiSize = getUiSizePreference(appCtx).first()
+                uiScale = getUiScalePreference(appCtx).first()
             }
 
             viewModelScope.launch {
@@ -2108,17 +2108,17 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    // UI Size Settings
-    fun getUiSizePreference(context: Context): Flow<String> {
+    // UI Scale Settings
+    fun getUiScalePreference(context: Context): Flow<Float> {
         return context.dataStore.data.map { preferences ->
-            preferences[UI_SIZE_KEY] ?: "Medium"
+            preferences[UI_SCALE_KEY] ?: 1.0f
         }
     }
 
-    fun saveUiSize(context: Context, size: String) {
+    fun saveUiScale(context: Context, scale: Float) {
         viewModelScope.launch {
-            context.dataStore.edit { it[UI_SIZE_KEY] = size }
-            uiSize = size
+            context.dataStore.edit { it[UI_SCALE_KEY] = scale }
+            uiScale = scale
         }
     }
 

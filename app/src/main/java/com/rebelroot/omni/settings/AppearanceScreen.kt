@@ -156,42 +156,42 @@ fun AppearanceScreen(
 
                     HorizontalDivider(color = dividerColor)
 
-                    // UI Scale Mode: Small | Medium | Large
+                    // UI Scale Mode
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("UI Size", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        val uiMode = when (viewModel.uiSize) {
-                            "Small" -> 0
-                            "Large" -> 2
-                            else -> 1
-                        }
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            val options = listOf("Small", "Medium", "Large")
-                            val icons = listOf(
-                                Icons.Rounded.ZoomOut,
-                                Icons.Rounded.AspectRatio,
-                                Icons.Rounded.ZoomIn
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("UI Scale", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "${(viewModel.uiScale * 100).toInt()}%",
+                                color = accentColor,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            options.forEachIndexed { index, label ->
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                                    onClick = {
-                                        val selectedSize = when (index) {
-                                            0 -> "Small"
-                                            2 -> "Large"
-                                            else -> "Medium"
-                                        }
-                                        viewModel.saveUiSize(context, selectedSize)
-                                    },
-                                    selected = uiMode == index,
-                                    icon = {
-                                        SegmentedButtonDefaults.Icon(active = uiMode == index) {
-                                            Icon(imageVector = icons[index], contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                                        }
-                                    }
-                                ) {
-                                    Text(label, fontSize = 13.sp)
-                                }
-                            }
+                        }
+                        Slider(
+                            value = viewModel.uiScale,
+                            onValueChange = { newValue ->
+                                val steppedValue = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveUiScale(context, steppedValue.coerceIn(0.8f, 1.3f))
+                            },
+                            valueRange = 0.8f..1.3f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = accentColor,
+                                activeTrackColor = accentColor,
+                                inactiveTrackColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color(0xFFE0E0E0)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Smaller", color = textSecondaryColor, fontSize = 11.sp)
+                            Text("Default", color = textSecondaryColor, fontSize = 11.sp)
+                            Text("Larger", color = textSecondaryColor, fontSize = 11.sp)
                         }
                     }
 

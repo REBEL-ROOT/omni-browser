@@ -16,37 +16,15 @@ data class UiSizeConfig(
     val paddingHorizontal: Dp
 )
 
-fun getUiSizeConfig(size: String): UiSizeConfig {
-    return when (size) {
-        "Small" -> UiSizeConfig(
-            addressBarHeight = 42.dp,
-            searchBoxHeight = 34.dp,
-            barIconSize = 32.dp,
-            innerIconSize = 16.dp,
-            fontSize = 13.sp,
-            bottomNavBarHeight = 44.dp,
-            paddingVertical = 2.dp,
-            paddingHorizontal = 6.dp
-        )
-        "Large" -> UiSizeConfig(
-            addressBarHeight = 56.dp,
-            searchBoxHeight = 46.dp,
-            barIconSize = 42.dp,
-            innerIconSize = 22.dp,
-            fontSize = 17.sp,
-            bottomNavBarHeight = 58.dp,
-            paddingVertical = 6.dp,
-            paddingHorizontal = 10.dp
-        )
-        else -> UiSizeConfig( // Medium
-            addressBarHeight = 48.dp,
-            searchBoxHeight = 40.dp,
-            barIconSize = 36.dp,
-            innerIconSize = 20.dp,
-            fontSize = 15.sp,
-            bottomNavBarHeight = 50.dp,
-            paddingVertical = 4.dp,
-            paddingHorizontal = 8.dp
-        )
-    }
+fun getUiSizeConfig(scale: Float): UiSizeConfig {
+    return UiSizeConfig(
+        addressBarHeight = (48 * scale).dp,
+        searchBoxHeight = (40 * scale).dp,
+        barIconSize = (36 * scale).dp,
+        innerIconSize = (20 * scale).dp,
+        fontSize = (15 * scale).sp,
+        bottomNavBarHeight = (50 * scale).dp,
+        paddingVertical = (4 * scale).dp,
+        paddingHorizontal = (8 * scale).dp
+    )
 }

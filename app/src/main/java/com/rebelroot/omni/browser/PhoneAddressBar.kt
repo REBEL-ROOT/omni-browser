@@ -151,7 +151,7 @@ fun PhoneAddressBar(
     val coroutineScope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    val config = getUiSizeConfig(viewModel.uiSize)
+    val config = getUiSizeConfig(viewModel.uiScale)
 
     Row(
         modifier = Modifier
