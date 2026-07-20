@@ -83,7 +83,7 @@ jobs:
           echo "✅ APKs renamed:"
           ls -lh app/build/outputs/apk/
 
-       - name: Wipe keystore from runner (security cleanup)
+      - name: Wipe keystore from runner (security cleanup)
         if: always()
         run: |
           rm -f release-new.keystore
