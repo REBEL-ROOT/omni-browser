@@ -54,17 +54,7 @@ jobs:
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
 
-      - name: Build & Sign Release AAB
-        run: |
-          ./gradlew bundleArmRelease bundleAarch64Release bundleUniversalRelease --no-daemon --stacktrace --info
-          if [ -z "$(find app/build/outputs/bundle/ -name "*.aab")" ]; then
-            echo "❌ AAB build failed - no AAB generated"
-            exit 1
-          fi
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+
 
       - name: Verify APK is signed
         run: |
@@ -93,24 +83,7 @@ jobs:
           echo "✅ APKs renamed:"
           ls -lh app/build/outputs/apk/
 
-      - name: Rename AAB
-        run: |
-          VERSION=${{ github.ref_name }}
-          find app/build/outputs/bundle/ -name "*.aab" -exec bash -c '
-            file="$1"
-            filename=$(basename "$file")
-            if [[ "$filename" == app-arm-release.aab ]]; then
-              mv "$file" "app/build/outputs/bundle/omni-browser-${VERSION}-arm.aab"
-            elif [[ "$filename" == app-aarch64-release.aab ]]; then
-              mv "$file" "app/build/outputs/bundle/omni-browser-${VERSION}-aarch64.aab"
-            elif [[ "$filename" == app-universal-release.aab ]]; then
-              mv "$file" "app/build/outputs/bundle/omni-browser-${VERSION}-universal.aab"
-            fi
-          ' bash {} \;
-          echo "✅ AABs renamed:"
-          ls -lh app/build/outputs/bundle/
-
-      - name: Wipe keystore from runner (security cleanup)
+       - name: Wipe keystore from runner (security cleanup)
         if: always()
         run: |
           rm -f release-new.keystore
@@ -125,7 +98,6 @@ jobs:
           generate_release_notes: true
           files: |
             app/build/outputs/apk/omni-browser-*.apk
-            app/build/outputs/bundle/omni-browser-*.aab
           body: |
             ## Omni Browser ${{ github.ref_name }}
 
