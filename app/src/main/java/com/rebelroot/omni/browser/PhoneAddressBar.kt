@@ -48,6 +48,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.SolidColor
@@ -164,10 +166,11 @@ fun PhoneAddressBar(
                 onClick = { viewModel.loadUrl("about:blank") },
                 modifier = Modifier.size(config.barIconSize)
             ) {
-                androidx.compose.foundation.Image(
-                    painter = androidx.compose.ui.res.painterResource(id = com.rebelroot.omni.R.drawable.ic_omni_logo),
+                Icon(
+                    imageVector = Icons.Rounded.Home,
                     contentDescription = "Go Home",
-                    modifier = Modifier.size(config.innerIconSize)
+                    modifier = Modifier.size(config.innerIconSize),
+                    tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
                 )
             }
         }
@@ -226,13 +229,31 @@ fun PhoneAddressBar(
                 }
 
 
+                val domainColor = MaterialTheme.colorScheme.onSurface
+                val pathColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                val urlTransformation = remember(isInputFocused, domainColor, pathColor) {
+                    UrlVisualTransformation(isInputFocused, domainColor, pathColor)
+                }
+
+                val bringIntoViewRequester = remember { BringIntoViewRequester() }
+
                 BasicTextField(
                     value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
                     onValueChange = onInputUrlChange,
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester)
-                        .onFocusChanged { onInputFocusedChange(it.isFocused) },
+                        .onFocusChanged { onInputFocusedChange(it.isFocused) }
+                        .bringIntoViewRequester(bringIntoViewRequester),
+                    onTextLayout = { textLayoutResult ->
+                        val cursorStart = inputUrl.selection.start
+                        if (cursorStart >= 0 && cursorStart <= inputUrl.text.length) {
+                            val cursorRect = textLayoutResult.getCursorRect(cursorStart)
+                            coroutineScope.launch {
+                                bringIntoViewRequester.bringIntoView(cursorRect)
+                            }
+                        }
+                    },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onSurface,
@@ -248,7 +269,8 @@ fun PhoneAddressBar(
                             keyboardController?.hide()
                         }
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    visualTransformation = urlTransformation
                 )
 
                 // X Clear button — only shown when the user is actively editing the URL
@@ -472,152 +494,147 @@ fun ChromeMenuDropdown(
     val iconTint = if (isDark) Color.White else Color(0xFF1C1C1E)
     val dividerColor = if (viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
     val iconBg = if (viewModel.isAmoledMode) Color(0xFF1C1C1E) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+    val accentColor = MaterialTheme.colorScheme.primary
+    val surfaceVariant = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
 
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
-        modifier = Modifier
-            .width(260.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(cardBg)
-            .border(
-                1.dp,
-                if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA),
-                RoundedCornerShape(18.dp)
-            )
+        modifier = Modifier.width(260.dp),
+        shape = RoundedCornerShape(20.dp),
+        containerColor = cardBg,
+        shadowElevation = 8.dp,
+        tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Row of circular actions
+            // ── Page Info Header ──────────────────────────────
+            if (!isHome && activeTab != null) {
+                val pageTitle = activeTab.title?.takeIf { it.isNotBlank() } ?: "Webpage"
+                val pageDomain = try {
+                    android.net.Uri.parse(viewModel.currentUrl).host?.removePrefix("www.") ?: viewModel.currentUrl
+                } catch (_: Exception) { viewModel.currentUrl }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(accentColor.copy(alpha = 0.18f), accentColor.copy(alpha = 0.06f))
+                                ),
+                                RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Language,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = pageTitle,
+                            color = textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = pageDomain,
+                            color = textSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                HorizontalDivider(color = dividerColor)
+            }
+
+            // ── Quick Action Pills ────────────────────────────
+            val canForward = activeTab?.canGoForward == true
+            val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Forward
-                val canForward = activeTab?.canGoForward == true
-                IconButton(
-                    onClick = {
-                        onDismissRequest()
-                        viewModel.goForward()
-                    },
+                MenuActionPill(
+                    icon = Icons.AutoMirrored.Rounded.ArrowForward,
+                    label = "Forward",
                     enabled = canForward,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(iconBg, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = "Forward",
-                        tint = if (canForward) iconTint else textSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
+                    tint = if (canForward) iconTint else textSecondary.copy(alpha = 0.35f),
+                    bg = if (canForward) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    onClick = { onDismissRequest(); viewModel.goForward() }
+                )
                 // Bookmark
-                val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
-                IconButton(
+                MenuActionPill(
+                    icon = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    label = if (isBookmarked) "Saved" else "Save",
+                    enabled = !isHome,
+                    tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else textSecondary.copy(alpha = 0.35f),
+                    bg = if (!isHome) (if (isBookmarked) accentColor.copy(alpha = 0.15f) else surfaceVariant) else surfaceVariant.copy(alpha = 0.4f),
                     onClick = {
                         onDismissRequest()
                         if (!isHome) {
-                            if (isBookmarked) {
-                                viewModel.removeBookmark(viewModel.currentUrl)
-                            } else {
-                                viewModel.addToBookmarks(activeTab?.title ?: "Webpage", viewModel.currentUrl)
-                            }
+                            if (isBookmarked) viewModel.removeBookmark(viewModel.currentUrl)
+                            else viewModel.addToBookmarks(activeTab?.title ?: "Webpage", viewModel.currentUrl)
                         }
-                    },
-                    enabled = !isHome,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(iconBg, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                        contentDescription = "Bookmark",
-                        tint = if (!isHome) {
-                            if (isBookmarked) MaterialTheme.colorScheme.primary else iconTint
-                        } else textSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
+                    }
+                )
                 // Download
-                IconButton(
-                    onClick = {
-                        onDismissRequest()
-                        if (!isHome) {
-                            viewModel.printCurrentPage(context)
-                        }
-                    },
+                MenuActionPill(
+                    icon = Icons.Rounded.Download,
+                    label = "Save PDF",
                     enabled = !isHome,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(iconBg, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Download,
-                        contentDescription = "Download",
-                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
+                    tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.35f),
+                    bg = if (!isHome) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    onClick = { onDismissRequest(); if (!isHome) viewModel.printCurrentPage(context) }
+                )
                 // Info
-                IconButton(
-                    onClick = {
-                        onDismissRequest()
-                        if (!isHome) {
-                            onShowSiteInfo()
-                        }
-                    },
+                MenuActionPill(
+                    icon = Icons.Rounded.Info,
+                    label = "Info",
                     enabled = !isHome,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(iconBg, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Info,
-                        contentDescription = "Site Info",
-                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
+                    tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.35f),
+                    bg = if (!isHome) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    onClick = { onDismissRequest(); if (!isHome) onShowSiteInfo() }
+                )
                 // Reload
-                IconButton(
-                    onClick = {
-                        onDismissRequest()
-                        if (!isHome) {
-                            viewModel.reload()
-                        }
-                    },
+                MenuActionPill(
+                    icon = Icons.Rounded.Refresh,
+                    label = "Reload",
                     enabled = !isHome,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(iconBg, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = "Reload",
-                        tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.35f),
+                    bg = if (!isHome) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    onClick = { onDismissRequest(); if (!isHome) viewModel.reload() }
+                )
             }
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
+            HorizontalDivider(color = dividerColor)
+            // ── Tabs section header ───────────────────────────
+            MenuSectionLabel(text = "Tabs", textColor = textSecondary)
 
             // New Tab
             LuxuryMenuItem(
-                text = "New tab",
+                text = "New Tab",
                 icon = Icons.Rounded.AddBox,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -627,9 +644,10 @@ fun ChromeMenuDropdown(
 
             // New Incognito Tab
             LuxuryMenuItem(
-                text = "New Incognito tab",
+                text = "New Incognito Tab",
                 icon = Icons.Rounded.VisibilityOff,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -637,13 +655,15 @@ fun ChromeMenuDropdown(
                 }
             )
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
+            HorizontalDivider(color = dividerColor)
+            MenuSectionLabel(text = "Browse", textColor = textSecondary)
 
             // History
             LuxuryMenuItem(
                 text = "History",
                 icon = Icons.Rounded.History,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -653,23 +673,26 @@ fun ChromeMenuDropdown(
 
             // Delete browsing data
             LuxuryMenuItem(
-                text = "Delete browsing data",
+                text = "Clear Browsing Data",
                 icon = Icons.Rounded.LocalFireDepartment,
-                iconTint = Color(0xFFFF4444),
-                textColor = Color(0xFFFF4444),
+                iconTint = Color(0xFFFF3B30),
+                iconBg = Color(0xFFFF3B30).copy(alpha = 0.12f),
+                textColor = Color(0xFFFF3B30),
                 onClick = {
                     onDismissRequest()
                     onBurnData()
                 }
             )
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
+            HorizontalDivider(color = dividerColor)
+            MenuSectionLabel(text = "Library", textColor = textSecondary)
 
             // Downloads
             LuxuryMenuItem(
                 text = "Downloads",
                 icon = Icons.Rounded.Download,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -682,6 +705,7 @@ fun ChromeMenuDropdown(
                 text = "Bookmarks",
                 icon = Icons.Rounded.Bookmark,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -692,9 +716,10 @@ fun ChromeMenuDropdown(
             // Desktop Site (only show if not on Home screen)
             if (!isHome) {
                 LuxuryMenuItem(
-                    text = "Desktop site",
+                    text = "Desktop Site",
                     icon = Icons.Rounded.Computer,
                     iconTint = iconTint,
+                    iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
@@ -717,9 +742,10 @@ fun ChromeMenuDropdown(
             // Find in page (only when a page is open)
             if (!isHome) {
                 LuxuryMenuItem(
-                    text = "Find in page",
+                    text = "Find in Page",
                     icon = Icons.Rounded.Search,
                     iconTint = iconTint,
+                    iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
@@ -731,9 +757,10 @@ fun ChromeMenuDropdown(
             // Add to shortcuts (only when a page is open)
             if (!isHome) {
                 LuxuryMenuItem(
-                    text = "Add to shortcuts",
+                    text = "Add to Shortcuts",
                     icon = Icons.Rounded.AddCircle,
                     iconTint = iconTint,
+                    iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
@@ -750,6 +777,7 @@ fun ChromeMenuDropdown(
                     text = "Extensions",
                     icon = Icons.Rounded.Extension,
                     iconTint = iconTint,
+                    iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
@@ -763,6 +791,7 @@ fun ChromeMenuDropdown(
                 text = "Player Settings",
                 icon = Icons.Rounded.PlayCircle,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -770,13 +799,15 @@ fun ChromeMenuDropdown(
                 }
             )
 
-            HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 6.dp))
+            HorizontalDivider(color = dividerColor)
+            MenuSectionLabel(text = "App", textColor = textSecondary)
 
             // Settings
             LuxuryMenuItem(
                 text = "Settings",
                 icon = Icons.Rounded.Settings,
                 iconTint = iconTint,
+                iconBg = iconBg,
                 textColor = textPrimary,
                 onClick = {
                     onDismissRequest()
@@ -790,6 +821,7 @@ fun ChromeMenuDropdown(
                     text = "Customize Home",
                     icon = Icons.Rounded.Edit,
                     iconTint = iconTint,
+                    iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
@@ -797,8 +829,61 @@ fun ChromeMenuDropdown(
                     }
                 )
             }
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
+}
+
+@Composable
+private fun MenuActionPill(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    tint: Color,
+    bg: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.width(44.dp)
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .size(40.dp)
+                .background(bg, RoundedCornerShape(12.dp))
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(19.dp)
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = tint.copy(alpha = if (enabled) 1f else 0.4f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun MenuSectionLabel(text: String, textColor: Color) {
+    Text(
+        text = text.uppercase(),
+        color = textColor,
+        fontSize = 10.5.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.8.sp,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+    )
 }
 
 @Composable
@@ -806,6 +891,7 @@ private fun LuxuryMenuItem(
     text: String,
     icon: ImageVector,
     iconTint: Color,
+    iconBg: Color = iconTint.copy(alpha = 0.12f),
     textColor: Color,
     onClick: () -> Unit,
     trailingContent: (@Composable () -> Unit)? = null
@@ -814,21 +900,28 @@ private fun LuxuryMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(18.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(iconBg, RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(17.dp)
+            )
+        }
         Text(
             text = text,
             color = textColor,
             fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Normal,
             modifier = Modifier.weight(1f)
         )
         if (trailingContent != null) {
@@ -1024,6 +1117,64 @@ fun MenuGridCell(
             lineHeight = 14.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+class UrlVisualTransformation(
+    private val isFocused: Boolean,
+    private val domainColor: Color,
+    private val pathColor: Color
+) : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val rawText = text.text
+        if (rawText.isBlank() || rawText == "about:blank" || isFocused) {
+            return androidx.compose.ui.text.input.TransformedText(text, androidx.compose.ui.text.input.OffsetMapping.Identity)
+        }
+
+        val builder = androidx.compose.ui.text.AnnotatedString.Builder()
+        
+        var protocolEnd = 0
+        if (rawText.startsWith("https://")) {
+            protocolEnd = 8
+        } else if (rawText.startsWith("http://")) {
+            protocolEnd = 7
+        }
+
+        val domainStart = protocolEnd
+        var domainEnd = rawText.indexOf('/', domainStart)
+        if (domainEnd == -1) {
+            domainEnd = rawText.indexOf('?', domainStart)
+        }
+        if (domainEnd == -1) {
+            domainEnd = rawText.indexOf('#', domainStart)
+        }
+        if (domainEnd == -1) {
+            domainEnd = rawText.length
+        }
+
+        // Protocol
+        if (protocolEnd > 0) {
+            builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = pathColor))
+            builder.append(rawText.substring(0, protocolEnd))
+            builder.pop()
+        }
+
+        // Domain
+        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = domainColor, fontWeight = FontWeight.Bold))
+        builder.append(rawText.substring(domainStart, domainEnd))
+        builder.pop()
+
+        // Path / params
+        if (domainEnd < rawText.length) {
+            builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = pathColor))
+            builder.append(rawText.substring(domainEnd))
+            builder.pop()
+        }
+
+        return androidx.compose.ui.text.input.TransformedText(
+            builder.toAnnotatedString(),
+            androidx.compose.ui.text.input.OffsetMapping.Identity
         )
     }
 }

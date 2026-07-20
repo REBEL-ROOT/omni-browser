@@ -49,6 +49,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.SolidColor
@@ -216,15 +218,16 @@ fun BrowserScreen(
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val isKeyboardVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
 
+    val isEditMode = activeTab?.isEditModeEnabled == true
     val navHideTopActive = isNavHideEnabled && viewModel.navBarHideTop
     val navHideBottomActive = isNavHideEnabled && viewModel.navBarHideBottom
     val topBarFraction by animateFloatAsState(
-        targetValue = if (isKeyboardVisible && !isInputFocused) 1f else if (!viewModel.isFullscreen && !showHomeScreen && navHideTopActive && !isScrollNavBarVisible) 1f else 0f,
+        targetValue = if (isKeyboardVisible && !isInputFocused && !isEditMode) 1f else if (!viewModel.isFullscreen && !showHomeScreen && navHideTopActive && !isScrollNavBarVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
         label = "topBarHide"
     )
     val bottomBarFraction by animateFloatAsState(
-        targetValue = if (isKeyboardVisible && !isInputFocused) 1f else if (!viewModel.isFullscreen && !showHomeScreen && navHideBottomActive && !isScrollNavBarVisible) 1f else 0f,
+        targetValue = if (isKeyboardVisible && !isInputFocused && !isEditMode) 1f else if (!viewModel.isFullscreen && !showHomeScreen && navHideBottomActive && !isScrollNavBarVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
         label = "bottomBarHide"
     )
@@ -669,17 +672,20 @@ fun BrowserScreen(
         if (!viewModel.isFullscreen && !showHomeScreen &&
                 ((viewModel.chromeNavBarEnabled && viewModel.addressBarPosition != "Bottom") ||
                 (!viewModel.chromeNavBarEnabled && !(viewModel.addressBarPosition == "Bottom" && !isTablet)))) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val statusBarHeightDp = with(density) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }
+            val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
+
             // Top bar: always rendered; graphicsLayer slides it out without removing from composition
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer { translationY = -size.height * topBarFraction }
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding(),
+                            .padding(top = statusBarHeightDp)
+                            .graphicsLayer { translationY = -topBarHeight.toPx() * topBarFraction },
                         shape = androidx.compose.ui.graphics.RectangleShape,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         shadowElevation = 8.dp,
@@ -848,13 +854,37 @@ fun BrowserScreen(
                                                 )
                                             }
 
+                                            val domainColor = MaterialTheme.colorScheme.onSurface
+                                            val pathColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            val urlTransformation = remember(isInputFocused, domainColor, pathColor) {
+                                                UrlVisualTransformation(isInputFocused, domainColor, pathColor)
+                                            }
+
+                                            val bringIntoViewRequester = remember { BringIntoViewRequester() }
+
                                             BasicTextField(
                                                 value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
                                                 onValueChange = { inputUrl = it },
                                                 modifier = Modifier
                                                     .weight(1f)
                                                     .focusRequester(focusRequester)
-                                                    .onFocusChanged { isInputFocused = it.isFocused },
+                                                    .onFocusChanged { 
+                                                        if (it.isFocused && !isInputFocused) {
+                                                            val text = inputUrl.text
+                                                            inputUrl = inputUrl.copy(selection = androidx.compose.ui.text.TextRange(0, text.length))
+                                                        }
+                                                        isInputFocused = it.isFocused
+                                                    }
+                                                    .bringIntoViewRequester(bringIntoViewRequester),
+                                                onTextLayout = { textLayoutResult ->
+                                                    val cursorStart = inputUrl.selection.start
+                                                    if (cursorStart >= 0 && cursorStart <= inputUrl.text.length) {
+                                                        val cursorRect = textLayoutResult.getCursorRect(cursorStart)
+                                                        coroutineScope.launch {
+                                                            bringIntoViewRequester.bringIntoView(cursorRect)
+                                                        }
+                                                    }
+                                                },
                                                 singleLine = true,
                                                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                                                     color = MaterialTheme.colorScheme.onSurface
@@ -869,7 +899,8 @@ fun BrowserScreen(
                                                         keyboardController?.hide()
                                                     }
                                                 ),
-                                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                                visualTransformation = urlTransformation
                                             )
 
                                             if (inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
@@ -1041,7 +1072,13 @@ fun BrowserScreen(
                                         inputUrl = inputUrl,
                                         onInputUrlChange = { inputUrl = it },
                                         isInputFocused = isInputFocused,
-                                        onInputFocusedChange = { isInputFocused = it },
+                                        onInputFocusedChange = { focused ->
+                                 if (focused && !isInputFocused) {
+                                     val text = inputUrl.text
+                                     inputUrl = inputUrl.copy(selection = androidx.compose.ui.text.TextRange(0, text.length))
+                                 }
+                                 isInputFocused = focused
+                             },
                                         focusRequester = focusRequester,
                                         hasActiveUserExtensions = hasActiveUserExtensions,
                                         onShowExtensionsSheet = { showExtensionsSheet = true },
@@ -1098,9 +1135,15 @@ fun BrowserScreen(
                             }
                         }
                     }
-
-
                 }
+                
+                // Static status bar background
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(statusBarHeightDp)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+                )
             }
         }
         },
@@ -1127,7 +1170,13 @@ fun BrowserScreen(
                             inputUrl = inputUrl,
                             onInputUrlChange = { inputUrl = it },
                             isInputFocused = isInputFocused,
-                            onInputFocusedChange = { isInputFocused = it },
+                            onInputFocusedChange = { focused ->
+                                if (focused && !isInputFocused) {
+                                    val text = inputUrl.text
+                                    inputUrl = inputUrl.copy(selection = androidx.compose.ui.text.TextRange(0, text.length))
+                                }
+                                isInputFocused = focused
+                            },
                             focusRequester = focusRequester,
                             hasActiveUserExtensions = hasActiveUserExtensions,
                             onShowExtensionsSheet = { showExtensionsSheet = true },
@@ -1371,21 +1420,6 @@ fun BrowserScreen(
                 // When scrolled down (currentScrollPos > 0), padding snaps to 0.dp so the browser
                 // bars overlap the site, allowing them to hide/show cleanly without white flashes.
                 if (activeTab != null && !showHomeScreen) {
-                    val hasBottomSiteNav = remember(viewModel.currentUrl) {
-                        val bottomNavDomains = listOf(
-                            "youtube.com", "m.youtube.com", 
-                            "instagram.com", "m.instagram.com",
-                            "twitter.com", "x.com", "mobile.twitter.com", 
-                            "tiktok.com", "m.tiktok.com",
-                            "threads.net", 
-                            "facebook.com", "m.facebook.com", 
-                            "reddit.com", "m.reddit.com", 
-                            "pinterest.com", "m.pinterest.com", 
-                            "linkedin.com", "mobile.linkedin.com",
-                            "github.com", "discord.com", "spotify.com", "twitch.tv"
-                        )
-                        bottomNavDomains.any { viewModel.currentUrl.contains(it, ignoreCase = true) }
-                    }
                     val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.uiScale) {
                         if (viewModel.addressBarPosition == "Bottom" && !isTablet && !showHomeScreen && !viewModel.isFullscreen) {
                             val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
@@ -1400,16 +1434,39 @@ fun BrowserScreen(
                     }
 
                     val density = androidx.compose.ui.platform.LocalDensity.current
+                    val statusBarHeightPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
+                    val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
+                    
                     val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                     val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
                     
-                    val isAtTop = currentScrollPos <= 0
-                    val geckoTopPad = if (isAtTop && hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused)) topBarHeight else 0.dp
-                    val geckoBottomPad = if (hasBottomSiteNav) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
+                    val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
+                    val geckoBottomPad = bottomNavBarHeight * (1f - bottomBarFraction)
+                    
+                    val geckoTopPad = if (hasTopBar) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
                     
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .then(
+                                object : androidx.compose.ui.layout.LayoutModifier {
+                                    override fun androidx.compose.ui.layout.MeasureScope.measure(
+                                        measurable: androidx.compose.ui.layout.Measurable,
+                                        constraints: androidx.compose.ui.unit.Constraints
+                                    ): androidx.compose.ui.layout.MeasureResult {
+                                        val extraHeight = translationDistance.roundToPx()
+                                        val newConstraints = constraints.copy(
+                                            minHeight = constraints.minHeight + extraHeight,
+                                            maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + extraHeight else constraints.maxHeight
+                                        )
+                                        val placeable = measurable.measure(newConstraints)
+                                        return layout(placeable.width, placeable.height) {
+                                            placeable.placeRelative(0, 0)
+                                        }
+                                    }
+                                }
+                            )
+                            .offset(y = translationDistance * (1f - topBarFraction))
                             .padding(top = geckoTopPad, bottom = geckoBottomPad)
                     ) {
                         DisposableEffect(Unit) {
@@ -3065,13 +3122,26 @@ fun BrowserScreen(
                                             onClick = {
                                                 if (currentUrl.isNotEmpty() && currentUrl != "about:blank") {
                                                     try {
-                                                        val encodedUrl = java.net.URLEncoder.encode(currentUrl, "UTF-8")
+                                                        val parsedUri = android.net.Uri.parse(currentUrl)
                                                         val targetLang = selectedPageTargetLang.second
-                                                        val translateUrl = "https://translate.google.com/translate?sl=auto&tl=$targetLang&u=$encodedUrl"
+                                                        // Build the modern translate.goog URL.
+                                                        // IMPORTANT: dots in the original host must become hyphens
+                                                        // so the subdomain is a single DNS label covered by *.translate.goog.
+                                                        // e.g. novelpedia.co → novelpedia-co.translate.goog
+                                                        //      www.example.com → www-example-com.translate.goog
+                                                        val host = parsedUri.host ?: ""
+                                                        val sanitizedHost = host.replace(".", "-")
+                                                        val path = parsedUri.path?.takeIf { it.isNotEmpty() } ?: "/"
+                                                        val existingQuery = parsedUri.query
+                                                        val scheme = if (parsedUri.scheme == "http") "http" else "https"
+                                                        val translateParams = "_x_tr_sl=auto&_x_tr_tl=$targetLang&_x_tr_hl=en&_x_tr_pto=wapp"
+                                                        val fullQuery = if (!existingQuery.isNullOrEmpty()) "$existingQuery&$translateParams" else translateParams
+                                                        val translateUrl = "$scheme://$sanitizedHost.translate.goog$path?$fullQuery"
+                                                        android.util.Log.d("Translator", "Translate URL: $translateUrl")
                                                         viewModel.loadUrl(translateUrl)
                                                         showTranslationDialog = false
                                                     } catch (e: Exception) {
-                                                        android.util.Log.e("Translator", "Failed to encode URL", e)
+                                                        android.util.Log.e("Translator", "Failed to build translate.goog URL", e)
                                                     }
                                                 }
                                             },

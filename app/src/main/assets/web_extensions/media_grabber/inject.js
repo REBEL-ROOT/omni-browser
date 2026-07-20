@@ -29,6 +29,39 @@
     });
 
     // =========================================================
+    // Pull-to-Refresh Inner Scroll Detection
+    // =========================================================
+    let isInnerScrolled = false;
+    const scrolledElements = new Set();
+    
+    window.addEventListener('scroll', function(e) {
+        let el = e.target;
+        if (el && el !== document && el !== document.body && el !== document.documentElement) {
+            // It's an inner scrollable element
+            if (el.scrollTop > 0) {
+                scrolledElements.add(el);
+            } else {
+                scrolledElements.delete(el);
+            }
+            
+            let newIsScrolled = scrolledElements.size > 0;
+            if (newIsScrolled !== isInnerScrolled) {
+                isInnerScrolled = newIsScrolled;
+                window.postMessage({ type: 'OMNI_INNER_SCROLL_STATE', isScrolled: isInnerScrolled }, '*');
+            }
+        }
+    }, { passive: true, capture: true });
+
+    // Expose a way to clear the scroll cache on SPA navigation
+    window._clearOmniScrollCache = function() {
+        scrolledElements.clear();
+        if (isInnerScrolled) {
+            isInnerScrolled = false;
+            window.postMessage({ type: 'OMNI_INNER_SCROLL_STATE', isScrolled: false }, '*');
+        }
+    };
+
+    // =========================================================
     // URL validation helpers
     // =========================================================
     const detectedMediaUrls = new Set();
@@ -47,6 +80,7 @@
             document.querySelectorAll('video').forEach(video => {
                 delete video._omniIntercepted;
             });
+            if (window._clearOmniScrollCache) window._clearOmniScrollCache();
             console.log('[inject.js] SPA navigation detected, cleared dedup caches and video intercept flags for:', window.location.href);
         }
     }, 500);

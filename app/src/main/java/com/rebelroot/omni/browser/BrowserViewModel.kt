@@ -315,6 +315,7 @@ class BrowserViewModel : ViewModel() {
     var currentUrl by mutableStateOf("about:blank")
     var isFullscreen by mutableStateOf(false)
     var isVideoPlayingInPage by mutableStateOf(false)
+    var isInnerScrolled by mutableStateOf(false)
 
     /** When true (default), popup windows not triggered by a real user tap are blocked. */
     var isPopupBlockerEnabled by mutableStateOf(true)
@@ -3648,6 +3649,39 @@ class BrowserViewModel : ViewModel() {
                  "  }" +
                  "  document.body.style.touchAction = 'pan-x pan-y';" +
                  "})();"
+        geckoSession.loadUri(js)
+    }
+
+    /**
+     * Removes the persistent Google Translate floating badge and toolbar injected by
+     * translate.goog pages. The widget consists of:
+     *  - An <iframe> banner that shifts body.top
+     *  - A floating circle button (#goog-gt-tt, .goog-te-balloon-frame)
+     *  - .skiptranslate wrapper elements
+     * We remove all of them via JS and attach a MutationObserver so they stay gone.
+     */
+    internal fun injectTranslateBadgeSuppressor() {
+        val js = """javascript:(function(){
+            function removeTranslateUI() {
+                var ids = ['goog-gt-tt','goog-gt-','gt-res-content','gt-res-dir-ctr'];
+                ids.forEach(function(id){ var el = document.getElementById(id); if(el) el.remove(); });
+                var classes = ['goog-te-balloon-frame','goog-te-banner-frame','skiptranslate','goog-te-ftab-float'];
+                classes.forEach(function(cls){
+                    document.querySelectorAll('.'+cls).forEach(function(el){ el.remove(); });
+                });
+                document.querySelectorAll('iframe').forEach(function(el){
+                    if(el.src && el.src.indexOf('translate.google') !== -1){ el.remove(); }
+                });
+                if(document.body) {
+                    document.body.style.top = '0px';
+                    document.body.style.position = '';
+                    document.documentElement.style.overflow = '';
+                }
+            }
+            removeTranslateUI();
+            var observer = new MutationObserver(function(){ removeTranslateUI(); });
+            observer.observe(document.documentElement, {childList:true, subtree:true});
+        })();"""
         geckoSession.loadUri(js)
     }
 

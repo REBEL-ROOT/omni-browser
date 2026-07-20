@@ -103,5 +103,10 @@ window.addEventListener('message', (event) => {
         chrome.runtime.sendMessage({
             type: 'FOCUS_LOGIN_INPUT'
         });
+    } else if (data.type === 'OMNI_INNER_SCROLL_STATE') {
+        chrome.runtime.sendMessage({
+            type: 'INNER_SCROLL_STATE',
+            isScrolled: data.isScrolled
+        });
     }
 });

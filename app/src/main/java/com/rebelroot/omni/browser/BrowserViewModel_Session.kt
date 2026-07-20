@@ -306,6 +306,12 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     checkAutofillForUrl(it)
                     mediaInterceptor.clear()
                     isVideoPlayingInPage = false
+                    // Re-suppress the translate badge on SPA navigations within translate.goog
+                    if (it.contains(".translate.goog")) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            injectTranslateBadgeSuppressor()
+                        }, 800)
+                    }
                 }
             }
         }
@@ -711,6 +717,11 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (success) {
                 if (tab.id == activeTabId) {
                     injectZoomEnabler()
+                    // Suppress the persistent Google Translate floating badge/toolbar
+                    // that translate.goog pages inject into every translated page.
+                    if (tab.url.contains(".translate.goog")) {
+                        injectTranslateBadgeSuppressor()
+                    }
                     if (siteStyleAppliedGlobally) {
                         applySiteStyleToActiveTab()
                     }

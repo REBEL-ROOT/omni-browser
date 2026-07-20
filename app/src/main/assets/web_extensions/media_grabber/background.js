@@ -280,6 +280,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (e) {
             console.error('[Omni] Native message failed for video state:', e);
         }
+    } else if (message.type === 'INNER_SCROLL_STATE') {
+        try {
+            chrome.runtime.sendNativeMessage('omniApp', {
+                type: 'INNER_SCROLL_STATE',
+                isScrolled: message.isScrolled
+            }).catch(() => {});
+        } catch (e) {
+            console.error('[Omni] Native message failed for INNER_SCROLL_STATE:', e);
+        }
     } else if (message.type === 'PLAY_IN_NATIVE') {
         // Relay to native app — this triggers navigation to the native VideoPlayerScreen
         console.log('[background.js] Received PLAY_IN_NATIVE from content script for URL:', message.url);

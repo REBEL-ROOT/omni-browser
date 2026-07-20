@@ -14,8 +14,8 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.2.4.6"
+        versionCode = 27
+        versionName = "1.2.4.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -200,6 +200,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.4")
     // ui-tooling-preview only needed in debug — never include in release APK

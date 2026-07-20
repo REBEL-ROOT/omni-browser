@@ -285,6 +285,15 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                     } else if (isYouTube) {
                         Log.i(TAG, "🎬 Native player takeover bypassed for YouTube URL")
                     }
+                } else if (type == "INNER_SCROLL_STATE") {
+                    val isScrolled = if (message is org.json.JSONObject) {
+                        if (message.has("isScrolled")) message.getBoolean("isScrolled") else false
+                    } else {
+                        (message as? Map<*, *>)?.get("isScrolled") as? Boolean ?: false
+                    }
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isInnerScrolled = isScrolled
+                    }
                 } else if (type == "VIDEO_STATE_CHANGE") {
                     val playing = if (message is org.json.JSONObject) {
                         if (message.has("isPlaying")) message.getBoolean("isPlaying") else false

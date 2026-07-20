@@ -300,7 +300,84 @@ fun HomeScreenContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(32.dp)
         ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        if (!viewModel.isIncognitoMode) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(top = 8.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Tabs counter icon — only shown when All-in-One navbar is enabled
+                if (viewModel.chromeNavBarEnabled) {
+                    IconButton(
+                        onClick = onShowTabGroups,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .border(1.5.dp, if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E), RoundedCornerShape(5.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Box {
+                IconButton(
+                    onClick = { showHomeMenu = true },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Menu",
+                        tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                ChromeMenuDropdown(
+                    expanded = showHomeMenu,
+                    onDismissRequest = { showHomeMenu = false },
+                    viewModel = viewModel,
+                    onNewTab = {
+                        viewModel.createNewTab(context, "about:blank")
+                    },
+                    onNewIncognitoTab = {
+                        if (!viewModel.isIncognitoMode) {
+                            viewModel.toggleIncognitoMode(context)
+                        }
+                        viewModel.createNewTab(context, "about:blank")
+                    },
+                    onOpenHistory = onOpenHistory,
+                    onBurnData = {
+                        coroutineScope.launch {
+                            val runtime = viewModel.getGeckoRuntime(context)
+                            FireButton(runtime, context).burn()
+                            viewModel.burnAllData(context)
+                            Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onOpenDownloads = onOpenDownloads,
+                    onOpenBookmarks = onOpenBookmarks,
+                    onOpenSettings = onOpenSettings,
+                    onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
+                    onShowExtensions = {},
+                    onShowPlayerSettings = {},
+                    onShowSiteInfo = {}
+                )
+                } // end Box (3-dot + dropdown)
+            } // end Row
+        } else {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         if (viewModel.isIncognitoMode) {
             // Incognito Branding
@@ -1156,94 +1233,6 @@ fun HomeScreenContent(
         }
     }
 
-    // Top right: tabs icon (chrome navbar only) + 3-dots option menu button
-    if (!viewModel.isIncognitoMode) {
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(top = 8.dp, end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // Tabs counter icon — only shown when All-in-One navbar is enabled
-            if (viewModel.chromeNavBarEnabled) {
-                IconButton(
-                    onClick = onShowTabGroups,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color = if (viewModel.isDarkThemeEnabled) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.3f),
-                            shape = CircleShape
-                        )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .border(1.5.dp, if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E), RoundedCornerShape(5.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
-                            color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            Box {
-            IconButton(
-                onClick = { showHomeMenu = true },
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = if (viewModel.isDarkThemeEnabled) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.3f),
-                        shape = CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Menu",
-                    tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            ChromeMenuDropdown(
-                expanded = showHomeMenu,
-                onDismissRequest = { showHomeMenu = false },
-                viewModel = viewModel,
-                onNewTab = {
-                    viewModel.createNewTab(context, "about:blank")
-                },
-                onNewIncognitoTab = {
-                    if (!viewModel.isIncognitoMode) {
-                        viewModel.toggleIncognitoMode(context)
-                    }
-                    viewModel.createNewTab(context, "about:blank")
-                },
-                onOpenHistory = onOpenHistory,
-                onBurnData = {
-                    coroutineScope.launch {
-                        val runtime = viewModel.getGeckoRuntime(context)
-                        FireButton(runtime, context).burn()
-                        viewModel.burnAllData(context)
-                        Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onOpenDownloads = onOpenDownloads,
-                onOpenBookmarks = onOpenBookmarks,
-                onOpenSettings = onOpenSettings,
-                onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
-                onShowExtensions = {},
-                onShowPlayerSettings = {},
-                onShowSiteInfo = {}
-            )
-            } // end Box (3-dot + dropdown)
-        } // end Row
-    }
 }
 
     if (showCustomizationSheet) {
