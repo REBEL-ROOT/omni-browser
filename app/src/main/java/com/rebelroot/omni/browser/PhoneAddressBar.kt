@@ -127,6 +127,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 
+@kotlin.OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PhoneAddressBar(
     viewModel: BrowserViewModel,
