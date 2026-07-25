@@ -42,11 +42,11 @@
 
 | Home | Quick Tools | Browser Menu |
 |:---:|:---:|:---:|
-| <img src="images/screenshots/home.png" width="200" alt="Home Screen" /> | <img src="images/screenshots/quick_tools.png" width="200" alt="Quick Tools" /> | <img src="images/screenshots/browser_menu.png" width="200" alt="Browser Menu" /> |
+| <img src="images/screenshots/home_v2.png" width="200" alt="Home Screen" /> | <img src="images/screenshots/quick_tools.png" width="200" alt="Quick Tools" /> | <img src="images/screenshots/browser_menu.png" width="200" alt="Browser Menu" /> |
 
 | Extensions | Settings | Safe Locker |
 |:---:|:---:|:---:|
-| <img src="images/screenshots/extensions.png" width="200" alt="Extensions" /> | <img src="images/screenshots/settings.png" width="200" alt="Settings" /> | <img src="images/screenshots/safe_locker.png" width="200" alt="Safe Locker" /> |
+| <img src="images/screenshots/extensions_v2.png" width="200" alt="Extensions" /> | <img src="images/screenshots/settings.png" width="200" alt="Settings" /> | <img src="images/screenshots/safe_locker_v2.png" width="200" alt="Safe Locker" /> |
 
 ---
 
@@ -193,11 +193,12 @@ omni-browser/
 │   │   └── vpn/                      # WireGuard VPN manager
 ├── images/
 │   ├── screenshots/                  # 📸 App screenshots
-│   │   ├── home.png
+│   │   ├── home_v2.png
 │   │   ├── quick_tools.png
 │   │   ├── browser_menu.png
-│   │   ├── extensions.png
-│   │   └── settings.png
+│   │   ├── extensions_v2.png
+│   │   ├── settings.png
+│   │   └── safe_locker_v2.png
 │   └── demo.gif                      # 🎬 Screen recording demo
 ├── docs/
 │   ├── ARCHITECTURE.md
