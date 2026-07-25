@@ -137,6 +137,8 @@ fun BrowserScreen(
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenBookmarks: () -> Unit,
+    onOpenNewsCenter: () -> Unit = {},
+    onOpenWallpapers: () -> Unit = {},
     onPlayOnlineStream: (String, String) -> Unit,
     onExitBrowser: () -> Unit
 ) {
@@ -346,6 +348,7 @@ fun BrowserScreen(
 
     // Tools sheet state
     var showToolsSheet by remember { mutableStateOf(false) }
+    var showQuickToolsSheet by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(isKeyboardVisible) {
@@ -878,10 +881,15 @@ fun BrowserScreen(
                                                     .bringIntoViewRequester(bringIntoViewRequester),
                                                 onTextLayout = { textLayoutResult ->
                                                     val cursorStart = inputUrl.selection.start
-                                                    if (cursorStart >= 0 && cursorStart <= inputUrl.text.length) {
-                                                        val cursorRect = textLayoutResult.getCursorRect(cursorStart)
-                                                        coroutineScope.launch {
-                                                            bringIntoViewRequester.bringIntoView(cursorRect)
+                                                    val layoutTextLength = textLayoutResult.layoutInput.text.length
+                                                    if (cursorStart >= 0 && cursorStart <= layoutTextLength) {
+                                                        try {
+                                                            val cursorRect = textLayoutResult.getCursorRect(cursorStart)
+                                                            coroutineScope.launch {
+                                                                bringIntoViewRequester.bringIntoView(cursorRect)
+                                                            }
+                                                        } catch (e: Throwable) {
+                                                            // Safely ignore transient layout bounds mismatch
                                                         }
                                                     }
                                                 },
@@ -1005,7 +1013,7 @@ fun BrowserScreen(
                                     }
 
                                     IconButton(
-                                        onClick = { showToolsSheet = true },
+                                        onClick = { showQuickToolsSheet = true },
                                         modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(
@@ -1082,7 +1090,7 @@ fun BrowserScreen(
                                         focusRequester = focusRequester,
                                         hasActiveUserExtensions = hasActiveUserExtensions,
                                         onShowExtensionsSheet = { showExtensionsSheet = true },
-                                        onShowToolsSheet = { showToolsSheet = true },
+                                        onShowToolsSheet = { showQuickToolsSheet = true },
                                         showMenu = showMenu,
                                         onShowMenuChange = { showMenu = it },
                                         onOpenHistory = onOpenHistory,
@@ -1180,7 +1188,7 @@ fun BrowserScreen(
                             focusRequester = focusRequester,
                             hasActiveUserExtensions = hasActiveUserExtensions,
                             onShowExtensionsSheet = { showExtensionsSheet = true },
-                            onShowToolsSheet = { showToolsSheet = true },
+                            onShowToolsSheet = { showQuickToolsSheet = true },
                             showMenu = showMenu,
                             onShowMenuChange = { showMenu = it },
                             onOpenHistory = onOpenHistory,
@@ -1195,7 +1203,7 @@ fun BrowserScreen(
                     }
                 }
 
-                if (!viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused) {
+                if ((!viewModel.chromeNavBarEnabled || showHomeScreen) && viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused) {
                 // Flat minimal bottom bar persisting exactly as requested in screenshots
                 val isDark = viewModel.isDarkThemeEnabled
                 val navBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
@@ -1217,135 +1225,177 @@ fun BrowserScreen(
                         },
                     color = navBg
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(config.bottomNavBarHeight)
-                            .pointerInput(Unit) {
-                                detectHorizontalDragGestures(
-                                    onDragEnd = {
-                                        if (dragAmountAccumulated > 100f) {
-                                            val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
-                                            // Swiped right -> select previous tab
-                                            val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
-                                            if (currentIndex > 0) {
-                                                viewModel.selectTab(currentModeTabs[currentIndex - 1].id)
-                                            }
-                                        } else if (dragAmountAccumulated < -100f) {
-                                            // Swiped left -> select next tab
-                                            val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
-                                            val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
-                                            if (currentIndex != -1 && currentIndex < currentModeTabs.size - 1) {
-                                                viewModel.selectTab(currentModeTabs[currentIndex + 1].id)
-                                            }
-                                        }
-                                        dragAmountAccumulated = 0f
-                                    },
-                                    onHorizontalDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragAmountAccumulated += dragAmount
-                                    }
-                                )
-                            },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Left: Back button
-                        Box(
+                    if (showHomeScreen) {
+                        // 3-Button Home Navigation Bar matching user screenshot: Palette, News Center, Menu
+                        Row(
                             modifier = Modifier
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .height((52 * viewModel.bottomNavScale).dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            IconButton(
-                                onClick = { viewModel.goBack() },
-                                enabled = viewModel.canGoBack,
-                                modifier = Modifier.size(config.barIconSize + 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = if (viewModel.canGoBack) navContent else navContentMuted,
-                                    modifier = Modifier.size(config.innerIconSize)
-                                )
-                            }
-                        }
-
-                        // Left-Center: Forward button
-                        Box(
-                            modifier = Modifier
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IconButton(
-                                onClick = { viewModel.goForward() },
-                                enabled = viewModel.canGoForward,
-                                modifier = Modifier.size(config.barIconSize + 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                    contentDescription = "Forward",
-                                    tint = if (viewModel.canGoForward) navContent else navContentMuted,
-                                    modifier = Modifier.size(config.innerIconSize)
-                                )
-                            }
-                        }
-
-                        // Center: Tools
-                        Box(
-                            modifier = Modifier
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IconButton(
-                                onClick = { showToolsSheet = true },
-                                modifier = Modifier.size(config.barIconSize + 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = BlackholeIcon,
-                                    contentDescription = "Tools",
-                                    tint = navContent,
-                                    modifier = Modifier.size(config.innerIconSize)
-                                )
-                            }
-                        }
-
-                        // Right-Center: Tabs counter
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { showTabGroupsSheet = true },
-                            contentAlignment = Alignment.Center
-                        ) {
+                            // Left: Palette Icon (Home Customization Sheet)
                             Box(
-                                modifier = Modifier
-                                    .size(config.innerIconSize + 4.dp)
-                                    .border(1.dp, navContent, RoundedCornerShape(5.dp)),
+                                modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
                             ) {
-                                  Text(
-                                      text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
-                                      color = navContent,
-                                      fontSize = (config.fontSize.value * 0.66f).sp,
-                                      fontWeight = FontWeight.Bold
-                                  )
+                                IconButton(
+                                    onClick = { showCustomizationSheet = true },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Palette,
+                                        contentDescription = "Customize Home",
+                                        tint = navContent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            // Center: News Center Icon (News Feed Screen)
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = { onOpenNewsCenter() },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.Article,
+                                        contentDescription = "News Center",
+                                        tint = navContent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            // Right: Menu Icon (Tools / Settings Sheet)
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = { showToolsSheet = true },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Menu,
+                                        contentDescription = "Menu",
+                                        tint = navContent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
                         }
-
-                        // Right: Menu
-                        Box(
+                    } else {
+                        // Standard Webpage Navigation Bar (Back, Forward, Tools, Tabs, Menu)
+                        Row(
                             modifier = Modifier
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .height((52 * viewModel.bottomNavScale).dp)
+                                .pointerInput(Unit) {
+                                    detectHorizontalDragGestures(
+                                        onDragEnd = {
+                                            if (dragAmountAccumulated > 100f) {
+                                                val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                                                val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                                if (currentIndex > 0) {
+                                                    viewModel.selectTab(currentModeTabs[currentIndex - 1].id)
+                                                }
+                                            } else if (dragAmountAccumulated < -100f) {
+                                                val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                                                val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                                if (currentIndex != -1 && currentIndex < currentModeTabs.size - 1) {
+                                                    viewModel.selectTab(currentModeTabs[currentIndex + 1].id)
+                                                }
+                                            }
+                                            dragAmountAccumulated = 0f
+                                        },
+                                        onHorizontalDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragAmountAccumulated += dragAmount
+                                        }
+                                    )
+                                },
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(
-                                onClick = { showMenu = true },
-                                modifier = Modifier.size(config.barIconSize + 4.dp)
+                            // Back
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                IconButton(
+                                    onClick = { viewModel.goBack() },
+                                    enabled = viewModel.canGoBack,
+                                    modifier = Modifier.size(config.barIconSize + 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = if (viewModel.canGoBack) navContent else navContentMuted,
+                                        modifier = Modifier.size(config.innerIconSize)
+                                    )
+                                }
+                            }
+                            // Forward
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                IconButton(
+                                    onClick = { viewModel.goForward() },
+                                    enabled = viewModel.canGoForward,
+                                    modifier = Modifier.size(config.barIconSize + 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                        contentDescription = "Forward",
+                                        tint = if (viewModel.canGoForward) navContent else navContentMuted,
+                                        modifier = Modifier.size(config.innerIconSize)
+                                    )
+                                }
+                            }
+                            // Tools
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                IconButton(
+                                    onClick = { showQuickToolsSheet = true },
+                                    modifier = Modifier.size(config.barIconSize + 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = BlackholeIcon,
+                                        contentDescription = "Tools",
+                                        tint = navContent,
+                                        modifier = Modifier.size(config.innerIconSize)
+                                    )
+                                }
+                            }
+                            // Tabs
+                            Box(
+                                modifier = Modifier.weight(1f).clickable { showTabGroupsSheet = true },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Menu,
-                                    contentDescription = "Menu",
-                                    tint = navContent,
-                                    modifier = Modifier.size(config.innerIconSize)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(config.innerIconSize + 4.dp)
+                                        .border(1.5.dp, navContent, RoundedCornerShape(5.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
+                                        color = navContent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            // Menu
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                IconButton(
+                                    onClick = { showMenu = true },
+                                    modifier = Modifier.size(config.barIconSize + 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Menu,
+                                        contentDescription = "Menu",
+                                        tint = navContent,
+                                        modifier = Modifier.size(config.innerIconSize)
+                                    )
+                                }
                             }
                         }
                     }
@@ -1399,12 +1449,7 @@ fun BrowserScreen(
                         onDismiss = { isAlohaBannerDismissed = true },
                         onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
                         onDownloadClick = {
-                            if (!viewModel.hasSeenVideoOverview) {
-                                pendingVideoAction = { showDownloadSheet = true }
-                                showVideoOverviewDialog = true
-                            } else {
-                                showDownloadSheet = true
-                            }
+                            showDownloadSheet = true
                         }
                     )
                 }
@@ -1414,340 +1459,336 @@ fun BrowserScreen(
                         .weight(1f)
                         .then(if (needsStatusBarPadding && !viewModel.isFullscreen) Modifier.statusBarsPadding() else Modifier)
                 ) {
-                // GeckoView transitions from "static" to "overlap" based on scroll position.
-                // At the very top (currentScrollPos <= 0), it has padding so the site's own
-                // nav/header is fully visible and not covered by the browser's top bar.
-                // When scrolled down (currentScrollPos > 0), padding snaps to 0.dp so the browser
-                // bars overlap the site, allowing them to hide/show cleanly without white flashes.
-                if (activeTab != null && !showHomeScreen) {
-                    val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.uiScale) {
-                        if (viewModel.addressBarPosition == "Bottom" && !isTablet && !showHomeScreen && !viewModel.isFullscreen) {
-                            val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
-                            if (viewModel.chromeNavBarEnabled) {
-                                searchHeight
+                    AnimatedContent(
+                        targetState = Pair(viewModel.activeTabId, showHomeScreen),
+                        transitionSpec = {
+                            val (prevTabId, prevHome) = initialState
+                            val (newTabId, newHome) = targetState
+
+                            if (prevTabId != newTabId && newHome) {
+                                // New tab creation — Safari zoom & spring enter
+                                (fadeIn(animationSpec = tween(220, easing = LinearOutSlowInEasing)) +
+                                 scaleIn(initialScale = 0.86f, animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f))) togetherWith
+                                (fadeOut(animationSpec = tween(160, easing = FastOutLinearInEasing)) +
+                                 scaleOut(targetScale = 0.95f))
                             } else {
-                                searchHeight + config.bottomNavBarHeight
-                            }
-                        } else {
-                            0.dp
-                        }
-                    }
-
-                    val density = androidx.compose.ui.platform.LocalDensity.current
-                    val statusBarHeightPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
-                    val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
-                    
-                    val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
-                    val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
-                    
-                    val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
-                    val geckoBottomPad = bottomNavBarHeight * (1f - bottomBarFraction)
-                    
-                    val geckoTopPad = if (hasTopBar) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
-                    
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                object : androidx.compose.ui.layout.LayoutModifier {
-                                    override fun androidx.compose.ui.layout.MeasureScope.measure(
-                                        measurable: androidx.compose.ui.layout.Measurable,
-                                        constraints: androidx.compose.ui.unit.Constraints
-                                    ): androidx.compose.ui.layout.MeasureResult {
-                                        val extraHeight = translationDistance.roundToPx()
-                                        val newConstraints = constraints.copy(
-                                            minHeight = constraints.minHeight + extraHeight,
-                                            maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + extraHeight else constraints.maxHeight
-                                        )
-                                        val placeable = measurable.measure(newConstraints)
-                                        return layout(placeable.width, placeable.height) {
-                                            placeable.placeRelative(0, 0)
-                                        }
-                                    }
-                                }
-                            )
-                            .offset(y = translationDistance * (1f - topBarFraction))
-                            .padding(top = geckoTopPad, bottom = geckoBottomPad)
-                    ) {
-                        DisposableEffect(Unit) {
-                            onDispose {
-                                viewModel.clearActiveGeckoView()
-                            }
-                        }
-    
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                        factory = { ctx ->
-                            val thresholdPx = with(density) { 80.dp.toPx() }
-                            object : GeckoView(ctx) {
-                                private var startY = 0f
-                                private var isPulling = false
-                                private val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
-
-                                override fun onDetachedFromWindow() {
-                                    releaseSession()
-                                    super.onDetachedFromWindow()
-                                }
-
-                                override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-                                    val scrollY = currentScrollPos
-                                    when (ev.action) {
-                                        android.view.MotionEvent.ACTION_DOWN -> {
-                                            startY = ev.y
-                                            isPulling = false
-                                        }
-                                        android.view.MotionEvent.ACTION_MOVE -> {
-                                            val deltaY = ev.y - startY
-                                            if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading) {
-                                                isPulling = true
-                                            }
-                                            if (isPulling) {
-                                                val pullDistance = (deltaY - touchSlop).coerceAtLeast(0f)
-                                                viewModel.pullToRefreshOffset = pullDistance
-                                                return true
-                                            }
-                                        }
-                                        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
-                                            if (isPulling) {
-                                                isPulling = false
-                                                viewModel.onPullRelease(thresholdPx)
-                                                return true
-                                            }
-                                        }
-                                    }
-                                    return super.dispatchTouchEvent(ev)
-                                }
-                            }.apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                
-                                val runtime = viewModel.getGeckoRuntime(ctx)
-                                if (!activeTab.session.isOpen) {
-                                    activeTab.session.open(runtime)
-                                }
-                                setSession(activeTab.session)
-                                activeTab.session.setActive(true)
-                                viewModel.setActiveGeckoView(this)
-                                
-                                // Scroll delegate is set via LaunchedEffect below; skip here to avoid duplicate assignment on recomposition
+                                // Tab switching — Safari immersive card transition
+                                (fadeIn(animationSpec = tween(200)) +
+                                 scaleIn(initialScale = 0.93f, animationSpec = spring(dampingRatio = 0.82f, stiffness = 420f))) togetherWith
+                                (fadeOut(animationSpec = tween(160)) +
+                                 scaleOut(targetScale = 0.97f))
                             }
                         },
-                        update = { geckoView ->
-                            val runtime = viewModel.getGeckoRuntime(geckoView.context)
-                            if (!activeTab.session.isOpen) {
-                                activeTab.session.open(runtime)
-                            }
-                            if (geckoView.session != activeTab.session) {
-                                geckoView.releaseSession()
-                                geckoView.setSession(activeTab.session)
-                            }
-                            activeTab.session.setActive(true)
-                            viewModel.setActiveGeckoView(geckoView)
-                            
-                            // Scroll delegate is managed via LaunchedEffect; no inline assignment needed
-                        },
-                        onRelease = { geckoView ->
-                            geckoView.releaseSession()
-                            viewModel.clearActiveGeckoView()
-                        }
-                    )
-
-                    RainbowScanBorder(isScanning = viewModel.isQrScanning)
-                    
-                    activeTab.loadError?.let { errorMsg ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Card(
-                                shape = RoundedCornerShape(32.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                                colors = CardDefaults.cardColors(containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface),
-                                modifier = Modifier
-                                    .fillMaxWidth(0.85f)
-                                    .padding(16.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(24.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Warning,
-                                        contentDescription = "Error",
-                                        tint = Color(0xFFFF4444),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = "Unable to Load Page",
-                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = errorMsg,
-                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 14.sp,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(24.dp))
-                                    Button(
-                                        onClick = { viewModel.reload() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        shape = RoundedCornerShape(20.dp)
-                                    ) {
-                                        Text(
-                                            text = "Retry",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Key on tab ID only — NOT the full TabState data class.
-                    // TabState.copy() is called on every title/url/canGoBack change,
-                    // which would cause the old key to dispose (setActive(false)) and
-                    // immediately re-enter (setActive(true)), creating a rapid
-                    // deactivate→reactivate cycle that freezes the compositor,
-                    // drops network packets, and stalls cookie/JS processing.
-                    DisposableEffect(activeTab.id) {
-                        onDispose {
-                            // Only deactivate when we truly leave this tab
-                            viewModel.tabs.find { it.id == activeTab.id }?.session?.setActive(false)
-                        }
-                    }
-
-                    // Lifecycle-aware session management:
-                    // GeckoView requires setActive(false) on pause and setActive(true)
-                    // on resume to properly suspend/resume its internal compositor,
-                    // network stack, and JS engine. Without this, returning from
-                    // background causes pages to appear frozen until a user interaction
-                    // triggers a Compose recomposition.
-                    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-                    DisposableEffect(activeTab.id, lifecycleOwner) {
-                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                            val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session
-                            when (event) {
-                                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
-                                    currentSession?.setActive(true)
-                                }
-                                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
-                                    currentSession?.setActive(false)
-                                }
-                                else -> {}
-                            }
-                        }
-                        lifecycleOwner.lifecycle.addObserver(observer)
-                        onDispose {
-                            lifecycleOwner.lifecycle.removeObserver(observer)
-                        }
-                    }
-                    // Pull-to-refresh overlay UI
-                    val pullOffset = viewModel.pullToRefreshOffset
-                    val isRefreshing = viewModel.isLoading
-                    
-                    if (pullOffset > 0f || isRefreshing) {
-                        val pullOffsetDp = with(density) { (pullOffset * 0.4f).toDp() }
-                        val thresholdDp = 80.dp
-                        val progress = (pullOffset * 0.4f) / with(density) { thresholdDp.toPx() }
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopCenter)
-                                .padding(top = 16.dp)
-                                .offset(y = if (isRefreshing) 40.dp else pullOffsetDp.coerceAtMost(120.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(40.dp),
-                                shape = CircleShape,
-                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color.White,
-                                shadowElevation = 6.dp
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    if (isRefreshing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(24.dp),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            strokeWidth = 2.5.dp
-                                        )
+                        label = "SafariTabContentTransition",
+                        modifier = Modifier.fillMaxSize()
+                    ) { (targetTabId, isHome) ->
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (activeTab != null && !isHome) {
+                                val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.uiScale) {
+                                    if (viewModel.addressBarPosition == "Bottom" && !isTablet && !isHome && !viewModel.isFullscreen) {
+                                        val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
+                                        if (viewModel.chromeNavBarEnabled) {
+                                            searchHeight
+                                        } else {
+                                            searchHeight + config.bottomNavBarHeight
+                                        }
                                     } else {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Refresh,
-                                            contentDescription = null,
-                                            tint = if (progress >= 1f) MaterialTheme.colorScheme.primary else Color.Gray,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .graphicsLayer {
-                                                    rotationZ = progress * 360f
-                                                }
-                                        )
+                                        0.dp
                                     }
                                 }
+
+                                val density = androidx.compose.ui.platform.LocalDensity.current
+                                val statusBarHeightPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
+                                val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
+                                
+                                val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
+                                val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
+                                
+                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
+                                val geckoBottomPad = bottomNavBarHeight * (1f - bottomBarFraction)
+                                
+                                val geckoTopPad = if (hasTopBar) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(
+                                            object : androidx.compose.ui.layout.LayoutModifier {
+                                                override fun androidx.compose.ui.layout.MeasureScope.measure(
+                                                    measurable: androidx.compose.ui.layout.Measurable,
+                                                    constraints: androidx.compose.ui.unit.Constraints
+                                                ): androidx.compose.ui.layout.MeasureResult {
+                                                    val extraHeight = translationDistance.roundToPx()
+                                                    val newConstraints = constraints.copy(
+                                                        minHeight = constraints.minHeight + extraHeight,
+                                                        maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + extraHeight else constraints.maxHeight
+                                                    )
+                                                    val placeable = measurable.measure(newConstraints)
+                                                    return layout(placeable.width, placeable.height) {
+                                                        placeable.placeRelative(0, 0)
+                                                    }
+                                                }
+                                            }
+                                        )
+                                        .offset(y = translationDistance * (1f - topBarFraction))
+                                        .padding(top = geckoTopPad, bottom = geckoBottomPad)
+                                ) {
+                                    DisposableEffect(Unit) {
+                                        onDispose {
+                                            viewModel.clearActiveGeckoView()
+                                        }
+                                    }
+    
+                                    AndroidView(
+                                        modifier = Modifier.fillMaxSize(),
+                                        factory = { ctx ->
+                                            val thresholdPx = with(density) { 80.dp.toPx() }
+                                            object : GeckoView(ctx) {
+                                                private var startY = 0f
+                                                private var isPulling = false
+                                                private val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+
+                                                override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+                                                    val scrollY = currentScrollPos
+                                                    when (ev.action) {
+                                                        android.view.MotionEvent.ACTION_DOWN -> {
+                                                            startY = ev.y
+                                                            isPulling = false
+                                                        }
+                                                        android.view.MotionEvent.ACTION_MOVE -> {
+                                                            val deltaY = ev.y - startY
+                                                            if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading) {
+                                                                isPulling = true
+                                                            }
+                                                            if (isPulling) {
+                                                                val pullDistance = (deltaY - touchSlop).coerceAtLeast(0f)
+                                                                viewModel.pullToRefreshOffset = pullDistance
+                                                                return true
+                                                            }
+                                                        }
+                                                        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                                                            if (isPulling) {
+                                                                isPulling = false
+                                                                viewModel.onPullRelease(thresholdPx)
+                                                                return true
+                                                            }
+                                                        }
+                                                    }
+                                                    return super.dispatchTouchEvent(ev)
+                                                }
+                                            }.apply {
+                                                layoutParams = ViewGroup.LayoutParams(
+                                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                                )
+                                                
+                                                val runtime = viewModel.getGeckoRuntime(ctx)
+                                                if (!activeTab.session.isOpen) {
+                                                    activeTab.session.open(runtime)
+                                                }
+                                                setSession(activeTab.session)
+                                                activeTab.session.setActive(true)
+                                                viewModel.setActiveGeckoView(this)
+                                            }
+                                        },
+                                        update = { geckoView ->
+                                            val runtime = viewModel.getGeckoRuntime(geckoView.context)
+                                            if (!activeTab.session.isOpen) {
+                                                activeTab.session.open(runtime)
+                                            }
+                                            if (geckoView.session != activeTab.session) {
+                                                geckoView.setSession(activeTab.session)
+                                            }
+                                            activeTab.session.setActive(true)
+                                            viewModel.setActiveGeckoView(geckoView)
+                                        }
+                                    )
+
+                                    activeTab.loadError?.let { errorMsg ->
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(MaterialTheme.colorScheme.background),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Card(
+                                                shape = RoundedCornerShape(32.dp),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                                colors = CardDefaults.cardColors(containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface),
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.85f)
+                                                    .padding(16.dp)
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(24.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Warning,
+                                                        contentDescription = "Error",
+                                                        tint = Color(0xFFFF4444),
+                                                        modifier = Modifier.size(48.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(16.dp))
+                                                    Text(
+                                                        text = "Unable to Load Page",
+                                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 18.sp,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = errorMsg,
+                                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 14.sp,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                    )
+                                                    Spacer(modifier = Modifier.height(24.dp))
+                                                    Button(
+                                                        onClick = { viewModel.reload() },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                        shape = RoundedCornerShape(20.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "Retry",
+                                                            color = Color.White,
+                                                            fontWeight = FontWeight.SemiBold
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    DisposableEffect(activeTab.id) {
+                                        onDispose {
+                                            viewModel.tabs.find { it.id == activeTab.id }?.session?.setActive(false)
+                                        }
+                                    }
+
+                                    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                                    DisposableEffect(activeTab.id, lifecycleOwner) {
+                                        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                            val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session
+                                            when (event) {
+                                                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                                                    currentSession?.setActive(true)
+                                                }
+                                                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                                                    currentSession?.setActive(false)
+                                                }
+                                                else -> {}
+                                            }
+                                        }
+                                        lifecycleOwner.lifecycle.addObserver(observer)
+                                        onDispose {
+                                            lifecycleOwner.lifecycle.removeObserver(observer)
+                                        }
+                                    }
+                                    
+                                    val pullOffset = viewModel.pullToRefreshOffset
+                                    val isRefreshing = viewModel.isLoading
+                                    
+                                    if (pullOffset > 0f || isRefreshing) {
+                                        val pullOffsetDp = with(density) { (pullOffset * 0.4f).toDp() }
+                                        val thresholdDp = 80.dp
+                                        val progress = (pullOffset * 0.4f) / with(density) { thresholdDp.toPx() }
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .align(Alignment.TopCenter)
+                                                .padding(top = 16.dp)
+                                                .offset(y = if (isRefreshing) 40.dp else pullOffsetDp.coerceAtMost(120.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.size(40.dp),
+                                                shape = CircleShape,
+                                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color.White,
+                                                shadowElevation = 6.dp
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    if (isRefreshing) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(24.dp),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            strokeWidth = 2.5.dp
+                                                        )
+                                                    } else {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Refresh,
+                                                            contentDescription = null,
+                                                            tint = if (progress >= 1f) MaterialTheme.colorScheme.primary else Color.Gray,
+                                                            modifier = Modifier
+                                                                .size(20.dp)
+                                                                .graphicsLayer {
+                                                                    rotationZ = progress * 360f
+                                                                }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                RainbowScanBorder(isScanning = viewModel.isQrScanning)
+                            }
+
+                            if (isHome) {
+                                HomeScreenContent(
+                                    viewModel = viewModel,
+                                    onOpenDownloads = onOpenDownloads,
+                                    onOpenHistory = onOpenHistory,
+                                    onOpenBookmarks = onOpenBookmarks,
+                                    onOpenLocker = onOpenLocker,
+                                    onOpenQrTools = {
+                                        if (!viewModel.hasSeenQrOverview) {
+                                            pendingQrAction = onOpenQrTools
+                                            showQrOverviewDialog = true
+                                        } else {
+                                            onOpenQrTools()
+                                        }
+                                    },
+                                    onOpenExtensions = {
+                                        if (!viewModel.hasSeenExtensionsOverview) {
+                                            pendingExtensionsAction = { showExtensionsSheet = true }
+                                            showExtensionsOverviewDialog = true
+                                        } else {
+                                            showExtensionsSheet = true
+                                        }
+                                    },
+                                    onOpenTranslator = {
+                                        translationSourceText = ""
+                                        translationResultText = ""
+                                        showTranslationDialog = true
+                                    },
+                                    onOpenConsole = {
+                                        if (!viewModel.hasSeenConsoleOverview) {
+                                            pendingConsoleAction = { showConsoleSheet = true }
+                                            showConsoleOverviewDialog = true
+                                        } else {
+                                            showConsoleSheet = true
+                                        }
+                                    },
+                                    onNavigateTo = { query ->
+                                        viewModel.loadUrl(query)
+                                    },
+                                    onFocusChanged = { isHomeSearchFocused = it },
+                                    showMenu = showMenu,
+                                    onShowMenuChange = { showMenu = it },
+                                    onOpenSettings = onOpenSettings,
+                                    showCustomizationSheet = showCustomizationSheet,
+                                    onShowCustomizationSheetChange = { showCustomizationSheet = it },
+                                    onShowTabGroups = { showTabGroupsSheet = true },
+                                    onOpenWallpapers = onOpenWallpapers
+                                )
                             }
                         }
                     }
-                    } // end GeckoView padding Box
-                } // end if (activeTab != null && !showHomeScreen)
-
-                if (showHomeScreen) {
-                    HomeScreenContent(
-                        viewModel = viewModel,
-                        onOpenDownloads = onOpenDownloads,
-                        onOpenHistory = onOpenHistory,
-                        onOpenBookmarks = onOpenBookmarks,
-                        onOpenLocker = onOpenLocker,
-                        onOpenQrTools = {
-                            if (!viewModel.hasSeenQrOverview) {
-                                pendingQrAction = onOpenQrTools
-                                showQrOverviewDialog = true
-                            } else {
-                                onOpenQrTools()
-                            }
-                        },
-                        onOpenExtensions = {
-                            if (!viewModel.hasSeenExtensionsOverview) {
-                                pendingExtensionsAction = { showExtensionsSheet = true }
-                                showExtensionsOverviewDialog = true
-                            } else {
-                                showExtensionsSheet = true
-                            }
-                        },
-                        onOpenTranslator = {
-                            translationSourceText = ""
-                            translationResultText = ""
-                            showTranslationDialog = true
-                        },
-                        onOpenConsole = {
-                            if (!viewModel.hasSeenConsoleOverview) {
-                                pendingConsoleAction = { showConsoleSheet = true }
-                                showConsoleOverviewDialog = true
-                            } else {
-                                showConsoleSheet = true
-                            }
-                        },
-                        onNavigateTo = { query ->
-                            viewModel.loadUrl(query)
-                        },
-                        onFocusChanged = { isHomeSearchFocused = it },
-                        showMenu = showMenu,
-                        onShowMenuChange = { showMenu = it },
-                        onOpenSettings = onOpenSettings,
-                        showCustomizationSheet = showCustomizationSheet,
-                        onShowCustomizationSheetChange = { showCustomizationSheet = it },
-                        onShowTabGroups = { showTabGroupsSheet = true }
-                    )
                 }
+            }
 
                 // Auto-Scroll HUD Pill
                 if (isAutoScrollActive && activeTab != null && !showHomeScreen && !viewModel.isReaderModeActive && isAutoScrollHUDExpanded) {
@@ -1903,7 +1944,163 @@ fun BrowserScreen(
                     }
                 }
                 
-                // Bottom edge touch detector to restore nav bars when hidden
+                // Vertical Context Menu Popup for Text Selection (Appears at the end of selected text)
+                val activeTextSelection = viewModel.activeTextSelection
+                val selectionRect = viewModel.selectionScreenRect
+                if (activeTextSelection != null && activeTab != null && !showHomeScreen) {
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val screenWidthPx = context.resources.displayMetrics.widthPixels
+                    val screenHeightPx = context.resources.displayMetrics.heightPixels
+                    val popupWidthPx = with(density) { 170.dp.toPx() }.toInt()
+                    val popupHeightPx = with(density) { 190.dp.toPx() }.toInt()
+
+                    val targetX = if (selectionRect != null) {
+                        selectionRect.right.toInt().coerceIn(16, (screenWidthPx - popupWidthPx - 16).coerceAtLeast(16))
+                    } else {
+                        (screenWidthPx - popupWidthPx) / 2
+                    }
+
+                    val targetY = if (selectionRect != null) {
+                        if (selectionRect.bottom + popupHeightPx > screenHeightPx - 120) {
+                            (selectionRect.top.toInt() - popupHeightPx - 12).coerceAtLeast(40)
+                        } else {
+                            (selectionRect.bottom.toInt() + 12).coerceAtLeast(40)
+                        }
+                    } else {
+                        (screenHeightPx - popupHeightPx) / 2
+                    }
+
+                    androidx.compose.ui.window.Popup(
+                        offset = androidx.compose.ui.unit.IntOffset(targetX, targetY),
+                        onDismissRequest = { viewModel.dismissTextSelection() }
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF1E293B) else Color.White,
+                            shadowElevation = 10.dp,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF334155) else Color(0xFFE2E8F0)
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .width(170.dp)
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                // Copy
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.copySelectedText(context) }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ContentCopy,
+                                        contentDescription = "Copy",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Copy",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1E293B)
+                                    )
+                                }
+
+                                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0))
+
+                                // Share
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(android.content.Intent.EXTRA_TEXT, activeTextSelection)
+                                            }
+                                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share text"))
+                                            viewModel.dismissTextSelection()
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Share,
+                                        contentDescription = "Share",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Share",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1E293B)
+                                    )
+                                }
+
+                                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0))
+
+                                // Search Google
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val query = activeTextSelection.trim()
+                                            val searchUrl = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                                            viewModel.loadUrl(searchUrl)
+                                            viewModel.dismissTextSelection()
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = "Search",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Search Google",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1E293B)
+                                    )
+                                }
+
+                                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0))
+
+                                // Select All
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.selectAllText() }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.SelectAll,
+                                        contentDescription = "Select All",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Select All",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1E293B)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 if (!isScrollNavBarVisible && !viewModel.isFullscreen && !showHomeScreen) {
                     Box(
                         modifier = Modifier
@@ -1918,7 +2115,6 @@ fun BrowserScreen(
                             }
                     )
                 }
-            }
             }
 
             // ─── Reader Mode Configuration Bar ─────────────────────────────────────
@@ -2403,7 +2599,7 @@ fun BrowserScreen(
                             ) { showFullscreenDownloadBtn = true }
                     ) {
                         // Top-left controls: Back + Exit Fullscreen
-                        AnimatedVisibility(
+                        androidx.compose.animation.AnimatedVisibility(
                             visible = showFullscreenDownloadBtn,
                             enter = fadeIn(),
                             exit = fadeOut(),
@@ -2452,7 +2648,7 @@ fun BrowserScreen(
                         }
 
                         // Bottom-right controls: Play FAB + Download FAB
-                        AnimatedVisibility(
+                        androidx.compose.animation.AnimatedVisibility(
                             visible = showFullscreenDownloadBtn,
                             enter = fadeIn(),
                             exit = fadeOut(),
@@ -2675,108 +2871,6 @@ fun BrowserScreen(
                 }
             }
 
-            // Text Selection Bottom Sheet
-            val activeTextSelection = viewModel.activeTextSelection
-            if (activeTextSelection != null) {
-                ModalBottomSheet(
-                    onDismissRequest = { viewModel.dismissTextSelection() },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color.White,
-                    contentColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFE0E0E0)) }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(bottom = 24.dp)
-                    ) {
-                        // Header
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = "Text Selection",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = activeTextSelection,
-                                fontSize = 14.sp,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                                color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.6f) else Color(0xFF606266)
-                            )
-                        }
-                        
-                        HorizontalDivider(
-                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFE0E0E0),
-                            thickness = 1.dp
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Options
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            // Copy Option
-                            ContextMenuItem(
-                                icon = Icons.Rounded.ContentCopy,
-                                title = "Copy",
-                                onClick = {
-                                    viewModel.copySelectedText(context)
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                            
-                            // Share Option
-                            ContextMenuItem(
-                                icon = Icons.Rounded.Share,
-                                title = "Share",
-                                onClick = {
-                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(android.content.Intent.EXTRA_TEXT, activeTextSelection)
-                                    }
-                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share text"))
-                                    viewModel.dismissTextSelection()
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-
-                            // Speak Aloud Option
-                            ContextMenuItem(
-                                icon = Icons.Rounded.RecordVoiceOver,
-                                title = "Speak Aloud",
-                                onClick = {
-                                    viewModel.speakSelectedText(context)
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-
-                            
-                            // Select All Option
-                            ContextMenuItem(
-                                icon = Icons.Rounded.SelectAll,
-                                title = "Select All",
-                                onClick = {
-                                    viewModel.selectAllText()
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-
-                        }
-                    }
-                }
-            }
 
             // Bottom options sheet for video downloading
             if (showDownloadSheet) {
@@ -3661,7 +3755,7 @@ fun BrowserScreen(
                                         }
                                     )
                             ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     // Header row
                                     Row(
                                         modifier = Modifier
@@ -5695,12 +5789,20 @@ fun BrowserScreen(
             }
 
 
-            // 5. Quick Tools Bottom Sheet
-            if (showToolsSheet) {
+            // 4.5 Quick Tools Bottom Sheet (Reorderable)
+            if (showQuickToolsSheet) {
+                val isDark = viewModel.isDarkThemeEnabled
+                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+                var lastSwapMs by remember { mutableStateOf(0L) }
+
                 ModalBottomSheet(
-                    onDismissRequest = { showToolsSheet = false },
+                    onDismissRequest = { showQuickToolsSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+                    containerColor = when {
+                        viewModel.isAmoledMode  -> Color(0xFF000000)
+                        isDark                  -> Color(0xFF111113)
+                        else                    -> Color(0xFFF2F2F7)
+                    }
                 ) {
                     Column(
                         modifier = Modifier
@@ -5710,19 +5812,29 @@ fun BrowserScreen(
                             .navigationBarsPadding(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text(
-                            text = "Quick Tools",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Quick Tools",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Long-press & drag to reorder",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
 
-                        HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A).copy(alpha = 0.5f) else Color.LightGray.copy(alpha = 0.5f))
+                        HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
 
                         val cardModifier = Modifier.width(80.dp)
-                        val isDark = viewModel.isDarkThemeEnabled
                         val isEditing = activeTab?.isEditModeEnabled ?: false
-                        val haptic = LocalHapticFeedback.current
 
                         // Stable ordered list that reacts to ViewModel state
                         val toolOrderState = remember(viewModel.quickToolsOrder) {
@@ -5773,101 +5885,90 @@ fun BrowserScreen(
                         }
                         fun toolAction(id: String): () -> Unit = when (id) {
                             "qr_scanner" -> ({
-                                showToolsSheet = false
+                                showQuickToolsSheet = false
                                 if (!viewModel.hasSeenQrOverview) { pendingQrAction = onOpenQrTools; showQrOverviewDialog = true } else onOpenQrTools()
                             })
-                            "safe_locker"  -> ({ showToolsSheet = false; onOpenLocker() })
-                            "translator"   -> ({ showToolsSheet = false; translationSourceText = ""; translationResultText = ""; showTranslationDialog = true })
+                            "safe_locker"  -> ({ showQuickToolsSheet = false; onOpenLocker() })
+                            "translator"   -> ({ showQuickToolsSheet = false; translationSourceText = ""; translationResultText = ""; showTranslationDialog = true })
                             "edit_page" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; if (!viewModel.hasSeenEditPageOverview) { pendingEditPageAction = { viewModel.toggleEditMode() }; showEditPageOverviewDialog = true } else viewModel.toggleEditMode() }
+                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenEditPageOverview) { pendingEditPageAction = { viewModel.toggleEditMode() }; showEditPageOverviewDialog = true } else viewModel.toggleEditMode() }
                             })
                             "save_pdf" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; if (!viewModel.hasSeenPdfOverview) { pendingPdfAction = { viewModel.printCurrentPage(context) }; showPdfOverviewDialog = true } else viewModel.printCurrentPage(context) }
+                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenPdfOverview) { pendingPdfAction = { viewModel.printCurrentPage(context) }; showPdfOverviewDialog = true } else viewModel.printCurrentPage(context) }
                             })
                             "pin_web_app" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url) }
+                                else { showQuickToolsSheet = false; viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url) }
                             })
                             "auto_scroll" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; isAutoScrollActive = !isAutoScrollActive }
+                                else { showQuickToolsSheet = false; isAutoScrollActive = !isAutoScrollActive }
                             })
                             "qr_scan_page" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { viewModel.scanPageForQrCodes() }; showQrOverviewDialog = true } else viewModel.scanPageForQrCodes() }
+                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { viewModel.scanPageForQrCodes() }; showQrOverviewDialog = true } else viewModel.scanPageForQrCodes() }
                             })
                             "qr_generator" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true }; showQrOverviewDialog = true } else { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true } }
+                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true }; showQrOverviewDialog = true } else { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true } }
                             })
                             "console_log" -> ({
-                                showToolsSheet = false
+                                showQuickToolsSheet = false
                                 if (!viewModel.hasSeenConsoleOverview) { pendingConsoleAction = { showConsoleSheet = true }; showConsoleOverviewDialog = true } else showConsoleSheet = true
                             })
                             "dev_notes" -> ({
-                                showToolsSheet = false
+                                showQuickToolsSheet = false
                                 if (!viewModel.hasSeenDevNotesOverview) { pendingDevNotesAction = { showDevNotesSheet = true }; showDevNotesOverviewDialog = true } else showDevNotesSheet = true
                             })
                             "site_style" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
-                                else { showToolsSheet = false; showSiteStyleCustomizerSheet = true }
+                                else { showQuickToolsSheet = false; showSiteStyleCustomizerSheet = true }
                             })
                             else -> ({})
                         }
 
-                        // "Hold & drag to reorder" hint
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.OpenWith,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Hold & drag to reorder",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                            )
-                        }
-
-                        // Drag-to-reorder grid
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .onGloballyPositioned { coords ->
                                     gridTopLeft = coords.boundsInWindow().topLeft
                                 }
                                 .pointerInput(Unit) {
-                                    var lastSwapMs = 0L
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = { offset ->
-                                            val absPos = androidx.compose.ui.geometry.Offset(
-                                                gridTopLeft.x + offset.x,
-                                                gridTopLeft.y + offset.y
-                                            )
-                                            draggedId = itemCenters.entries.minByOrNull { (_, c) ->
-                                                val dx = c.x - absPos.x; val dy = c.y - absPos.y; dx * dx + dy * dy
-                                            }?.key
-                                            if (draggedId != null) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            val absPos = gridTopLeft + offset
+                                            val closestEntry = itemCenters.entries.minByOrNull { entry ->
+                                                val dx = entry.value.x - absPos.x
+                                                val dy = entry.value.y - absPos.y
+                                                dx * dx + dy * dy
+                                            }
+                                            if (closestEntry != null) {
+                                                val dx = closestEntry.value.x - absPos.x
+                                                val dy = closestEntry.value.y - absPos.y
+                                                if (dx * dx + dy * dy < 2500f) { // threshold
+                                                    draggedId = closestEntry.key
+                                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                                }
+                                            }
                                         },
-                                        onDrag = { change, _ ->
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
                                             val id = draggedId ?: return@detectDragGesturesAfterLongPress
-                                            val absPos = androidx.compose.ui.geometry.Offset(
-                                                gridTopLeft.x + change.position.x,
-                                                gridTopLeft.y + change.position.y
-                                            )
-                                            val myCenter = itemCenters[id] ?: return@detectDragGesturesAfterLongPress
-                                            val myDistSq = run { val dx = myCenter.x - absPos.x; val dy = myCenter.y - absPos.y; dx * dx + dy * dy }
+                                            val currentCenter = itemCenters[id] ?: return@detectDragGesturesAfterLongPress
+                                            val newCenter = currentCenter + dragAmount
+                                            itemCenters[id] = newCenter
+                                            
+                                            val absPos = newCenter
+                                            val myDistSq = 2500f
                                             val closestEntry = itemCenters.entries
                                                 .filter { it.key != id }
-                                                .minByOrNull { (_, c) -> val dx = c.x - absPos.x; val dy = c.y - absPos.y; dx * dx + dy * dy }
+                                                .minByOrNull { entry ->
+                                                    val dx = entry.value.x - absPos.x
+                                                    val dy = entry.value.y - absPos.y
+                                                    dx * dx + dy * dy
+                                                }
                                                 ?: return@detectDragGesturesAfterLongPress
                                             val closestDistSq = closestEntry.value.let { c -> val dx = c.x - absPos.x; val dy = c.y - absPos.y; dx * dx + dy * dy }
                                             val now = System.currentTimeMillis()
@@ -5878,7 +5979,7 @@ fun BrowserScreen(
                                                     toolOrderState.removeAt(from)
                                                     toolOrderState.add(to, id)
                                                     lastSwapMs = now
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                                 }
                                             }
                                         },
@@ -5910,16 +6011,21 @@ fun BrowserScreen(
                                             ) {
                                                 if (toolId.isNotEmpty()) {
                                                     val isDragged = draggedId == toolId
+                                                    val toolCardModifier = if (isDragged) {
+                                                        cardModifier.graphicsLayer {
+                                                            scaleX = 1.12f
+                                                            scaleY = 1.12f
+                                                            shadowElevation = 18f
+                                                            alpha = 0.82f
+                                                        }
+                                                    } else {
+                                                        cardModifier
+                                                    }
                                                     ToolCard(
                                                         title = toolTitle(toolId),
                                                         icon = toolIcon(toolId),
                                                         isDarkTheme = isDark,
-                                                        modifier = cardModifier.graphicsLayer {
-                                                            scaleX = if (isDragged) 1.12f else 1f
-                                                            scaleY = if (isDragged) 1.12f else 1f
-                                                            shadowElevation = if (isDragged) 18f else 0f
-                                                            alpha = if (isDragged) 0.82f else 1f
-                                                        },
+                                                        modifier = toolCardModifier,
                                                         onClick = if (isDragged) ({}) else toolAction(toolId)
                                                     )
                                                 }
@@ -5931,7 +6037,148 @@ fun BrowserScreen(
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+            }
 
+
+            // 5. Grid Menu Bottom Sheet (Replaces Quick Tools)
+            if (showToolsSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showToolsSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else Color(0xFF141416)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 24.dp, top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        // Row 1: Bookmarks, History, Downloads, Settings
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            GridMenuTile(
+                                title = "Bookmarks",
+                                icon = Icons.Rounded.Bookmark,
+                                onClick = { showToolsSheet = false; onOpenBookmarks() }
+                            )
+                            GridMenuTile(
+                                title = "History",
+                                icon = Icons.Rounded.History,
+                                onClick = { showToolsSheet = false; onOpenHistory() }
+                            )
+                            GridMenuTile(
+                                title = "Downloads",
+                                icon = Icons.Rounded.Download,
+                                onClick = { showToolsSheet = false; onOpenDownloads() }
+                            )
+                            GridMenuTile(
+                                title = "Settings",
+                                icon = Icons.Rounded.Settings,
+                                onClick = { showToolsSheet = false; onOpenSettings() }
+                            )
+                        }
+
+                        HorizontalDivider(
+                            color = Color(0xFF2C2C2E),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
+                        // Row 2: Incognito, Player Settings, Desktop Site, Nav Hide On/Off
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            GridMenuTile(
+                                title = "Incognito",
+                                icon = Icons.Rounded.Visibility,
+                                onClick = {
+                                    showToolsSheet = false
+                                    if (!viewModel.isIncognitoMode) {
+                                        viewModel.toggleIncognitoMode(context)
+                                    }
+                                    viewModel.createNewTab(context, "about:blank")
+                                }
+                            )
+                            GridMenuTile(
+                                title = "Player\nSettings",
+                                icon = Icons.Rounded.PlayCircle,
+                                onClick = { showToolsSheet = false; showPlayerSettingsDialog = true }
+                            )
+                            GridMenuTile(
+                                title = "Desktop\nSite",
+                                icon = Icons.Rounded.DesktopWindows,
+                                onClick = {
+                                    showToolsSheet = false
+                                    if (!showHomeScreen && activeTab != null) {
+                                        viewModel.toggleDesktopMode(context)
+                                    } else {
+                                        Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+                            GridMenuTile(
+                                title = if (viewModel.navBarHideBottom) "Nav\nHide On" else "Nav\nHide Off",
+                                icon = Icons.Rounded.OpenInFull,
+                                onClick = {
+                                    showToolsSheet = false
+                                    viewModel.saveNavBarHideBottom(context, !viewModel.navBarHideBottom)
+                                }
+                            )
+                        }
+
+                        // Row 3: Find in Page, Burn Data, Add to Shortcuts, Extensions
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            GridMenuTile(
+                                title = "Find in\nPage",
+                                icon = Icons.Rounded.Search,
+                                onClick = {
+                                    showToolsSheet = false
+                                    if (!showHomeScreen && activeTab != null) viewModel.openFindInPage()
+                                    else Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                            GridMenuTile(
+                                title = "Burn\nData",
+                                icon = Icons.Rounded.Whatshot,
+                                isBurnData = true,
+                                onClick = {
+                                    showToolsSheet = false
+                                    coroutineScope.launch {
+                                        val runtime = viewModel.getGeckoRuntime(context)
+                                        FireButton(runtime, context).burn()
+                                        viewModel.burnAllData(context)
+                                        Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+                            GridMenuTile(
+                                title = "Add to\nShortcuts",
+                                icon = Icons.Rounded.Add,
+                                onClick = {
+                                    showToolsSheet = false
+                                    if (!showHomeScreen && activeTab != null) {
+                                        viewModel.addShortcut(activeTab.title, activeTab.url)
+                                        Toast.makeText(context, "Added to shortcuts", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+                            GridMenuTile(
+                                title = "Extension\ns",
+                                icon = Icons.Rounded.Extension,
+                                onClick = { showToolsSheet = false; showExtensionsSheet = true }
+                            )
+                        }
                     }
                 }
             }
@@ -5957,7 +6204,7 @@ fun BrowserScreen(
             val autofillSuggestion = viewModel.autofillSuggestion
 
             // Save-password banner: slides up from bottom when GeckoView fires onLoginSave
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = saveCred != null,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
@@ -6022,7 +6269,7 @@ fun BrowserScreen(
             }
 
             // Autofill suggestion bar: appears at bottom when visiting a site with saved credentials
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = autofillSuggestion != null && saveCred == null,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
@@ -6340,8 +6587,7 @@ fun BrowserScreen(
                     }
                 }
             }
-        }
-    }
+            }
 
         // Lock Screen Overlay
         if (viewModel.isIncognitoMode && viewModel.lockIncognito && !viewModel.isIncognitoUnlocked) {
@@ -6530,5 +6776,56 @@ private fun MediaSnifferBanner(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun GridMenuTile(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isBurnData: Boolean = false,
+    isDark: Boolean = true,
+    onClick: () -> Unit
+) {
+    val bg = if (isBurnData) Color(0xFF3D1416) else if (isDark) Color(0xFF24252A) else Color(0xFFF0F0F2)
+    val iconTint = if (isBurnData) Color(0xFFEF5350) else if (isDark) Color(0xFFE5E5EA) else Color(0xFF202124)
+    val textColor = if (isDark) Color(0xFFD1D1D6) else Color(0xFF202124)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .width(66.dp)
+            .clickable(
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                onClick = onClick
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(bg),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = iconTint,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Text(
+            text = title,
+            color = textColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            lineHeight = 13.sp,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

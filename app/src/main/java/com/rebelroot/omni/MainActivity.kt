@@ -330,6 +330,8 @@ class MainActivity : FragmentActivity() {
                                 onOpenSettings = { navController.navigate("settings") },
                                 onOpenHistory = { navController.navigate("history") },
                                 onOpenBookmarks = { navController.navigate("bookmarks") },
+                                onOpenNewsCenter = { navController.navigate("news") },
+                                onOpenWallpapers = { navController.navigate("wallpapers") },
                                 onPlayOnlineStream = { url, pageUrl ->
                                     android.util.Log.i("MainActivity", "🎬 onPlayOnlineStream triggered! url=$url, pageUrl=$pageUrl")
                                     val encodedPath = android.util.Base64.encodeToString(url.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
@@ -530,6 +532,22 @@ class MainActivity : FragmentActivity() {
                                     browserViewModel.loadUrl(url)
                                     if (navController.previousBackStackEntry != null) {
                                         navController.popBackStack("browser", inclusive = false)
+                                    } else {
+                                        navController.navigate("browser") {
+                                            popUpTo("browser") { inclusive = true }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        // News Feed Screen
+                        composable("news") {
+                            com.rebelroot.omni.news.ui.NewsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateHome = {
+                                    if (navController.previousBackStackEntry != null) {
+                                        navController.popBackStack()
                                     } else {
                                         navController.navigate("browser") {
                                             popUpTo("browser") { inclusive = true }

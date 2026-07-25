@@ -24,6 +24,11 @@ internal fun BrowserViewModel.applyUserAgentForTab(tab: TabState) {
 
 internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: Context) {
     applyUserAgentForTab(tab)
+    tab.session.contentBlockingDelegate = object : org.mozilla.geckoview.ContentBlocking.Delegate {
+        override fun onContentBlocked(session: GeckoSession, event: org.mozilla.geckoview.ContentBlocking.BlockEvent) {
+            incrementTrackersBlocked(context, 1)
+        }
+    }
     tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
         override fun onAndroidPermissionsRequest(
             session: GeckoSession,
@@ -270,6 +275,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (tab.id == activeTabId && selection.text.isNotEmpty()) {
                 activeTextSelection = selection.text
                 activeSelectionObject = selection
+                selectionScreenRect = selection.screenRect
             }
         }
 
@@ -277,6 +283,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (tab.id == activeTabId) {
                 activeTextSelection = null
                 activeSelectionObject = null
+                selectionScreenRect = null
             }
         }
     }
@@ -339,6 +346,11 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
             val uri = request.uri
             val lowerUri = uri.lowercase().trim()
+
+            // Always allow extension-internal resources (moz-extension://) immediately
+            if (lowerUri.startsWith("moz-extension://")) {
+                return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+            }
 
             if (tab.id == activeTabId) {
                 mediaInterceptor.onMediaRequestDetected(uri)
@@ -588,6 +600,11 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             
             val lowerUri = uri?.lowercase() ?: ""
             val isGoogleAuthHost = lowerUri.contains("accounts.google.com")
+
+            if (lowerUri.startsWith("moz-extension://")) {
+                Log.i(TAG, "🧩 Suppressed load error for extension URI: $uri")
+                return null
+            }
             
             // Check if this error is an ERROR_UNKNOWN (17) caused by us returning DENY
             // in onLoadRequest for OAuth pages, direct videos, or spam calendars.

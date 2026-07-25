@@ -52,6 +52,14 @@ import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
 import kotlinx.coroutines.launch
 
+private data class SettingSearchResult(
+    val title: String,
+    val subtitle: String,
+    val category: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val onClick: () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("DEPRECATION")
 @Composable
@@ -67,8 +75,16 @@ fun SettingsScreen(
     onOpenAccessibility: () -> Unit = {},
     onOpenSiteSettings: () -> Unit = {}
 ) {
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+
     BackHandler {
-        onNavigateBack()
+        if (isSearchActive) {
+            isSearchActive = false
+            searchQuery = ""
+        } else {
+            onNavigateBack()
+        }
     }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -161,14 +177,68 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(id = R.string.settings_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = {
+                    if (isSearchActive) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search settings...", fontSize = 14.sp, color = textSecondaryColor) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = textPrimaryColor,
+                                unfocusedTextColor = textPrimaryColor,
+                                focusedContainerColor = inputBgColor,
+                                unfocusedContainerColor = inputBgColor,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent
+                            ),
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Clear search",
+                                            tint = textSecondaryColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    } else {
+                        Text(stringResource(id = R.string.settings_title), fontWeight = FontWeight.Bold, color = textPrimaryColor)
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        if (isSearchActive) {
+                            isSearchActive = false
+                            searchQuery = ""
+                        } else {
+                            onNavigateBack()
+                        }
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
+                    }
+                },
+                actions = {
+                    if (!isSearchActive) {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = "Search Settings",
+                                tint = textPrimaryColor
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -288,7 +358,90 @@ fun SettingsScreen(
                 }
             }
 
-            // ── 1. PERSONALIZATION ────────────────────────────────────────────────
+            if (isSearchActive && searchQuery.isNotBlank()) {
+                val query = searchQuery.trim()
+                val allSettingsItems = remember(query, isDefaultBrowser, currentLangName) {
+                    listOf(
+                        SettingSearchResult("Appearance", "Theme mode, accent colors, layout, and UI scale", "PERSONALIZATION", Icons.Rounded.Palette, onOpenAppearance),
+                        SettingSearchResult("Wallpapers", "Browser background, dynamic wallpaper blur/dim", "PERSONALIZATION", Icons.Rounded.Wallpaper, onOpenWallpapers),
+                        SettingSearchResult("Accessibility", "Text scaling, force enable zoom, high contrast mode", "PERSONALIZATION", Icons.Rounded.AccessibilityNew, onOpenAccessibility),
+                        SettingSearchResult("Tabs", "Tab layouts, background tabs, auto-closing settings", "BROWSING", Icons.Rounded.Tab, onOpenTabs),
+                        SettingSearchResult("Site Settings", "Manage site permissions, javascript, autoplay, popups", "BROWSING", Icons.Rounded.Language, onOpenSiteSettings),
+                        SettingSearchResult(context.getString(R.string.default_browser_title), "Set Omni Browser as system default browser", "BROWSING", Icons.Rounded.OpenInBrowser, {
+                            if (!isDefaultBrowser) {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                    roleManager?.let { rm ->
+                                        if (rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)) {
+                                            defaultBrowserLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER))
+                                        }
+                                    }
+                                } else {
+                                    try { defaultBrowserLauncher.launch(android.content.Intent("android.intent.action.SET_DEFAULT").apply { addCategory(android.content.Intent.CATEGORY_DEFAULT); type = "text/html" }) }
+                                    catch (e: Exception) { try { defaultBrowserLauncher.launch(android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) } catch (ex: Exception) { Toast.makeText(context, "Please set default browser in System Settings", Toast.LENGTH_LONG).show() } }
+                                }
+                            } else { Toast.makeText(context, "Omni Browser is already your default browser!", Toast.LENGTH_SHORT).show() }
+                        }),
+                        SettingSearchResult(context.getString(R.string.app_language_title), "Change app display language ($currentLangName)", "BROWSING", Icons.Rounded.Translate, { showLanguageSelector = true }),
+                        SettingSearchResult("Discover Feed", "Show news recommendations on home page", "BROWSING", Icons.Rounded.Newspaper, { viewModel.saveShowDiscoverFeed(context, !viewModel.showDiscoverFeed) }),
+                        SettingSearchResult("Bottom Navigation Bar", "Show bottom toolbar with main navigation buttons", "BROWSING", Icons.Rounded.ViewAgenda, { viewModel.saveShowBottomNavBar(context, !viewModel.showBottomNavBar) }),
+                        SettingSearchResult(context.getString(R.string.pdf_export_theme_title), "PDF export styling and background colors", "BROWSING", Icons.Rounded.Print, {}),
+                        SettingSearchResult("Privacy and Security", "Clear browsing data, cookies, Safe Browsing, device lock", "PRIVACY & SECURITY", Icons.Rounded.Security, onOpenPrivacySecurity),
+                        SettingSearchResult("Private Browsing", "Incognito mode without saving browsing history", "PRIVACY & SECURITY", Icons.Rounded.VisibilityOff, { viewModel.toggleIncognitoMode(context) }),
+                        SettingSearchResult(context.getString(R.string.notifications_title), "Push notification permissions", "PRIVACY & SECURITY", Icons.Rounded.Notifications, {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }),
+                        SettingSearchResult("Clear Cache & Site Data", "Removes cookies, offline data, and frees storage", "PRIVACY & SECURITY", Icons.Rounded.DeleteSweep, { showClearCacheConfirmation = true }),
+                        SettingSearchResult(context.getString(R.string.native_player_title), "Custom floating video player with gesture controls", "MEDIA", Icons.Rounded.PlayCircle, { viewModel.toggleNativePlayer(context) }),
+                        SettingSearchResult(context.getString(R.string.ai_blocker_title), "Filter AI generated search results and web bloat", "MEDIA", Icons.Rounded.Block, { viewModel.toggleAiBlocker(context) }),
+                        SettingSearchResult(context.getString(R.string.search_engine_title), "Select default search provider (Google, DuckDuckGo, Bing, Brave, Custom)", "SEARCH", Icons.Rounded.Search, {})
+                    )
+                }
+
+                val matchingResults = remember(query, allSettingsItems) {
+                    allSettingsItems.filter {
+                        it.title.contains(query, ignoreCase = true) ||
+                        it.subtitle.contains(query, ignoreCase = true) ||
+                        it.category.contains(query, ignoreCase = true)
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionHeader("SEARCH RESULTS (${matchingResults.size})")
+
+                    if (matchingResults.isNotEmpty()) {
+                        SettingsCard {
+                            matchingResults.forEachIndexed { index, item ->
+                                if (index > 0) HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                                NavRow(
+                                    icon = item.icon,
+                                    title = item.title,
+                                    subtitle = "${item.category} • ${item.subtitle}",
+                                    onClick = item.onClick
+                                )
+                            }
+                        }
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
+                            color = cardColor,
+                            border = BorderStroke(0.5.dp, cardBorderColor)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Rounded.SearchOff, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(36.dp))
+                                Text("No settings found", color = textPrimaryColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text("No matching settings found for \"$query\"", color = textSecondaryColor, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // ── 1. PERSONALIZATION ────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionHeader("PERSONALIZATION")
                 SettingsCard {
@@ -663,6 +816,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.Shield, stringResource(id = R.string.privacy_policy_title), "Read our privacy policy", onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser/privacy-policy") })
                 }
+            }
             }
         }
     }

@@ -282,6 +282,111 @@ fun AppearanceScreen(
                 }
             }
 
+                        // ── UI SCALERS & LAYOUT ───────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("UI Scalers & Layout", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(0.5.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Home Screen UI Scaler
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Home Screen UI Scale", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${(viewModel.homeUiScale * 100).toInt()}%", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = viewModel.homeUiScale,
+                            onValueChange = { newValue ->
+                                val steppedValue = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveHomeUiScale(context, steppedValue.coerceIn(0.8f, 1.3f))
+                            },
+                            valueRange = 0.8f..1.3f,
+                            colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor)
+
+                    // Bottom Nav Scaler
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Bottom Navigation Scale", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${(viewModel.bottomNavScale * 100).toInt()}%", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = viewModel.bottomNavScale,
+                            onValueChange = { newValue ->
+                                val steppedValue = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveBottomNavScale(context, steppedValue.coerceIn(0.8f, 1.3f))
+                            },
+                            valueRange = 0.8f..1.3f,
+                            colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // ── HOME SHORTCUT TILE STYLE ─────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Home Shortcuts", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(0.5.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Shortcut Tile Style", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Circle", "Squircle", "Square", "Glass").forEach { style ->
+                            val isSelected = viewModel.shortcutTileStyle == style
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isSelected) accentColor
+                                        else if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+                                    )
+                                    .clickable {
+                                        viewModel.saveShortcutTileStyle(context, style)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = style,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else textPrimaryColor
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Navigation Visibility Toggles
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Navigation", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
@@ -644,41 +749,7 @@ fun AppearanceScreen(
                             colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
                         )
                     }
-                    HorizontalDivider(color = dividerColor)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenWallpapers() }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text("Wallpaper", color = textPrimaryColor, fontSize = 16.sp)
-                                Surface(
-                                    color = Color(0xFFFF9500).copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Experimental",
-                                        color = Color(0xFFFF9500),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Text("Browser background, dynamic wallpaper blur/dim", color = textSecondaryColor, fontSize = 11.sp)
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = textSecondaryColor
-                        )
-                    }
+
                 }
             }
         }

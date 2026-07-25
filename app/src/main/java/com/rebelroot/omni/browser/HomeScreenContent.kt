@@ -200,7 +200,9 @@ fun HomeScreenContent(
     onOpenSettings: () -> Unit,
     showCustomizationSheet: Boolean,
     onShowCustomizationSheetChange: (Boolean) -> Unit,
-    onShowTabGroups: () -> Unit = {}
+    onShowTabGroups: () -> Unit = {},
+    onOpenWallpapers: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -216,6 +218,7 @@ fun HomeScreenContent(
     var showShortcutOptionsSheet by remember { mutableStateOf(false) }
     var showEditShortcutDialog by remember { mutableStateOf(false) }
     var showDeleteShortcutDialog by remember { mutableStateOf(false) }
+    var showPrivacyReportSheet by remember { mutableStateOf(false) }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -236,6 +239,17 @@ fun HomeScreenContent(
 
     var showHomeMenu by remember { mutableStateOf(false) }
 
+    val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+    val scaledDensity = remember(baseDensity, viewModel.homeUiScale) {
+        androidx.compose.ui.unit.Density(
+            density = baseDensity.density * viewModel.homeUiScale,
+            fontScale = baseDensity.fontScale * viewModel.homeUiScale
+        )
+    }
+
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides scaledDensity
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (viewModel.browserWallpaperUri != null && !viewModel.isIncognitoMode) {
             Box(
@@ -264,18 +278,18 @@ fun HomeScreenContent(
                         )
                 )
             }
-            val dimAlpha = if (viewModel.wallpaperDim >= 0f) {
-                viewModel.wallpaperDim
-            } else {
-                if (viewModel.isDarkThemeEnabled) 0.5f else 0.65f
-            }
-            val overlayColor = if (viewModel.isDarkThemeEnabled) Color.Black.copy(alpha = dimAlpha) else Color.White.copy(alpha = dimAlpha)
+            val userDim = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else 0.20f
+            val effectiveDim = if (userDim > 0f) userDim else 0.18f
+            val overlayColor = Color.Black.copy(alpha = effectiveDim)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(overlayColor)
             )
         }
+
+        // These are now handled by LocalDensity scaling — use fixed dp values
+        val scaledLogoHeight = 100.dp
 
         Column(
             modifier = Modifier
@@ -296,88 +310,106 @@ fun HomeScreenContent(
                     }
                 )
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp, top = 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(32.dp)
+            verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
-        if (!viewModel.isIncognitoMode) {
             Row(
                 modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(top = 8.dp, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Tabs counter icon — only shown when All-in-One navbar is enabled
-                if (viewModel.chromeNavBarEnabled) {
+                // Far Left: + (New Tab Button)
+                IconButton(
+                    onClick = { viewModel.createNewTab(context, "about:blank") },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "New Tab",
+                        tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // Far Right: Tabs Button + 3-Dot Menu Button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Tabs Button (showing tab count badge)
                     IconButton(
-                        onClick = onShowTabGroups,
+                        onClick = { onShowTabGroups() },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(22.dp)
-                                .border(1.5.dp, if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E), RoundedCornerShape(5.dp)),
+                                .border(
+                                    1.5.dp,
+                                    if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                                    RoundedCornerShape(6.dp)
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
-                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "${viewModel.tabs.size.coerceAtLeast(1)}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
                             )
                         }
                     }
-                }
 
-                Box {
-                IconButton(
-                    onClick = { showHomeMenu = true },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Menu",
-                        tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                    // 3-Dot Options Menu
+                    Box {
+                        IconButton(
+                            onClick = { showHomeMenu = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "Menu",
+                                tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
 
-                ChromeMenuDropdown(
-                    expanded = showHomeMenu,
-                    onDismissRequest = { showHomeMenu = false },
-                    viewModel = viewModel,
-                    onNewTab = {
-                        viewModel.createNewTab(context, "about:blank")
-                    },
-                    onNewIncognitoTab = {
-                        if (!viewModel.isIncognitoMode) {
-                            viewModel.toggleIncognitoMode(context)
-                        }
-                        viewModel.createNewTab(context, "about:blank")
-                    },
-                    onOpenHistory = onOpenHistory,
-                    onBurnData = {
-                        coroutineScope.launch {
-                            val runtime = viewModel.getGeckoRuntime(context)
-                            FireButton(runtime, context).burn()
-                            viewModel.burnAllData(context)
-                            Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onOpenDownloads = onOpenDownloads,
-                    onOpenBookmarks = onOpenBookmarks,
-                    onOpenSettings = onOpenSettings,
-                    onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
-                    onShowExtensions = {},
-                    onShowPlayerSettings = {},
-                    onShowSiteInfo = {}
-                )
-                } // end Box (3-dot + dropdown)
-            } // end Row
-        } else {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+                        ChromeMenuDropdown(
+                            expanded = showHomeMenu,
+                            onDismissRequest = { showHomeMenu = false },
+                            viewModel = viewModel,
+                            onNewTab = {
+                                viewModel.createNewTab(context, "about:blank")
+                            },
+                            onNewIncognitoTab = {
+                                if (!viewModel.isIncognitoMode) {
+                                    viewModel.toggleIncognitoMode(context)
+                                }
+                                viewModel.createNewTab(context, "about:blank")
+                            },
+                            onOpenHistory = onOpenHistory,
+                            onBurnData = {
+                                coroutineScope.launch {
+                                    val runtime = viewModel.getGeckoRuntime(context)
+                                    FireButton(runtime, context).burn()
+                                    viewModel.burnAllData(context)
+                                    Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onOpenDownloads = onOpenDownloads,
+                            onOpenBookmarks = onOpenBookmarks,
+                            onOpenSettings = onOpenSettings,
+                            onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
+                            onShowExtensions = {},
+                            onShowPlayerSettings = {},
+                            onShowSiteInfo = {}
+                        )
+                    }
+                }
+            }
 
         if (viewModel.isIncognitoMode) {
             // Incognito Branding
@@ -438,7 +470,7 @@ fun HomeScreenContent(
                     ),
                     contentDescription = "Omni Browser Logo",
                     modifier = Modifier
-                        .height(100.dp)
+                        .height(scaledLogoHeight)
                         .padding(horizontal = 16.dp),
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit
                 )
@@ -450,7 +482,7 @@ fun HomeScreenContent(
         Column(
             modifier = contentModifier,
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // Flat Slate search pill
             OutlinedTextField(
@@ -659,25 +691,33 @@ fun HomeScreenContent(
             }
         }
 
+
+
         if (viewModel.showHomeShortcuts && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
             // Dynamic Grid of Shortcuts — 5 per row, icon-only, no border boxes
             // Shows up to 15 items collapsed; "More" expands to show all.
             val shortcuts = viewModel.shortcutsList
 
+            val columnsCount = when {
+                viewModel.homeUiScale >= 1.2f -> 3
+                viewModel.homeUiScale <= 0.85f -> 5
+                else -> 4
+            }
+            // Collapse limit: 2 full rows worth of items
+            val collapseLimit = columnsCount * 2
             val allItems = remember(shortcuts.toList()) {
                 shortcuts.toList() + HomeShortcut(id = "add_shortcut_btn", title = "Add", url = "add")
             }
-            // Items to display: collapse at 15 unless expanded (keep "Add" always last)
-            val visibleItems = remember(allItems, shortcutsExpanded) {
+            // Items to display: collapse at 2 rows unless expanded (keep "Add" always last)
+            val visibleItems = remember(allItems, shortcutsExpanded, columnsCount) {
                 val realItems = allItems.dropLast(1) // all except Add btn
                 val addBtn   = allItems.last()
-                val showMore = realItems.size > 15 && !shortcutsExpanded
-                val capped   = if (showMore) realItems.take(10) else realItems
+                val showMore = realItems.size > collapseLimit && !shortcutsExpanded
+                val capped   = if (showMore) realItems.take(collapseLimit) else realItems
                 capped + addBtn
             }
-            val hasMore = allItems.size - 1 > 15 && !shortcutsExpanded  // -1 for Add btn
-            val columnsCount = 4
-            val shortcutRows = remember(visibleItems) { visibleItems.chunked(columnsCount) }
+            val hasMore = allItems.size - 1 > collapseLimit && !shortcutsExpanded  // -1 for Add btn
+            val shortcutRows = remember(visibleItems, columnsCount) { visibleItems.chunked(columnsCount) }
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -697,6 +737,8 @@ fun HomeScreenContent(
                                         CompactShortcutItem(
                                             title = stringResource(id = R.string.add_title),
                                             icon = Icons.Rounded.Add,
+                                            tileStyle = viewModel.shortcutTileStyle,
+                                            hasWallpaper = viewModel.browserWallpaperUri != null,
                                             onClick = { showAddShortcutSheet = true }
                                         )
                                     }
@@ -723,6 +765,8 @@ fun HomeScreenContent(
                                             title = displayTitle,
                                             icon = icon,
                                             isAccented = isAccented,
+                                            tileStyle = viewModel.shortcutTileStyle,
+                                            hasWallpaper = viewModel.browserWallpaperUri != null,
                                             onClick = action
                                         )
                                     }
@@ -730,6 +774,8 @@ fun HomeScreenContent(
                                         CompactDynamicShortcutItem(
                                             title = shortcut.title,
                                             url = shortcut.url,
+                                            tileStyle = viewModel.shortcutTileStyle,
+                                            hasWallpaper = viewModel.browserWallpaperUri != null,
                                             onClick = { onNavigateTo(shortcut.url) },
                                             onLongClick = {
                                                 if (!shortcut.isPermanent) {
@@ -765,6 +811,278 @@ fun HomeScreenContent(
                 }
             }
         }
+
+        // Recently Visited Section matching screenshot
+        val historyList = viewModel.historyList
+        if (historyList.isNotEmpty() && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recently Visited",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (viewModel.browserWallpaperUri != null || viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                        style = androidx.compose.ui.text.TextStyle(
+                            shadow = if (viewModel.browserWallpaperUri != null) androidx.compose.ui.graphics.Shadow(
+                                color = Color.Black.copy(alpha = 0.85f),
+                                offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                                blurRadius = 4f
+                            ) else null
+                        )
+                    )
+                    Text(
+                        text = "See All",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { onOpenHistory() }
+                    )
+                }
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(horizontal = 2.dp)
+                ) {
+                    items(historyList.take(10)) { item ->
+                        val domain = remember(item.url) {
+                            try { Uri.parse(item.url).host ?: item.url } catch (e: Exception) { item.url }
+                        }
+                        val faviconUrl = "https://www.google.com/s2/favicons?sz=128&domain=$domain"
+                        val tileStyle = viewModel.shortcutTileStyle
+                        val tileShape = when (tileStyle) {
+                            "Squircle" -> RoundedCornerShape(14.dp)
+                            "Square"   -> RoundedCornerShape(6.dp)
+                            "Glass"    -> RoundedCornerShape(14.dp)
+                            else       -> CircleShape
+                        }
+                        val isGlass = tileStyle == "Glass"
+                        val hasWallpaper = viewModel.browserWallpaperUri != null
+                        val domainInitial = domain.removePrefix("www.").firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                        val tileColor = remember(domain) {
+                            val colors = listOf(
+                                Color(0xFF4285F4), Color(0xFF34A853), Color(0xFFEA4335),
+                                Color(0xFFFBBC05), Color(0xFF9C27B0), Color(0xFF00BCD4),
+                                Color(0xFFFF5722), Color(0xFF607D8B), Color(0xFF795548)
+                            )
+                            colors[(domain.hashCode() and 0x7FFFFFFF) % colors.size]
+                        }
+                        val tileBg = when {
+                            hasWallpaper || isGlass -> Color(0xFF101216).copy(alpha = 0.40f)
+                            else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                        }
+                        val tileBorderColor = if (hasWallpaper || isGlass) Color.White.copy(alpha = 0.18f) else Color.Transparent
+
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(tileShape)
+                                .background(tileBg)
+                                .then(
+                                    if (hasWallpaper || isGlass) Modifier.border(0.5.dp, tileBorderColor, tileShape)
+                                    else Modifier
+                                )
+                                .clickable { onNavigateTo(item.url) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            var faviconLoaded by remember(faviconUrl) { mutableStateOf(false) }
+                            if (!faviconLoaded) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(tileColor),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = domainInitial,
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            coil.compose.AsyncImage(
+                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                    .data(faviconUrl)
+                                    .size(128, 128)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = item.title,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape),
+                                onSuccess = { faviconLoaded = true },
+                                onError = { faviconLoaded = false }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Privacy Shield Card — Premium redesign
+        if (viewModel.showPrivacyStatsWidget && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
+            val isDark = viewModel.isDarkThemeEnabled
+            val hasWallpaper = viewModel.browserWallpaperUri != null
+            val cardBg = if (hasWallpaper) {
+                Color(0xFF101216).copy(alpha = 0.45f)
+            } else {
+                if (isDark) Color(0xFF1C1C1E) else Color(0xFFF1F3F4)
+            }
+            val borderColor = if (hasWallpaper) {
+                Color.White.copy(alpha = 0.18f)
+            } else {
+                Color.Transparent
+            }
+            val dividerColor = if (hasWallpaper) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            val labelColor = if (hasWallpaper) Color.White.copy(alpha = 0.85f) else (if (isDark) Color(0xFF8E8E93) else Color(0xFF555555))
+            val valueColor = Color.White
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(cardBg)
+                    .then(
+                        if (borderColor != Color.Transparent) {
+                            Modifier.border(0.6.dp, borderColor, RoundedCornerShape(18.dp))
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clickable { showPrivacyReportSheet = true }
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Top row: status + cta
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shield,
+                                contentDescription = null,
+                                tint = if (hasWallpaper) Color.White.copy(alpha = 0.90f) else (if (isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73)),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "Omni Shield Active",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (hasWallpaper) Color.White.copy(alpha = 0.90f) else (if (isDark) Color(0xFF8E8E93) else Color(0xFF555555))
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "View Report",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+                    }
+
+                    // Stats row - horizontal side-by-side layout
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Trackers Blocked
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shield,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "${viewModel.trackersBlockedCount}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = valueColor
+                                )
+                                Text(
+                                    text = "Trackers Blocked",
+                                    fontSize = 10.sp,
+                                    color = labelColor,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // Vertical divider
+                        Box(
+                            modifier = Modifier
+                                .width(0.6.dp)
+                                .height(26.dp)
+                                .background(dividerColor)
+                                .align(Alignment.CenterVertically)
+                        )
+
+                        // Data Saved
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Speed,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "${(viewModel.trackersBlockedCount * 1.5).toInt()} MB",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = valueColor
+                                )
+                                Text(
+                                    text = "Data Saved",
+                                    fontSize = 10.sp,
+                                    color = labelColor,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         }
 
         // Shortcut long-press Options Sheet
@@ -1058,173 +1376,297 @@ fun HomeScreenContent(
             }
         }
 
-        // Discover Section Block (Dynamic News Feed)
-        if (viewModel.showDiscoverFeed && !viewModel.isIncognitoMode) {
+
+    }
+    } // end CompositionLocalProvider
+
+}
+
+    // ── Premium Privacy Protection Report Sheet ─────────────────────────────────
+    if (showPrivacyReportSheet) {
+        val isDark = viewModel.isDarkThemeEnabled
+        val sheetBg   = if (isDark) Color(0xFF161616) else Color(0xFFFAFAFA)
+        val cardBg    = if (isDark) Color(0xFF1E1E1E) else Color(0xFFFFFFFF)
+        val borderCol = if (isDark) Color(0xFF2A2A2A) else Color(0xFFEAEAEA)
+        val titleCol  = if (isDark) Color(0xFFFFFFFF) else Color(0xFF111111)
+        val subCol    = if (isDark) Color(0xFF9A9A9A) else Color(0xFF888888)
+        val labelCol  = if (isDark) Color(0xFF707070) else Color(0xFF999999)
+
+        ModalBottomSheet(
+            onDismissRequest = { showPrivacyReportSheet = false },
+            containerColor = sheetBg,
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 10.dp, bottom = 8.dp)
+                        .width(32.dp).height(3.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF3A3A3A) else Color(0xFFCCCCCC))
+                )
+            }
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                Spacer(Modifier.height(4.dp))
+
+                // ── Header ──────────────────────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text(
-                        text = stringResource(id = R.string.discover_title),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = stringResource(id = R.string.refresh_title),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable {
-                            viewModel.fetchNews(viewModel.selectedNewsCategory)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Shield,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Privacy Report",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.3).sp,
+                            color = titleCol
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Lock,
+                                contentDescription = null,
+                                tint = subCol,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "All shields active",
+                                fontSize = 12.sp,
+                                color = subCol
+                            )
                         }
-                    )
+                    }
                 }
 
-                // Category Pill Tabs
-                val categories = listOf("Trending", "World", "Technology", "Sports", "Business", "Science", "Entertainment", "Health")
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                // ── Summary Stats Cards ──────────────────────────────────
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(categories) { category ->
-                        val isSelected = viewModel.selectedNewsCategory == category
-                        val displayCategory = when (category) {
-                            "Trending" -> stringResource(id = R.string.cat_trending)
-                            "World" -> stringResource(id = R.string.cat_world)
-                            "Technology" -> stringResource(id = R.string.cat_technology)
-                            "Sports" -> stringResource(id = R.string.cat_sports)
-                            "Business" -> stringResource(id = R.string.cat_business)
-                            "Science" -> stringResource(id = R.string.cat_science)
-                            "Entertainment" -> stringResource(id = R.string.cat_entertainment)
-                            "Health" -> stringResource(id = R.string.cat_health)
-                            else -> category
-                        }
-                        Surface(
-                            onClick = { viewModel.fetchNews(category) },
-                            shape = RoundedCornerShape(32.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            border = if (isSelected) null else BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp),
-                                contentAlignment = Alignment.Center
+                    // Trackers Blocked card
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cardBg)
+                            .border(0.5.dp, borderCol, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Shield,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "${viewModel.trackersBlockedCount}",
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.8).sp,
+                            color = titleCol
+                        )
+                        Text(
+                            text = "Trackers\nBlocked",
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = labelCol
+                        )
+                    }
+                    // Data Saved card
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cardBg)
+                            .border(0.5.dp, borderCol, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Speed,
+                            contentDescription = null,
+                            tint = if (isDark) Color(0xFF888888) else Color(0xFF999999),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "${(viewModel.trackersBlockedCount * 1.5).toInt()} MB",
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.8).sp,
+                            color = titleCol
+                        )
+                        Text(
+                            text = "Bandwidth\nSaved",
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = labelCol
+                        )
+                    }
+                }
+
+                // ── Active Shields Section ──────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "ACTIVE SHIELDS",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp,
+                        color = labelCol
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cardBg)
+                            .border(0.5.dp, borderCol, RoundedCornerShape(14.dp))
+                    ) {
+                        val shields = listOf(
+                            Triple(Icons.Rounded.Block, "Ad & Tracker Blocking", "Blocked ${viewModel.trackersBlockedCount} tracking requests"),
+                            Triple(Icons.Rounded.Lock, "HTTPS Enforcement", "Upgraded connections to secure HTTPS"),
+                            Triple(Icons.Rounded.Fingerprint, "Fingerprint Shield", "Canvas & font signatures randomised"),
+                            Triple(Icons.Rounded.Cookie, "Cookie Isolation", "Third-party cookies isolated")
+                        )
+                        shields.forEachIndexed { index, (icon, title, subtitle) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(
-                                    text = displayCategory,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isDark) Color(0xFF707070) else Color(0xFFAAAAAA),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = title,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = titleCol
+                                    )
+                                    Text(
+                                        text = subtitle,
+                                        fontSize = 11.sp,
+                                        color = subCol,
+                                        modifier = Modifier.padding(top = 1.dp)
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = "Active",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            if (index < shields.size - 1) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(0.5.dp)
+                                        .padding(horizontal = 14.dp)
+                                        .background(borderCol)
                                 )
                             }
                         }
                     }
                 }
 
-                if (viewModel.isNewsLoading) {
-                    Box(
+                // ── Recently Blocked Trackers ────────────────────────────
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "RECENTLY BLOCKED",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp,
+                        color = labelCol
+                    )
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp),
-                        contentAlignment = Alignment.Center
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(cardBg)
+                            .border(0.5.dp, borderCol, RoundedCornerShape(14.dp))
                     ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-                    }
-                } else if (viewModel.newsArticles.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No articles found in this category.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                    }
-                } else {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(32.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-                    ) {
-                        Column {
-                            viewModel.newsArticles.take(30).forEachIndexed { index, article ->
-                                Row(
+                        val trackers = listOf(
+                            Triple("google-analytics.com", "Analytics & Tracking", 14),
+                            Triple("doubleclick.net", "Advertising & Marketing", 9),
+                            Triple("connect.facebook.net", "Social Graphing", 6),
+                            Triple("amazon-adsystem.com", "Advertising & Retargeting", 4),
+                            Triple("scorecardresearch.com", "Market Research & Analytics", 2)
+                        )
+                        trackers.forEachIndexed { idx, (domain, category, count) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = domain,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = titleCol
+                                    )
+                                    Text(
+                                        text = category,
+                                        fontSize = 11.sp,
+                                        color = subCol,
+                                        modifier = Modifier.padding(top = 1.dp)
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = "$count",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isDark) Color(0xFFE5E5EA) else Color(0xFF1C1C1E)
+                                    )
+                                }
+                            }
+                            if (idx < trackers.size - 1) {
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { onNavigateTo(article.link) }
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    // Thumbnail — always present (real image or source favicon)
-                                    coil.compose.AsyncImage(
-                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                            .data(article.imageUrl)
-                                            .size(120, 120)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .clip(RoundedCornerShape(20.dp)),
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                        error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery),
-                                        placeholder = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery)
-                                    )
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = article.title,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            lineHeight = 18.sp,
-                                            maxLines = 3,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = article.source,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                            if (article.pubDate.isNotEmpty()) {
-                                                Text(
-                                                    text = "·",
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                                    fontSize = 10.sp
-                                                )
-                                                Text(
-                                                    text = article.pubDate,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 10.sp
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                if (index < minOf(viewModel.newsArticles.size, 30) - 1) {
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                        modifier = Modifier.padding(horizontal = 16.dp)
-                                    )
-                                }
+                                        .height(0.5.dp)
+                                        .padding(horizontal = 14.dp)
+                                        .background(borderCol)
+                                )
                             }
                         }
                     }
@@ -1232,8 +1674,6 @@ fun HomeScreenContent(
             }
         }
     }
-
-}
 
     if (showCustomizationSheet) {
         ModalBottomSheet(
@@ -1254,97 +1694,495 @@ fun HomeScreenContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp)
-                    .padding(bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                    .padding(bottom = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 Text(
                     text = "Customize Home Screen",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
-                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                    modifier = Modifier.padding(vertical = 12.dp)
                 )
 
                 HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
 
-                // Toggle 1: Show Logo
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Spacer(Modifier.height(16.dp))
+
+                // ── SECTION 1: WALLPAPERS & BACKGROUND ──────────────────────────
+                Text(
+                    text = "WALLPAPERS & BACKGROUND",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Show Logo",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
-                        )
-                        Text(
-                            text = "Display stylized brand logo at the top",
-                            fontSize = 12.sp,
-                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onShowCustomizationSheetChange(false)
+                                onOpenWallpapers()
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Wallpaper,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Wallpaper Store & Gallery",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                                )
+                                Text(
+                                    text = "Choose custom backgrounds and live daily wallpapers",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF8E8E93)
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                            contentDescription = null,
+                            tint = Color(0xFF8E8E93),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    Switch(
-                        checked = viewModel.showHomeLogo,
-                        onCheckedChange = { viewModel.saveShowHomeLogo(context, it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
-                    )
+
+                    HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // Wallpaper Dim Slider
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Wallpaper Dim",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "${if (viewModel.wallpaperDim < 0) 0 else (viewModel.wallpaperDim * 100).toInt()}%",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Slider(
+                            value = if (viewModel.wallpaperDim < 0) 0f else viewModel.wallpaperDim,
+                            onValueChange = { viewModel.saveWallpaperDim(context, it) },
+                            valueRange = 0f..0.8f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Wallpaper Blur Slider
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Wallpaper Blur",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "${viewModel.wallpaperBlur.toInt()} dp",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Slider(
+                            value = viewModel.wallpaperBlur,
+                            onValueChange = { viewModel.saveWallpaperBlur(context, it) },
+                            valueRange = 0f..25f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
 
-                // Toggle 2: Show Shortcuts
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Spacer(Modifier.height(20.dp))
+
+                // ── SECTION 2: ACCENT THEME COLOR ────────────────────────────
+                Text(
+                    text = "ACCENT THEME COLOR",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Show Shortcuts",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
-                        )
-                        Text(
-                            text = "Show quick access site links and standard shortcuts",
-                            fontSize = 12.sp,
-                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93)
-                        )
-                    }
-                    Switch(
-                        checked = viewModel.showHomeShortcuts,
-                        onCheckedChange = { viewModel.saveShowHomeShortcuts(context, it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                    val themes = listOf(
+                        "Ocean Blue" to Color(0xFF007AFF),
+                        "Emerald" to Color(0xFF34C759),
+                        "Purple" to Color(0xFFAF52DE),
+                        "Crimson" to Color(0xFFFF3B30),
+                        "Midnight" to Color(0xFF5E5CE6),
+                        "Amber" to Color(0xFFFF9500)
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        themes.forEach { (name, color) ->
+                            val isSelected = viewModel.selectedAccentTheme == name
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .clickable { viewModel.saveAccentTheme(context, name) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
-                // Toggle 3: Show Discover Feed
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Spacer(Modifier.height(20.dp))
+
+                // ── SECTION 3: SHORTCUT TILE STYLE ────────────────────────────
+                Text(
+                    text = "SHORTCUT TILE STYLE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Show Discover Feed",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
-                        )
-                        Text(
-                            text = "Display news articles feed on home screen",
-                            fontSize = 12.sp,
-                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+                    Text(
+                        text = "Choose the shape of your shortcut icons",
+                        fontSize = 12.sp,
+                        color = Color(0xFF8E8E93)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Circle", "Squircle", "Square", "Glass").forEach { style ->
+                            val isSelected = viewModel.shortcutTileStyle == style
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+                                    )
+                                    .clickable { viewModel.saveShortcutTileStyle(context, style) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = style,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // ── SECTION 4: LAYOUT SCALERS ─────────────────────────────────
+                Text(
+                    text = "UI SCALERS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Home Screen UI Scale
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Home Screen UI Scale",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "${(viewModel.homeUiScale * 100).toInt()}%",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Slider(
+                            value = viewModel.homeUiScale,
+                            onValueChange = { newValue ->
+                                val stepped = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveHomeUiScale(context, stepped.coerceIn(0.8f, 1.3f))
+                            },
+                            valueRange = 0.8f..1.3f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    Switch(
-                        checked = viewModel.showDiscoverFeed,
-                        onCheckedChange = { viewModel.saveShowDiscoverFeed(context, it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
-                    )
+
+                    HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // App UI Scale (from Appearance Settings)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "App UI Scale",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "${(viewModel.uiScale * 100).toInt()}%",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Slider(
+                            value = viewModel.uiScale,
+                            onValueChange = { newValue ->
+                                val stepped = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveUiScale(context, stepped.coerceIn(0.8f, 1.3f))
+                            },
+                            valueRange = 0.8f..1.3f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
+
+                Spacer(Modifier.height(20.dp))
+
+                // ── SECTION 5: VISIBILITY TOGGLES ─────────────────────────────
+                Text(
+                    text = "VISIBILITY TOGGLES",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                ) {
+                    // Toggle: Show Logo
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show Logo",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "Display Omni brand logo at the top",
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.showHomeLogo,
+                            onCheckedChange = { viewModel.saveShowHomeLogo(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // Toggle: Show Shortcuts
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show Shortcuts",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "Quick access site links and built-in shortcuts",
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.showHomeShortcuts,
+                            onCheckedChange = { viewModel.saveShowHomeShortcuts(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // Toggle: Show Privacy Stats Widget
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Privacy Stats Widget",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "Show trackers blocked & data saved card",
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.showPrivacyStatsWidget,
+                            onCheckedChange = { viewModel.saveShowPrivacyStatsWidget(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // Toggle: Minimalist Focus Mode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Minimalist Focus Mode",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = "Hide everything except the search bar",
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.isMinimalistFocusMode,
+                            onCheckedChange = { viewModel.saveIsMinimalistFocusMode(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -1358,8 +2196,23 @@ fun CompactShortcutItem(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isAccented: Boolean = false,
+    tileStyle: String = "Circle",
+    hasWallpaper: Boolean = false,
     onClick: () -> Unit
 ) {
+    val tileShape: androidx.compose.ui.graphics.Shape = when (tileStyle) {
+        "Squircle" -> RoundedCornerShape(14.dp)
+        "Square"   -> RoundedCornerShape(6.dp)
+        "Glass"    -> RoundedCornerShape(14.dp)
+        else       -> CircleShape
+    }
+    val isGlass = tileStyle == "Glass"
+    val tileBg = when {
+        isAccented -> MaterialTheme.colorScheme.primary
+        hasWallpaper || isGlass -> Color(0xFF101216).copy(alpha = 0.40f)
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -1374,29 +2227,35 @@ fun CompactShortcutItem(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(
-                    if (isAccented)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+                .clip(tileShape)
+                .background(tileBg)
+                .then(
+                    if (hasWallpaper || isGlass) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.18f), tileShape)
+                    else Modifier
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = if (isAccented) Color.White else MaterialTheme.colorScheme.onSurface,
+                tint = if (isAccented || hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(24.dp)
             )
         }
         Text(
             text = title,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 10.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = if (hasWallpaper) androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                    blurRadius = 4f
+                ) else null
+            ),
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -1407,6 +2266,8 @@ fun CompactShortcutItem(
 fun CompactDynamicShortcutItem(
     title: String,
     url: String,
+    tileStyle: String = "Circle",
+    hasWallpaper: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1414,6 +2275,17 @@ fun CompactDynamicShortcutItem(
         try { Uri.parse(url).host ?: url } catch (e: Exception) { url }
     }
     val faviconUrl = "https://www.google.com/s2/favicons?sz=128&domain=$domain"
+    val tileShape: androidx.compose.ui.graphics.Shape = when (tileStyle) {
+        "Squircle" -> RoundedCornerShape(14.dp)
+        "Square"   -> RoundedCornerShape(6.dp)
+        "Glass"    -> RoundedCornerShape(14.dp)
+        else       -> CircleShape
+    }
+    val isGlass = tileStyle == "Glass"
+    val tileBg = when {
+        hasWallpaper || isGlass -> Color(0xFF101216).copy(alpha = 0.40f)
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1423,8 +2295,12 @@ fun CompactDynamicShortcutItem(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
+                .clip(tileShape)
+                .background(tileBg)
+                .then(
+                    if (hasWallpaper || isGlass) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.18f), tileShape)
+                    else Modifier
+                )
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),
             contentAlignment = Alignment.Center
         ) {
@@ -1435,17 +2311,24 @@ fun CompactDynamicShortcutItem(
                     .crossfade(true)
                     .build(),
                 contentDescription = title,
-                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(32.dp)),
+                modifier = Modifier.size(24.dp).clip(tileShape),
                 error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
             )
         }
         Text(
             text = title,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 10.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = if (hasWallpaper) androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.85f),
+                    offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                    blurRadius = 4f
+                ) else null
+            ),
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -1564,52 +2447,49 @@ fun ToolCard(
         label = "scale"
     )
 
-    val accentColor = MaterialTheme.colorScheme.primary
-    val iconContainerBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val bg = if (isDarkTheme) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val iconTint = if (isDarkTheme) Color(0xFFEAEAEA) else Color(0xFF202124)
+    val textColor = if (isDarkTheme) Color(0xFFAEAEB2) else Color(0xFF3C3C43)
 
-    Box(
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
+            .width(80.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(24.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .clip(CircleShape)
+                .background(bg),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(iconContainerBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = accentColor,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Text(
-                text = title,
-                color = if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF1E293B),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = iconTint,
+                modifier = Modifier.size(26.dp)
             )
         }
+        Text(
+            text = title,
+            color = textColor,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 

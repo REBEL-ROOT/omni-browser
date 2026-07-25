@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
@@ -164,6 +165,12 @@ class BrowserViewModel : ViewModel() {
         val WALLPAPER_SCALE_KEY = floatPreferencesKey("wallpaper_scale")
         val WALLPAPER_OFFSET_X_KEY = floatPreferencesKey("wallpaper_offset_x")
         val WALLPAPER_OFFSET_Y_KEY = floatPreferencesKey("wallpaper_offset_y")
+        val SHORTCUT_TILE_STYLE_KEY = stringPreferencesKey("shortcut_tile_style")
+        val HOME_UI_SCALE_KEY = floatPreferencesKey("home_ui_scale")
+        val BOTTOM_NAV_SCALE_KEY = floatPreferencesKey("bottom_nav_scale")
+        val SHOW_PRIVACY_STATS_KEY = booleanPreferencesKey("show_privacy_stats")
+        val MINIMALIST_FOCUS_MODE_KEY = booleanPreferencesKey("minimalist_focus_mode")
+        val TRACKERS_BLOCKED_COUNT_KEY = intPreferencesKey("trackers_blocked_count")
         val QUICK_TOOLS_ORDER_KEY = stringPreferencesKey("quick_tools_order")
 
 
@@ -259,6 +266,7 @@ class BrowserViewModel : ViewModel() {
     var activeTextSelection by mutableStateOf<String?>(null)
         internal set
     var activeSelectionObject by mutableStateOf<org.mozilla.geckoview.GeckoSession.SelectionActionDelegate.Selection?>(null)
+    var selectionScreenRect by mutableStateOf<android.graphics.RectF?>(null)
 
 
     // Browser History System
@@ -282,8 +290,10 @@ class BrowserViewModel : ViewModel() {
         activeGeckoViewRef = WeakReference(geckoView)
     }
 
-    fun clearActiveGeckoView() {
-        activeGeckoViewRef = null
+    fun clearActiveGeckoView(geckoView: GeckoView? = null) {
+        if (geckoView == null || activeGeckoViewRef?.get() == geckoView) {
+            activeGeckoViewRef = null
+        }
     }
 
     // QR Page Scan States
@@ -345,6 +355,32 @@ class BrowserViewModel : ViewModel() {
     var tabLayoutMode by mutableStateOf("Grid")
     var autoCloseTabsDays by mutableStateOf(0)
     var openTabsInBackground by mutableStateOf(false)
+    var lastBackgroundTabOpenedTitle by mutableStateOf("")
+    var lastBackgroundTabOpenedUrl by mutableStateOf("")
+    var lastBackgroundTabOpenedId by mutableStateOf("")
+    var showBackgroundTabNotification by mutableStateOf(false)
+    private var backgroundTabDismissJob: kotlinx.coroutines.Job? = null
+
+    fun triggerBackgroundTabNotification(tab: TabState) {
+        lastBackgroundTabOpenedTitle = tab.title?.takeIf { it.isNotBlank() && it != "New Tab" && it != "about:blank" }
+            ?: try {
+                android.net.Uri.parse(tab.url).host?.removePrefix("www.") ?: tab.url
+            } catch (_: Exception) {
+                tab.url
+            }
+        if (lastBackgroundTabOpenedTitle.isBlank() || lastBackgroundTabOpenedTitle == "about:blank") {
+            lastBackgroundTabOpenedTitle = "New Tab"
+        }
+        lastBackgroundTabOpenedUrl = tab.url
+        lastBackgroundTabOpenedId = tab.id
+        showBackgroundTabNotification = true
+
+        backgroundTabDismissJob?.cancel()
+        backgroundTabDismissJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(4000)
+            showBackgroundTabNotification = false
+        }
+    }
     var accessibilityTextScale by mutableStateOf(1.0f)
     var accessibilityForceZoom by mutableStateOf(false)
     var accessibilityHighContrast by mutableStateOf(false)
@@ -370,7 +406,7 @@ class BrowserViewModel : ViewModel() {
     var customIconPath by mutableStateOf<String?>(null)
     var browserWallpaperUri by mutableStateOf<String?>(null)
     var changeWallpaperDaily by mutableStateOf(false)
-    var showDiscoverFeed by mutableStateOf(true)
+    var showDiscoverFeed by mutableStateOf(false)
     var showHomeLogo by mutableStateOf(true)
     var showHomeShortcuts by mutableStateOf(true)
     var showBottomNavBar by mutableStateOf(true)
@@ -381,6 +417,13 @@ class BrowserViewModel : ViewModel() {
     var wallpaperScale by mutableStateOf(1.0f)
     var wallpaperOffsetX by mutableStateOf(0f)
     var wallpaperOffsetY by mutableStateOf(0f)
+    var shouldOpenTabsSheetOnLaunch by mutableStateOf(false)
+    var shortcutTileStyle by mutableStateOf("Circle")
+    var homeUiScale by mutableStateOf(1.0f)
+    var bottomNavScale by mutableStateOf(1.0f)
+    var showPrivacyStatsWidget by mutableStateOf(true)
+    var isMinimalistFocusMode by mutableStateOf(false)
+    var trackersBlockedCount by androidx.compose.runtime.mutableIntStateOf(48)
 
 
 
@@ -642,6 +685,7 @@ class BrowserViewModel : ViewModel() {
     fun dismissTextSelection() {
         activeTextSelection = null
         activeSelectionObject = null
+        selectionScreenRect = null
     }
 
     fun speakSelectedText(context: Context) {
@@ -1413,6 +1457,7 @@ class BrowserViewModel : ViewModel() {
             } else if (!isIncog && activeNormalTabId == null) {
                 activeNormalTabId = newTab.id
             }
+            triggerBackgroundTabNotification(newTab)
         }
         loadUrlInTab(newTab, url)
         saveTabs()
@@ -1581,6 +1626,19 @@ class BrowserViewModel : ViewModel() {
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
                 tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl, isUriLoaded = true)
+            }
+            if (tab.id == activeTabId) {
+                currentUrl = formattedUrl
+            }
+            tab.session.loadUri(formattedUrl)
+            return
+        }
+
+        // Pass extension-internal pages (moz-extension://) through directly — never rewrite them as search queries
+        if (formattedUrl.startsWith("moz-extension://")) {
+            val idx = tabs.indexOfFirst { it.id == tab.id }
+            if (idx != -1) {
+                tabs[idx] = tabs[idx].copy(url = formattedUrl, title = "Loading...", isUriLoaded = true)
             }
             if (tab.id == activeTabId) {
                 currentUrl = formattedUrl
@@ -1882,6 +1940,30 @@ class BrowserViewModel : ViewModel() {
                         )
                     )
                 }
+
+                override fun onOptionalPrompt(
+                    extension: org.mozilla.geckoview.WebExtension,
+                    permissions: Array<String>,
+                    origins: Array<String>,
+                    dataCollectionPermissions: Array<String>
+                ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
+                    Log.d(TAG, "Auto-granting optional permissions for extension: ${extension.id}")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(
+                        org.mozilla.geckoview.AllowOrDeny.ALLOW
+                    )
+                }
+
+                override fun onUpdatePrompt(
+                    extension: org.mozilla.geckoview.WebExtension,
+                    permissions: Array<String>,
+                    origins: Array<String>,
+                    dataCollectionPermissions: Array<String>
+                ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
+                    Log.d(TAG, "Auto-granting update permissions for extension: ${extension.id}")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(
+                        org.mozilla.geckoview.AllowOrDeny.ALLOW
+                    )
+                }
             })
         }
 
@@ -2067,7 +2149,7 @@ class BrowserViewModel : ViewModel() {
                     customIconPath = prefs[CUSTOM_ICON_PATH_KEY]
                     browserWallpaperUri = prefs[BROWSER_WALLPAPER_URI_KEY]
                     changeWallpaperDaily = prefs[CHANGE_WALLPAPER_DAILY_KEY] ?: false
-                    showDiscoverFeed = prefs[SHOW_DISCOVER_FEED_KEY] ?: true
+                    showDiscoverFeed = prefs[SHOW_DISCOVER_FEED_KEY] ?: false
                     showBottomNavBar = prefs[SHOW_BOTTOM_NAV_BAR_KEY] ?: true
                     chromeNavBarEnabled = prefs[CHROME_NAV_BAR_KEY] ?: false
                     showHomeLogo = prefs[SHOW_HOME_LOGO_KEY] ?: true
@@ -2077,6 +2159,12 @@ class BrowserViewModel : ViewModel() {
                     wallpaperScale = prefs[WALLPAPER_SCALE_KEY] ?: 1.0f
                     wallpaperOffsetX = prefs[WALLPAPER_OFFSET_X_KEY] ?: 0f
                     wallpaperOffsetY = prefs[WALLPAPER_OFFSET_Y_KEY] ?: 0f
+                    shortcutTileStyle = prefs[SHORTCUT_TILE_STYLE_KEY] ?: "Circle"
+                    homeUiScale = prefs[HOME_UI_SCALE_KEY] ?: 1.0f
+                    bottomNavScale = prefs[BOTTOM_NAV_SCALE_KEY] ?: 1.0f
+                    showPrivacyStatsWidget = prefs[SHOW_PRIVACY_STATS_KEY] ?: true
+                    isMinimalistFocusMode = prefs[MINIMALIST_FOCUS_MODE_KEY] ?: false
+                    trackersBlockedCount = prefs[TRACKERS_BLOCKED_COUNT_KEY] ?: 48
                     quickToolsOrder = run {
                         val saved = prefs[QUICK_TOOLS_ORDER_KEY]
                         val default = listOf(
@@ -2828,6 +2916,49 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+        fun saveHomeUiScale(context: Context, scale: Float) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[HOME_UI_SCALE_KEY] = scale }
+            homeUiScale = scale
+        }
+    }
+
+    fun saveBottomNavScale(context: Context, scale: Float) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[BOTTOM_NAV_SCALE_KEY] = scale }
+            bottomNavScale = scale
+        }
+    }
+
+    fun saveShortcutTileStyle(context: Context, style: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[SHORTCUT_TILE_STYLE_KEY] = style }
+            shortcutTileStyle = style
+        }
+    }
+
+    fun saveShowPrivacyStatsWidget(context: Context, show: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[SHOW_PRIVACY_STATS_KEY] = show }
+            showPrivacyStatsWidget = show
+        }
+    }
+
+    fun saveIsMinimalistFocusMode(context: Context, enable: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[MINIMALIST_FOCUS_MODE_KEY] = enable }
+            isMinimalistFocusMode = enable
+        }
+    }
+
+    fun incrementTrackersBlocked(context: Context, count: Int = 1) {
+        viewModelScope.launch {
+            val newCount = trackersBlockedCount + count
+            trackersBlockedCount = newCount
+            context.dataStore.edit { it[TRACKERS_BLOCKED_COUNT_KEY] = newCount }
+        }
+    }
+
     fun saveShowBottomNavBar(context: Context, show: Boolean) {
         viewModelScope.launch {
             context.dataStore.edit { it[SHOW_BOTTOM_NAV_BAR_KEY] = show }
@@ -3275,12 +3406,26 @@ class BrowserViewModel : ViewModel() {
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
 
-        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://") && !formattedUrl.startsWith("about:") && !formattedUrl.startsWith("javascript:")) {
+        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://") && !formattedUrl.startsWith("about:") && !formattedUrl.startsWith("javascript:") && !formattedUrl.startsWith("moz-extension://")) {
             formattedUrl = if (formattedUrl.contains(".") && !formattedUrl.contains(" ")) {
                 "https://$formattedUrl"
             } else {
                 getSearchUrlForQuery(formattedUrl)
             }
+        }
+
+        // Pass extension-internal pages directly to GeckoSession — never proxy them
+        if (formattedUrl.startsWith("moz-extension://")) {
+            val activeId = activeTabId
+            if (activeId != null) {
+                val idx = tabs.indexOfFirst { it.id == activeId }
+                if (idx != -1) {
+                    tabs[idx] = tabs[idx].copy(url = formattedUrl, title = "Loading...", isUriLoaded = true)
+                }
+            }
+            currentUrl = formattedUrl
+            geckoSession.loadUri(formattedUrl)
+            return
         }
 
         // Intercept direct video playback if native player is enabled
@@ -3749,6 +3894,58 @@ class BrowserViewModel : ViewModel() {
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         filtered.forEach { ext ->
                             runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                            runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                            ext.setTabDelegate(object : WebExtension.TabDelegate {
+                                override fun onNewTab(
+                                    extension: WebExtension,
+                                    createDetails: WebExtension.CreateTabDetails
+                                ): GeckoResult<GeckoSession>? {
+                                    Log.d(TAG, "WebExtension ${extension.id} requested onNewTab: ${createDetails.url}")
+                                    val url = createDetails.url ?: "about:blank"
+                                    val result = GeckoResult<GeckoSession>()
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        try {
+                                            val context = appContext
+                                            if (context != null) {
+                                                createNewTab(context, url)
+                                                val createdSession = tabs.find { it.id == activeTabId }?.session ?: tabs.lastOrNull()?.session
+                                                result.complete(createdSession)
+                                            } else {
+                                                result.completeExceptionally(IllegalStateException("Context is null"))
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "Error in WebExtension onNewTab", e)
+                                            result.completeExceptionally(e)
+                                        }
+                                    }
+                                    return result
+                                }
+
+                                override fun onOpenOptionsPage(extension: WebExtension) {
+                                    Log.d(TAG, "WebExtension ${extension.id} requested onOpenOptionsPage")
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        try {
+                                            val context = appContext
+                                            if (context != null) {
+                                                val meta = extension.metaData
+                                                val rawOptions = meta?.optionsPageUrl
+                                                val baseUrl = meta?.baseUrl ?: ""
+                                                val optionsUrl = if (!rawOptions.isNullOrBlank()) {
+                                                    if (rawOptions.startsWith("moz-extension://") || rawOptions.startsWith("http://") || rawOptions.startsWith("https://")) rawOptions
+                                                    else "${baseUrl.removeSuffix("/")}/${rawOptions.removePrefix("/")}"
+                                                } else if (baseUrl.isNotBlank()) {
+                                                    "${baseUrl.removeSuffix("/")}/options/index.html"
+                                                } else null
+                                                if (optionsUrl != null) {
+                                                    createNewTab(context, optionsUrl)
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "Error opening options page for ${extension.id}", e)
+                                        }
+                                    }
+                                }
+                            })
                             ext.setActionDelegate(object : WebExtension.ActionDelegate {
 
                                 override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
@@ -4024,148 +4221,176 @@ class BrowserViewModel : ViewModel() {
     }
 
     val newsArticles = mutableStateListOf<NewsArticle>()
-    var selectedNewsCategory by mutableStateOf("Trending")
+    var selectedNewsCategory by mutableStateOf("News")
     var isNewsLoading by mutableStateOf(false)
+    var isMoreNewsLoading by mutableStateOf(false)
+    var hasMoreNews by mutableStateOf(true)
+    private var newsPageIndex = 0
 
-    fun fetchNews(category: String = "Trending") {
+    fun fetchNews(category: String = "News") {
         selectedNewsCategory = category
         isNewsLoading = true
+        hasMoreNews = true
+        newsPageIndex = 0
         viewModelScope.launch(Dispatchers.IO) {
-            val list = mutableListOf<NewsArticle>()
-            try {
-                // Determine localized parameters based on selected language code
-                val (hl, gl, ceid) = when (selectedLanguageCode) {
-                    "hi" -> Triple("hi", "IN", "IN:hi")
-                    "es" -> Triple("es-419", "MX", "MX:es-419")
-                    "fr" -> Triple("fr", "FR", "FR:fr")
-                    "de" -> Triple("de", "DE", "DE:de")
-                    "zh" -> Triple("zh-CN", "CN", "CN:zh-Hans")
-                    "ja" -> Triple("ja", "JP", "JP:ja")
-                    "ru" -> Triple("ru", "RU", "RU:ru")
-                    "pt" -> Triple("pt-BR", "BR", "BR:pt")
-                    else -> Triple("en-US", "US", "US:en")
-                }
+            val list = fetchRssArticles(category, page = 0)
+            launch(Dispatchers.Main) {
+                newsArticles.clear()
+                newsArticles.addAll(list.filter { it.title.length >= 12 })
+                isNewsLoading = false
+            }
+        }
+    }
 
-                val topicPath = when (category) {
-                    "World"         -> "headlines/section/topic/WORLD"
-                    "Technology"    -> "headlines/section/topic/TECHNOLOGY"
-                    "Sports"        -> "headlines/section/topic/SPORTS"
-                    "Business"      -> "headlines/section/topic/BUSINESS"
-                    "Science"       -> "headlines/section/topic/SCIENCE"
-                    "Entertainment" -> "headlines/section/topic/ENTERTAINMENT"
-                    "Health"        -> "headlines/section/topic/HEALTH"
-                    else            -> ""
-                }
-
-                val rssUrl = if (topicPath.isNotEmpty()) {
-                    "https://news.google.com/rss/$topicPath?hl=$hl&gl=$gl&ceid=$ceid"
+    fun loadMoreNews() {
+        if (isNewsLoading || isMoreNewsLoading || !hasMoreNews) return
+        isMoreNewsLoading = true
+        newsPageIndex++
+        val pageToFetch = newsPageIndex
+        viewModelScope.launch(Dispatchers.IO) {
+            val newItems = fetchRssArticles(selectedNewsCategory, page = pageToFetch)
+            launch(Dispatchers.Main) {
+                if (newItems.isNotEmpty()) {
+                    val existingTitles = newsArticles.map { it.title.trim().lowercase() }.toSet()
+                    val uniqueNew = newItems.filter { it.title.length >= 12 && !existingTitles.contains(it.title.trim().lowercase()) }
+                    if (uniqueNew.isNotEmpty()) {
+                        newsArticles.addAll(uniqueNew)
+                    } else if (pageToFetch > 15) {
+                        hasMoreNews = false
+                    }
                 } else {
+                    hasMoreNews = false
+                }
+                isMoreNewsLoading = false
+            }
+        }
+    }
+
+    private fun fetchRssArticles(category: String, page: Int): List<NewsArticle> {
+        val list = mutableListOf<NewsArticle>()
+        try {
+            val (hl, gl, ceid) = when (selectedLanguageCode) {
+                "hi" -> Triple("hi", "IN", "IN:hi")
+                "es" -> Triple("es-419", "MX", "MX:es-419")
+                "fr" -> Triple("fr", "FR", "FR:fr")
+                "de" -> Triple("de", "DE", "DE:de")
+                "zh" -> Triple("zh-CN", "CN", "CN:zh-Hans")
+                "ja" -> Triple("ja", "JP", "JP:ja")
+                "ru" -> Triple("ru", "RU", "RU:ru")
+                "pt" -> Triple("pt-BR", "BR", "BR:pt")
+                else -> Triple("en-US", "US", "US:en")
+            }
+
+            val topicPath = when (category) {
+                "World"         -> "headlines/section/topic/WORLD"
+                "Technology"    -> "headlines/section/topic/TECHNOLOGY"
+                "Sports"        -> "headlines/section/topic/SPORTS"
+                "Business", "Finance" -> "headlines/section/topic/BUSINESS"
+                "Science"       -> "headlines/section/topic/SCIENCE"
+                "Entertainment" -> "headlines/section/topic/ENTERTAINMENT"
+                "Health"        -> "headlines/section/topic/HEALTH"
+                else            -> null
+            }
+
+            val rssUrl = when {
+                page > 0 -> {
+                    val query = when (page % 5) {
+                        1 -> "$category latest news"
+                        2 -> "$category breaking news"
+                        3 -> "$category updates"
+                        4 -> "$category top stories"
+                        else -> "$category digest"
+                    }
+                    val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+                    "https://news.google.com/rss/search?q=$encodedQuery&hl=$hl&gl=$gl&ceid=$ceid"
+                }
+                topicPath != null -> {
+                    "https://news.google.com/rss/$topicPath?hl=$hl&gl=$gl&ceid=$ceid"
+                }
+                category == "Top Stories" || category == "News" || category == "All" -> {
                     "https://news.google.com/rss?hl=$hl&gl=$gl&ceid=$ceid"
                 }
+                else -> {
+                    val encodedQuery = java.net.URLEncoder.encode(category, "UTF-8")
+                    "https://news.google.com/rss/search?q=$encodedQuery&hl=$hl&gl=$gl&ceid=$ceid"
+                }
+            }
 
-                val conn = java.net.URL(rssUrl).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 10000
-                conn.readTimeout    = 10000
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            val conn = java.net.URL(rssUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 10000
+            conn.readTimeout    = 10000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
 
-                val parser = android.util.Xml.newPullParser()
-                parser.setInput(conn.inputStream, "UTF-8")
+            val parser = android.util.Xml.newPullParser()
+            parser.setInput(conn.inputStream, "UTF-8")
 
-                var eventType   = parser.eventType
-                var insideItem  = false
-                var currentTag  = ""
-                var title       = ""
-                var link        = ""
-                var pubDate     = ""
-                var description = ""
-                var source      = ""
-                var sourceUrl   = ""
+            var eventType   = parser.eventType
+            var insideItem  = false
+            var currentTag  = ""
+            var title       = ""
+            var link        = ""
+            var pubDate     = ""
+            var description = ""
+            var source      = ""
+            var sourceUrl   = ""
 
-                while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-                    when (eventType) {
-                        org.xmlpull.v1.XmlPullParser.START_TAG -> {
-                            currentTag = parser.name ?: ""
-                            if (currentTag.equals("item", ignoreCase = true)) {
-                                insideItem = true
-                            }
-                            if (insideItem && currentTag.equals("source", ignoreCase = true)) {
-                                sourceUrl = parser.getAttributeValue(null, "url") ?: ""
-                            }
+            while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    org.xmlpull.v1.XmlPullParser.START_TAG -> {
+                        currentTag = parser.name ?: ""
+                        if (currentTag.equals("item", ignoreCase = true)) {
+                            insideItem = true
                         }
-                        org.xmlpull.v1.XmlPullParser.TEXT -> {
-                            if (insideItem) {
-                                val text = parser.text ?: ""
-                                if (text.isNotEmpty()) {
-                                    when (currentTag.lowercase()) {
-                                        "title"       -> title       += text
-                                        "link"        -> link        += text
-                                        "pubdate"     -> pubDate     += text
-                                        "description" -> description += text
-                                        "source"      -> source      += text
-                                    }
+                        if (insideItem && currentTag.equals("source", ignoreCase = true)) {
+                            sourceUrl = parser.getAttributeValue(null, "url") ?: ""
+                        }
+                    }
+                    org.xmlpull.v1.XmlPullParser.TEXT -> {
+                        if (insideItem) {
+                            val text = parser.text ?: ""
+                            if (text.isNotEmpty()) {
+                                when (currentTag.lowercase()) {
+                                    "title"       -> title       += text
+                                    "link"        -> link        += text
+                                    "pubdate"     -> pubDate     += text
+                                    "description" -> description += text
+                                    "source"      -> source      += text
                                 }
                             }
                         }
-                        org.xmlpull.v1.XmlPullParser.END_TAG -> {
-                            if ((parser.name ?: "").equals("item", ignoreCase = true)) {
-                                insideItem = false
+                    }
+                    org.xmlpull.v1.XmlPullParser.END_TAG -> {
+                        if ((parser.name ?: "").equals("item", ignoreCase = true)) {
+                            insideItem = false
 
-                                val rawTitle = title.trim()
-                                val rawLink  = link.trim()
+                            val rawTitle = title.trim()
+                            val rawLink  = link.trim()
 
-                                if (rawTitle.isNotEmpty() && rawLink.isNotEmpty()) {
-                                    // Strip trailing source info from Google News titles
-                                    val cleanTitle = if (rawTitle.contains(" - "))
-                                        rawTitle.substringBeforeLast(" - ").trim()
-                                    else rawTitle.trim()
+                            if (rawTitle.isNotEmpty() && rawLink.isNotEmpty()) {
+                                val cleanTitle = if (rawTitle.contains(" - "))
+                                    rawTitle.substringBeforeLast(" - ").trim()
+                                else rawTitle.trim()
 
-                                    // 2. Reject titles that are too short or look like junk
-                                    if (cleanTitle.length < 12) {
-                                        title = ""; link = ""; pubDate = ""
-                                        description = ""; source = ""; sourceUrl = ""
-                                        currentTag = ""
-                                        eventType = parser.next()
-                                        continue
-                                    }
-
-                                    // 3. Source name: prefer what Google appended; fall back to <source> tag
+                                if (cleanTitle.length >= 12) {
                                     val sourceName = if (rawTitle.contains(" - "))
                                         rawTitle.substringAfterLast(" - ").trim()
                                     else source.trim().ifEmpty { "News" }
 
-                                    // 4. Parse date — format: "Tue, 16 Jun 2026 05:06:59 GMT"
                                     val cleanDate = try {
                                         val parts = pubDate.trim().split(" ")
-                                        // parts: [Tue,] [16] [Jun] [2026] ...
                                         if (parts.size >= 4) "${parts[2]} ${parts[3]}" else pubDate.trim()
                                     } catch (e: Exception) { pubDate.trim() }
 
-                                    // 5. Extract image from description
-                                    //    Google News HTML-encodes the description, so unescape first
-                                    val decodedDesc = android.text.Html.fromHtml(
-                                        description, android.text.Html.FROM_HTML_MODE_COMPACT
-                                    ).toString()
+                                    val imgRegex = Regex("<img[^>]+src=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+                                    val imgMatch = imgRegex.find(description)
 
-                                    // Try to get src from the decoded HTML (plain text won't have tags,
-                                    // but the raw description string still has encoded HTML we can scan)
-                                    val imgMatch = "<img[^>]+src=[\"']([^\"']+)[\"']"
-                                        .toRegex(RegexOption.IGNORE_CASE)
-                                        .find(description)
-                                    val encodedImgMatch = "src=(?:&quot;|%22|\"')([^&\"']+)(?:&quot;|%22|\"')"
-                                        .toRegex(RegexOption.IGNORE_CASE)
-                                        .find(description)
+                                    var imageUrl = imgMatch?.groupValues?.getOrNull(1)?.trim() ?: ""
 
-                                    var imageUrl = imgMatch?.groupValues?.getOrNull(1)?.trim()
-                                        ?: encodedImgMatch?.groupValues?.getOrNull(1)?.trim()
-                                        ?: ""
-
-                                    // 6. Fallback: use source domain favicon (64 px — decent quality)
                                     if (imageUrl.isEmpty()) {
                                         val domain = extractDomain(sourceUrl.ifEmpty { null }, sourceName)
                                         imageUrl = "https://www.google.com/s2/favicons?sz=64&domain=$domain"
                                     }
 
-                                    // 7. Deduplicate by title
                                     if (list.none { it.title.equals(cleanTitle, ignoreCase = true) }) {
                                         list.add(NewsArticle(
                                             title    = cleanTitle,
@@ -4176,26 +4401,85 @@ class BrowserViewModel : ViewModel() {
                                         ))
                                     }
                                 }
-
-                                title = ""; link = ""; pubDate = ""
-                                description = ""; source = ""; sourceUrl = ""
                             }
-                            currentTag = ""
-                        }
-                    }
-                    eventType = parser.next()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error fetching news RSS feed: ${e.message}", e)
-            }
 
-            launch(Dispatchers.Main) {
-                newsArticles.clear()
-                // Final quality pass: remove anything with a suspiciously short title
-                newsArticles.addAll(list.filter { it.title.length >= 12 })
-                isNewsLoading = false
+                            title = ""; link = ""; pubDate = ""
+                            description = ""; source = ""; sourceUrl = ""
+                        }
+                        currentTag = ""
+                    }
+                }
+                eventType = parser.next()
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching news RSS feed: ${e.message}", e)
         }
+
+        if (category.equals("Astrology", ignoreCase = true)) {
+            val openVedArticles = listOf(
+                NewsArticle(
+                    title = "OpenVed Vedic Janam Kundli & Birth Chart Calculation Guide",
+                    link = "https://openved.com/astrology",
+                    source = "OpenVed Astrology",
+                    pubDate = "Today",
+                    imageUrl = "https://openved.com/og-image.jpg"
+                ),
+                NewsArticle(
+                    title = "Daily Vedic Horoscopes & Planetary Transit Forecasts",
+                    link = "https://openved.com/astrology",
+                    source = "OpenVed Astrology",
+                    pubDate = "Today",
+                    imageUrl = "https://openved.com/og-image.jpg"
+                ),
+                NewsArticle(
+                    title = "Sade Sati & Manglik Dosha Analysis with Vedic Remedies",
+                    link = "https://openved.com/astrology",
+                    source = "OpenVed Astrology",
+                    pubDate = "Today",
+                    imageUrl = "https://openved.com/og-image.jpg"
+                ),
+                NewsArticle(
+                    title = "Vedic Kundli Matching & Relationship Compatibility",
+                    link = "https://openved.com/astrology",
+                    source = "OpenVed Astrology",
+                    pubDate = "Today",
+                    imageUrl = "https://openved.com/og-image.jpg"
+                ),
+                NewsArticle(
+                    title = "Nakshatra, Mahadasha & Lal Kitab Jyotish Remedies",
+                    link = "https://openved.com/astrology",
+                    source = "OpenVed Astrology",
+                    pubDate = "Today",
+                    imageUrl = "https://openved.com/og-image.jpg"
+                ),
+                NewsArticle(
+                    title = "AI Astrologer: Instant Personal Jyotish & Horoscope Readings",
+                    link = "https://openved.com/astrology",
+                    source = "OpenVed Astrology",
+                    pubDate = "Today",
+                    imageUrl = "https://openved.com/og-image.jpg"
+                )
+            )
+
+            val blended = mutableListOf<NewsArticle>()
+            val rssSize = list.size
+            val openVedSize = openVedArticles.size
+            var rssIdx = 0
+            var openVedIdx = (page * 3) % openVedSize
+
+            while (blended.size < list.size + 4 && (rssIdx < rssSize || blended.size < 6)) {
+                if (openVedArticles.isNotEmpty()) {
+                    blended.add(openVedArticles[openVedIdx % openVedSize])
+                    openVedIdx++
+                }
+                if (rssIdx < rssSize) {
+                    blended.add(list[rssIdx])
+                    rssIdx++
+                }
+            }
+            return blended
+        }
+        return list
     }
 
     /** Extract a clean domain from the source URL attribute or fall back to a lookup table. */
@@ -4489,7 +4773,7 @@ class BrowserViewModel : ViewModel() {
     fun checkAppUpdates(context: Context, onResult: (UpdateCheckResult) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val url = java.net.URL("https://raw.githubusercontent.com/rebelroot/omni-browser/main/version.json")
+                val url = java.net.URL("https://raw.githubusercontent.com/REBEL-ROOT/omni-browser/main/version.json")
                 val connection = url.openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 8000

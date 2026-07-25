@@ -38,6 +38,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -236,43 +237,81 @@ fun PhoneAddressBar(
                     UrlVisualTransformation(isInputFocused, domainColor, pathColor)
                 }
 
-                val bringIntoViewRequester = remember { BringIntoViewRequester() }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val scrollState = rememberScrollState()
+                var textLayoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                var containerWidth by remember { mutableStateOf(0) }
 
-                BasicTextField(
-                    value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
-                    onValueChange = onInputUrlChange,
+                LaunchedEffect(inputUrl.selection, textLayoutResult, containerWidth) {
+                    val layout = textLayoutResult ?: return@LaunchedEffect
+                    val selection = inputUrl.selection
+                    val cursorStart = selection.start
+                    val layoutTextLength = layout.layoutInput.text.length
+                    if (cursorStart >= 0 && cursorStart <= layoutTextLength) {
+                        try {
+                            val cursorRect = layout.getCursorRect(cursorStart)
+                            val cursorLeft = cursorRect.left
+                            val cursorRight = cursorRect.right
+                            
+                            val viewportWidth = containerWidth
+                            if (viewportWidth > 0) {
+                                val scrollVal = scrollState.value
+                                val paddingPx = with(density) { 36.dp.toPx() }
+                                val leftBoundary = scrollVal + paddingPx
+                                val rightBoundary = scrollVal + viewportWidth - paddingPx
+                                
+                                if (cursorLeft < leftBoundary) {
+                                    scrollState.animateScrollTo((cursorLeft - paddingPx).coerceAtLeast(0f).toInt())
+                                } else if (cursorRight > rightBoundary) {
+                                    scrollState.animateScrollTo((cursorRight - viewportWidth + paddingPx).toInt())
+                                }
+                            }
+                        } catch (e: Throwable) {
+                            // Safely ignore transient layout bounds mismatch during rapid typing or focus changes
+                        }
+                    }
+                }
+
+                LaunchedEffect(isInputFocused) {
+                    if (!isInputFocused) {
+                        scrollState.scrollTo(0)
+                    }
+                }
+
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .focusRequester(focusRequester)
-                        .onFocusChanged { onInputFocusedChange(it.isFocused) }
-                        .bringIntoViewRequester(bringIntoViewRequester),
-                    onTextLayout = { textLayoutResult ->
-                        val cursorStart = inputUrl.selection.start
-                        if (cursorStart >= 0 && cursorStart <= inputUrl.text.length) {
-                            val cursorRect = textLayoutResult.getCursorRect(cursorStart)
-                            coroutineScope.launch {
-                                bringIntoViewRequester.bringIntoView(cursorRect)
+                        .onGloballyPositioned { containerWidth = it.size.width },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    BasicTextField(
+                        value = if (inputUrl.text == "about:blank") androidx.compose.ui.text.input.TextFieldValue("") else inputUrl,
+                        onValueChange = onInputUrlChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(scrollState)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { onInputFocusedChange(it.isFocused) },
+                        onTextLayout = { textLayoutResult = it },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = config.fontSize
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Go
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onGo = {
+                                viewModel.loadUrl(inputUrl.text)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
                             }
-                        }
-                    },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = config.fontSize
-                    ),
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Go
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onGo = {
-                            viewModel.loadUrl(inputUrl.text)
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        }
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    visualTransformation = urlTransformation
-                )
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        visualTransformation = urlTransformation
+                    )
+                }
 
                 // X Clear button — only shown when the user is actively editing the URL
                 if (isInputFocused && inputUrl.text.isNotEmpty() && inputUrl.text != "about:blank") {
@@ -366,34 +405,81 @@ fun PhoneAddressBar(
         }
 
         AnimatedVisibility(visible = !isInputFocused) {
+            val isPopupOpen = viewModel.activeExtensionPopupSession != null
+            val pulseTransition = rememberInfiniteTransition(label = "extPopupPulse")
+            val pulseAlpha by pulseTransition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 0.9f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "extPulseAlpha"
+            )
+            val pulseScale by pulseTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.35f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "extPulseScale"
+            )
+
             IconButton(
                 onClick = onShowExtensionsSheet,
                 modifier = Modifier.size(config.barIconSize)
             ) {
-                Box(contentAlignment = Alignment.TopEnd) {
-                    Icon(
-                        imageVector = Icons.Rounded.Extension,
-                        contentDescription = "Extensions",
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.size(config.innerIconSize)
-                    )
-                    if (hasActiveUserExtensions) {
+                Box(contentAlignment = Alignment.Center) {
+                    // Pulsing glow ring — only visible when popup is open
+                    if (isPopupOpen) {
                         Box(
                             modifier = Modifier
-                                .size(config.innerIconSize * 0.25f)
-                                .offset(x = 1.dp, y = (-1).dp)
+                                .size(config.innerIconSize * pulseScale)
                                 .background(
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha * 0.25f),
                                     shape = CircleShape
                                 )
-                                .border(1.dp, MaterialTheme.colorScheme.background, CircleShape)
                         )
-                     }
+                    }
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        Icon(
+                            imageVector = Icons.Rounded.Extension,
+                            contentDescription = "Extensions",
+                            tint = if (isPopupOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(config.innerIconSize)
+                        )
+                        if (hasActiveUserExtensions || isPopupOpen) {
+                            Box(
+                                modifier = Modifier
+                                    .size(config.innerIconSize * 0.25f)
+                                    .offset(x = 1.dp, y = (-1).dp)
+                                    .background(
+                                        color = if (isPopupOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape
+                                    )
+                                    .border(1.dp, MaterialTheme.colorScheme.background, CircleShape)
+                            )
+                        }
+                    }
                 }
             }
         }
 
         AnimatedVisibility(visible = !isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
+            val infiniteTransition = rememberInfiniteTransition(label = "tabPulse")
+            val pulseScale by infiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.25f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "pulseScale"
+            )
+            val currentScale = if (viewModel.showBackgroundTabNotification) pulseScale else 1f
+            val pulseColor = if (viewModel.showBackgroundTabNotification) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+
             IconButton(
                 onClick = onShowTabGroups,
                 modifier = Modifier.size(config.barIconSize)
@@ -401,12 +487,13 @@ fun PhoneAddressBar(
                 Box(
                     modifier = Modifier
                         .size(config.innerIconSize + 4.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(5.dp)),
+                        .graphicsLayer(scaleX = currentScale, scaleY = currentScale)
+                        .border(1.dp, pulseColor, RoundedCornerShape(5.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = pulseColor,
                         fontSize = (config.fontSize.value * 0.66f).sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -428,39 +515,37 @@ fun PhoneAddressBar(
                     )
                 }
 
-                if (viewModel.chromeNavBarEnabled) {
-                    ChromeMenuDropdown(
-                        expanded = showMenu,
-                        onDismissRequest = { onShowMenuChange(false) },
-                        viewModel = viewModel,
-                        onNewTab = {
-                            viewModel.createNewTab(context, "about:blank")
-                        },
-                        onNewIncognitoTab = {
-                            if (!viewModel.isIncognitoMode) {
-                                viewModel.toggleIncognitoMode(context)
-                            }
-                            viewModel.createNewTab(context, "about:blank")
-                        },
-                        onOpenHistory = onOpenHistory,
-                        onBurnData = {
-                            coroutineScope.launch {
-                                val runtime = viewModel.getGeckoRuntime(context)
-                                FireButton(runtime, context).burn()
-                                viewModel.burnAllData(context)
-                                Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onOpenDownloads = onOpenDownloads,
-                        onOpenBookmarks = onOpenBookmarks,
-                        onOpenSettings = onOpenSettings,
-                        onShowCustomizationSheet = onShowCustomizationSheet,
-                        onShowExtensions = onShowExtensionsSheet,
-                        onShowPlayerSettings = onShowPlayerSettings,
-                        onShowSiteInfo = onShowSiteInfo,
-                        onFindInPage = { viewModel.openFindInPage() }
-                    )
-                }
+                ChromeMenuDropdown(
+                    expanded = showMenu,
+                    onDismissRequest = { onShowMenuChange(false) },
+                    viewModel = viewModel,
+                    onNewTab = {
+                        viewModel.createNewTab(context, "about:blank")
+                    },
+                    onNewIncognitoTab = {
+                        if (!viewModel.isIncognitoMode) {
+                            viewModel.toggleIncognitoMode(context)
+                        }
+                        viewModel.createNewTab(context, "about:blank")
+                    },
+                    onOpenHistory = onOpenHistory,
+                    onBurnData = {
+                        coroutineScope.launch {
+                            val runtime = viewModel.getGeckoRuntime(context)
+                            FireButton(runtime, context).burn()
+                            viewModel.burnAllData(context)
+                            Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onOpenDownloads = onOpenDownloads,
+                    onOpenBookmarks = onOpenBookmarks,
+                    onOpenSettings = onOpenSettings,
+                    onShowCustomizationSheet = onShowCustomizationSheet,
+                    onShowExtensions = onShowExtensionsSheet,
+                    onShowPlayerSettings = onShowPlayerSettings,
+                    onShowSiteInfo = onShowSiteInfo,
+                    onFindInPage = { viewModel.openFindInPage() }
+                )
             }
         }
     }
@@ -489,12 +574,12 @@ fun ChromeMenuDropdown(
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
     val isHome = viewModel.currentUrl == "about:blank" || activeTab == null
 
-    val cardBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
+    val cardBg = if (isDark && viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
     val textPrimary = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+    val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73)
     val iconTint = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val dividerColor = if (viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    val iconBg = if (viewModel.isAmoledMode) Color(0xFF1C1C1E) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+    val dividerColor = if (isDark && viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val iconBg = if (isDark && viewModel.isAmoledMode) Color(0xFF1C1C1E) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
     val accentColor = MaterialTheme.colorScheme.primary
     val surfaceVariant = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
 
@@ -511,57 +596,7 @@ fun ChromeMenuDropdown(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            // ── Page Info Header ──────────────────────────────
-            if (!isHome && activeTab != null) {
-                val pageTitle = activeTab.title?.takeIf { it.isNotBlank() } ?: "Webpage"
-                val pageDomain = try {
-                    android.net.Uri.parse(viewModel.currentUrl).host?.removePrefix("www.") ?: viewModel.currentUrl
-                } catch (_: Exception) { viewModel.currentUrl }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(accentColor.copy(alpha = 0.18f), accentColor.copy(alpha = 0.06f))
-                                ),
-                                RoundedCornerShape(10.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Language,
-                            contentDescription = null,
-                            tint = accentColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = pageTitle,
-                            color = textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = pageDomain,
-                            color = textSecondary,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                HorizontalDivider(color = dividerColor)
-            }
+
 
             // ── Quick Action Pills ────────────────────────────
             val canForward = activeTab?.canGoForward == true
@@ -800,36 +835,24 @@ fun ChromeMenuDropdown(
                 }
             )
 
-            HorizontalDivider(color = dividerColor)
-            MenuSectionLabel(text = "App", textColor = textSecondary)
+            if (!isHome) {
+                HorizontalDivider(color = dividerColor)
+                MenuSectionLabel(text = "App", textColor = textSecondary)
 
-            // Settings
-            LuxuryMenuItem(
-                text = "Settings",
-                icon = Icons.Rounded.Settings,
-                iconTint = iconTint,
-                iconBg = iconBg,
-                textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onOpenSettings()
-                }
-            )
-
-            // Customize home screen (only show if on Home screen)
-            if (isHome) {
+                // Settings (only shown when browsing a website)
                 LuxuryMenuItem(
-                    text = "Customize Home",
-                    icon = Icons.Rounded.Edit,
+                    text = "Settings",
+                    icon = Icons.Rounded.Settings,
                     iconTint = iconTint,
                     iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
-                        onShowCustomizationSheet()
+                        onOpenSettings()
                     }
                 )
             }
+
             Spacer(modifier = Modifier.height(4.dp))
         }
     }
@@ -937,8 +960,8 @@ fun FindInPageBar(
     modifier: Modifier = Modifier
 ) {
     val isDark = viewModel.isDarkThemeEnabled
-    val bg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
-    val border = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
+    val bg = if (isDark && viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
+    val border = if (isDark && viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
     val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
     val mutedColor = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
     val accentColor = MaterialTheme.colorScheme.primary
@@ -1133,16 +1156,14 @@ class UrlVisualTransformation(
             return androidx.compose.ui.text.input.TransformedText(text, androidx.compose.ui.text.input.OffsetMapping.Identity)
         }
 
-        val builder = androidx.compose.ui.text.AnnotatedString.Builder()
-        
-        var protocolEnd = 0
+        var protocolLen = 0
         if (rawText.startsWith("https://")) {
-            protocolEnd = 8
+            protocolLen = 8
         } else if (rawText.startsWith("http://")) {
-            protocolEnd = 7
+            protocolLen = 7
         }
 
-        val domainStart = protocolEnd
+        val domainStart = protocolLen
         var domainEnd = rawText.indexOf('/', domainStart)
         if (domainEnd == -1) {
             domainEnd = rawText.indexOf('?', domainStart)
@@ -1154,28 +1175,40 @@ class UrlVisualTransformation(
             domainEnd = rawText.length
         }
 
-        // Protocol
-        if (protocolEnd > 0) {
-            builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = pathColor))
-            builder.append(rawText.substring(0, protocolEnd))
-            builder.pop()
-        }
+        val domainPart = rawText.substring(domainStart, domainEnd)
+        val wwwLen = if (domainPart.startsWith("www.")) 4 else 0
+        val hiddenPrefixLen = protocolLen + wwwLen
 
-        // Domain
+        val builder = androidx.compose.ui.text.AnnotatedString.Builder()
+        
+        // Append domain (excluding www. if present)
+        val transDomain = rawText.substring(hiddenPrefixLen, domainEnd)
         builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = domainColor, fontWeight = FontWeight.Bold))
-        builder.append(rawText.substring(domainStart, domainEnd))
+        builder.append(transDomain)
         builder.pop()
 
-        // Path / params
+        // Append path / params
         if (domainEnd < rawText.length) {
             builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = pathColor))
             builder.append(rawText.substring(domainEnd))
             builder.pop()
         }
 
+        val transformedLength = rawText.length - hiddenPrefixLen
+        val offsetMapping = object : androidx.compose.ui.text.input.OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                if (offset <= hiddenPrefixLen) return 0
+                return (offset - hiddenPrefixLen).coerceIn(0, transformedLength)
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                return (offset + hiddenPrefixLen).coerceIn(0, rawText.length)
+            }
+        }
+
         return androidx.compose.ui.text.input.TransformedText(
             builder.toAnnotatedString(),
-            androidx.compose.ui.text.input.OffsetMapping.Identity
+            offsetMapping
         )
     }
 }

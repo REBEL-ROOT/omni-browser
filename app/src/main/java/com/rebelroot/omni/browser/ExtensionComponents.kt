@@ -420,11 +420,25 @@ fun UserExtensionItemCard(
                     }
                 }
 
-                // Actions: Switch and 3-Dot Dropdown
+                // Actions: Settings, Switch and 3-Dot Dropdown
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    if (onOpenAction != null) {
+                        IconButton(
+                            onClick = { onOpenAction() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = "Open Dashboard / Settings",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
                     Switch(
                         checked = checked,
                         onCheckedChange = onCheckedChange,
