@@ -6,6 +6,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val baseVersionCode = 26
+val baseVersionName = "1.2.6.1"
+
 android {
     namespace = "com.rebelroot.omni"
     compileSdk = 36
@@ -14,8 +17,8 @@ android {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "1.2.6"
+        versionCode = baseVersionCode
+        versionName = baseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -152,6 +155,20 @@ android {
     lint {
         checkReleaseBuilds = false
         abortOnError = false
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val versionOffset = when (variant.flavorName) {
+            "arm" -> 1000000
+            "aarch64" -> 2000000
+            "universal" -> 3000000
+            else -> 0
+        }
+        variant.outputs.forEach { output ->
+            output.versionCode.set(baseVersionCode + versionOffset)
+        }
     }
 }
 

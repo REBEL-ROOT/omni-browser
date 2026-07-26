@@ -1685,7 +1685,14 @@ fun BrowserScreen(
                                                         android.view.MotionEvent.ACTION_MOVE -> {
                                                             val deltaY = ev.y - startY
                                                             if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading) {
-                                                                isPulling = true
+                                                                // Only allow pull-to-refresh if the swipe started near the top edge
+                                                                // of the screen. This prevents accidental refreshes when scrolling up
+                                                                // inside internal scrollable elements on websites like MangaPlus.
+                                                                val density = ctx.resources.displayMetrics.density
+                                                                val edgeThreshold = 120f * density
+                                                                if (startY < edgeThreshold) {
+                                                                    isPulling = true
+                                                                }
                                                             }
                                                             if (isPulling) {
                                                                 val pullDistance = (deltaY - touchSlop).coerceAtLeast(0f)

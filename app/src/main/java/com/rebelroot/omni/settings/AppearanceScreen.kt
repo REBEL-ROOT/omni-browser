@@ -30,6 +30,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -397,10 +398,12 @@ fun AppearanceScreen(
                         .background(cardColor)
                         .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
                 ) {
+                    val isAllInOneEnabled = viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Bottom"
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .alpha(if (isAllInOneEnabled) 1f else 0.5f),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -408,13 +411,14 @@ fun AppearanceScreen(
                             Text("Chrome-style single top bar (hides bottom nav)", color = textSecondaryColor, fontSize = 12.sp)
                         }
                         Switch(
-                            checked = viewModel.chromeNavBarEnabled,
+                            checked = viewModel.chromeNavBarEnabled && isAllInOneEnabled,
                             onCheckedChange = { viewModel.saveChromeNavBarEnabled(context, it) },
+                            enabled = isAllInOneEnabled,
                             colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
                         )
                     }
                     // All-in-One preview strip — shown when the toggle is ON
-                    AnimatedVisibility(visible = viewModel.chromeNavBarEnabled) {
+                    AnimatedVisibility(visible = viewModel.chromeNavBarEnabled && isAllInOneEnabled) {
                         Column {
                             HorizontalDivider(color = dividerColor)
                             Box(
