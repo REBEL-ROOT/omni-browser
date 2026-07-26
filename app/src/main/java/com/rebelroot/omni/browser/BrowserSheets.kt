@@ -18,6 +18,10 @@
 
 package com.rebelroot.omni.browser
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
 import android.app.Activity
 import android.net.Uri
 import android.view.ViewGroup
@@ -33,14 +37,15 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -1785,5 +1790,1619 @@ fun PrivacyReportSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ImageGrabberSheetContent(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isMangaMode by remember { mutableStateOf(false) }
+    var selectedImages by remember { mutableStateOf(setOf<String>()) }
+    val isDark = viewModel.isDarkThemeEnabled
+    val bg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF141416) else Color(0xFFF2F2F7)
+    val cardBg = if (viewModel.isAmoledMode) Color(0xFF111111) else if (isDark) Color(0xFF1C1C1E) else Color.White
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+
+    // Initial load when sheet opens
+    LaunchedEffect(Unit) {
+        viewModel.extractPageImages(context)
+    }
+
+    var localImages by remember(viewModel.extractedImagesList) { mutableStateOf(viewModel.extractedImagesList) }
+    var isFullscreenManga by remember { mutableStateOf(false) }
+    var pendingDownloadType by remember { mutableStateOf<Boolean?>(null) } // null = hide, false = images, true = asPdf
+
+    // Download destination prompt (Download Locally vs Save to Private Vault 🔒)
+    pendingDownloadType?.let { asPdf ->
+        ModalBottomSheet(
+            onDismissRequest = { pendingDownloadType = null },
+            containerColor = cardBg,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (asPdf) Icons.Rounded.PictureAsPdf else Icons.Rounded.Download,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = if (asPdf) "Download Manga PDF" else "Download Manga Images",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = textColor
+                        )
+                        Text(
+                            text = "${localImages.size} pages ready for download",
+                            fontSize = 13.sp,
+                            color = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                Button(
+                    onClick = {
+                        val isPdf = asPdf
+                        pendingDownloadType = null
+                        downloadMangaImagesAndPdf(context, localImages, viewModel.currentUrl, asPdf = isPdf, saveToLocker = false, downloadEngine = viewModel.streamDownloadEngine)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Download Locally", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val isPdf = asPdf
+                        pendingDownloadType = null
+                        downloadMangaImagesAndPdf(context, localImages, viewModel.currentUrl, asPdf = isPdf, saveToLocker = true, downloadEngine = viewModel.streamDownloadEngine)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                ) {
+                    Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Save to Private Vault 🔒", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+
+    if (isFullscreenManga && localImages.isNotEmpty()) {
+        MangaFullscreenViewer(
+            images = localImages,
+            onExitFullscreen = { isFullscreenManga = false }
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = bg,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .fillMaxHeight(0.9f)
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Collections,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column {
+                        Text(
+                            text = if (isMangaMode) "Manga Reader Mode" else "Image Grabber",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "${localImages.size} pages extracted",
+                            fontSize = 12.sp,
+                            color = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isMangaMode && localImages.isNotEmpty()) {
+                        IconButton(onClick = { isFullscreenManga = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Fullscreen,
+                                contentDescription = "Fullscreen",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // Mode Toggle (Manga vs Grid)
+                    FilterChip(
+                        selected = isMangaMode,
+                        onClick = { isMangaMode = !isMangaMode },
+                        label = { Text(if (isMangaMode) "🖼️ Grid View" else "📖 Manga View", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                    )
+
+                    IconButton(onClick = onDismissRequest) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = textColor)
+                    }
+                }
+            }
+
+            HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+            if (viewModel.isExtractingImages) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Extracting full-resolution images...", color = textColor, fontSize = 13.sp)
+                    }
+                }
+            } else if (localImages.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Rounded.ImageNotSupported, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("No images available", color = textColor, fontSize = 14.sp)
+                    }
+                }
+            } else if (isMangaMode) {
+                // ── Manga / Webtoon Vertical Continuous View Mode ──
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(0.dp) // Zero gap for seamless manga reading!
+                    ) {
+                        items(localImages.size) { index ->
+                            val imgUrl = localImages[index]
+                            val request = remember(imgUrl, viewModel.currentUrl) {
+                                val referer = try {
+                                    val uri = android.net.Uri.parse(viewModel.currentUrl)
+                                    "${uri.scheme}://${uri.host}/"
+                                } catch (_: Exception) {
+                                    viewModel.currentUrl
+                                }
+                                coil.request.ImageRequest.Builder(context)
+                                    .data(imgUrl)
+                                    .addHeader("Referer", referer)
+                                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                                    .crossfade(true)
+                                    .build()
+                            }
+                            coil.compose.AsyncImage(
+                                model = request,
+                                contentDescription = "Manga Page ${index + 1}",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
+                            )
+                        }
+                    }
+
+                    // Floating Page Indicator Badge
+                    val firstVisible = remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.85f)
+                    ) {
+                        Text(
+                            text = "Page ${firstVisible.value} / ${localImages.size}",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            } else {
+                // ── Grid Gallery Mode (with Top-Right X Delete Badge) ──
+                Column(modifier = Modifier.fillMaxSize()) {
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(localImages.size) { index ->
+                            val imgUrl = localImages[index]
+                            val request = remember(imgUrl, viewModel.currentUrl) {
+                                val referer = try {
+                                    val uri = android.net.Uri.parse(viewModel.currentUrl)
+                                    "${uri.scheme}://${uri.host}/"
+                                } catch (_: Exception) {
+                                    viewModel.currentUrl
+                                }
+                                coil.request.ImageRequest.Builder(context)
+                                    .data(imgUrl)
+                                    .addHeader("Referer", referer)
+                                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                                    .crossfade(true)
+                                    .build()
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(cardBg)
+                            ) {
+                                coil.compose.AsyncImage(
+                                    model = request,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+
+                                // Top-Right (X) Remove Badge Button
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Red.copy(alpha = 0.85f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp)
+                                        .size(24.dp)
+                                        .clickable {
+                                            localImages = localImages - imgUrl
+                                            viewModel.extractedImagesList = localImages
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Remove Image",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Bottom Action Bar for Downloads & Manga View Switch
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = cardBg,
+                        shadowElevation = 8.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${localImages.size} pages remaining",
+                                color = textColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        pendingDownloadType = false
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Images (${localImages.size})", fontSize = 12.sp)
+                                }
+                                Button(
+                                    onClick = {
+                                        pendingDownloadType = true
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(Icons.Rounded.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("As PDF", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PageInspectorSheetContent(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isDark = viewModel.isDarkThemeEnabled
+    val bg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF141416) else Color(0xFFF2F2F7)
+    val cardBg = if (viewModel.isAmoledMode) Color(0xFF111111) else if (isDark) Color(0xFF1C1C1E) else Color.White
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+
+    var selectedTab by remember { mutableStateOf(0) }
+    var jsInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.inspectCurrentPage(context)
+    }
+
+    val stats = viewModel.pageInspectorStats
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = bg,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .fillMaxHeight(0.85f)
+        ) {
+            // Header Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Code,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "DevTools Inspector",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                }
+
+                IconButton(onClick = onDismissRequest) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = textColor)
+                }
+            }
+
+            // Navigation Tabs
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                edgePadding = 12.dp,
+                containerColor = Color.Transparent,
+                divider = { HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)) }
+            ) {
+                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
+                    Text("📊 Overview", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                }
+                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
+                    Text("🌐 Elements", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 1) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                }
+                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
+                    Text("⚡ Network (${stats?.resources?.size ?: 0})", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 2) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                }
+                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
+                    Text("💻 Console", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 3) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                }
+                Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }) {
+                    Text("🔒 Storage", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 4) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                }
+            }
+
+            if (stats == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                when (selectedTab) {
+                    0 -> DevToolsOverviewTab(stats, viewModel.currentUrl, isDark, cardBg, textColor)
+                    1 -> DevToolsElementsTab(stats, viewModel, isDark, cardBg, textColor)
+                    2 -> DevToolsNetworkTab(stats, isDark, cardBg, textColor)
+                    3 -> DevToolsConsoleTab(viewModel, jsInput, onJsChange = { jsInput = it }, isDark, cardBg, textColor)
+                    4 -> DevToolsStorageTab(stats, isDark, cardBg, textColor)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevToolsOverviewTab(
+    stats: BrowserViewModel.PageStats,
+    currentUrl: String,
+    isDark: Boolean,
+    cardBg: Color,
+    textColor: Color
+) {
+    val isHttps = currentUrl.startsWith("https://")
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            // URL & Security Card
+            Surface(shape = RoundedCornerShape(12.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(if (isHttps) Icons.Rounded.CheckCircle else Icons.Rounded.Warning, contentDescription = null, tint = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500), modifier = Modifier.size(16.dp))
+                        Text(if (isHttps) "HTTPS Secure Connection" else "HTTP Unsecured Connection", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500))
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(stats.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(currentUrl, fontSize = 11.sp, color = textColor.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+
+        item {
+            // Stat Cards Grid
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = cardBg) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Reading", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text("${stats.readTimeMinutes} min", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                        Text("${stats.wordCount} words", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                    }
+                }
+                Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = cardBg) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Elements", fontSize = 10.sp, color = Color(0xFF34C759), fontWeight = FontWeight.Bold)
+                        Text("${stats.imageCount} imgs", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                        Text("${stats.linkCount} links", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                    }
+                }
+                Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = cardBg) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Assets", fontSize = 10.sp, color = Color(0xFFAF52DE), fontWeight = FontWeight.Bold)
+                        Text("${stats.scriptCount} scripts", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                        Text("${stats.cssCount} styles", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                    }
+                }
+            }
+        }
+
+        if (stats.metaTags.isNotEmpty()) {
+            item {
+                Text("SEO & Meta Tags (${stats.metaTags.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+            }
+            items(stats.metaTags.size) { idx ->
+                val meta = stats.metaTags[idx]
+                Surface(shape = RoundedCornerShape(8.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(meta.name, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(meta.content, fontSize = 12.sp, color = textColor, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevToolsElementsTab(
+    stats: BrowserViewModel.PageStats,
+    viewModel: BrowserViewModel,
+    isDark: Boolean,
+    cardBg: Color,
+    textColor: Color
+) {
+    if (stats.domNodes.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No DOM nodes extracted", color = textColor.copy(alpha = 0.6f), fontSize = 13.sp)
+        }
+    } else {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                Text("Page DOM Structure Inspector (${stats.domNodes.size} key elements)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor.copy(alpha = 0.7f))
+            }
+            items(stats.domNodes.size) { idx ->
+                val node = stats.domNodes[idx]
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = cardBg,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
+                                Text("<${node.tag}>", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
+                            if (node.id.isNotEmpty()) {
+                                Text("#${node.id}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF34C759))
+                            }
+                            if (node.className.isNotEmpty()) {
+                                Text(".${node.className.take(25)}", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        if (node.snippet.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("\"${node.snippet}\"", fontSize = 11.sp, color = textColor.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevToolsNetworkTab(
+    stats: BrowserViewModel.PageStats,
+    isDark: Boolean,
+    cardBg: Color,
+    textColor: Color
+) {
+    val totalBytes = stats.resources.sumOf { it.sizeBytes }
+    if (stats.resources.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No network activity captured yet", color = textColor.copy(alpha = 0.6f), fontSize = 13.sp)
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("${stats.resources.size} Network Requests", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
+                    Text("${totalBytes / 1024} KB transferred", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(stats.resources.size) { idx ->
+                    val res = stats.resources[idx]
+                    val fileName = try { android.net.Uri.parse(res.url).lastPathSegment ?: res.url } catch(_: Exception) { res.url }
+                    val badgeColor = when(res.type.lowercase()) {
+                        "script" -> Color(0xFFAF52DE)
+                        "img", "image" -> Color(0xFF007AFF)
+                        "fetch", "xmlhttprequest" -> Color(0xFF34C759)
+                        "css" -> Color(0xFFFF9500)
+                        else -> Color.Gray
+                    }
+
+                    Surface(shape = RoundedCornerShape(8.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(shape = RoundedCornerShape(4.dp), color = badgeColor.copy(alpha = 0.15f)) {
+                                    Text(res.type.take(6), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = badgeColor, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                                }
+                                Text(fileName, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text("${res.durationMs}ms", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevToolsConsoleTab(
+    viewModel: BrowserViewModel,
+    jsInput: String,
+    onJsChange: (String) -> Unit,
+    isDark: Boolean,
+    cardBg: Color,
+    textColor: Color
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Quick DevTools Commands", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor.copy(alpha = 0.7f))
+        
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { viewModel.executeConsoleJs("document.querySelectorAll('a').forEach(a => a.style.outline = '2px solid gold')") },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("🔗 Highlight Links", fontSize = 11.sp)
+            }
+            OutlinedButton(
+                onClick = { viewModel.executeConsoleJs("document.querySelectorAll('*').forEach(e => e.style.outline = '1px solid red')") },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("🔳 Outline Layout", fontSize = 11.sp)
+            }
+            OutlinedButton(
+                onClick = { viewModel.executeConsoleJs("document.querySelectorAll('input[type=\"hidden\"]').forEach(i => i.type = 'text')") },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("👁️ Show Hidden Inputs", fontSize = 11.sp)
+            }
+            OutlinedButton(
+                onClick = { viewModel.executeConsoleJs("document.body.contentEditable = (document.body.contentEditable !== 'true')") },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("✏️ Toggle Edit Page", fontSize = 11.sp)
+            }
+        }
+
+        HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = jsInput,
+                onValueChange = onJsChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("eval('document.title')", fontSize = 12.sp) },
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            )
+            Button(
+                onClick = {
+                    if (jsInput.isNotBlank()) {
+                        viewModel.executeConsoleJs(jsInput)
+                    }
+                }
+            ) {
+                Text("Run")
+            }
+        }
+
+        val result = viewModel.consoleEvalResult
+        val isError = viewModel.consoleEvalError
+        if (result != null) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                color = if (isError) Color(0xFF3C1414) else if (isDark) Color(0xFF0F1B12) else Color(0xFFE8F5E9)
+            ) {
+                Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
+                    Text(if (isError) "Console Error" else "Console Output", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isError) Color(0xFFFF453A) else Color(0xFF34C759))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(result, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = if (isError) Color(0xFFFF453A) else if (isDark) Color(0xFF34C759) else Color(0xFF1B5E20))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DevToolsStorageTab(
+    stats: BrowserViewModel.PageStats,
+    isDark: Boolean,
+    cardBg: Color,
+    textColor: Color
+) {
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Cookies (${stats.cookies.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+        }
+        if (stats.cookies.isEmpty()) {
+            item {
+                Text("No cookies set for this domain", fontSize = 12.sp, color = textColor.copy(alpha = 0.6f))
+            }
+        } else {
+            items(stats.cookies.size) { idx ->
+                val item = stats.cookies[idx]
+                Surface(shape = RoundedCornerShape(8.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(item.key, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(item.value, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = textColor.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("LocalStorage (${stats.localStorageItems.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+        }
+        if (stats.localStorageItems.isEmpty()) {
+            item {
+                Text("No LocalStorage items found", fontSize = 12.sp, color = textColor.copy(alpha = 0.6f))
+            }
+        } else {
+            items(stats.localStorageItems.size) { idx ->
+                val item = stats.localStorageItems[idx]
+                Surface(shape = RoundedCornerShape(8.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(item.key, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFAF52DE))
+                        Text(item.value, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = textColor.copy(alpha = 0.8f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MangaFullscreenViewer(
+    images: List<String>,
+    onExitFullscreen: () -> Unit
+) {
+    var showControls by remember { mutableStateOf(true) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val firstVisible = remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onExitFullscreen,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) {
+                    showControls = !showControls
+                }
+        ) {
+            // Continuous Vertical Manga Scroll
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                items(images.size) { index ->
+                    val imgUrl = images[index]
+                    val request = remember(imgUrl) {
+                        val referer = try {
+                            val uri = android.net.Uri.parse(images.firstOrNull() ?: "")
+                            "${uri.scheme}://${uri.host}/"
+                        } catch (_: Exception) {
+                            ""
+                        }
+                        coil.request.ImageRequest.Builder(context)
+                            .data(imgUrl)
+                            .addHeader("Referer", referer)
+                            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                            .crossfade(true)
+                            .build()
+                    }
+                    coil.compose.AsyncImage(
+                        model = request,
+                        contentDescription = "Manga Page ${index + 1}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
+                    )
+                }
+            }
+
+            // Top Control Bar Overlay
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + slideInVertically { -it },
+                exit = fadeOut() + slideOutVertically { -it },
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.Black.copy(alpha = 0.85f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Fullscreen Manga Reader",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        IconButton(onClick = onExitFullscreen) {
+                            Icon(
+                                imageVector = Icons.Rounded.FullscreenExit,
+                                contentDescription = "Exit Fullscreen",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Bottom Floating HUD (Page X of Y)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 20.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.85f),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Page ${firstVisible.value} of ${images.size}",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = {
+                                downloadMangaImagesAndPdf(context, images, asPdf = false)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Download,
+                                contentDescription = "Download Images",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                downloadMangaImagesAndPdf(context, images, asPdf = true)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PictureAsPdf,
+                                contentDescription = "Download PDF",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun downloadMangaImagesAndPdf(
+    context: android.content.Context,
+    urls: List<String>,
+    pageUrl: String = "",
+    asPdf: Boolean = false,
+    saveToLocker: Boolean = false,
+    downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null
+) {
+    if (urls.isEmpty()) return
+    val appCtx = context.applicationContext
+    val targetCount = urls.size
+    val destText = if (saveToLocker) "Private Vault 🔒" else "Downloads"
+    val modeText = if (asPdf) "PDF document" else "$targetCount images"
+    Toast.makeText(appCtx, "⏳ Starting download ($modeText to $destText)...", Toast.LENGTH_SHORT).show()
+
+    val timeStamp = System.currentTimeMillis() / 1000
+    val filename = if (asPdf) "Manga_$timeStamp.pdf" else "Manga_$timeStamp ($targetCount images)"
+
+    val registered = downloadEngine?.registerExternalJob(
+        filename = filename,
+        url = pageUrl,
+        saveToLocker = saveToLocker,
+        isGeneric = true
+    )
+    val jobId = registered?.first
+
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        val referer = try {
+            if (pageUrl.isNotEmpty()) {
+                val uri = android.net.Uri.parse(pageUrl)
+                "${uri.scheme}://${uri.host}/"
+            } else ""
+        } catch (_: Exception) { "" }
+
+        val folderName = "Manga_$timeStamp"
+        val resolver = appCtx.contentResolver
+        val loader = coil.ImageLoader(appCtx)
+        val lockerManager = if (saveToLocker) com.rebelroot.omni.tools.locker.PrivateLockerManager(appCtx) else null
+
+        val pdfDocument = if (asPdf) android.graphics.pdf.PdfDocument() else null
+        var successCount = 0
+        var totalBytesDownloaded = 0L
+        var firstSavedUri: android.net.Uri? = null
+        var firstSavedFile: java.io.File? = null
+        val downloadedCount = java.util.concurrent.atomic.AtomicInteger(0)
+
+        // Download images in parallel (4 at a time) for maximum speed
+        val semaphore = Semaphore(4)
+        coroutineScope {
+            val deferreds = urls.mapIndexed { index, url ->
+                async(kotlinx.coroutines.Dispatchers.IO) {
+                    semaphore.acquire()
+                    try {
+                        val request = coil.request.ImageRequest.Builder(appCtx)
+                            .data(url)
+                            .apply {
+                                if (referer.isNotEmpty()) addHeader("Referer", referer)
+                                addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                            }
+                            .allowHardware(false)
+                            .size(coil.size.Size.ORIGINAL) // Full original resolution — no downsampling
+                            .build()
+
+                        val result = loader.execute(request)
+                        val drawable = result.drawable
+                        if (drawable is android.graphics.drawable.BitmapDrawable) {
+                            val bitmap = drawable.bitmap
+
+                            if (asPdf && pdfDocument != null) {
+                                synchronized(pdfDocument) {
+                                    val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1).create()
+                                    val page = pdfDocument.startPage(pageInfo)
+                                    page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                                    pdfDocument.finishPage(page)
+                                }
+                                successCount++
+                            } else {
+                                val isPng = url.contains(".png", true)
+                                val ext = if (isPng) ".png" else ".jpg"
+                                val mimeType = if (isPng) "image/png" else "image/jpeg"
+                                val fileName = "${folderName}_page_${index + 1}$ext"
+
+                                if (saveToLocker && lockerManager != null) {
+                                    val tempFile = java.io.File(appCtx.cacheDir, fileName)
+                                    java.io.FileOutputStream(tempFile).use { out ->
+                                        if (isPng) {
+                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                                        } else {
+                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, out)
+                                        }
+                                    }
+                                    totalBytesDownloaded += tempFile.length()
+                                    if (firstSavedFile == null) firstSavedFile = tempFile
+                                    lockerManager.saveFileToLocker(tempFile, fileName, mimeType)
+                                    if (tempFile.exists()) tempFile.delete()
+                                    successCount++
+                                } else {
+                                    val contentValues = android.content.ContentValues().apply {
+                                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "page_${index + 1}$ext")
+                                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/OmniBrowser/$folderName")
+                                    }
+                                    val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                                    if (uri != null) {
+                                        if (firstSavedUri == null) firstSavedUri = uri
+                                        resolver.openOutputStream(uri)?.use { out ->
+                                            if (isPng) {
+                                                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                                            } else {
+                                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, out)
+                                            }
+                                        }
+                                        successCount++
+                                    }
+                                }
+                            }
+                        }
+
+                        val done = downloadedCount.incrementAndGet()
+                        val percent = (done * 100) / targetCount
+                        if (jobId != null) {
+                            downloadEngine?.updateExternalJobProgress(
+                                jobId = jobId,
+                                filename = filename,
+                                progress = percent,
+                                statusText = "$done of $targetCount pages downloaded",
+                                bytesDownloaded = totalBytesDownloaded
+                            )
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MangaDownload", "Error fetching page ${index + 1}: $url", e)
+                        downloadedCount.incrementAndGet()
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+            deferreds.awaitAll()
+        }
+
+        if (asPdf && pdfDocument != null) {
+            try {
+                val pdfFileName = "Manga_$timeStamp.pdf"
+                if (saveToLocker && lockerManager != null) {
+                    val tempPdfFile = java.io.File(appCtx.cacheDir, pdfFileName)
+                    java.io.FileOutputStream(tempPdfFile).use { out ->
+                        pdfDocument.writeTo(out)
+                    }
+                    pdfDocument.close()
+                    val pdfBytes = tempPdfFile.length()
+                    lockerManager.saveFileToLocker(tempPdfFile, pdfFileName, "application/pdf")
+                    if (jobId != null) {
+                        downloadEngine?.completeExternalJob(jobId, filename, tempPdfFile, pdfBytes, null)
+                    }
+                    if (tempPdfFile.exists()) tempPdfFile.delete()
+
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        Toast.makeText(appCtx, "🔒 Saved Manga PDF ($successCount pages) to Private Vault", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    val targetPdfFile = java.io.File(downloadsDir, "OmniBrowser/$pdfFileName")
+                    val contentValues = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, pdfFileName)
+                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/OmniBrowser")
+                    }
+                    val pdfUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    if (pdfUri != null) {
+                        resolver.openOutputStream(pdfUri)?.use { out ->
+                            pdfDocument.writeTo(out)
+                        }
+                    }
+                    pdfDocument.close()
+                    if (jobId != null) {
+                        downloadEngine?.completeExternalJob(jobId, filename, targetPdfFile, targetPdfFile.length(), pdfUri)
+                    }
+
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        Toast.makeText(appCtx, "📄 Saved Manga PDF ($successCount pages) to Downloads/OmniBrowser/$pdfFileName", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MangaDownload", "Error writing PDF", e)
+                if (jobId != null) {
+                    downloadEngine?.failExternalJob(jobId, filename, e.localizedMessage ?: "PDF Error")
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(appCtx, "Failed to compile PDF: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            val folderFile = java.io.File(downloadsDir, "OmniBrowser/$folderName")
+            if (jobId != null) {
+                downloadEngine?.completeExternalJob(jobId, filename, folderFile, totalBytesDownloaded, firstSavedUri)
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                val msg = if (saveToLocker) "🔒 Saved $successCount images to Private Vault" else "✅ Downloaded $successCount images to Downloads/OmniBrowser/$folderName"
+                Toast.makeText(appCtx, msg, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AllInOneMenuSheet(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit,
+    onNewTab: () -> Unit,
+    onNewIncognitoTab: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onBurnData: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onShowCustomizationSheet: () -> Unit,
+    onShowExtensions: () -> Unit,
+    onShowPlayerSettings: () -> Unit,
+    onShowSiteInfo: () -> Unit,
+    onFindInPage: () -> Unit,
+    onAddTabToNewGroup: () -> Unit,
+    hasActiveUserExtensions: Boolean
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isDark = viewModel.isDarkThemeEnabled
+    val isAmoled = viewModel.isAmoledMode
+    val showHomeScreen = viewModel.currentUrl.isEmpty() || viewModel.currentUrl.startsWith("file:///android_asset/home")
+    
+    // Firefox inspired but better!
+    val sheetBg = if (isAmoled) Color(0xFF000000) else if (isDark) Color(0xFF141416) else Color(0xFFF9F9FB)
+    val cardBg = if (isAmoled) Color(0xFF0C0C0E) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val secondaryText = if (isDark) Color(0xFFA0A0A5) else Color(0xFF8E8E93)
+    val dividerColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+
+    val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+    val isBookmarked = viewModel.isBookmarked(viewModel.currentUrl)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = sheetBg,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDark) Color(0xFF48484A) else Color(0xFFC7C7CC),
+                width = 36.dp,
+                height = 4.dp
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            
+            // --- Card 0: Tab Actions ---
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Add,
+                        label = "New Tab",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onNewTab() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.VisibilityOff,
+                        label = "Incognito",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onNewIncognitoTab() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.GridView,
+                        label = "Group",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onAddTabToNewGroup() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Devices,
+                        label = "Recent",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onOpenHistory() }
+                    )
+                }
+            }
+
+            // --- Card 1: Page Actions ---
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column {
+                    // Bookmark Page
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onDismissRequest()
+                                if (activeTab != null && !showHomeScreen) {
+                                    if (isBookmarked) {
+                                        viewModel.removeBookmark(viewModel.currentUrl)
+                                    } else {
+                                        viewModel.addToBookmarks(activeTab.title ?: "Page", viewModel.currentUrl)
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarOutline,
+                            contentDescription = "Bookmark",
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else textColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Bookmark page", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+
+                    // Add to Shortcuts
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onDismissRequest()
+                                if (activeTab != null && !showHomeScreen) {
+                                    viewModel.addShortcut(activeTab.title ?: "Page", viewModel.currentUrl)
+                                    Toast.makeText(context, "Added to shortcuts", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Add to Shortcuts",
+                            tint = textColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Add to shortcuts", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+
+                    // Find in Page
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onDismissRequest()
+                                if (activeTab != null && !showHomeScreen) {
+                                    onFindInPage()
+                                } else {
+                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = "Find",
+                            tint = textColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Find in page", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+
+                    // Desktop Site
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onDismissRequest()
+                                if (activeTab != null && !showHomeScreen) {
+                                    viewModel.toggleDesktopMode(context)
+                                } else {
+                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.DesktopWindows,
+                            contentDescription = "Desktop Site",
+                            tint = textColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Desktop site", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        
+                        // Badge for On/Off
+                        Box(
+                            modifier = Modifier
+                                .background(if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else dividerColor, RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (viewModel.isDesktopMode) "On" else "Off",
+                                fontSize = 13.sp,
+                                color = if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary else textColor,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+
+                    // Extensions
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onDismissRequest()
+                                onShowExtensions()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Extension,
+                            contentDescription = "Extensions",
+                            tint = textColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Extensions", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                            Text("Adblock, scripts & more", fontSize = 12.sp, color = secondaryText)
+                        }
+                        
+                        // Badge for Extensions Count
+                        if (hasActiveUserExtensions) {
+                            Box(
+                                modifier = Modifier
+                                    .background(dividerColor, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                            ) {
+                                Box(modifier = Modifier.size(8.dp).background(Color(0xFF8B5CF6), androidx.compose.foundation.shape.CircleShape))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null, tint = secondaryText, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+
+            // --- Card 2: Grid Menu (History, Bookmarks, Downloads, Burn Data) ---
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.History,
+                        label = "History",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onOpenHistory() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Bookmark,
+                        label = "Bookmarks",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onOpenBookmarks() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Download,
+                        label = "Downloads",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onOpenDownloads() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Whatshot,
+                        label = "Burn Data",
+                        tint = Color(0xFFFF4444),
+                        onClick = { onDismissRequest(); onBurnData() }
+                    )
+                }
+            }
+
+            // --- Card 3: Theme & Settings ---
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.PlayCircle,
+                        label = "Player",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onShowPlayerSettings() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Edit,
+                        label = "Theme",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onShowCustomizationSheet() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.Rounded.Settings,
+                        label = "Settings",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onOpenSettings() }
+                    )
+                    AllInOneGridItem(
+                        icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                        label = "Help",
+                        tint = textColor,
+                        onClick = { onDismissRequest(); Toast.makeText(context, "Omni Browser v1.0.9", Toast.LENGTH_SHORT).show() }
+                    )
+                }
+            }
+
+            // --- Bottom Navigation Row (Back, Forward, Share, Refresh) ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                val canGoBack = activeTab?.canGoBack == true
+                val canGoForward = activeTab?.canGoForward == true
+
+                AllInOneBottomAction(
+                    icon = Icons.Rounded.ArrowBack,
+                    label = "Back",
+                    enabled = canGoBack,
+                    onClick = { viewModel.goBack() }
+                )
+                AllInOneBottomAction(
+                    icon = Icons.Rounded.ArrowForward,
+                    label = "Forward",
+                    enabled = canGoForward,
+                    onClick = { viewModel.goForward() }
+                )
+                AllInOneBottomAction(
+                    icon = Icons.Rounded.Share,
+                    label = "Share",
+                    enabled = activeTab != null && !showHomeScreen,
+                    onClick = {
+                        onDismissRequest()
+                        val sendIntent: android.content.Intent = android.content.Intent().apply {
+                            action = android.content.Intent.ACTION_SEND
+                            putExtra(android.content.Intent.EXTRA_TEXT, viewModel.currentUrl)
+                            type = "text/plain"
+                        }
+                        val shareIntent = android.content.Intent.createChooser(sendIntent, "Share").apply {
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(shareIntent)
+                    }
+                )
+                AllInOneBottomAction(
+                    icon = Icons.Rounded.Refresh,
+                    label = "Refresh",
+                    enabled = activeTab != null && !showHomeScreen,
+                    onClick = { viewModel.reload(); onDismissRequest() }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AllInOneGridItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(26.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = tint,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun AllInOneBottomAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val alpha = if (enabled) 1f else 0.3f
+    val color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+    
+    Column(
+        modifier = Modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = color,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = color,
+            fontWeight = FontWeight.Medium
+        )
     }
 }

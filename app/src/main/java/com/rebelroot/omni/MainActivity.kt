@@ -460,6 +460,15 @@ class MainActivity : FragmentActivity() {
                         composable("privacy_security") {
                             com.rebelroot.omni.settings.PrivacySecurityScreen(
                                 viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onOpenAdBlockConfig = { navController.navigate("adblock_settings") }
+                            )
+                        }
+
+                        // AdBlock & Filter Providers Screen
+                        composable("adblock_settings") {
+                            com.rebelroot.omni.settings.AdBlockSettingsScreen(
+                                viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }

@@ -194,6 +194,70 @@ class StreamDownloadEngine(
         }
     }
 
+    fun registerExternalJob(
+        filename: String,
+        url: String,
+        saveToLocker: Boolean,
+        isGeneric: Boolean = true
+    ): Pair<String, MutableStateFlow<DownloadProgress>> {
+        val jobId = UUID.randomUUID().toString()
+        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
+        val job = DownloadJob(
+            id = jobId,
+            filename = filename,
+            url = url,
+            saveToLocker = saveToLocker,
+            progress = progressFlow,
+            isGeneric = isGeneric
+        )
+        _jobs.update { list -> list + job }
+        saveDownloadHistory()
+        updateNotification(jobId, filename, "Starting download...", 0)
+        return Pair(jobId, progressFlow)
+    }
+
+    fun updateExternalJobProgress(
+        jobId: String,
+        filename: String,
+        progress: Int,
+        statusText: String,
+        bytesDownloaded: Long = 0L
+    ) {
+        val job = _jobs.value.find { it.id == jobId }
+        if (job != null) {
+            (job.progress as? MutableStateFlow)?.value = DownloadProgress.Downloading(progress, bytesDownloaded)
+            updateNotification(jobId, filename, statusText, progress)
+        }
+    }
+
+    fun completeExternalJob(
+        jobId: String,
+        filename: String,
+        file: File,
+        sizeBytes: Long,
+        openUri: Uri? = null
+    ) {
+        val job = _jobs.value.find { it.id == jobId }
+        if (job != null) {
+            (job.progress as? MutableStateFlow)?.value = DownloadProgress.Complete(file, sizeBytes, openUri)
+            showCompleteNotification(jobId, filename, filename)
+            saveDownloadHistory()
+        }
+    }
+
+    fun failExternalJob(
+        jobId: String,
+        filename: String,
+        errorMsg: String
+    ) {
+        val job = _jobs.value.find { it.id == jobId }
+        if (job != null) {
+            (job.progress as? MutableStateFlow)?.value = DownloadProgress.Error(errorMsg)
+            showErrorNotification(jobId, filename, errorMsg)
+            saveDownloadHistory()
+        }
+    }
+
     fun cancelDownload(jobId: String) {
         runningJobs[jobId]?.cancel()
         runningJobs.remove(jobId)

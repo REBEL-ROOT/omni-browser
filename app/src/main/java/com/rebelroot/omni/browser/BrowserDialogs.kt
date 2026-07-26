@@ -674,43 +674,62 @@ fun PlayerSettingsDialog(
 
 val BlackholeIcon: ImageVector by lazy {
     ImageVector.Builder(
-        name = "Blackhole",
+        name = "FourBoxGrid",
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f
     ).apply {
-        // Outer swirl 1
-        path(
-            stroke = SolidColor(Color.White),
-            strokeLineWidth = 2f,
-            strokeLineCap = StrokeCap.Round
-        ) {
-            moveTo(12f, 1.2f)
-            curveTo(18f, 1.2f, 22.8f, 6f, 22.8f, 12f)
-            curveTo(22.8f, 15.6f, 20.4f, 19.2f, 16.8f, 19.2f)
-            curveTo(13.2f, 21.6f, 8.4f, 18f, 8.4f, 14.4f)
+        // Top-Left Box
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6.5f, 4f)
+            lineTo(8.5f, 4f)
+            quadTo(11f, 4f, 11f, 6.5f)
+            lineTo(11f, 8.5f)
+            quadTo(11f, 11f, 8.5f, 11f)
+            lineTo(6.5f, 11f)
+            quadTo(4f, 11f, 4f, 8.5f)
+            lineTo(4f, 6.5f)
+            quadTo(4f, 4f, 6.5f, 4f)
+            close()
         }
-        // Outer swirl 2
-        path(
-            stroke = SolidColor(Color.White),
-            strokeLineWidth = 2f,
-            strokeLineCap = StrokeCap.Round
-        ) {
-            moveTo(12f, 22.8f)
-            curveTo(6f, 22.8f, 1.2f, 18f, 1.2f, 12f)
-            curveTo(1.2f, 8.4f, 3.6f, 4.8f, 7.2f, 4.8f)
-            curveTo(10.8f, 2.4f, 15.6f, 6f, 15.6f, 9.6f)
+        // Top-Right Box
+        path(fill = SolidColor(Color.White)) {
+            moveTo(15.5f, 4f)
+            lineTo(17.5f, 4f)
+            quadTo(20f, 4f, 20f, 6.5f)
+            lineTo(20f, 8.5f)
+            quadTo(20f, 11f, 17.5f, 11f)
+            lineTo(15.5f, 11f)
+            quadTo(13f, 11f, 13f, 8.5f)
+            lineTo(13f, 6.5f)
+            quadTo(13f, 4f, 15.5f, 4f)
+            close()
         }
-        // Singularity center
-        path(
-            fill = SolidColor(Color.White)
-        ) {
-            moveTo(12f, 9f)
-            curveTo(13.66f, 9f, 15f, 10.34f, 15f, 12f)
-            curveTo(15f, 13.66f, 13.66f, 15f, 12f, 15f)
-            curveTo(10.34f, 15f, 9f, 13.66f, 9f, 12f)
-            curveTo(9f, 10.34f, 10.34f, 9f, 12f, 9f)
+        // Bottom-Left Box
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6.5f, 13f)
+            lineTo(8.5f, 13f)
+            quadTo(11f, 13f, 11f, 15.5f)
+            lineTo(11f, 17.5f)
+            quadTo(11f, 20f, 8.5f, 20f)
+            lineTo(6.5f, 20f)
+            quadTo(4f, 20f, 4f, 17.5f)
+            lineTo(4f, 15.5f)
+            quadTo(4f, 13f, 6.5f, 13f)
+            close()
+        }
+        // Bottom-Right Box
+        path(fill = SolidColor(Color.White)) {
+            moveTo(15.5f, 13f)
+            lineTo(17.5f, 13f)
+            quadTo(20f, 13f, 20f, 15.5f)
+            lineTo(20f, 17.5f)
+            quadTo(20f, 20f, 17.5f, 20f)
+            lineTo(15.5f, 20f)
+            quadTo(13f, 20f, 13f, 17.5f)
+            lineTo(13f, 15.5f)
+            quadTo(13f, 13f, 15.5f, 13f)
             close()
         }
     }.build()
@@ -1349,4 +1368,218 @@ fun FeatureOverviewDialog(
             }
         }
     }
+}
+
+@Composable
+fun TabGroupDialog(
+    viewModel: BrowserViewModel,
+    targetTabId: String,
+    currentGroup: TabGroup?,
+    newGroupTitle: String,
+    onNewGroupTitleChange: (String) -> Unit,
+    newGroupColorIndex: Int,
+    onNewGroupColorIndexChange: (Int) -> Unit,
+    groupColors: List<Long>,
+    onDismissRequest: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                "Tab Groups",
+                color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Remove from group option
+                if (currentGroup != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFFF3B5C).copy(alpha = 0.12f))
+                            .clickable {
+                                viewModel.removeTabFromGroup(targetTabId, currentGroup.id)
+                                onDismissRequest()
+                            }
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Close, null, tint = Color(0xFFFF3B5C), modifier = Modifier.size(16.dp))
+                        Text("Remove from \"${currentGroup.title}\"", color = Color(0xFFFF3B5C), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // Existing groups
+                val existingGroups = viewModel.tabGroups.filter { it.id != currentGroup?.id }
+                if (existingGroups.isNotEmpty()) {
+                    Text(
+                        "Add to existing group:",
+                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    existingGroups.forEach { group ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(group.color).copy(alpha = 0.12f))
+                                .clickable {
+                                    viewModel.addTabToGroup(targetTabId, group.id)
+                                    onDismissRequest()
+                                }
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(group.color)))
+                            Text(group.title, color = Color(group.color), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.weight(1f))
+                            Text("${group.tabIds.size} tab${if (group.tabIds.size != 1) "s" else ""}",
+                                color = Color(group.color).copy(alpha = 0.6f), fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+
+                // Create new group
+                Text(
+                    "Create new group:",
+                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = newGroupTitle,
+                    onValueChange = onNewGroupTitleChange,
+                    placeholder = { Text("Group name (e.g. Work, Social)", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(groupColors[newGroupColorIndex]),
+                        unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                    )
+                )
+                // Color picker row
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    groupColors.forEachIndexed { i, colorLong ->
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(colorLong))
+                                .border(
+                                    if (i == newGroupColorIndex) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
+                                    CircleShape
+                                )
+                                .clickable { onNewGroupColorIndexChange(i) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (newGroupTitle.isNotBlank()) {
+                        viewModel.createTabGroup(
+                            title = newGroupTitle.trim(),
+                            color = groupColors[newGroupColorIndex],
+                            initialTabId = targetTabId
+                        )
+                    }
+                    onDismissRequest()
+                }
+            ) {
+                Text(if (newGroupTitle.isNotBlank()) "Create & Add" else "Close",
+                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    )
+}
+
+@Composable
+fun RenameTabGroupDialog(
+    viewModel: BrowserViewModel,
+    renameGroupTarget: TabGroup,
+    renameGroupText: String,
+    onRenameGroupTextChange: (String) -> Unit,
+    groupColors: List<Long>,
+    onDismissRequest: () -> Unit,
+    onRenameGroupTargetChange: (TabGroup) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
+        title = {
+            Text("Rename Group",
+                color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = renameGroupText,
+                    onValueChange = onRenameGroupTextChange,
+                    placeholder = { Text("Group name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                    )
+                )
+                // Color change row
+                Text("Change color:", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    groupColors.forEach { colorLong ->
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(colorLong))
+                                .border(
+                                    if (colorLong == renameGroupTarget.color) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
+                                    CircleShape
+                                )
+                                .clickable {
+                                    onRenameGroupTargetChange(renameGroupTarget.copy(color = colorLong))
+                                    viewModel.changeTabGroupColor(renameGroupTarget.id, colorLong)
+                                }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (renameGroupText.isNotBlank()) {
+                    viewModel.renameTabGroup(renameGroupTarget.id, renameGroupText.trim())
+                }
+                onDismissRequest()
+            }) {
+                Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    )
 }

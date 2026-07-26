@@ -27,6 +27,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
     tab.session.contentBlockingDelegate = object : org.mozilla.geckoview.ContentBlocking.Delegate {
         override fun onContentBlocked(session: GeckoSession, event: org.mozilla.geckoview.ContentBlocking.BlockEvent) {
             incrementTrackersBlocked(context, 1)
+            try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
         }
     }
     tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
@@ -186,6 +187,137 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 mimeTypes = mimeTypes
             )
             return result
+        }
+
+        override fun onAlertPrompt(
+            session: GeckoSession,
+            prompt: GeckoSession.PromptDelegate.AlertPrompt
+        ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            val message = prompt.message ?: ""
+            if (message.startsWith("OMNI_IMAGES:")) {
+                val json = message.removePrefix("OMNI_IMAGES:")
+                try {
+                    val jsonArray = org.json.JSONArray(json)
+                    val urls = mutableListOf<String>()
+                    for (i in 0 until jsonArray.length()) {
+                        val imgUrl = jsonArray.getString(i)
+                        if (imgUrl.isNotBlank() && !urls.contains(imgUrl)) {
+                            urls.add(imgUrl)
+                        }
+                    }
+                    viewModelScope.launch(Dispatchers.Main) {
+                        extractedImagesList = urls
+                        isExtractingImages = false
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing extracted images", e)
+                }
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
+            if (message.startsWith("OMNI_EVAL_RESULT:")) {
+                val jsonStr = message.removePrefix("OMNI_EVAL_RESULT:")
+                try {
+                    val obj = org.json.JSONObject(jsonStr)
+                    val ok = obj.optBoolean("ok", true)
+                    val resultVal = obj.optString("val", "")
+                    viewModelScope.launch(Dispatchers.Main) {
+                        consoleEvalError = !ok
+                        consoleEvalResult = resultVal
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing eval result", e)
+                }
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
+            if (message.startsWith("OMNI_PAGE_STATS:")) {
+                val jsonStr = message.removePrefix("OMNI_PAGE_STATS:")
+                try {
+                    val obj = org.json.JSONObject(jsonStr)
+                    val activeTab = tabs.find { it.id == activeTabId }
+                    val titleText = activeTab?.title?.ifEmpty { "Webpage" } ?: "Webpage"
+
+                    val metaList = mutableListOf<BrowserViewModel.MetaTagInfo>()
+                    val metaArray = obj.optJSONArray("meta")
+                    if (metaArray != null) {
+                        for (idx in 0 until metaArray.length()) {
+                            val mObj = metaArray.getJSONObject(idx)
+                            metaList.add(BrowserViewModel.MetaTagInfo(mObj.optString("n"), mObj.optString("c")))
+                        }
+                    }
+
+                    val domList = mutableListOf<BrowserViewModel.DomNodeInfo>()
+                    val domArray = obj.optJSONArray("dom")
+                    if (domArray != null) {
+                        for (idx in 0 until domArray.length()) {
+                            val dObj = domArray.getJSONObject(idx)
+                            domList.add(BrowserViewModel.DomNodeInfo(
+                                tag = dObj.optString("t"),
+                                id = dObj.optString("i"),
+                                className = dObj.optString("c"),
+                                childCount = dObj.optInt("ch"),
+                                snippet = dObj.optString("s")
+                            ))
+                        }
+                    }
+
+                    val resList = mutableListOf<BrowserViewModel.ResourceInfo>()
+                    val resArray = obj.optJSONArray("res")
+                    if (resArray != null) {
+                        for (idx in 0 until resArray.length()) {
+                            val rObj = resArray.getJSONObject(idx)
+                            resList.add(BrowserViewModel.ResourceInfo(
+                                url = rObj.optString("u"),
+                                type = rObj.optString("t"),
+                                durationMs = rObj.optInt("d"),
+                                sizeBytes = rObj.optLong("s")
+                            ))
+                        }
+                    }
+
+                    val ckList = mutableListOf<BrowserViewModel.StorageItem>()
+                    val ckArray = obj.optJSONArray("ck")
+                    if (ckArray != null) {
+                        for (idx in 0 until ckArray.length()) {
+                            val cObj = ckArray.getJSONObject(idx)
+                            ckList.add(BrowserViewModel.StorageItem(cObj.optString("k"), cObj.optString("v")))
+                        }
+                    }
+
+                    val lsList = mutableListOf<BrowserViewModel.StorageItem>()
+                    val lsArray = obj.optJSONArray("ls")
+                    if (lsArray != null) {
+                        for (idx in 0 until lsArray.length()) {
+                            val lObj = lsArray.getJSONObject(idx)
+                            lsList.add(BrowserViewModel.StorageItem(lObj.optString("k"), lObj.optString("v")))
+                        }
+                    }
+
+                    viewModelScope.launch(Dispatchers.Main) {
+                        pageInspectorStats = BrowserViewModel.PageStats(
+                            title = titleText,
+                            wordCount = obj.optInt("w", 0),
+                            readTimeMinutes = obj.optInt("r", 1),
+                            imageCount = obj.optInt("i", 0),
+                            linkCount = obj.optInt("l", 0),
+                            scriptCount = obj.optInt("s", 0),
+                            cssCount = obj.optInt("c", 0),
+                            charCount = obj.optInt("ch", 0),
+                            h1Count = obj.optInt("h1", 0),
+                            h2Count = obj.optInt("h2", 0),
+                            h3Count = obj.optInt("h3", 0),
+                            metaTags = metaList,
+                            domNodes = domList,
+                            resources = resList,
+                            cookies = ckList,
+                            localStorageItems = lsList
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing page stats", e)
+                }
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
+            return null
         }
 
         override fun onLoginSave(
@@ -733,9 +865,14 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
             if (success) {
                 if (tab.id == activeTabId) {
-                    injectZoomEnabler()
-                    // Suppress the persistent Google Translate floating badge/toolbar
-                    // that translate.goog pages inject into every translated page.
+                    if (accessibilityForceZoom) {
+                        injectZoomEnabler()
+                    }
+                    val cosmeticCss = try { adBlockManager.getCosmeticAdBlockCss() } catch(_: Exception) { "" }
+                    if (cosmeticCss.isNotEmpty()) {
+                        val cleanCss = cosmeticCss.replace("\n", " ").replace("'", "\\'")
+                        tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.innerHTML='$cleanCss';document.head.appendChild(s);}catch(e){}})();")
+                    }
                     if (tab.url.contains(".translate.goog")) {
                         injectTranslateBadgeSuppressor()
                     }

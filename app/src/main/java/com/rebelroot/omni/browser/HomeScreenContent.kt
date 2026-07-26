@@ -240,10 +240,17 @@ fun HomeScreenContent(
     var showHomeMenu by remember { mutableStateOf(false) }
 
     val baseDensity = androidx.compose.ui.platform.LocalDensity.current
-    val scaledDensity = remember(baseDensity, viewModel.homeUiScale) {
+    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val responsiveWidthFactor = remember(screenWidthDp) {
+        (screenWidthDp / 390f).coerceIn(0.85f, 1.05f)
+    }
+    val effectiveHomeScale = remember(viewModel.homeUiScale, responsiveWidthFactor) {
+        (viewModel.homeUiScale * responsiveWidthFactor).coerceIn(0.72f, 1.10f)
+    }
+    val scaledDensity = remember(baseDensity, effectiveHomeScale) {
         androidx.compose.ui.unit.Density(
-            density = baseDensity.density * viewModel.homeUiScale,
-            fontScale = baseDensity.fontScale * viewModel.homeUiScale
+            density = baseDensity.density * effectiveHomeScale,
+            fontScale = baseDensity.fontScale * effectiveHomeScale
         )
     }
 
@@ -321,14 +328,14 @@ fun HomeScreenContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Far Left: + (New Tab Button)
+                // Far Left: Extensions Button
                 IconButton(
-                    onClick = { viewModel.createNewTab(context, "about:blank") },
+                    onClick = { onOpenExtensions() },
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "New Tab",
+                        imageVector = Icons.Rounded.Extension,
+                        contentDescription = "Extensions",
                         tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
                         modifier = Modifier.size(22.dp)
                     )
@@ -2010,7 +2017,7 @@ fun HomeScreenContent(
 
                     HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
 
-                    // App UI Scale (from Appearance Settings)
+                    // App Nav Scaler (from Appearance Settings)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -2018,7 +2025,7 @@ fun HomeScreenContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "App UI Scale",
+                                text = "App Nav Scaler",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
@@ -2274,7 +2281,13 @@ fun CompactDynamicShortcutItem(
     val domain = remember(url) {
         try { Uri.parse(url).host ?: url } catch (e: Exception) { url }
     }
-    val faviconUrl = "https://www.google.com/s2/favicons?sz=128&domain=$domain"
+    val faviconUrl = remember(domain) {
+        if (domain.contains("rebelroot")) {
+            "https://www.rebelroot.xyz/favicon.ico?v=${System.currentTimeMillis() / 86400000}"
+        } else {
+            "https://www.google.com/s2/favicons?sz=128&domain=$domain"
+        }
+    }
     val tileShape: androidx.compose.ui.graphics.Shape = when (tileStyle) {
         "Squircle" -> RoundedCornerShape(14.dp)
         "Square"   -> RoundedCornerShape(6.dp)
@@ -2309,9 +2322,10 @@ fun CompactDynamicShortcutItem(
                     .data(faviconUrl)
                     .size(64, 64)
                     .crossfade(true)
+                    .memoryCachePolicy(coil.request.CachePolicy.DISABLED)
                     .build(),
                 contentDescription = title,
-                modifier = Modifier.size(24.dp).clip(tileShape),
+                modifier = Modifier.size(26.dp).clip(tileShape),
                 error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
             )
         }

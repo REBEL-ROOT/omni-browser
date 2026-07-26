@@ -5,5 +5,7 @@ data class NewsArticle(
     val link: String,
     val source: String,
     val pubDate: String,
-    val imageUrl: String
+    val imageUrl: String,
+    val sourceFaviconUrl: String = ""
 )
+

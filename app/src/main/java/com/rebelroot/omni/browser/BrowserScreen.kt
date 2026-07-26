@@ -194,7 +194,7 @@ fun BrowserScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
     val coroutineScope = rememberCoroutineScope()
-    val config = getUiSizeConfig(viewModel.uiScale)
+    val config = getUiSizeConfig(viewModel.uiScale, configuration.screenWidthDp)
     var dragAmountAccumulated by remember { mutableStateOf(0f) }
 
     val showHomeScreen = viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()
@@ -340,6 +340,13 @@ fun BrowserScreen(
 
     // Tab Switcher states
     var showTabGroupsSheet by remember { mutableStateOf(false) }
+    var showGroupDialog by remember { mutableStateOf(false) }
+    var groupDialogTargetTabId by remember { mutableStateOf<String?>(null) }
+    var newGroupTitle by remember { mutableStateOf("") }
+    var newGroupColorIndex by remember { mutableStateOf(0) }
+    var showRenameGroupDialog by remember { mutableStateOf(false) }
+    var renameGroupTarget by remember { mutableStateOf<TabGroup?>(null) }
+    var renameGroupText by remember { mutableStateOf("") }
     
     // Developer Console state
     var showConsoleSheet by remember { mutableStateOf(false) }
@@ -349,6 +356,9 @@ fun BrowserScreen(
     // Tools sheet state
     var showToolsSheet by remember { mutableStateOf(false) }
     var showQuickToolsSheet by remember { mutableStateOf(false) }
+    var showImageGrabberSheet by remember { mutableStateOf(false) }
+    var showPageInspectorSheet by remember { mutableStateOf(false) }
+    var showAllInOneMenuSheet by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(isKeyboardVisible) {
@@ -1073,7 +1083,7 @@ fun BrowserScreen(
                             } else {
                                 // Phone Top Bar — show address bar here when position is "Top",
                                 // or All-in-One is enabled AND position is NOT explicitly "Bottom"
-                                if (viewModel.addressBarPosition == "Top" ||
+                                if (viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Split" ||
                                     (viewModel.chromeNavBarEnabled && viewModel.addressBarPosition != "Bottom")) {
                                     PhoneAddressBar(
                                         viewModel = viewModel,
@@ -1100,7 +1110,8 @@ fun BrowserScreen(
                                         onShowCustomizationSheet = { showCustomizationSheet = true },
                                         onShowPlayerSettings = { showPlayerSettingsDialog = true },
                                         onShowTabGroups = { showTabGroupsSheet = true },
-                                        onShowSiteInfo = { showSiteInfoSheet = true }
+                                        onShowSiteInfo = { showSiteInfoSheet = true },
+                                        onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true }
                                     )
                                 }
                             }
@@ -1161,7 +1172,68 @@ fun BrowserScreen(
                     .fillMaxWidth()
                     .graphicsLayer { translationY = size.height * bottomBarFraction }
             ) {
-                if ((!viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Bottom") && viewModel.addressBarPosition != "Top" && !isTablet && !showHomeScreen && !viewModel.isFullscreen) {
+                // --- Bottom Group Strip ---
+                if (!showHomeScreen && activeTab != null) {
+                    val activeGroup = viewModel.tabGroups.find { it.tabIds.contains(activeTab.id) }
+                    if (activeGroup != null) {
+                        val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                        val groupTabs = currentModeTabs.filter { it.id in activeGroup.tabIds }
+                        if (groupTabs.size > 1) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant,
+                                tonalElevation = 1.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(activeGroup.color)))
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    androidx.compose.foundation.lazy.LazyRow(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        items(groupTabs.size, key = { "strip_${groupTabs[it].id}" }) { index ->
+                                            val tab = groupTabs[index]
+                                            val isTabActive = tab.id == viewModel.activeTabId
+                                            val groupColor = Color(activeGroup.color)
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isTabActive) groupColor.copy(alpha=0.2f) else Color.Transparent)
+                                                    .clickable { viewModel.selectTab(tab.id) },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (tab.url.isNotEmpty() && tab.url != "about:blank") {
+                                                    coil.compose.AsyncImage(
+                                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                            .data("https://www.google.com/s2/favicons?domain=${tab.url}&sz=64")
+                                                            .crossfade(true).build(),
+                                                        contentDescription = null, modifier = Modifier.size(20.dp)
+                                                    )
+                                                } else {
+                                                    Icon(Icons.Rounded.Language, null, tint = if (isTabActive) groupColor else (if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant), modifier = Modifier.size(20.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Add to group button
+                                    val context = LocalContext.current
+                                    IconButton(onClick = { viewModel.createNewTab(context, "about:blank", activeGroup.id) }) {
+                                        Icon(Icons.Rounded.Add, contentDescription = "Add to group", tint = Color(activeGroup.color))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((!viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Bottom") && viewModel.addressBarPosition != "Top" && viewModel.addressBarPosition != "Split" && !isTablet && !showHomeScreen && !viewModel.isFullscreen) {
                     val isBottomNavBarVisible = !viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused
                     Surface(
                         modifier = Modifier
@@ -1173,7 +1245,23 @@ fun BrowserScreen(
                         shadowElevation = 12.dp,
                         tonalElevation = 2.dp
                     ) {
-                        PhoneAddressBar(
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            AnimatedVisibility(
+                                visible = viewModel.isLoading && !showHomeScreen,
+                                enter = fadeIn(),
+                                exit = fadeOut()
+                            ) {
+                                LinearProgressIndicator(
+                                    progress = { viewModel.loadingProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.5.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = Color.Transparent,
+                                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
+                                )
+                            }
+                            PhoneAddressBar(
                             viewModel = viewModel,
                             inputUrl = inputUrl,
                             onInputUrlChange = { inputUrl = it },
@@ -1198,15 +1286,17 @@ fun BrowserScreen(
                             onShowCustomizationSheet = { showCustomizationSheet = true },
                             onShowPlayerSettings = { showPlayerSettingsDialog = true },
                             onShowTabGroups = { showTabGroupsSheet = true },
-                            onShowSiteInfo = { showSiteInfoSheet = true }
+                            onShowSiteInfo = { showSiteInfoSheet = true },
+                            onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true }
                         )
+                    }
                     }
                 }
 
                 if ((!viewModel.chromeNavBarEnabled || showHomeScreen) && viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused) {
-                // Flat minimal bottom bar persisting exactly as requested in screenshots
+                    // Flat minimal bottom bar: transparent and seamlessly blended on Home Screen, contoured on Webpages
                 val isDark = viewModel.isDarkThemeEnabled
-                val navBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+                val navBg = if (showHomeScreen) Color.Transparent else if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
                 val navBorder = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
                 val navContent = if (isDark) Color.White else Color(0xFF1C1C1E)
                 val navContentMuted = if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF8E8E93)
@@ -1216,17 +1306,35 @@ fun BrowserScreen(
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .drawBehind {
-                            drawLine(
-                                color = navBorder,
-                                start = Offset(0f, 0f),
-                                end = Offset(size.width, 0f),
-                                strokeWidth = 1.dp.toPx()
-                            )
+                            if (!showHomeScreen) {
+                                drawLine(
+                                    color = navBorder,
+                                    start = Offset(0f, 0f),
+                                    end = Offset(size.width, 0f),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
                         },
                     color = navBg
                 ) {
-                    if (showHomeScreen) {
-                        // 3-Button Home Navigation Bar matching user screenshot: Palette, News Center, Menu
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        AnimatedVisibility(
+                            visible = viewModel.isLoading && !showHomeScreen,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { viewModel.loadingProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(2.5.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = Color.Transparent,
+                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
+                            )
+                        }
+                        if (showHomeScreen) {
+                        // 4-Button Home Navigation Bar: Palette, News Center, Quick Tools, Menu
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1234,7 +1342,7 @@ fun BrowserScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            // Left: Palette Icon (Home Customization Sheet)
+                            // 1. Palette Icon (Home Customization Sheet)
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
@@ -1252,7 +1360,7 @@ fun BrowserScreen(
                                 }
                             }
 
-                            // Center: News Center Icon (News Feed Screen)
+                            // 2. News Center Icon (News Feed Screen)
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
@@ -1270,7 +1378,25 @@ fun BrowserScreen(
                                 }
                             }
 
-                            // Right: Menu Icon (Tools / Settings Sheet)
+                            // 3. Quick Tools Icon (Quick Tools Sheet)
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = { showQuickToolsSheet = true },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.GridView,
+                                        contentDescription = "Quick Tools",
+                                        tint = navContent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            // 4. Menu Icon (Options / Tools Sheet)
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
@@ -1398,6 +1524,7 @@ fun BrowserScreen(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
@@ -1985,7 +2112,7 @@ fun BrowserScreen(
                         ) {
                             Column(
                                 modifier = Modifier
-                                    .width(170.dp)
+                                    .width(180.dp)
                                     .padding(vertical = 4.dp)
                             ) {
                                 // Copy
@@ -2018,11 +2145,21 @@ fun BrowserScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(android.content.Intent.EXTRA_TEXT, activeTextSelection)
+                                            val textToShare = activeTextSelection ?: ""
+                                            if (textToShare.isNotBlank()) {
+                                                try {
+                                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                        type = "text/plain"
+                                                        putExtra(android.content.Intent.EXTRA_TEXT, textToShare)
+                                                    }
+                                                    val chooser = android.content.Intent.createChooser(shareIntent, "Share Text").apply {
+                                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(chooser)
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("OmniBrowser", "Error sharing text", e)
+                                                }
                                             }
-                                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share text"))
                                             viewModel.dismissTextSelection()
                                         }
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -2045,14 +2182,48 @@ fun BrowserScreen(
 
                                 HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0))
 
+                                // Read Aloud
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val textToRead = activeTextSelection ?: ""
+                                            if (textToRead.isNotBlank()) {
+                                                viewModel.initTts(context)
+                                                viewModel.speakText(textToRead)
+                                            }
+                                            viewModel.dismissTextSelection()
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.RecordVoiceOver,
+                                        contentDescription = "Read Aloud",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Read Aloud",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1E293B)
+                                    )
+                                }
+
+                                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0))
+
                                 // Search Google
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            val query = activeTextSelection.trim()
-                                            val searchUrl = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
-                                            viewModel.loadUrl(searchUrl)
+                                            val query = activeTextSelection?.trim().orEmpty()
+                                            if (query.isNotEmpty()) {
+                                                val searchUrl = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                                                viewModel.loadUrl(searchUrl)
+                                            }
                                             viewModel.dismissTextSelection()
                                         }
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -3388,6 +3559,7 @@ fun BrowserScreen(
 
             // 2. Premium Grid Tab Windows Switcher Tray Bottom Sheet
             if (showTabGroupsSheet) {
+                var showOnlyGroups by remember { mutableStateOf(false) }
                 val currentModeTabs = remember(viewModel.tabs.toList(), viewModel.isIncognitoMode) {
                     viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
                 }
@@ -3399,111 +3571,99 @@ fun BrowserScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 24.dp)
+                            .padding(bottom = 4.dp)
                             .navigationBarsPadding(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Top Bar: Segmented Control & Title (Firefox Style)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (viewModel.isIncognitoMode) "Incognito Tabs (${currentModeTabs.size})" else "Open Tabs (${currentModeTabs.size})",
-                                color = if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color.White else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                            TextButton(
-                                onClick = {
-                                    showTabGroupsSheet = false
-                                    viewModel.createNewTab(context, "about:blank")
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Add,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "New Tab",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-
-                        // Premium Mode Toggle Capsule Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 4.dp)
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF1E2D3F) else MaterialTheme.colorScheme.surfaceVariant),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
                             val normalCount = viewModel.tabs.count { !it.isIncognito }
                             val privateCount = viewModel.tabs.count { it.isIncognito }
 
-                            // Normal tab option
-                            Box(
+                            // Segmented control pill
+                            Row(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(if (!viewModel.isIncognitoMode) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                    .clickable {
-                                        if (viewModel.isIncognitoMode) {
-                                            viewModel.toggleIncognitoMode(context)
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
+                                    .width(290.dp)
+                                    .height(36.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF1E2D3F) else MaterialTheme.colorScheme.surfaceVariant),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Normal ($normalCount)",
-                                    color = if (!viewModel.isIncognitoMode) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
+                                // Normal tab option
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(if (!viewModel.isIncognitoMode && !showOnlyGroups) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                        .clickable {
+                                            showOnlyGroups = false
+                                            if (viewModel.isIncognitoMode) {
+                                                viewModel.toggleIncognitoMode(context)
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Normal",
+                                        color = if (!viewModel.isIncognitoMode && !showOnlyGroups) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
 
-                            // Private tab option
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(if (viewModel.isIncognitoMode) Color(0xFFFF3B5C) else Color.Transparent)
-                                    .clickable {
-                                        if (!viewModel.isIncognitoMode) {
-                                            viewModel.toggleIncognitoMode(context)
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Incognito ($privateCount)",
-                                    color = if (viewModel.isIncognitoMode) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
+                                // Group option
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(if (showOnlyGroups) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                        .clickable {
+                                            showOnlyGroups = true
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Group",
+                                        color = if (showOnlyGroups) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                // Incognito option
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(if (viewModel.isIncognitoMode && !showOnlyGroups) Color(0xFFFF3B5C) else Color.Transparent)
+                                        .clickable {
+                                            showOnlyGroups = false
+                                            if (!viewModel.isIncognitoMode) {
+                                                viewModel.toggleIncognitoMode(context)
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Incognito",
+                                        color = if (viewModel.isIncognitoMode && !showOnlyGroups) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
                             }
                         }
 
-                        // Tab group & context menu state
-                        var showGroupDialog by remember { mutableStateOf(false) }
-                        var groupDialogTargetTabId by remember { mutableStateOf<String?>(null) }
-                        var newGroupTitle by remember { mutableStateOf("") }
-                        var newGroupColorIndex by remember { mutableStateOf(0) }
-                        var showRenameGroupDialog by remember { mutableStateOf(false) }
-                        var renameGroupTarget by remember { mutableStateOf<TabGroup?>(null) }
-                        var renameGroupText by remember { mutableStateOf("") }
+                        // Tab group & context menu state (Moved to top level)
 
                         val groupColors = listOf(
                             0xFF4285F4L, // Google Blue
@@ -3695,6 +3855,8 @@ fun BrowserScreen(
                             }
                         }
 
+                        var activeGroupView by remember { mutableStateOf<com.rebelroot.omni.browser.TabGroup?>(null) }
+
                         // Helper composable: square grid card for Grid mode
                         @Composable
                         fun TabGridCard(tab: TabState, modifier: Modifier = Modifier) {
@@ -3864,51 +4026,191 @@ fun BrowserScreen(
                             }
                         }
 
+                        @Composable
+                        fun TabGroupFolderCard(group: com.rebelroot.omni.browser.TabGroup, groupTabs: List<TabState>, modifier: Modifier = Modifier, onClick: () -> Unit) {
+                            val isActive = groupTabs.any { it.id == viewModel.activeTabId }
+                            val groupColor = Color(group.color)
+                            
+                            Box(
+                                modifier = modifier
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        BorderStroke(
+                                            if (isActive) 1.5.dp else 0.5.dp,
+                                            if (isActive) groupColor else groupColor.copy(alpha = 0.5f)
+                                        ),
+                                        RoundedCornerShape(24.dp)
+                                    )
+                                    .clickable { onClick() }
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    // Header row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(groupColor))
+                                            Text(
+                                                text = group.title,
+                                                color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text("${groupTabs.size}", color = groupColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    // Preview box (2x2 grid)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(84.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(groupColor.copy(alpha = 0.1f))
+                                            .padding(6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val displayTabs = groupTabs.take(4)
+                                        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            userScrollEnabled = false,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            items(displayTabs.size) { index ->
+                                                val tab = displayTabs[index]
+                                                Box(
+                                                    modifier = Modifier
+                                                        .aspectRatio(1f)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(if (viewModel.isDarkThemeEnabled) Color(0xFF1E2D3F) else Color.White),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (tab.url.isNotEmpty() && tab.url != "about:blank") {
+                                                        coil.compose.AsyncImage(
+                                                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                                .data("https://www.google.com/s2/favicons?domain=${tab.url}&sz=64")
+                                                                .crossfade(true).build(),
+                                                            contentDescription = null, modifier = Modifier.size(16.dp)
+                                                        )
+                                                    } else {
+                                                        Icon(Icons.Rounded.Explore, null, tint = groupColor.copy(alpha=0.5f), modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        @Composable
+                        fun TabGroupFolderListRow(group: com.rebelroot.omni.browser.TabGroup, groupTabs: List<TabState>, modifier: Modifier = Modifier, onClick: () -> Unit) {
+                            val isActive = groupTabs.any { it.id == viewModel.activeTabId }
+                            val groupColor = Color(group.color)
+                            Box(
+                                modifier = modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        BorderStroke(if (isActive) 1.5.dp else 0.5.dp, if (isActive) groupColor else groupColor.copy(alpha = 0.5f)),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable { onClick() }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(modifier = Modifier.width(3.dp).height(36.dp).clip(RoundedCornerShape(2.dp)).background(groupColor))
+                                    // 2x2 mini favicons
+                                    Box(
+                                        modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(groupColor.copy(alpha=0.15f)).padding(2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                groupTabs.take(2).forEach { tab ->
+                                                    Box(modifier = Modifier.size(15.dp).clip(RoundedCornerShape(4.dp)).background(if (viewModel.isDarkThemeEnabled) Color(0xFF1E2D3F) else Color.White), contentAlignment = Alignment.Center) {
+                                                        Icon(Icons.Rounded.Explore, null, tint = groupColor.copy(alpha=0.5f), modifier = Modifier.size(10.dp))
+                                                    }
+                                                }
+                                            }
+                                            if (groupTabs.size > 2) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                    groupTabs.drop(2).take(2).forEach { tab ->
+                                                        Box(modifier = Modifier.size(15.dp).clip(RoundedCornerShape(4.dp)).background(if (viewModel.isDarkThemeEnabled) Color(0xFF1E2D3F) else Color.White), contentAlignment = Alignment.Center) {
+                                                            Icon(Icons.Rounded.Explore, null, tint = groupColor.copy(alpha=0.5f), modifier = Modifier.size(10.dp))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = group.title, color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(text = "${groupTabs.size} tabs", color = groupColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
                         val isList = viewModel.tabLayoutMode == "List"
 
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(if (isList) 8.dp else 12.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            // ── Tab Groups Section ──────────────────────────────────────────
-                            viewModel.tabGroups.forEach { group ->
-                                val groupTabsInMode = currentModeTabs.filter { it.id in group.tabIds }
-                                if (groupTabsInMode.isEmpty()) return@forEach
-
-                                item(key = "group_header_${group.id}") {
-                                    // Group header row
+                        if (activeGroupView != null) {
+                            // --- GROUP SUB-VIEW ---
+                            val group = activeGroupView!!
+                            val tabsInGroup = currentModeTabs.filter { it.id in group.tabIds }
+                            
+                            if (tabsInGroup.isEmpty()) {
+                                activeGroupView = null // Close view if empty
+                            } else {
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
+                                    // Group Header Bar
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(Color(group.color).copy(alpha = if (viewModel.isDarkThemeEnabled) 0.15f else 0.10f))
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            .background(Color(group.color).copy(alpha = 0.15f))
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(10.dp)
+                                                .size(32.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(group.color))
-                                        )
+                                                .background(Color(group.color).copy(alpha = 0.2f))
+                                                .clickable { activeGroupView = null },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.ArrowBack, "Back", tint = Color(group.color), modifier = Modifier.size(18.dp))
+                                        }
                                         Text(
                                             text = group.title,
                                             color = Color(group.color),
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
+                                            fontSize = 16.sp,
                                             modifier = Modifier.weight(1f)
-                                        )
-                                        Text(
-                                            text = "${groupTabsInMode.size} tab${if (groupTabsInMode.size != 1) "s" else ""}",
-                                            color = Color(group.color).copy(alpha = 0.7f),
-                                            fontSize = 10.sp
                                         )
                                         // Rename group
                                         Box(
                                             modifier = Modifier
-                                                .size(24.dp)
+                                                .size(28.dp)
                                                 .clip(CircleShape)
                                                 .background(Color(group.color).copy(alpha = 0.2f))
                                                 .clickable {
@@ -3918,281 +4220,149 @@ fun BrowserScreen(
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Edit,
-                                                contentDescription = "Rename Group",
-                                                tint = Color(group.color),
-                                                modifier = Modifier.size(12.dp)
-                                            )
+                                            Icon(Icons.Rounded.Edit, "Rename", tint = Color(group.color), modifier = Modifier.size(14.dp))
                                         }
                                         // Delete group
                                         Box(
                                             modifier = Modifier
-                                                .size(24.dp)
+                                                .size(28.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFFFF3B5C).copy(alpha = 0.12f))
-                                                .clickable { viewModel.deleteTabGroup(group.id) },
+                                                .background(Color(0xFFFF3B5C).copy(alpha = 0.15f))
+                                                .clickable { 
+                                                    viewModel.deleteTabGroup(group.id)
+                                                    activeGroupView = null
+                                                },
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Close,
-                                                contentDescription = "Delete Group",
-                                                tint = Color(0xFFFF3B5C),
-                                                modifier = Modifier.size(12.dp)
-                                            )
+                                            Icon(Icons.Rounded.Close, "Delete", tint = Color(0xFFFF3B5C), modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+
+                                    // Tabs in this group
+                                    LazyColumn(
+                                        verticalArrangement = Arrangement.spacedBy(if (isList) 8.dp else 12.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        if (isList) {
+                                            items(tabsInGroup, key = { "group_list_${it.id}" }) { tab ->
+                                                TabListRow(tab)
+                                            }
+                                        } else {
+                                            val chunks = tabsInGroup.chunked(2)
+                                            items(chunks, key = { "group_grid_${it.first().id}" }) { chunk ->
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    for (tab in chunk) {
+                                                        TabGridCard(tab, modifier = Modifier.weight(1f))
+                                                    }
+                                                    if (chunk.size == 1) Box(modifier = Modifier.weight(1f))
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                            }
+                        } else {
+                            // --- MAIN TAB GRID (Mixed Groups and Tabs) ---
+                            val gridItems = mutableListOf<Any>()
+                            // 1. Add valid groups
+                            viewModel.tabGroups.forEach { group ->
+                                val groupTabs = currentModeTabs.filter { it.id in group.tabIds }
+                                if (groupTabs.isNotEmpty()) {
+                                    gridItems.add(Pair(group, groupTabs))
+                                }
+                            }
+                            // 2. Add ungrouped tabs
+                            if (!showOnlyGroups) {
+                                gridItems.addAll(ungroupedTabs)
+                            }
 
-                                // Tabs in this group
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(if (isList) 8.dp else 12.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
                                 if (isList) {
-                                    items(groupTabsInMode, key = { "list_${it.id}" }) { tab ->
-                                        TabListRow(tab)
+                                    items(gridItems.size, key = { "list_$it" }) { index ->
+                                        val item = gridItems[index]
+                                        if (item is Pair<*, *>) {
+                                            val group = item.first as com.rebelroot.omni.browser.TabGroup
+                                            val groupTabs = item.second as List<TabState>
+                                            TabGroupFolderListRow(group, groupTabs, onClick = { activeGroupView = group })
+                                        } else if (item is TabState) {
+                                            TabListRow(item)
+                                        }
                                     }
                                 } else {
-                                    val chunks = groupTabsInMode.chunked(2)
-                                    items(chunks, key = { "grid_group_${group.id}_${it.first().id}" }) { chunk ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            for (tab in chunk) {
-                                                TabGridCard(tab, modifier = Modifier.weight(1f))
+                                    val chunks = gridItems.chunked(2)
+                                    items(chunks.size, key = { "grid_$it" }) { index ->
+                                        val chunk = chunks[index]
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            for (item in chunk) {
+                                                if (item is Pair<*, *>) {
+                                                    val group = item.first as com.rebelroot.omni.browser.TabGroup
+                                                    val groupTabs = item.second as List<TabState>
+                                                    TabGroupFolderCard(group, groupTabs, modifier = Modifier.weight(1f), onClick = { activeGroupView = group })
+                                                } else if (item is TabState) {
+                                                    TabGridCard(item as TabState, modifier = Modifier.weight(1f))
+                                                }
                                             }
                                             if (chunk.size == 1) Box(modifier = Modifier.weight(1f))
                                         }
                                     }
                                 }
-
-                                item(key = "group_divider_${group.id}") {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                }
-                            }
-
-                            // ── Ungrouped Tabs Section ──────────────────────────────────────
-                            if (ungroupedTabs.isNotEmpty() && viewModel.tabGroups.any { g -> currentModeTabs.any { t -> t.id in g.tabIds } }) {
-                                item(key = "ungrouped_header") {
-                                    Text(
-                                        text = "Other Tabs",
-                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            if (isList) {
-                                items(ungroupedTabs, key = { "list_ungrouped_${it.id}" }) { tab ->
-                                    TabListRow(tab)
-                                }
-                            } else {
-                                val chunks = ungroupedTabs.chunked(2)
-                                items(chunks, key = { "grid_${it.first().id}" }) { chunk ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        for (tab in chunk) {
-                                            TabGridCard(tab, modifier = Modifier.weight(1f))
-                                        }
-                                        if (chunk.size == 1) Box(modifier = Modifier.weight(1f))
-                                    }
-                                }
                             }
                         }
 
-                        // ── Add to Group dialog (long-press on tab) ────────────────────────
-                        if (showGroupDialog && groupDialogTargetTabId != null) {
-                            val targetTabId = groupDialogTargetTabId!!
-                            val currentGroup = remember(viewModel.tabGroups.toList()) { viewModel.getGroupForTab(targetTabId) }
-
-                            AlertDialog(
-                                onDismissRequest = { showGroupDialog = false },
-                                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
-                                title = {
-                                    Text(
-                                        "Tab Groups",
-                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                        // Bottom Action Bar - Compact & Professional
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 2.dp)
+                                .height(44.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    showTabGroupsSheet = false
+                                    viewModel.closeAllTabs(context, viewModel.isIncognitoMode)
                                 },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        // Remove from group option
-                                        if (currentGroup != null) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(Color(0xFFFF3B5C).copy(alpha = 0.12f))
-                                                    .clickable {
-                                                        viewModel.removeTabFromGroup(targetTabId, currentGroup.id)
-                                                        showGroupDialog = false
-                                                    }
-                                                    .padding(10.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(Icons.Rounded.Close, null, tint = Color(0xFFFF3B5C), modifier = Modifier.size(16.dp))
-                                                Text("Remove from \"${currentGroup.title}\"", color = Color(0xFFFF3B5C), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            }
-                                        }
-
-                                        // Existing groups
-                                        val existingGroups = viewModel.tabGroups.filter { it.id != currentGroup?.id }
-                                        if (existingGroups.isNotEmpty()) {
-                                            Text(
-                                                "Add to existing group:",
-                                                color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 11.sp, fontWeight = FontWeight.SemiBold
-                                            )
-                                            existingGroups.forEach { group ->
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(10.dp))
-                                                        .background(Color(group.color).copy(alpha = 0.12f))
-                                                        .clickable {
-                                                            viewModel.addTabToGroup(targetTabId, group.id)
-                                                            showGroupDialog = false
-                                                        }
-                                                        .padding(10.dp),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(group.color)))
-                                                    Text(group.title, color = Color(group.color), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                                    Spacer(Modifier.weight(1f))
-                                                    Text("${group.tabIds.size} tab${if (group.tabIds.size != 1) "s" else ""}",
-                                                        color = Color(group.color).copy(alpha = 0.6f), fontSize = 10.sp)
-                                                }
-                                            }
-                                        }
-
-                                        HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
-
-                                        // Create new group
-                                        Text(
-                                            "Create new group:",
-                                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 11.sp, fontWeight = FontWeight.SemiBold
-                                        )
-                                        androidx.compose.material3.OutlinedTextField(
-                                            value = newGroupTitle,
-                                            onValueChange = { newGroupTitle = it },
-                                            placeholder = { Text("Group name (e.g. Work, Social)", fontSize = 12.sp) },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(10.dp),
-                                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                                focusedBorderColor = Color(groupColors[newGroupColorIndex]),
-                                                unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                                                focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
-                                                unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
-                                            )
-                                        )
-                                        // Color picker row
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            groupColors.forEachIndexed { i, colorLong ->
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(24.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color(colorLong))
-                                                        .border(
-                                                            if (i == newGroupColorIndex) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
-                                                            CircleShape
-                                                        )
-                                                        .clickable { newGroupColorIndex = i }
-                                                )
-                                            }
-                                        }
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            if (newGroupTitle.isNotBlank()) {
-                                                viewModel.createTabGroup(
-                                                    title = newGroupTitle.trim(),
-                                                    color = groupColors[newGroupColorIndex],
-                                                    initialTabId = targetTabId
-                                                )
-                                            }
-                                            showGroupDialog = false
-                                        }
-                                    ) {
-                                        Text(if (newGroupTitle.isNotBlank()) "Create & Add" else "Close",
-                                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showGroupDialog = false }) {
-                                        Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            )
-                        }
-
-                        // ── Rename Group dialog ────────────────────────────────────────────
-                        if (showRenameGroupDialog && renameGroupTarget != null) {
-                            AlertDialog(
-                                onDismissRequest = { showRenameGroupDialog = false },
-                                containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
-                                title = {
-                                    Text("Rename Group",
-                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Bold)
-                                },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        androidx.compose.material3.OutlinedTextField(
-                                            value = renameGroupText,
-                                            onValueChange = { renameGroupText = it },
-                                            placeholder = { Text("Group name") },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        // Color change row
-                                        Text("Change color:", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            groupColors.forEach { colorLong ->
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(24.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color(colorLong))
-                                                        .border(
-                                                            if (colorLong == renameGroupTarget!!.color) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
-                                                            CircleShape
-                                                        )
-                                                        .clickable {
-                                                            renameGroupTarget = renameGroupTarget!!.copy(color = colorLong)
-                                                            viewModel.changeTabGroupColor(renameGroupTarget!!.id, colorLong)
-                                                        }
-                                                )
-                                            }
-                                        }
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        if (renameGroupText.isNotBlank()) {
-                                            viewModel.renameTabGroup(renameGroupTarget!!.id, renameGroupText.trim())
-                                        }
-                                        showRenameGroupDialog = false
-                                    }) {
-                                        Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showRenameGroupDialog = false }) {
-                                        Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            )
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DeleteOutline,
+                                    contentDescription = "Close All",
+                                    tint = Color(0xFFFF4D4D),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Close All",
+                                    color = Color(0xFFFF4D4D),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .clickable {
+                                        showTabGroupsSheet = false
+                                        viewModel.createNewTab(context, "about:blank")
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Add,
+                                    contentDescription = "New Tab",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -5112,18 +5282,6 @@ fun BrowserScreen(
                                 }
                             )
                             MenuGridCell(
-                                icon = Icons.Rounded.Book,
-                                label = "Reader\nMode",
-                                iconTint = inactiveIconTint,
-                                iconBg = inactiveIconBg,
-                                onClick = {
-                                    showMenu = false
-                                    try { viewModel.toggleReaderMode() } catch (e: Exception) {
-                                        Toast.makeText(context, "Reader Mode not supported on this page", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                            MenuGridCell(
                                 icon = Icons.Rounded.LocalFireDepartment,
                                 label = "Burn\nData",
                                 iconTint = Color(0xFFFF4444),
@@ -5299,7 +5457,105 @@ fun BrowserScreen(
 
                         HorizontalDivider(color = if (isDarkExt) Color(0xFF23374A).copy(alpha = 0.5f) else Color.LightGray.copy(alpha = 0.5f))
 
-                         // ── User-installed section (shown first for fast access) ────────────
+                        // ── Featured Reference Add-on: uBlock Origin (Firefox Mobile Style) ──
+                        val isUblockInstalled = userExts.any {
+                            try {
+                                it.id.contains("ublock", ignoreCase = true) ||
+                                (it.metaData?.name?.contains("uBlock", ignoreCase = true) == true)
+                            } catch(_: Exception) { false }
+                        }
+
+                        if (!isUblockInstalled) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isDarkExt) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, Color(0xFFFF3B5C).copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xFFFF3B5C).copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Shield,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFF3B5C),
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "uBlock Origin",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = Color(0xFFFF3B5C).copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "RECOMMENDED",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = Color(0xFFFF3B5C),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = "by Raymond Hill · #1 Firefox Content Blocker",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = "An efficient wide-spectrum content blocker. Blocks ads, popups, trackers, and malware sites natively on mobile.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 16.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Button(
+                                        onClick = {
+                                            viewModel.installExtensionFromUrl("https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/addon-607454-latest.xpi", context)
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier.fillMaxWidth().height(40.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(16.dp))
+                                            Text("Install uBlock Origin Latest", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── User-installed section (shown first for fast access) ────────────
                         if (userExts.isNotEmpty()) {
 
                             Row(
@@ -5788,9 +6044,54 @@ fun BrowserScreen(
                 } // key block
             }
 
-
             // 4.5 Quick Tools Bottom Sheet (Reorderable)
-            if (showQuickToolsSheet) {
+
+        if (showAllInOneMenuSheet) {
+            AllInOneMenuSheet(
+                viewModel = viewModel,
+                onDismissRequest = { showAllInOneMenuSheet = false },
+                onNewTab = {
+                    viewModel.createNewTab(context, "about:blank")
+                },
+                onNewIncognitoTab = {
+                    if (!viewModel.isIncognitoMode) {
+                        viewModel.toggleIncognitoMode(context)
+                    }
+                    viewModel.createNewTab(context, "about:blank")
+                },
+                onOpenHistory = onOpenHistory,
+                onBurnData = {
+                    coroutineScope.launch {
+                        val runtime = viewModel.getGeckoRuntime(context)
+                        FireButton(runtime, context).burn()
+                        viewModel.burnAllData(context)
+                        Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onOpenDownloads = onOpenDownloads,
+                onOpenBookmarks = onOpenBookmarks,
+                onOpenSettings = onOpenSettings,
+                onShowCustomizationSheet = { showCustomizationSheet = true },
+                onShowExtensions = { showExtensionsSheet = true },
+                onShowPlayerSettings = { showPlayerSettingsDialog = true },
+                onShowSiteInfo = { showSiteInfoSheet = true },
+                onFindInPage = { viewModel.openFindInPage() },
+                onAddTabToNewGroup = {
+                    showAllInOneMenuSheet = false
+                    if (viewModel.activeTabId != null) {
+                        groupDialogTargetTabId = viewModel.activeTabId
+                        newGroupTitle = ""
+                        newGroupColorIndex = 0
+                        showGroupDialog = true
+                    } else {
+                        Toast.makeText(context, "No active tab to group", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                hasActiveUserExtensions = hasActiveUserExtensions
+            )
+        }
+
+        if (showQuickToolsSheet) {
                 val isDark = viewModel.isDarkThemeEnabled
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
                 var lastSwapMs by remember { mutableStateOf(0L) }
@@ -5841,6 +6142,7 @@ fun BrowserScreen(
                             mutableStateListOf<String>().also { list ->
                                 val vmOrder = viewModel.quickToolsOrder
                                 val allTools = listOf(
+                                    "image_grabber", "page_inspector", "force_zoom", "vpn",
                                     "qr_scanner", "safe_locker", "translator", "edit_page",
                                     "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
                                     "qr_generator", "console_log", "dev_notes", "site_style"
@@ -5854,36 +6156,81 @@ fun BrowserScreen(
 
                         // Resolve tool display info
                         fun toolTitle(id: String): String = when (id) {
-                            "qr_scanner"   -> "QR Scanner"
-                            "safe_locker"  -> "Safe Locker"
-                            "translator"   -> "Translator"
-                            "edit_page"    -> if (isEditing) "Stop Edit" else "Edit Page"
-                            "save_pdf"     -> "Save PDF"
-                            "pin_web_app"  -> "Pin Web App"
-                            "auto_scroll"  -> "Auto-Scroll"
-                            "qr_scan_page" -> "QR Scan Page"
-                            "qr_generator" -> "QR Generator"
-                            "console_log"  -> "Console Log"
-                            "dev_notes"    -> "Dev Notes"
-                            "site_style"   -> "Site Style"
+                            "image_grabber"  -> "Manga Grabber"
+                            "page_inspector" -> "Page Inspector"
+                            "force_zoom"     -> if (viewModel.accessibilityForceZoom) "Zoom: On" else "Force Zoom"
+                            "vpn"            -> if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) "VPN: On" else "VPN"
+                            "qr_scanner"     -> "QR Scanner"
+                            "safe_locker"    -> "Safe Locker"
+                            "translator"     -> "Translator"
+                            "edit_page"      -> if (isEditing) "Stop Edit" else "Edit Page"
+                            "save_pdf"       -> "Save PDF"
+                            "pin_web_app"    -> "Pin Web App"
+                            "auto_scroll"    -> "Auto-Scroll"
+                            "qr_scan_page"   -> "QR Scan Page"
+                            "qr_generator"   -> "QR Generator"
+                            "console_log"    -> "Console Log"
+                            "dev_notes"      -> "Dev Notes"
+                            "site_style"     -> "Site Style"
                             else -> id
                         }
                         fun toolIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector = when (id) {
-                            "qr_scanner"   -> Icons.Rounded.QrCodeScanner
-                            "safe_locker"  -> Icons.Rounded.Lock
-                            "translator"   -> Icons.Rounded.Translate
-                            "edit_page"    -> Icons.Rounded.Edit
-                            "save_pdf"     -> Icons.Rounded.Print
-                            "pin_web_app"  -> Icons.AutoMirrored.Rounded.OpenInNew
-                            "auto_scroll"  -> Icons.Rounded.ArrowDownward
-                            "qr_scan_page" -> Icons.Rounded.CenterFocusWeak
-                            "qr_generator" -> Icons.Rounded.QrCode2
-                            "console_log"  -> Icons.Rounded.Terminal
-                            "dev_notes"    -> Icons.Rounded.Description
-                            "site_style"   -> Icons.Rounded.Palette
+                            "image_grabber"  -> Icons.Rounded.Collections
+                            "page_inspector" -> Icons.Rounded.Code
+                            "force_zoom"     -> Icons.Rounded.ZoomIn
+                            "vpn"            -> Icons.Rounded.VpnKey
+                            "qr_scanner"     -> Icons.Rounded.QrCodeScanner
+                            "safe_locker"    -> Icons.Rounded.Lock
+                            "translator"     -> Icons.Rounded.Translate
+                            "edit_page"      -> Icons.Rounded.Edit
+                            "save_pdf"       -> Icons.Rounded.Print
+                            "pin_web_app"    -> Icons.AutoMirrored.Rounded.OpenInNew
+                            "auto_scroll"    -> Icons.Rounded.ArrowDownward
+                            "qr_scan_page"   -> Icons.Rounded.CenterFocusWeak
+                            "qr_generator"   -> Icons.Rounded.QrCode2
+                            "console_log"    -> Icons.Rounded.Terminal
+                            "dev_notes"      -> Icons.Rounded.Description
+                            "site_style"     -> Icons.Rounded.Palette
                             else -> Icons.Rounded.Build
                         }
                         fun toolAction(id: String): () -> Unit = when (id) {
+                            "image_grabber" -> ({
+                                showQuickToolsSheet = false
+                                if (!showHomeScreen && activeTab != null) showImageGrabberSheet = true
+                                else Toast.makeText(context, "Open a webpage first to extract images", Toast.LENGTH_SHORT).show()
+                            })
+                            "page_inspector" -> ({
+                                showQuickToolsSheet = false
+                                if (!showHomeScreen && activeTab != null) showPageInspectorSheet = true
+                                else Toast.makeText(context, "Open a webpage first to inspect page", Toast.LENGTH_SHORT).show()
+                            })
+                            "force_zoom" -> ({
+                                val nextState = !viewModel.accessibilityForceZoom
+                                viewModel.saveAccessibilityForceZoom(context, nextState)
+                                if (nextState) {
+                                    viewModel.injectZoomEnabler()
+                                    Toast.makeText(context, "🔍 Force Zoom Enabled: Pinch to zoom on any website", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Force Zoom Disabled", Toast.LENGTH_SHORT).show()
+                                }
+                                showQuickToolsSheet = false
+                            })
+                            "vpn" -> ({
+                                showQuickToolsSheet = false
+                                if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
+                                    viewModel.disconnectVpn()
+                                    Toast.makeText(context, "🛡️ VPN Disconnected", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val config = viewModel.customVpnConfig
+                                    if (!config.isNullOrBlank()) {
+                                        viewModel.connectCustomVpn()
+                                        Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        onOpenSettings()
+                                        Toast.makeText(context, "Add VPN configuration in Settings first", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            })
                             "qr_scanner" -> ({
                                 showQuickToolsSheet = false
                                 if (!viewModel.hasSeenQrOverview) { pendingQrAction = onOpenQrTools; showQrOverviewDialog = true } else onOpenQrTools()
@@ -6196,6 +6543,59 @@ fun BrowserScreen(
                 SiteStyleCustomizerSheetContent(
                     viewModel = viewModel,
                     onDismissRequest = { showSiteStyleCustomizerSheet = false }
+                )
+            }
+
+            if (showImageGrabberSheet) {
+                ImageGrabberSheetContent(
+                    viewModel = viewModel,
+                    onDismissRequest = { showImageGrabberSheet = false }
+                )
+            }
+
+            if (showPageInspectorSheet) {
+                PageInspectorSheetContent(
+                    viewModel = viewModel,
+                    onDismissRequest = { showPageInspectorSheet = false }
+                )
+            }
+
+            if (showGroupDialog && groupDialogTargetTabId != null) {
+                val currentGroup = remember(viewModel.tabGroups.toList()) { viewModel.getGroupForTab(groupDialogTargetTabId!!) }
+                val groupColors = listOf(
+                    0xFF4285F4L, 0xFF34A853L, 0xFFFBBC05L, 0xFFEA4335L,
+                    0xFF8AB4F8L, 0xFF81C995L, 0xFFFDE293L, 0xFFF28B82L,
+                    0xFF9AA0A6L, 0xFF607D8BL, 0xFFFF9800L, 0xFF9C27B0L,
+                    0xFFE91E63L, 0xFF795548L, 0xFF009688L, 0xFF3F51B5L
+                )
+                TabGroupDialog(
+                    viewModel = viewModel,
+                    targetTabId = groupDialogTargetTabId!!,
+                    currentGroup = currentGroup,
+                    newGroupTitle = newGroupTitle,
+                    onNewGroupTitleChange = { newGroupTitle = it },
+                    newGroupColorIndex = newGroupColorIndex,
+                    onNewGroupColorIndexChange = { newGroupColorIndex = it },
+                    groupColors = groupColors,
+                    onDismissRequest = { showGroupDialog = false }
+                )
+            }
+
+            if (showRenameGroupDialog && renameGroupTarget != null) {
+                val groupColors = listOf(
+                    0xFF4285F4L, 0xFF34A853L, 0xFFFBBC05L, 0xFFEA4335L,
+                    0xFF8AB4F8L, 0xFF81C995L, 0xFFFDE293L, 0xFFF28B82L,
+                    0xFF9AA0A6L, 0xFF607D8BL, 0xFFFF9800L, 0xFF9C27B0L,
+                    0xFFE91E63L, 0xFF795548L, 0xFF009688L, 0xFF3F51B5L
+                )
+                RenameTabGroupDialog(
+                    viewModel = viewModel,
+                    renameGroupTarget = renameGroupTarget!!,
+                    renameGroupText = renameGroupText,
+                    onRenameGroupTextChange = { renameGroupText = it },
+                    groupColors = groupColors,
+                    onDismissRequest = { showRenameGroupDialog = false },
+                    onRenameGroupTargetChange = { renameGroupTarget = it }
                 )
             }
 

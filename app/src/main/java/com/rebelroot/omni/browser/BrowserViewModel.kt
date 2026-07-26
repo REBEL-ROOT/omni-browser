@@ -51,6 +51,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+
 import org.json.JSONObject
 import org.json.JSONArray
 import org.mozilla.geckoview.AllowOrDeny
@@ -132,6 +135,7 @@ class BrowserViewModel : ViewModel() {
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
         val SEARCH_ENGINE_KEY = stringPreferencesKey("default_search_engine")
         val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
+        val CUSTOM_SUGGEST_URL_KEY = stringPreferencesKey("custom_suggest_url")
         val CUSTOM_SEARCH_ENGINES_KEY = stringPreferencesKey("custom_search_engines")
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
@@ -278,6 +282,7 @@ class BrowserViewModel : ViewModel() {
     lateinit var ffmpegBridge: FFmpegBridge
     lateinit var streamDownloadEngine: StreamDownloadEngine
     lateinit var vpnManager: VpnManager
+    lateinit var adBlockManager: com.rebelroot.omni.browser.adblock.AdBlockManager
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     internal var copyManager: UniversalCopyManager? = null
     internal var aiBlockerManager: BuiltInExtensionManager? = null
@@ -312,14 +317,10 @@ class BrowserViewModel : ViewModel() {
 
     val DEFAULT_QUICK_TOOLS_ORDER = listOf(
         "qr_scanner", "safe_locker", "translator", "edit_page",
-        "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
+        "save_pdf", "vpn", "pin_web_app", "auto_scroll", "qr_scan_page",
         "qr_generator", "console_log", "dev_notes", "site_style"
     )
-    var quickToolsOrder by mutableStateOf(listOf(
-        "qr_scanner", "safe_locker", "translator", "edit_page",
-        "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
-        "qr_generator", "console_log", "dev_notes", "site_style"
-    ))
+    var quickToolsOrder by mutableStateOf(DEFAULT_QUICK_TOOLS_ORDER)
 
     // UI States
     var currentUrl by mutableStateOf("about:blank")
@@ -339,6 +340,7 @@ class BrowserViewModel : ViewModel() {
     var customVpnConfig by mutableStateOf<String?>(null)
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
+    var customSuggestUrl by mutableStateOf("")
     var customSearchEngines by mutableStateOf<List<CustomSearchEngine>>(emptyList())
     val searchSuggestions = androidx.compose.runtime.mutableStateListOf<String>()
     var isDarkThemeEnabled by mutableStateOf(true)
@@ -401,7 +403,7 @@ class BrowserViewModel : ViewModel() {
     var forceDarkWebsites by mutableStateOf(false)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
-    var addressBarPosition by mutableStateOf("Top")
+    var addressBarPosition by mutableStateOf("Split")
     var appIconState by mutableStateOf("Default")
     var customIconPath by mutableStateOf<String?>(null)
     var browserWallpaperUri by mutableStateOf<String?>(null)
@@ -419,11 +421,11 @@ class BrowserViewModel : ViewModel() {
     var wallpaperOffsetY by mutableStateOf(0f)
     var shouldOpenTabsSheetOnLaunch by mutableStateOf(false)
     var shortcutTileStyle by mutableStateOf("Circle")
-    var homeUiScale by mutableStateOf(1.0f)
+    var homeUiScale by mutableStateOf(0.90f)
     var bottomNavScale by mutableStateOf(1.0f)
     var showPrivacyStatsWidget by mutableStateOf(true)
     var isMinimalistFocusMode by mutableStateOf(false)
-    var trackersBlockedCount by androidx.compose.runtime.mutableIntStateOf(48)
+    var trackersBlockedCount by androidx.compose.runtime.mutableIntStateOf(0)
 
 
 
@@ -1426,7 +1428,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    fun createNewTab(context: Context, url: String) {
+    fun createNewTab(context: Context, url: String, groupId: String? = null) {
         val runtime = getGeckoRuntime(context)
         val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -1447,8 +1449,11 @@ class BrowserViewModel : ViewModel() {
         
         setupTabSessionListeners(newTab, context)
         tabs.add(newTab)
+        if (groupId != null) {
+            addTabToGroup(tabId, groupId)
+        }
         session.open(runtime)
-        if (!openTabsInBackground || tabs.size == 1) {
+        if (!openTabsInBackground || tabs.size == 1 || groupId != null) {
             selectTab(newTab.id)
         } else {
             val isIncog = newTab.isIncognito
@@ -1617,6 +1622,12 @@ class BrowserViewModel : ViewModel() {
         saveTabGroups()
     }
 
+    fun closeAllTabs(context: Context, incognito: Boolean) {
+        val targetTabs = tabs.filter { it.isIncognito == incognito }.toList()
+        targetTabs.forEach { tab ->
+            closeTab(tab.id, context)
+        }
+    }
 
     private fun loadUrlInTab(tab: TabState, url: String) {
         var formattedUrl = url.trim()
@@ -1987,6 +1998,7 @@ class BrowserViewModel : ViewModel() {
             val locker = PrivateLockerManager(appCtx)
             streamDownloadEngine = StreamDownloadEngine(appCtx, ffmpegBridge, locker)
             vpnManager = VpnManager(appCtx)
+            adBlockManager = com.rebelroot.omni.browser.adblock.AdBlockManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
             aiBlockerManager = BuiltInExtensionManager(
                 runtime = geckoRuntime!!,
@@ -2032,6 +2044,7 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 selectedSearchEngine = getSearchEnginePreference(appCtx).first()
                 customSearchUrl = getCustomSearchUrlPreference(appCtx).first()
+                customSuggestUrl = getCustomSuggestUrlPreference(appCtx).first()
                 val enginesJson = getCustomSearchEnginesPreference(appCtx).first()
                 customSearchEngines = parseCustomSearchEngines(enginesJson)
             }
@@ -2144,7 +2157,7 @@ class BrowserViewModel : ViewModel() {
                     forceDarkWebsites = prefs[FORCE_DARK_WEBSITES_KEY] ?: false
                     navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
                     navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
-                    addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Top"
+                    addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Split"
                     appIconState = prefs[APP_ICON_STATE_KEY] ?: "Default"
                     customIconPath = prefs[CUSTOM_ICON_PATH_KEY]
                     browserWallpaperUri = prefs[BROWSER_WALLPAPER_URI_KEY]
@@ -2160,20 +2173,16 @@ class BrowserViewModel : ViewModel() {
                     wallpaperOffsetX = prefs[WALLPAPER_OFFSET_X_KEY] ?: 0f
                     wallpaperOffsetY = prefs[WALLPAPER_OFFSET_Y_KEY] ?: 0f
                     shortcutTileStyle = prefs[SHORTCUT_TILE_STYLE_KEY] ?: "Circle"
-                    homeUiScale = prefs[HOME_UI_SCALE_KEY] ?: 1.0f
+                    homeUiScale = prefs[HOME_UI_SCALE_KEY] ?: 0.90f
                     bottomNavScale = prefs[BOTTOM_NAV_SCALE_KEY] ?: 1.0f
                     showPrivacyStatsWidget = prefs[SHOW_PRIVACY_STATS_KEY] ?: true
                     isMinimalistFocusMode = prefs[MINIMALIST_FOCUS_MODE_KEY] ?: false
-                    trackersBlockedCount = prefs[TRACKERS_BLOCKED_COUNT_KEY] ?: 48
+                    trackersBlockedCount = prefs[TRACKERS_BLOCKED_COUNT_KEY] ?: 0
                     quickToolsOrder = run {
                         val saved = prefs[QUICK_TOOLS_ORDER_KEY]
-                        val default = listOf(
-                            "qr_scanner", "safe_locker", "translator", "edit_page",
-                            "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
-                            "qr_generator", "console_log", "dev_notes", "site_style"
-                        )
+                        val default = DEFAULT_QUICK_TOOLS_ORDER
                         if (!saved.isNullOrBlank()) {
-                            val savedList = saved.split(",").filter { it.isNotBlank() }
+                            val savedList = saved.split(",").map { if (it == "ad_blocker") "vpn" else it }.filter { it.isNotBlank() && it != "ad_blocker" }.distinct()
                             savedList + default.filter { it !in savedList }
                         } else default
                     }
@@ -2611,6 +2620,12 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun getCustomSuggestUrlPreference(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_SUGGEST_URL_KEY] ?: ""
+        }
+    }
+
     fun getCustomSearchEnginesPreference(context: Context): Flow<String> {
         return context.dataStore.data.map { preferences ->
             preferences[CUSTOM_SEARCH_ENGINES_KEY] ?: "[]"
@@ -2625,8 +2640,9 @@ class BrowserViewModel : ViewModel() {
                 val obj = array.getJSONObject(i)
                 val name = obj.optString("name", "")
                 val queryUrl = obj.optString("queryUrl", "")
+                val suggestUrl = obj.optString("suggestUrl", "")
                 if (name.isNotEmpty() && queryUrl.isNotEmpty()) {
-                    list.add(CustomSearchEngine(name, queryUrl))
+                    list.add(CustomSearchEngine(name, queryUrl, suggestUrl))
                 }
             }
         } catch (e: Exception) {
@@ -2641,14 +2657,25 @@ class BrowserViewModel : ViewModel() {
             val obj = org.json.JSONObject()
             obj.put("name", engine.name)
             obj.put("queryUrl", engine.queryUrl)
+            if (engine.suggestUrl.isNotEmpty()) {
+                obj.put("suggestUrl", engine.suggestUrl)
+            }
             array.put(obj)
         }
         return array.toString()
     }
 
-    fun addCustomSearchEngine(context: Context, name: String, queryUrl: String) {
-        val updatedList = customSearchEngines + CustomSearchEngine(name, queryUrl)
+    fun addCustomSearchEngine(context: Context, name: String, queryUrl: String, suggestUrl: String = "") {
+        val updatedList = customSearchEngines + CustomSearchEngine(name, queryUrl, suggestUrl)
         saveCustomSearchEnginesList(context, updatedList)
+    }
+
+    fun updateCustomSearchEngine(context: Context, oldEngine: CustomSearchEngine, newEngine: CustomSearchEngine) {
+        val updatedList = customSearchEngines.map { if (it.name == oldEngine.name) newEngine else it }
+        saveCustomSearchEnginesList(context, updatedList)
+        if (selectedSearchEngine == oldEngine.name && oldEngine.name != newEngine.name) {
+            saveSearchEngine(context, newEngine.name)
+        }
     }
 
     fun deleteCustomSearchEngine(context: Context, engine: CustomSearchEngine) {
@@ -2684,6 +2711,15 @@ class BrowserViewModel : ViewModel() {
                 preferences[CUSTOM_SEARCH_URL_KEY] = url
             }
             customSearchUrl = url
+        }
+    }
+
+    fun saveCustomSuggestUrl(context: Context, url: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_SUGGEST_URL_KEY] = url
+            }
+            customSuggestUrl = url
         }
     }
 
@@ -2792,6 +2828,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[ADDRESS_BAR_POSITION_KEY] = position }
             addressBarPosition = position
+            saveChromeNavBarEnabled(context, position != "Split")
         }
     }
 
@@ -3321,7 +3358,25 @@ class BrowserViewModel : ViewModel() {
                     "Ecosia" -> "https://ac.ecosia.org/autocomplete?q=$encodedQuery"
                     "Startpage" -> "https://www.startpage.com/do/suggest?query=$encodedQuery"
                     "Qwant" -> "https://api.qwant.com/v3/suggest?q=$encodedQuery"
-                    else -> "https://suggestqueries.google.com/complete/search?client=chrome&q=$encodedQuery"
+                    "Custom" -> {
+                        val customSuggest = customSuggestUrl.trim()
+                        if (customSuggest.isNotEmpty()) {
+                            if (customSuggest.contains("%s")) customSuggest.replace("%s", encodedQuery)
+                            else customSuggest + encodedQuery
+                        } else {
+                            "https://suggestqueries.google.com/complete/search?client=chrome&q=$encodedQuery"
+                        }
+                    }
+                    else -> {
+                        val match = customSearchEngines.find { it.name == selectedSearchEngine }
+                        if (match != null && match.suggestUrl.isNotBlank()) {
+                            val customSuggest = match.suggestUrl.trim()
+                            if (customSuggest.contains("%s")) customSuggest.replace("%s", encodedQuery)
+                            else customSuggest + encodedQuery
+                        } else {
+                            "https://suggestqueries.google.com/complete/search?client=chrome&q=$encodedQuery"
+                        }
+                    }
                 }
 
                 val url = java.net.URL(urlString)
@@ -3334,19 +3389,43 @@ class BrowserViewModel : ViewModel() {
                 if (conn.responseCode == 200) {
                     val text = conn.inputStream.bufferedReader().use { it.readText() }
                     val list = mutableListOf<String>()
+                    val trimmedText = text.trim()
                     
-                    if (selectedSearchEngine == "DuckDuckGo") {
-                        val arr = org.json.JSONArray(text)
-                        for (i in 0 until arr.length()) {
-                            val obj = arr.getJSONObject(i)
-                            list.add(obj.getString("phrase"))
+                    if (trimmedText.startsWith("[")) {
+                        val arr = org.json.JSONArray(trimmedText)
+                        if (arr.length() > 0) {
+                            val firstItem = arr.opt(0)
+                            if (firstItem is org.json.JSONObject && firstItem.has("phrase")) {
+                                for (i in 0 until arr.length()) {
+                                    val obj = arr.optJSONObject(i)
+                                    if (obj != null && obj.has("phrase")) {
+                                        list.add(obj.getString("phrase"))
+                                    }
+                                }
+                            } else if (arr.length() > 1 && arr.opt(1) is org.json.JSONArray) {
+                                val suggestionsArr = arr.getJSONArray(1)
+                                for (i in 0 until suggestionsArr.length()) {
+                                    list.add(suggestionsArr.getString(i))
+                                }
+                            } else if (firstItem is String) {
+                                for (i in 0 until arr.length()) {
+                                    val str = arr.optString(i)
+                                    if (str.isNotEmpty()) list.add(str)
+                                }
+                            }
                         }
-                    } else {
-                        val arr = org.json.JSONArray(text)
-                        if (arr.length() > 1) {
-                            val suggestionsArr = arr.getJSONArray(1)
-                            for (i in 0 until suggestionsArr.length()) {
-                                list.add(suggestionsArr.getString(i))
+                    } else if (trimmedText.startsWith("{")) {
+                        val obj = org.json.JSONObject(trimmedText)
+                        val arr = obj.optJSONArray("suggestions") ?: obj.optJSONArray("results") ?: obj.optJSONArray("items")
+                        if (arr != null) {
+                            for (i in 0 until arr.length()) {
+                                val item = arr.opt(i)
+                                if (item is String) {
+                                    list.add(item)
+                                } else if (item is org.json.JSONObject) {
+                                    val phrase = item.optString("phrase", item.optString("title", item.optString("name", "")))
+                                    if (phrase.isNotEmpty()) list.add(phrase)
+                                }
                             }
                         }
                     }
@@ -3778,23 +3857,25 @@ class BrowserViewModel : ViewModel() {
 
     internal fun injectZoomEnabler() {
         val js = "javascript:(function() {" +
-                 "  var meta = document.querySelector('meta[name=viewport]');" +
-                 "  if (meta) {" +
-                 "    var content = meta.getAttribute('content');" +
-                 "    if (content) {" +
-                 "      content = content.replace(/user-scalable\\s*=\\s*no/g, 'user-scalable=yes');" +
-                 "      content = content.replace(/maximum-scale\\s*=\\s*[0-9.]+/g, 'maximum-scale=5.0');" +
-                 "      meta.setAttribute('content', content);" +
-                 "    }" +
-                 "  } else {" +
-                 "    meta = document.createElement('meta');" +
+                 "  try {" +
+                 "    var metas = document.querySelectorAll('meta[name=viewport]');" +
+                 "    metas.forEach(function(m){ if (m && m.parentNode) m.parentNode.removeChild(m); });" +
+                 "    var meta = document.createElement('meta');" +
                  "    meta.name = 'viewport';" +
-                 "    meta.content = 'width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0';" +
-                 "    document.getElementsByTagName('head')[0].appendChild(meta);" +
-                 "  }" +
-                 "  document.body.style.touchAction = 'pan-x pan-y';" +
+                 "    meta.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.1, maximum-scale=10.0, user-scalable=yes';" +
+                 "    (document.head || document.documentElement).appendChild(meta);" +
+                 "    if (document.documentElement) document.documentElement.style.touchAction = 'auto';" +
+                 "    if (document.body) document.body.style.touchAction = 'auto';" +
+                 "    window.addEventListener('touchmove', function(e){ if (e.touches && e.touches.length > 1) e.stopPropagation(); }, true);" +
+                 "  } catch(e) {}" +
                  "})();"
-        geckoSession.loadUri(js)
+        try {
+            val activeTab = tabs.find { it.id == activeTabId }
+            val targetSession = activeTab?.session ?: geckoSession
+            targetSession.loadUri(js)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error injecting zoom enabler", e)
+        }
     }
 
     /**
@@ -4227,20 +4308,40 @@ class BrowserViewModel : ViewModel() {
     var hasMoreNews by mutableStateOf(true)
     private var newsPageIndex = 0
 
-    fun fetchNews(category: String = "News") {
+    private val categoryNewsCache = mutableMapOf<String, List<NewsArticle>>()
+
+    fun fetchNews(category: String = "News", forceRefresh: Boolean = false) {
         selectedNewsCategory = category
-        isNewsLoading = true
         hasMoreNews = true
         newsPageIndex = 0
+
+        val cached = categoryNewsCache[category]
+        if (!forceRefresh && !cached.isNullOrEmpty()) {
+            newsArticles.clear()
+            newsArticles.addAll(cached)
+            isNewsLoading = false
+            return
+        }
+
+        isNewsLoading = true
         viewModelScope.launch(Dispatchers.IO) {
             val list = fetchRssArticles(category, page = 0)
-            launch(Dispatchers.Main) {
-                newsArticles.clear()
-                newsArticles.addAll(list.filter { it.title.length >= 12 })
-                isNewsLoading = false
+            val filtered = list.filter { it.title.length >= 12 }
+            if (filtered.isNotEmpty()) {
+                categoryNewsCache[category] = filtered
             }
+            launch(Dispatchers.Main) {
+                if (selectedNewsCategory == category) {
+                    newsArticles.clear()
+                    newsArticles.addAll(filtered)
+                    isNewsLoading = false
+                }
+            }
+            enrichArticlesWithOriginalOgImages(filtered, category)
         }
     }
+
+
 
     fun loadMoreNews() {
         if (isNewsLoading || isMoreNewsLoading || !hasMoreNews) return
@@ -4324,15 +4425,16 @@ class BrowserViewModel : ViewModel() {
             val parser = android.util.Xml.newPullParser()
             parser.setInput(conn.inputStream, "UTF-8")
 
-            var eventType   = parser.eventType
-            var insideItem  = false
-            var currentTag  = ""
-            var title       = ""
-            var link        = ""
-            var pubDate     = ""
-            var description = ""
-            var source      = ""
-            var sourceUrl   = ""
+            var eventType     = parser.eventType
+            var insideItem    = false
+            var currentTag    = ""
+            var title         = ""
+            var link          = ""
+            var pubDate       = ""
+            var description   = ""
+            var source        = ""
+            var sourceUrl     = ""
+            var mediaImageUrl = ""
 
             while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
@@ -4340,9 +4442,30 @@ class BrowserViewModel : ViewModel() {
                         currentTag = parser.name ?: ""
                         if (currentTag.equals("item", ignoreCase = true)) {
                             insideItem = true
+                            mediaImageUrl = ""
                         }
-                        if (insideItem && currentTag.equals("source", ignoreCase = true)) {
-                            sourceUrl = parser.getAttributeValue(null, "url") ?: ""
+                        if (insideItem) {
+                            if (currentTag.equals("source", ignoreCase = true)) {
+                                sourceUrl = parser.getAttributeValue(null, "url") ?: ""
+                            }
+                            if (currentTag.contains("media:content", ignoreCase = true) ||
+                                currentTag.contains("media:thumbnail", ignoreCase = true) ||
+                                currentTag.equals("thumbnail", ignoreCase = true)
+                            ) {
+                                val urlAttr = parser.getAttributeValue(null, "url") ?: ""
+                                if (urlAttr.isNotEmpty() && mediaImageUrl.isEmpty()) {
+                                    mediaImageUrl = urlAttr
+                                }
+                            }
+                            if (currentTag.equals("enclosure", ignoreCase = true)) {
+                                val encUrl  = parser.getAttributeValue(null, "url") ?: ""
+                                val encType = parser.getAttributeValue(null, "type") ?: ""
+                                if (encUrl.isNotEmpty() && (encType.contains("image", ignoreCase = true) || encUrl.contains(".jpg") || encUrl.contains(".png") || encUrl.contains(".webp"))) {
+                                    if (mediaImageUrl.isEmpty()) {
+                                        mediaImageUrl = encUrl
+                                    }
+                                }
+                            }
                         }
                     }
                     org.xmlpull.v1.XmlPullParser.TEXT -> {
@@ -4383,21 +4506,28 @@ class BrowserViewModel : ViewModel() {
 
                                     val imgRegex = Regex("<img[^>]+src=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
                                     val imgMatch = imgRegex.find(description)
+                                    val htmlImgUrl = imgMatch?.groupValues?.getOrNull(1)?.trim() ?: ""
 
-                                    var imageUrl = imgMatch?.groupValues?.getOrNull(1)?.trim() ?: ""
-
-                                    if (imageUrl.isEmpty()) {
-                                        val domain = extractDomain(sourceUrl.ifEmpty { null }, sourceName)
-                                        imageUrl = "https://www.google.com/s2/favicons?sz=64&domain=$domain"
+                                    val rawCandidate = when {
+                                        mediaImageUrl.isNotEmpty() -> mediaImageUrl
+                                        htmlImgUrl.isNotEmpty() -> htmlImgUrl
+                                        else -> ""
                                     }
+
+                                    val domain = extractDomain(sourceUrl.ifEmpty { null }, sourceName)
+                                    val sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=$domain"
+
+                                    val headlineImageUrl = resolveHeadlineImageUrl(rawCandidate, cleanTitle, category)
+
 
                                     if (list.none { it.title.equals(cleanTitle, ignoreCase = true) }) {
                                         list.add(NewsArticle(
-                                            title    = cleanTitle,
-                                            link     = rawLink,
-                                            source   = sourceName,
-                                            pubDate  = cleanDate,
-                                            imageUrl = imageUrl
+                                            title            = cleanTitle,
+                                            link             = rawLink,
+                                            source           = sourceName,
+                                            pubDate          = cleanDate,
+                                            imageUrl         = headlineImageUrl,
+                                            sourceFaviconUrl = sourceFaviconUrl
                                         ))
                                     }
                                 }
@@ -4405,6 +4535,7 @@ class BrowserViewModel : ViewModel() {
 
                             title = ""; link = ""; pubDate = ""
                             description = ""; source = ""; sourceUrl = ""
+                            mediaImageUrl = ""
                         }
                         currentTag = ""
                     }
@@ -4422,42 +4553,48 @@ class BrowserViewModel : ViewModel() {
                     link = "https://openved.com/astrology",
                     source = "OpenVed Astrology",
                     pubDate = "Today",
-                    imageUrl = "https://openved.com/og-image.jpg"
+                    imageUrl = "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
+                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
                 ),
                 NewsArticle(
                     title = "Daily Vedic Horoscopes & Planetary Transit Forecasts",
                     link = "https://openved.com/astrology",
                     source = "OpenVed Astrology",
                     pubDate = "Today",
-                    imageUrl = "https://openved.com/og-image.jpg"
+                    imageUrl = "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
+                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
                 ),
                 NewsArticle(
                     title = "Sade Sati & Manglik Dosha Analysis with Vedic Remedies",
                     link = "https://openved.com/astrology",
                     source = "OpenVed Astrology",
                     pubDate = "Today",
-                    imageUrl = "https://openved.com/og-image.jpg"
+                    imageUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800",
+                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
                 ),
                 NewsArticle(
                     title = "Vedic Kundli Matching & Relationship Compatibility",
                     link = "https://openved.com/astrology",
                     source = "OpenVed Astrology",
                     pubDate = "Today",
-                    imageUrl = "https://openved.com/og-image.jpg"
+                    imageUrl = "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
+                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
                 ),
                 NewsArticle(
                     title = "Nakshatra, Mahadasha & Lal Kitab Jyotish Remedies",
                     link = "https://openved.com/astrology",
                     source = "OpenVed Astrology",
                     pubDate = "Today",
-                    imageUrl = "https://openved.com/og-image.jpg"
+                    imageUrl = "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
+                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
                 ),
                 NewsArticle(
                     title = "AI Astrologer: Instant Personal Jyotish & Horoscope Readings",
                     link = "https://openved.com/astrology",
                     source = "OpenVed Astrology",
                     pubDate = "Today",
-                    imageUrl = "https://openved.com/og-image.jpg"
+                    imageUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800",
+                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
                 )
             )
 
@@ -4492,6 +4629,214 @@ class BrowserViewModel : ViewModel() {
         }
         return getDomainForSource(sourceName)
     }
+
+    private val topicHeadlinePhotos = mapOf(
+        "Technology" to listOf(
+            "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800",
+            "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=800",
+            "https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=800",
+            "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800",
+            "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800",
+            "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=800"
+        ),
+        "Sports" to listOf(
+            "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800",
+            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=800",
+            "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800",
+            "https://images.unsplash.com/photo-1530549387789-4c1017266635?q=80&w=800",
+            "https://images.unsplash.com/photo-1517649763962-0c623266010b?q=80&w=800"
+        ),
+        "Business" to listOf(
+            "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=800",
+            "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800",
+            "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=800",
+            "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=800",
+            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800"
+        ),
+        "World" to listOf(
+            "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=800",
+            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800",
+            "https://images.unsplash.com/photo-1508873696983-2df515122519?q=80&w=800",
+            "https://images.unsplash.com/photo-1477959858617-67f30ac4ce78?q=80&w=800"
+        ),
+        "Science" to listOf(
+            "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?q=80&w=800",
+            "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=800",
+            "https://images.unsplash.com/photo-1507668077129-56e32842fceb?q=80&w=800",
+            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800"
+        ),
+        "Entertainment" to listOf(
+            "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800",
+            "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=800",
+            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800",
+            "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800"
+        ),
+        "Health" to listOf(
+            "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=800",
+            "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800",
+            "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?q=80&w=800",
+            "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800"
+        ),
+        "Astrology" to listOf(
+            "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
+            "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
+            "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800"
+        ),
+        "Recipes" to listOf(
+            "https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=800",
+            "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800",
+            "https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?q=80&w=800"
+        )
+    )
+
+    private fun resolveHeadlineImageUrl(
+        xmlImage: String,
+        title: String,
+        category: String
+    ): String {
+        if (xmlImage.isNotBlank() && !xmlImage.contains("favicons") && !xmlImage.contains("favicon.ico")) {
+            return xmlImage
+        }
+
+        val pool = topicHeadlinePhotos[category] ?: topicHeadlinePhotos["World"]!!
+        val index = Math.abs(title.hashCode()) % pool.size
+        return pool[index]
+    }
+
+    fun getFallbackCategoryPhoto(title: String, category: String): String {
+        val lowerTitle = title.lowercase()
+        val detectedCategory = when {
+            category.isNotBlank() && topicHeadlinePhotos.containsKey(category) -> category
+            lowerTitle.contains("ai") || lowerTitle.contains("tech") || lowerTitle.contains("phone") || lowerTitle.contains("app") || lowerTitle.contains("chip") || lowerTitle.contains("google") || lowerTitle.contains("apple") || lowerTitle.contains("nvidia") -> "Technology"
+            lowerTitle.contains("crypto") || lowerTitle.contains("bitcoin") || lowerTitle.contains("stock") || lowerTitle.contains("market") || lowerTitle.contains("bank") || lowerTitle.contains("economy") || lowerTitle.contains("trade") -> "Business"
+            lowerTitle.contains("match") || lowerTitle.contains("score") || lowerTitle.contains("football") || lowerTitle.contains("soccer") || lowerTitle.contains("cricket") || lowerTitle.contains("nba") || lowerTitle.contains("league") -> "Sports"
+            lowerTitle.contains("movie") || lowerTitle.contains("film") || lowerTitle.contains("actor") || lowerTitle.contains("music") || lowerTitle.contains("star") || lowerTitle.contains("show") || lowerTitle.contains("series") -> "Entertainment"
+            lowerTitle.contains("doctor") || lowerTitle.contains("hospital") || lowerTitle.contains("health") || lowerTitle.contains("virus") || lowerTitle.contains("medicine") || lowerTitle.contains("diet") -> "Health"
+            lowerTitle.contains("space") || lowerTitle.contains("nasa") || lowerTitle.contains("science") || lowerTitle.contains("planet") || lowerTitle.contains("astronomy") -> "Science"
+            else -> "World"
+        }
+        val pool = topicHeadlinePhotos[detectedCategory] ?: topicHeadlinePhotos["World"]!!
+        val index = Math.abs(title.hashCode()) % pool.size
+        return pool[index]
+    }
+
+    private fun enrichArticlesWithOriginalOgImages(articles: List<NewsArticle>, category: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            articles.chunked(4).forEach { chunk ->
+                val jobs = chunk.map { article ->
+                    async {
+                        val realOgImage = fetchOriginalArticleImage(article.link)
+                        if (!realOgImage.isNullOrEmpty()) {
+                            withContext(Dispatchers.Main) {
+                                val index = newsArticles.indexOfFirst { it.link == article.link }
+                                if (index != -1) {
+                                    newsArticles[index] = newsArticles[index].copy(imageUrl = realOgImage)
+                                }
+                                categoryNewsCache[category]?.let { cachedList ->
+                                    val cacheIdx = cachedList.indexOfFirst { it.link == article.link }
+                                    if (cacheIdx != -1) {
+                                        val mutable = cachedList.toMutableList()
+                                        mutable[cacheIdx] = mutable[cacheIdx].copy(imageUrl = realOgImage)
+                                        categoryNewsCache[category] = mutable
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                jobs.awaitAll()
+            }
+        }
+    }
+
+    private fun resolveGoogleNewsRedirect(googleNewsUrl: String): String {
+        try {
+            val conn = java.net.URL(googleNewsUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            conn.instanceFollowRedirects = true
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+            val inputStream = conn.inputStream
+            val buf = ByteArray(32768)
+            val read = inputStream.read(buf)
+            conn.disconnect()
+
+            if (read > 0) {
+                val html = String(buf, 0, read, Charsets.UTF_8)
+                val linkRegex = Regex("""<a[^>]+href=["'](https?://[^"']+)["']""", RegexOption.IGNORE_CASE)
+                val match = linkRegex.find(html)
+                val target = match?.groupValues?.getOrNull(1)
+                if (!target.isNullOrEmpty() && !target.contains("news.google.com")) {
+                    return target
+                }
+            }
+        } catch (_: Exception) {}
+        return googleNewsUrl
+    }
+
+    private fun fetchOriginalArticleImage(articleUrl: String): String? {
+        if (articleUrl.isBlank()) return null
+        return try {
+            val targetUrl = if (articleUrl.contains("news.google.com")) {
+                resolveGoogleNewsRedirect(articleUrl)
+            } else {
+                articleUrl
+            }
+
+            val conn = java.net.URL(targetUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 3500
+            conn.readTimeout = 3500
+            conn.instanceFollowRedirects = true
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+            val inputStream = conn.inputStream
+            val buf = ByteArray(65536)
+            val read = inputStream.read(buf)
+            conn.disconnect()
+
+            if (read > 0) {
+                val html = String(buf, 0, read, Charsets.UTF_8)
+                val ogPattern = Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+                val ogPattern2 = Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']""", RegexOption.IGNORE_CASE)
+                val twitterPattern = Regex("""<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+
+                val match = ogPattern.find(html) ?: ogPattern2.find(html) ?: twitterPattern.find(html)
+                var rawImg = match?.groupValues?.getOrNull(1)?.trim() ?: ""
+
+                if (rawImg.isNotEmpty()) {
+                    rawImg = rawImg.replace("&amp;", "&")
+                        .replace("&quot;", "\"")
+                        .replace("&lt;", "<")
+                        .replace("&gt;", ">")
+
+                    if (rawImg.startsWith("//")) {
+                        rawImg = "https:$rawImg"
+                    } else if (rawImg.startsWith("/") && !rawImg.startsWith("//")) {
+                        val baseUri = Uri.parse(targetUrl)
+                        val scheme = baseUri.scheme ?: "https"
+                        val host = baseUri.host ?: ""
+                        if (host.isNotEmpty()) {
+                            rawImg = "$scheme://$host$rawImg"
+                        }
+                    }
+
+                    if (rawImg.startsWith("http://") || rawImg.startsWith("https://")) {
+                        if (!rawImg.endsWith(".svg", ignoreCase = true)) {
+                            return rawImg
+                        }
+                    }
+                }
+                null
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+
+
     private fun getDomainForSource(sourceName: String): String {
         val clean = sourceName.trim().lowercase()
             .replace(" ", "")
@@ -5115,6 +5460,377 @@ class BrowserViewModel : ViewModel() {
                 Log.d("BrowserViewModel", "Auto-closed ${toClose.size} inactive tabs.")
             }
         }
+    }
+
+    // Image Grabber & Manga Reader Mode State
+    data class MetaTagInfo(val name: String, val content: String)
+    data class DomNodeInfo(val tag: String, val id: String, val className: String, val childCount: Int, val snippet: String)
+    data class ResourceInfo(val url: String, val type: String, val durationMs: Int, val sizeBytes: Long)
+    data class StorageItem(val key: String, val value: String)
+
+    data class PageStats(
+        val title: String,
+        val wordCount: Int,
+        val readTimeMinutes: Int,
+        val imageCount: Int,
+        val linkCount: Int,
+        val scriptCount: Int,
+        val cssCount: Int,
+        val charCount: Int,
+        val h1Count: Int = 0,
+        val h2Count: Int = 0,
+        val h3Count: Int = 0,
+        val metaTags: List<MetaTagInfo> = emptyList(),
+        val domNodes: List<DomNodeInfo> = emptyList(),
+        val resources: List<ResourceInfo> = emptyList(),
+        val cookies: List<StorageItem> = emptyList(),
+        val localStorageItems: List<StorageItem> = emptyList()
+    )
+
+    var extractedImagesList by mutableStateOf<List<String>>(emptyList())
+    var isExtractingImages by mutableStateOf(false)
+    var pageInspectorStats by mutableStateOf<PageStats?>(null)
+    var consoleEvalResult by mutableStateOf<String?>(null)
+    var consoleEvalError by mutableStateOf(false)
+
+    fun executeConsoleJs(code: String) {
+        val activeTab = tabs.find { it.id == activeTabId } ?: return
+        val escaped = code.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ")
+        val js = """
+            javascript:(function(){
+                try {
+                    var res = eval('$escaped');
+                    var output = (res === undefined) ? 'undefined' : (res === null) ? 'null' : (typeof res === 'object') ? JSON.stringify(res, null, 2) : String(res);
+                    alert('OMNI_EVAL_RESULT:' + JSON.stringify({ ok: true, val: output }));
+                } catch(e) {
+                    alert('OMNI_EVAL_RESULT:' + JSON.stringify({ ok: false, val: e.toString() }));
+                }
+            })();
+        """.trimIndent()
+        activeTab.session.loadUri(js)
+    }
+
+    fun inspectCurrentPage(context: Context) {
+        val activeTab = tabs.find { it.id == activeTabId } ?: return
+        val js = """
+            javascript:(function(){
+                try {
+                    var text = document.body ? document.body.innerText || '' : '';
+                    var words = text.trim().split(/\s+/).filter(function(w){ return w.length > 0; });
+                    var wordCount = words.length;
+                    var readTime = Math.max(1, Math.ceil(wordCount / 200));
+                    var imgs = document.querySelectorAll('img').length;
+                    var links = document.querySelectorAll('a').length;
+                    var scripts = document.querySelectorAll('script').length;
+                    var css = document.querySelectorAll('link[rel="stylesheet"]').length;
+
+                    var metas = [];
+                    var metaEls = document.querySelectorAll('meta');
+                    metaEls.forEach(function(m) {
+                        var name = m.getAttribute('name') || m.getAttribute('property') || m.getAttribute('http-equiv') || '';
+                        var content = m.getAttribute('content') || '';
+                        if (name && content && metas.length < 20) {
+                            metas.push({ n: name, c: content });
+                        }
+                    });
+
+                    var h1 = document.querySelectorAll('h1').length;
+                    var h2 = document.querySelectorAll('h2').length;
+                    var h3 = document.querySelectorAll('h3').length;
+
+                    var domNodes = [];
+                    var keyEls = document.querySelectorAll('header, nav, main, article, section, footer, aside, form, table, script, style, div[id], div[class]');
+                    keyEls.forEach(function(el) {
+                        if (domNodes.length < 35) {
+                            var tag = el.tagName.toLowerCase();
+                            var id = el.id || '';
+                            var cls = (el.className && typeof el.className === 'string') ? el.className.trim() : '';
+                            var children = el.children ? el.children.length : 0;
+                            var textSnippet = el.innerText ? el.innerText.trim().substring(0, 50) : '';
+                            domNodes.push({ t: tag, i: id, c: cls, ch: children, s: textSnippet });
+                        }
+                    });
+
+                    var resources = [];
+                    if (window.performance && window.performance.getEntriesByType) {
+                        var entries = window.performance.getEntriesByType('resource');
+                        entries.forEach(function(entry) {
+                            if (resources.length < 50) {
+                                var u = entry.name;
+                                var type = entry.initiatorType || 'other';
+                                var dur = Math.round(entry.duration || 0);
+                                var size = entry.transferSize || entry.encodedBodySize || 0;
+                                resources.push({ u: u, t: type, d: dur, s: size });
+                            }
+                        });
+                    }
+
+                    var cookies = [];
+                    if (document.cookie) {
+                        var parts = document.cookie.split(';');
+                        parts.forEach(function(p) {
+                            var kv = p.trim().split('=');
+                            if (kv[0] && cookies.length < 25) {
+                                cookies.push({ k: kv[0], v: kv.slice(1).join('=') });
+                            }
+                        });
+                    }
+
+                    var localStore = [];
+                    try {
+                        if (window.localStorage) {
+                            for (var i = 0; i < localStorage.length && i < 25; i++) {
+                                var key = localStorage.key(i);
+                                if (key) {
+                                    localStore.push({ k: key, v: String(localStorage.getItem(key)) });
+                                }
+                            }
+                        }
+                    } catch(e){}
+
+                    alert('OMNI_PAGE_STATS:' + JSON.stringify({
+                        w: wordCount, r: readTime, i: imgs, l: links, s: scripts, c: css, ch: text.length,
+                        meta: metas, h1: h1, h2: h2, h3: h3, dom: domNodes, res: resources, ck: cookies, ls: localStore
+                    }));
+                } catch(e) {}
+            })();
+        """.trimIndent()
+        activeTab.session.loadUri(js)
+    }
+
+    fun extractPageImages(context: Context) {
+        extractedImagesList = emptyList()
+        isExtractingImages = true
+        val activeTab = tabs.find { it.id == activeTabId }
+        if (activeTab == null) {
+            isExtractingImages = false
+            return
+        }
+
+        // Automatic fallback: hide spinner after 8 seconds if script hasn't signaled DONE
+        viewModelScope.launch(Dispatchers.Main) {
+            kotlinx.coroutines.delay(8000)
+            if (isExtractingImages) {
+                isExtractingImages = false
+            }
+        }
+
+        val js = """
+            javascript:(function(){
+                try {
+                    var urls = [];
+                    var seen = {};
+
+                    function addUrl(src) {
+                        if (!src || typeof src !== 'string') return;
+                        src = src.trim();
+                        if (src.startsWith('//')) src = window.location.protocol + src;
+                        if (src.startsWith('/')) src = window.location.origin + src;
+                        if (!src.startsWith('http://') && !src.startsWith('https://')) return;
+                        
+                        var lower = src.toLowerCase();
+                        if (lower.includes('favicon') || lower.includes('pixel.gif') || lower.includes('spinner.gif') || 
+                            lower.includes('loading.gif') || lower.includes('blank.png') || lower.includes('placeholder') ||
+                            lower.includes('/r.png') || lower.includes('/star.png') || lower.includes('logo') || 
+                            lower.includes('avatar') || lower.includes('icon') || lower.includes('badge') || 
+                            lower.includes('emoji') || lower.includes('1x1') || lower.startsWith('data:image')) {
+                            return;
+                        }
+
+                        if (!seen[src]) {
+                            seen[src] = true;
+                            urls.push(src);
+                        }
+                    }
+
+                    /* Parse srcset and return ONLY the highest-resolution URL */
+                    function bestFromSrcset(srcset) {
+                        if (!srcset) return null;
+                        var parts = srcset.split(',');
+                        var best = null;
+                        var bestW = 0;
+                        parts.forEach(function(p) {
+                            var tokens = p.trim().split(/\s+/);
+                            var u = tokens[0];
+                            var descriptor = tokens[1] || '';
+                            var w = 0;
+                            if (descriptor.endsWith('w')) {
+                                w = parseInt(descriptor) || 0;
+                            } else if (descriptor.endsWith('x')) {
+                                w = (parseFloat(descriptor) || 1) * 1000;
+                            } else {
+                                w = 1;
+                            }
+                            if (w > bestW || !best) {
+                                bestW = w;
+                                best = u;
+                            }
+                        });
+                        return best;
+                    }
+
+                    /* 1. Extract from DOM Elements (force eager loading across un-scrolled elements) */
+                    function collectDomImages() {
+                        var selector = 'img, picture source, [data-src], [data-original], [data-lazy-src], [data-url], [data-echo], [data-cdn], [data-actual-src], [data-cfsrc], [data-manga-src], [data-page-src], [data-full-src], [data-hi-res-src], [data-master], [data-img], [data-origin], [data-link], [data-lazy], [data-srcset], [srcset]';
+                        var els = document.querySelectorAll(selector);
+                        els.forEach(function(el) {
+                            /* Force eager loading attribute */
+                            if (el.tagName === 'IMG') {
+                                el.loading = 'eager';
+                                el.removeAttribute('loading');
+                            }
+
+                            /* 1. Best from srcset (highest resolution) */
+                            var srcset = el.getAttribute('data-srcset') || el.getAttribute('srcset');
+                            var bestSrcset = bestFromSrcset(srcset);
+
+                            /* 2. Lazy-load / full-res data attributes */
+                            var dataSrc = el.getAttribute('data-original') || 
+                                          el.getAttribute('data-src') || 
+                                          el.getAttribute('data-lazy-src') || 
+                                          el.getAttribute('data-url') || 
+                                          el.getAttribute('data-cdn') ||
+                                          el.getAttribute('data-actual-src') ||
+                                          el.getAttribute('data-cfsrc') ||
+                                          el.getAttribute('data-manga-src') ||
+                                          el.getAttribute('data-page-src') ||
+                                          el.getAttribute('data-full-src') ||
+                                          el.getAttribute('data-hi-res-src') ||
+                                          el.getAttribute('data-master') ||
+                                          el.getAttribute('data-img') ||
+                                          el.getAttribute('data-origin') ||
+                                          el.getAttribute('data-link') ||
+                                          el.getAttribute('data-echo');
+
+                            /* If element has lazy attribute and src is blank/placeholder, update src */
+                            if (dataSrc && el.tagName === 'IMG') {
+                                if (!el.src || el.src.indexOf('data:image') === 0 || el.src.indexOf('blank') !== -1 || el.src.indexOf('loading') !== -1 || el.src.indexOf('placeholder') !== -1) {
+                                    try { el.src = dataSrc; } catch(_e) {}
+                                }
+                            }
+
+                            /* 3. currentSrc or src */
+                            var fallbackSrc = null;
+                            if (el.currentSrc) {
+                                var csLower = el.currentSrc.toLowerCase();
+                                if (!csLower.includes('loading') && !csLower.includes('placeholder') && !csLower.includes('data:image') && !csLower.includes('blank')) {
+                                    fallbackSrc = el.currentSrc;
+                                }
+                            }
+                            if (!fallbackSrc && el.src) {
+                                var srcLower = el.src.toLowerCase();
+                                if (!srcLower.includes('loading') && !srcLower.includes('placeholder') && !srcLower.includes('data:image') && !srcLower.includes('blank')) {
+                                    fallbackSrc = el.src;
+                                }
+                            }
+
+                            var chosen = bestSrcset || dataSrc || fallbackSrc;
+                            if (chosen) addUrl(chosen);
+                        });
+
+                        /* CSS Background images */
+                        var bgEls = document.querySelectorAll('div[style*="background"], a[style*="background"], span[style*="background"], section[style*="background"], .gdtm, .gdtl, [style*="url("]');
+                        bgEls.forEach(function(el) {
+                            var bg = el.style.backgroundImage || window.getComputedStyle(el).backgroundImage;
+                            if (bg && bg.indexOf('url(') !== -1) {
+                                var matches = bg.match(/url\(['"]?(.*?)['"]?\)/g);
+                                if (matches) {
+                                    matches.forEach(function(m) {
+                                        var clean = m.replace(/^url\(['"]?/, '').replace(/['"]?\)${'$'}/, '');
+                                        addUrl(clean);
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    /* 2. Extract Embedded Manga Chapter Arrays from Script Tags */
+                    function extractScriptImages() {
+                        try {
+                            /* Check global window chapter data candidates */
+                            var globalCandidates = [
+                                window.chapter_images, window.pages, window.chapterData, window.imageData,
+                                window.img_list, window.img_url, window.sources, window.page_list, window.manga_pages
+                            ];
+                            globalCandidates.forEach(function(arr) {
+                                if (Array.isArray(arr)) {
+                                    arr.forEach(function(item) {
+                                        if (typeof item === 'string') addUrl(item);
+                                        else if (item && typeof item === 'object') {
+                                            var u = item.url || item.src || item.path || item.link || item.page;
+                                            if (u) addUrl(u);
+                                        }
+                                    });
+                                }
+                            });
+
+                            /* Parse inline <script> tags for image URL patterns */
+                            var scripts = document.querySelectorAll('script');
+                            var imageRegex = /https?:\/\/[^"'\s\\]+?\.(?:jpg|jpeg|png|webp|avif)(?:\?[^"'\s\\]*)?/gi;
+                            scripts.forEach(function(s) {
+                                var text = s.textContent || s.innerText || '';
+                                if (!text || text.length < 20) return;
+                                var matches = text.match(imageRegex);
+                                if (matches) {
+                                    matches.forEach(function(u) {
+                                        var lower = u.toLowerCase();
+                                        if (lower.includes('/chapter/') || lower.includes('/manga/') || lower.includes('/pages/') || 
+                                            lower.includes('/uploads/') || lower.includes('/scans/') || lower.includes('/images/') ||
+                                            lower.includes('cdn') || lower.includes('img') || lower.includes('page') ||
+                                            /\d+\.(jpg|jpeg|png|webp|avif)/i.test(u)) {
+                                            addUrl(u);
+                                        }
+                                    });
+                                }
+                            });
+                        } catch(_e) {}
+                    }
+
+                    collectDomImages();
+                    extractScriptImages();
+
+                    /* Handle special paginated reader links (e.g. e-hentai / exhentai / gdtm) */
+                    var readerLinks = document.querySelectorAll('.gdtm a, .gdtl a, a[href*="/s/"]');
+                    if (readerLinks.length > 0) {
+                        var linkUrls = [];
+                        var linkSeen = {};
+                        readerLinks.forEach(function(a) {
+                            var href = a.href;
+                            if (href && href.indexOf('/s/') !== -1 && !linkSeen[href]) {
+                                linkSeen[href] = true;
+                                linkUrls.push(href);
+                            }
+                        });
+
+                        if (linkUrls.length > 0) {
+                            var promises = linkUrls.map(function(pageUrl) {
+                                return fetch(pageUrl)
+                                    .then(function(res) { return res.text(); })
+                                    .then(function(html) {
+                                        var match = html.match(/<img\s+id="img"\s+src="([^"]+)"/i) || 
+                                                    html.match(/src="([^"]+\/h\/[^"]+)"/i);
+                                        return match ? match[1] : null;
+                                    })
+                                    .catch(function() { return null; });
+                            });
+
+                            Promise.all(promises).then(function(results) {
+                                results.forEach(function(u) {
+                                    if (u) addUrl(u);
+                                });
+                                alert('OMNI_IMAGES:' + JSON.stringify(urls));
+                            });
+                            return;
+                        }
+                    }
+
+                    alert('OMNI_IMAGES:' + JSON.stringify(urls));
+                } catch(e) {
+                    alert('OMNI_IMAGES:[]');
+                }
+            })();
+        """.trimIndent()
+        activeTab.session.loadUri(js)
     }
 
     override fun onCleared() {

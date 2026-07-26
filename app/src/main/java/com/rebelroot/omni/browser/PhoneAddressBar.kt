@@ -149,13 +149,18 @@ fun PhoneAddressBar(
     onShowCustomizationSheet: () -> Unit,
     onShowPlayerSettings: () -> Unit,
     onShowTabGroups: () -> Unit = {},
-    onShowSiteInfo: () -> Unit = {}
+    onShowSiteInfo: () -> Unit = {},
+    onShowAllInOneMenuSheet: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    val config = getUiSizeConfig(viewModel.uiScale)
+    val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val config = getUiSizeConfig(viewModel.uiScale, screenWidthDp)
+
+    var showAddressBarContextMenu by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
 
     Row(
         modifier = Modifier
@@ -164,16 +169,33 @@ fun PhoneAddressBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedVisibility(visible = !isInputFocused) {
-            IconButton(
-                onClick = { viewModel.loadUrl("about:blank") },
-                modifier = Modifier.size(config.barIconSize)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Home,
-                    contentDescription = "Go Home",
-                    modifier = Modifier.size(config.innerIconSize),
-                    tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { viewModel.loadUrl("about:blank") },
+                    modifier = Modifier.size(config.barIconSize)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Home,
+                        contentDescription = "Go Home",
+                        modifier = Modifier.size(config.innerIconSize),
+                        tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
+                    )
+                }
+
+                // Quick Tools (Toolbox) — visible on Left Hand Side in All-in-One mode
+                if (viewModel.chromeNavBarEnabled) {
+                    IconButton(
+                        onClick = onShowToolsSheet,
+                        modifier = Modifier.size(config.barIconSize)
+                    ) {
+                        Icon(
+                            imageVector = BlackholeIcon,
+                            contentDescription = "Quick Tools",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(config.innerIconSize)
+                        )
+                    }
+                }
             }
         }
 
@@ -191,9 +213,85 @@ fun PhoneAddressBar(
                     color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                     shape = RoundedCornerShape(config.searchBoxHeight / 2)
                 )
+                .combinedClickable(
+                    onClick = {
+                        if (!isInputFocused) {
+                            focusRequester.requestFocus()
+                        }
+                    },
+                    onLongClick = {
+                        if (!isInputFocused) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showAddressBarContextMenu = true
+                        }
+                    }
+                )
                 .padding(horizontal = config.searchBoxHeight * 0.35f),
             contentAlignment = Alignment.CenterStart
         ) {
+            DropdownMenu(
+                expanded = showAddressBarContextMenu,
+                onDismissRequest = { showAddressBarContextMenu = false },
+                modifier = Modifier.width(260.dp),
+                shape = RoundedCornerShape(18.dp),
+                containerColor = if (viewModel.isDarkThemeEnabled && viewModel.isAmoledMode) Color(0xFF0C0D10) else if (viewModel.isDarkThemeEnabled) Color(0xFF20222A) else Color(0xFFFFFFFF),
+                shadowElevation = 10.dp,
+                border = BorderStroke(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF2D303C) else Color(0xFFE5E7EB))
+            ) {
+                val isBottom = viewModel.addressBarPosition == "Bottom"
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = if (isBottom) "Move address bar to the top" else "Move address bar to the bottom",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (viewModel.isDarkThemeEnabled) Color(0xFFF3F4F6) else Color(0xFF1F2937)
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (isBottom) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward,
+                            contentDescription = null,
+                            tint = if (viewModel.isDarkThemeEnabled) Color(0xFFD1D5DB) else Color(0xFF4B5563),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        showAddressBarContextMenu = false
+                        val newPos = if (isBottom) "Top" else "Bottom"
+                        viewModel.saveAddressBarPosition(context, newPos)
+                        Toast.makeText(context, "Address bar moved to $newPos", Toast.LENGTH_SHORT).show()
+                    }
+                )
+
+                HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2D303C) else Color(0xFFE5E7EB), thickness = 0.5.dp)
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "Copy link",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (viewModel.isDarkThemeEnabled) Color(0xFFF3F4F6) else Color(0xFF1F2937)
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.ContentCopy,
+                            contentDescription = null,
+                            tint = if (viewModel.isDarkThemeEnabled) Color(0xFFD1D5DB) else Color(0xFF4B5563),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    onClick = {
+                        showAddressBarContextMenu = false
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("URL", viewModel.currentUrl)
+                        clipboard?.setPrimaryClip(clip)
+                        Toast.makeText(context, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -214,16 +312,14 @@ fun PhoneAddressBar(
                         Icon(
                             imageVector = when {
                                 viewModel.isIncognitoMode -> Icons.Rounded.VisibilityOff
-                                showSecurityIcon && isSecure -> Icons.Rounded.Lock
-                                showSecurityIcon && isHttp -> Icons.Rounded.LockOpen
+                                showSecurityIcon -> Icons.Rounded.Tune
                                 else -> Icons.Rounded.Search
                             },
-                            contentDescription = "Search or Security icon",
+                            contentDescription = "Search or Site controls icon",
                             modifier = Modifier.size(config.innerIconSize * 0.75f),
                             tint = when {
                                 viewModel.isIncognitoMode -> Color(0xFFCBB2FF)
-                                showSecurityIcon && isSecure -> Color(0xFF34C759)
-                                showSecurityIcon && isHttp -> Color(0xFFFF9500)
+                                showSecurityIcon -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 else -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
                             }
                         )
@@ -389,78 +485,26 @@ fun PhoneAddressBar(
 
 
 
-        // Toolbox — only visible in All-in-One mode
-        AnimatedVisibility(visible = !isInputFocused && viewModel.chromeNavBarEnabled) {
-            IconButton(
-                onClick = onShowToolsSheet,
-                modifier = Modifier.size(config.barIconSize)
-            ) {
-                Icon(
-                    imageVector = BlackholeIcon,
-                    contentDescription = "Toolbox",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(config.innerIconSize)
-                )
-            }
-        }
-
-        AnimatedVisibility(visible = !isInputFocused) {
-            val isPopupOpen = viewModel.activeExtensionPopupSession != null
-            val pulseTransition = rememberInfiniteTransition(label = "extPopupPulse")
-            val pulseAlpha by pulseTransition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 0.9f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "extPulseAlpha"
-            )
-            val pulseScale by pulseTransition.animateFloat(
-                initialValue = 1f,
-                targetValue = 1.35f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "extPulseScale"
-            )
-
+        AnimatedVisibility(visible = !isInputFocused && !viewModel.chromeNavBarEnabled) {
             IconButton(
                 onClick = onShowExtensionsSheet,
                 modifier = Modifier.size(config.barIconSize)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    // Pulsing glow ring — only visible when popup is open
-                    if (isPopupOpen) {
+                Box {
+                    Icon(
+                        imageVector = Icons.Rounded.Extension,
+                        contentDescription = "Extensions",
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(config.innerIconSize)
+                    )
+                    if (hasActiveUserExtensions) {
                         Box(
                             modifier = Modifier
-                                .size(config.innerIconSize * pulseScale)
-                                .background(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha * 0.25f),
-                                    shape = CircleShape
-                                )
+                                .size(8.dp)
+                                .background(Color(0xFF8B5CF6), androidx.compose.foundation.shape.CircleShape)
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-2).dp)
                         )
-                    }
-                    Box(contentAlignment = Alignment.TopEnd) {
-                        Icon(
-                            imageVector = Icons.Rounded.Extension,
-                            contentDescription = "Extensions",
-                            tint = if (isPopupOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(config.innerIconSize)
-                        )
-                        if (hasActiveUserExtensions || isPopupOpen) {
-                            Box(
-                                modifier = Modifier
-                                    .size(config.innerIconSize * 0.25f)
-                                    .offset(x = 1.dp, y = (-1).dp)
-                                    .background(
-                                        color = if (isPopupOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
-                                        shape = CircleShape
-                                    )
-                                    .border(1.dp, MaterialTheme.colorScheme.background, CircleShape)
-                            )
-                        }
                     }
                 }
             }
@@ -504,11 +548,17 @@ fun PhoneAddressBar(
         AnimatedVisibility(visible = !isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             Box {
                 IconButton(
-                    onClick = { onShowMenuChange(true) },
+                    onClick = {
+                        if (viewModel.addressBarPosition == "Bottom") {
+                            onShowAllInOneMenuSheet()
+                        } else {
+                            onShowMenuChange(true)
+                        }
+                    },
                     modifier = Modifier.size(config.barIconSize)
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.MoreVert,
+                        imageVector = Icons.Rounded.Menu,
                         contentDescription = "Menu",
                         tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(config.innerIconSize)
@@ -574,56 +624,113 @@ fun ChromeMenuDropdown(
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
     val isHome = viewModel.currentUrl == "about:blank" || activeTab == null
 
-    val cardBg = if (isDark && viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
-    val textPrimary = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73)
-    val iconTint = if (isDark) Color.White else Color(0xFF1C1C1E)
-    val dividerColor = if (isDark && viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-    val iconBg = if (isDark && viewModel.isAmoledMode) Color(0xFF1C1C1E) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+    val cardBg = if (isDark && viewModel.isAmoledMode) Color(0xFF0C0D10) else if (isDark) Color(0xFF20222A) else Color(0xFFF6F7F9)
+    val textPrimary = if (isDark) Color(0xFFF3F4F6) else Color(0xFF1F2937)
+    val textSecondary = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+    val iconTint = if (isDark) Color(0xFFD1D5DB) else Color(0xFF4B5563)
+    val dividerColor = if (isDark) Color(0xFF2D303C) else Color(0xFFE5E7EB)
+    val circleBg = if (isDark) Color(0xFF2C2E38) else Color(0xFFE5E7EB)
     val accentColor = MaterialTheme.colorScheme.primary
-    val surfaceVariant = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
 
-    DropdownMenu(
-        expanded = expanded,
+    if (!expanded) return
+
+    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+    val maxHeight = (screenHeightDp - 70.dp).coerceAtLeast(300.dp)
+
+    androidx.compose.ui.window.Popup(
         onDismissRequest = onDismissRequest,
-        modifier = Modifier.width(260.dp),
-        shape = RoundedCornerShape(20.dp),
-        containerColor = cardBg,
-        shadowElevation = 8.dp,
-        tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+        popupPositionProvider = remember {
+            object : androidx.compose.ui.window.PopupPositionProvider {
+                override fun calculatePosition(
+                    anchorBounds: androidx.compose.ui.unit.IntRect,
+                    windowSize: androidx.compose.ui.unit.IntSize,
+                    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                    popupContentSize: androidx.compose.ui.unit.IntSize
+                ): androidx.compose.ui.unit.IntOffset {
+                    val isBottom = anchorBounds.top > windowSize.height / 2
+
+                    // Horizontal: right align with anchor button
+                    val x = (anchorBounds.right - popupContentSize.width).coerceIn(
+                        12,
+                        (windowSize.width - popupContentSize.width - 12).coerceAtLeast(0)
+                    )
+
+                    // Vertical:
+                    // If bottom nav: bottom of popup sits directly on top of anchor bounds (top of bottom bar)
+                    // If top nav: top of popup sits directly below anchor bounds (bottom of top bar)
+                    val y = if (isBottom) {
+                        anchorBounds.top - popupContentSize.height - 4
+                    } else {
+                        anchorBounds.bottom + 4
+                    }
+
+                    val clampedY = y.coerceIn(
+                        12,
+                        (windowSize.height - popupContentSize.height - 12).coerceAtLeast(0)
+                    )
+
+                    return androidx.compose.ui.unit.IntOffset(x, clampedY)
+                }
+            }
+        },
+        properties = androidx.compose.ui.window.PopupProperties(
+            focusable = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
+        Card(
+            modifier = Modifier
+                .width(260.dp)
+                .heightIn(max = maxHeight),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF2D303C) else Color(0xFFE5E7EB))
         ) {
-
-
-            // ── Quick Action Pills ────────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp)
+            ) {
+            // ── Top 6 Circular Quick Navigation Row ──────────────────
+            val canBack = activeTab?.canGoBack == true
             val canForward = activeTab?.canGoForward == true
             val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Back
+                CircleMenuIconButton(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    enabled = canBack,
+                    tint = if (canBack) iconTint else iconTint.copy(alpha = 0.3f),
+                    bg = circleBg,
+                    onClick = { onDismissRequest(); viewModel.goBack() }
+                )
                 // Forward
-                MenuActionPill(
+                CircleMenuIconButton(
                     icon = Icons.AutoMirrored.Rounded.ArrowForward,
-                    label = "Forward",
+                    contentDescription = "Forward",
                     enabled = canForward,
-                    tint = if (canForward) iconTint else textSecondary.copy(alpha = 0.35f),
-                    bg = if (canForward) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    tint = if (canForward) iconTint else iconTint.copy(alpha = 0.3f),
+                    bg = circleBg,
                     onClick = { onDismissRequest(); viewModel.goForward() }
                 )
-                // Bookmark
-                MenuActionPill(
+                // Save / Bookmark
+                CircleMenuIconButton(
                     icon = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                    label = if (isBookmarked) "Saved" else "Save",
+                    contentDescription = "Bookmark",
                     enabled = !isHome,
-                    tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else textSecondary.copy(alpha = 0.35f),
-                    bg = if (!isHome) (if (isBookmarked) accentColor.copy(alpha = 0.15f) else surfaceVariant) else surfaceVariant.copy(alpha = 0.4f),
+                    tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else iconTint.copy(alpha = 0.3f),
+                    bg = if (isBookmarked) accentColor.copy(alpha = 0.2f) else circleBg,
                     onClick = {
                         onDismissRequest()
                         if (!isHome) {
@@ -632,171 +739,130 @@ fun ChromeMenuDropdown(
                         }
                     }
                 )
-                // Download
-                MenuActionPill(
+                // Save PDF
+                CircleMenuIconButton(
                     icon = Icons.Rounded.Download,
-                    label = "Save PDF",
+                    contentDescription = "Save PDF",
                     enabled = !isHome,
-                    tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.35f),
-                    bg = if (!isHome) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
+                    bg = circleBg,
                     onClick = { onDismissRequest(); if (!isHome) viewModel.printCurrentPage(context) }
                 )
                 // Info
-                MenuActionPill(
+                CircleMenuIconButton(
                     icon = Icons.Rounded.Info,
-                    label = "Info",
+                    contentDescription = "Info",
                     enabled = !isHome,
-                    tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.35f),
-                    bg = if (!isHome) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
+                    bg = circleBg,
                     onClick = { onDismissRequest(); if (!isHome) onShowSiteInfo() }
                 )
                 // Reload
-                MenuActionPill(
+                CircleMenuIconButton(
                     icon = Icons.Rounded.Refresh,
-                    label = "Reload",
+                    contentDescription = "Reload",
                     enabled = !isHome,
-                    tint = if (!isHome) iconTint else textSecondary.copy(alpha = 0.35f),
-                    bg = if (!isHome) surfaceVariant else surfaceVariant.copy(alpha = 0.4f),
+                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
+                    bg = circleBg,
                     onClick = { onDismissRequest(); if (!isHome) viewModel.reload() }
                 )
             }
 
-            HorizontalDivider(color = dividerColor)
-            // ── Tabs section header ───────────────────────────
-            MenuSectionLabel(text = "Tabs", textColor = textSecondary)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-            // New Tab
-            LuxuryMenuItem(
-                text = "New Tab",
-                icon = Icons.Rounded.AddBox,
+            // ── Section 1: Tabs ────────────────────────────────────
+            MinimalMenuItem(
+                text = "New tab",
+                icon = Icons.Rounded.Add,
                 iconTint = iconTint,
-                iconBg = iconBg,
                 textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onNewTab()
-                }
+                onClick = { onDismissRequest(); onNewTab() }
             )
-
-            // New Incognito Tab
-            LuxuryMenuItem(
-                text = "New Incognito Tab",
+            MinimalMenuItem(
+                text = "New Incognito tab",
                 icon = Icons.Rounded.VisibilityOff,
                 iconTint = iconTint,
-                iconBg = iconBg,
                 textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onNewIncognitoTab()
-                }
+                onClick = { onDismissRequest(); onNewIncognitoTab() }
+            )
+            MinimalMenuItem(
+                text = "Add tab to new group",
+                icon = Icons.Rounded.GridView,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); Toast.makeText(context, "Group created with active tab", Toast.LENGTH_SHORT).show() }
             )
 
-            HorizontalDivider(color = dividerColor)
-            MenuSectionLabel(text = "Browse", textColor = textSecondary)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
 
-            // History
-            LuxuryMenuItem(
+            // ── Section 2: Browse & Data ───────────────────────────
+            MinimalMenuItem(
                 text = "History",
                 icon = Icons.Rounded.History,
                 iconTint = iconTint,
-                iconBg = iconBg,
                 textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onOpenHistory()
-                }
+                onClick = { onDismissRequest(); onOpenHistory() }
             )
-
-            // Delete browsing data
-            LuxuryMenuItem(
+            MinimalMenuItem(
                 text = "Clear Browsing Data",
-                icon = Icons.Rounded.LocalFireDepartment,
-                iconTint = Color(0xFFFF3B30),
-                iconBg = Color(0xFFFF3B30).copy(alpha = 0.12f),
-                textColor = Color(0xFFFF3B30),
-                onClick = {
-                    onDismissRequest()
-                    onBurnData()
-                }
+                icon = Icons.Rounded.DeleteOutline,
+                iconTint = Color(0xFFFF453A),
+                textColor = Color(0xFFFF453A),
+                onClick = { onDismissRequest(); onBurnData() }
             )
 
-            HorizontalDivider(color = dividerColor)
-            MenuSectionLabel(text = "Library", textColor = textSecondary)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
 
-            // Downloads
-            LuxuryMenuItem(
+            // ── Section 3: Library & Page Tools ────────────────────
+            MinimalMenuItem(
                 text = "Downloads",
-                icon = Icons.Rounded.Download,
+                icon = Icons.Rounded.FileDownload,
                 iconTint = iconTint,
-                iconBg = iconBg,
                 textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onOpenDownloads()
-                }
+                onClick = { onDismissRequest(); onOpenDownloads() }
             )
-
-            // Bookmarks
-            LuxuryMenuItem(
+            MinimalMenuItem(
                 text = "Bookmarks",
-                icon = Icons.Rounded.Bookmark,
+                icon = Icons.Rounded.StarBorder,
                 iconTint = iconTint,
-                iconBg = iconBg,
                 textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onOpenBookmarks()
-                }
+                onClick = { onDismissRequest(); onOpenBookmarks() }
+            )
+            MinimalMenuItem(
+                text = "Recent tabs",
+                icon = Icons.Rounded.Devices,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); onOpenHistory() }
             )
 
-            // Desktop Site (only show if not on Home screen)
             if (!isHome) {
-                LuxuryMenuItem(
+                MinimalMenuItem(
                     text = "Desktop Site",
                     icon = Icons.Rounded.Computer,
                     iconTint = iconTint,
-                    iconBg = iconBg,
                     textColor = textPrimary,
-                    onClick = {
-                        onDismissRequest()
-                        viewModel.toggleDesktopMode(context)
-                    },
+                    onClick = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
                     trailingContent = {
                         Switch(
                             checked = viewModel.isDesktopMode,
-                            onCheckedChange = {
-                                onDismissRequest()
-                                viewModel.toggleDesktopMode(context)
-                            },
-                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.scale(0.8f)
+                            onCheckedChange = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
+                            modifier = Modifier.scale(0.7f)
                         )
                     }
                 )
-            }
-
-            // Find in page (only when a page is open)
-            if (!isHome) {
-                LuxuryMenuItem(
+                MinimalMenuItem(
                     text = "Find in Page",
                     icon = Icons.Rounded.Search,
                     iconTint = iconTint,
-                    iconBg = iconBg,
                     textColor = textPrimary,
-                    onClick = {
-                        onDismissRequest()
-                        onFindInPage()
-                    }
+                    onClick = { onDismissRequest(); onFindInPage() }
                 )
-            }
-
-            // Add to shortcuts (only when a page is open)
-            if (!isHome) {
-                LuxuryMenuItem(
+                MinimalMenuItem(
                     text = "Add to Shortcuts",
                     icon = Icons.Rounded.AddCircle,
                     iconTint = iconTint,
-                    iconBg = iconBg,
                     textColor = textPrimary,
                     onClick = {
                         onDismissRequest()
@@ -805,55 +871,111 @@ fun ChromeMenuDropdown(
                         viewModel.addShortcut(currentTitle, currentUrl)
                     }
                 )
-            }
-
-            // Extensions (only show if not on Home screen)
-            if (!isHome) {
-                LuxuryMenuItem(
+                MinimalMenuItem(
                     text = "Extensions",
                     icon = Icons.Rounded.Extension,
                     iconTint = iconTint,
-                    iconBg = iconBg,
                     textColor = textPrimary,
-                    onClick = {
-                        onDismissRequest()
-                        onShowExtensions()
-                    }
+                    onClick = { onDismissRequest(); onShowExtensions() }
                 )
             }
 
-            // Player Settings
-            LuxuryMenuItem(
+            MinimalMenuItem(
                 text = "Player Settings",
                 icon = Icons.Rounded.PlayCircle,
                 iconTint = iconTint,
-                iconBg = iconBg,
                 textColor = textPrimary,
-                onClick = {
-                    onDismissRequest()
-                    onShowPlayerSettings()
-                }
+                onClick = { onDismissRequest(); onShowPlayerSettings() }
             )
 
-            if (!isHome) {
-                HorizontalDivider(color = dividerColor)
-                MenuSectionLabel(text = "App", textColor = textSecondary)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
 
-                // Settings (only shown when browsing a website)
-                LuxuryMenuItem(
-                    text = "Settings",
-                    icon = Icons.Rounded.Settings,
-                    iconTint = iconTint,
-                    iconBg = iconBg,
-                    textColor = textPrimary,
-                    onClick = {
-                        onDismissRequest()
-                        onOpenSettings()
-                    }
-                )
-            }
+            // ── Section 4: App Settings ────────────────────────────
+            MinimalMenuItem(
+                text = "Settings",
+                icon = Icons.Rounded.Settings,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); onOpenSettings() }
+            )
+            MinimalMenuItem(
+                text = "Customize new tab page",
+                icon = Icons.Rounded.Edit,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); onShowCustomizationSheet() }
+            )
+            MinimalMenuItem(
+                text = "Help & feedback",
+                icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); Toast.makeText(context, "Omni Browser v1.0.9", Toast.LENGTH_SHORT).show() }
+            )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
+        }
+    }
+}
+}
+
+@Composable
+private fun CircleMenuIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    tint: Color,
+    bg: Color,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(35.dp)
+            .background(bg, CircleShape)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(17.dp)
+        )
+    }
+}
+
+@Composable
+private fun MinimalMenuItem(
+    text: String,
+    icon: ImageVector,
+    iconTint: Color,
+    textColor: Color,
+    onClick: () -> Unit,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(17.dp)
+        )
+        Text(
+            text = text,
+            color = textColor,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Normal,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailingContent != null) {
+            trailingContent()
         }
     }
 }

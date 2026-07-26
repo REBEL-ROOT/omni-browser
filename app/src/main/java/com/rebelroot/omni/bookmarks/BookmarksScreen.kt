@@ -26,6 +26,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -221,7 +222,7 @@ fun BookmarksScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
-                    items(filteredBookmarks, key = { it.url }) { entry ->
+                    itemsIndexed(filteredBookmarks, key = { index, entry -> "${entry.url}_$index" }) { _, entry ->
                         BookmarkRowItem(
                             entry = entry,
                             isDarkMode = isDarkMode,

@@ -182,14 +182,14 @@ fun AppearanceScreen(
 
                     HorizontalDivider(color = dividerColor)
 
-                    // UI Scale Mode
+                    // App Nav Scaler Mode
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("UI Scale", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("App Nav Scaler", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text(
                                 text = "${(viewModel.uiScale * 100).toInt()}%",
                                 color = accentColor,
@@ -468,7 +468,7 @@ fun AppearanceScreen(
                                     ) {
                                         Text("4", color = textPrimaryColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                     }
-                                    Icon(imageVector = Icons.Rounded.MoreVert, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
+                                    Icon(imageVector = Icons.Rounded.Menu, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -555,43 +555,7 @@ fun AppearanceScreen(
                 }
             }
 
-            // Theme Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Theme", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cardColor)
-                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.saveDarkTheme(context, false) }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Light Theme", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        if (!viewModel.isDarkThemeEnabled) {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
-                        }
-                    }
-                    HorizontalDivider(color = dividerColor)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.saveDarkTheme(context, true) }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Dark Theme", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        if (viewModel.isDarkThemeEnabled) {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
-                        }
-                    }
-                }
-            }
+
 
 
 

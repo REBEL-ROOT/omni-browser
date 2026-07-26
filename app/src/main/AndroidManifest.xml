@@ -129,6 +129,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:theme="@style/Theme.OmniBrowser"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout">

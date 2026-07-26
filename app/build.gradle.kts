@@ -13,9 +13,9 @@ android {
     defaultConfig {
         applicationId = "com.rebelroot.omni"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 25
-        versionName = "1.2.5.1"
+        versionName = "1.2.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -79,23 +79,10 @@ android {
             isShrinkResources = false
         }
         release {
-            // R8 (ProGuard) over-optimization caused two release-only regressions
-            // that never reproduced on the uncompressed test APK (minify off):
-            //   1. LAG: R8 inlined the browser-screen Compose tree into a single
-            //      mega-method (obfuscated as `xu.a`). On first render ART had to
-            //      JIT-compile ~6.5 MB of code on the main thread, producing
-            //      16-22s frame gaps and "Skipped 67 frames" stalls.
-            //   2. ExceptionInInitializerError after onboarding: R8 optimizing /
-            //      shrinking static initializers (the prior crash-loop was exactly
-            //      this — snakeyaml's <clinit> throwing and taking GeckoRuntime
-            //      init down with it).
-            // Disabling minify makes release behave like the smooth, stable
-            // uncompressed test APK. The APK is larger (~500 MB) but matches the
-            // reference build's smoothness and eliminates R8-induced crashes.
-            // proguard-rules.pro is retained (it is ignored when minify is off,
-            // but keeps @Keep honored if minify is ever re-enabled).
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Enable R8 code minification & resource shrinking per Google Play Console recommendation.
+            // Critical keep rules in proguard-rules.pro safeguard GeckoView, Compose, SnakeYAML & SQLCipher.
+            isMinifyEnabled = true
+            isShrinkResources = true
             // Emit native debug symbols so Play Console can symbolicate GeckoView /
             // SQLCipher NDK crash traces. SYMBOL_TABLE (not FULL) because the
             // prebuilt .so files ship stripped — this still recovers function
@@ -218,6 +205,7 @@ dependencies {
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("com.wireguard.android:tunnel:1.0.20260102")
 
     // === Room + SQLCipher Encrypted DB ===
     implementation("androidx.room:room-runtime:2.7.1")

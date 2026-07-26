@@ -42,10 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.BasicTextField
 import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.ui.theme.AccentThemesLight
 import androidx.compose.ui.res.stringResource
@@ -125,6 +128,7 @@ fun SettingsScreen(
     var showLanguageSelector by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var showAddSearchEngineDialog by remember { mutableStateOf(false) }
+    var editingSearchEngine by remember { mutableStateOf<com.rebelroot.omni.browser.CustomSearchEngine?>(null) }
 
 
 
@@ -179,33 +183,52 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     if (isSearchActive) {
-                        TextField(
+                        BasicTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search settings...", fontSize = 14.sp, color = textSecondaryColor) },
                             singleLine = true,
+                            textStyle = TextStyle(
+                                color = textPrimaryColor,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedTextColor = textPrimaryColor,
-                                unfocusedTextColor = textPrimaryColor,
-                                focusedContainerColor = inputBgColor,
-                                unfocusedContainerColor = inputBgColor,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent
-                            ),
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Close,
-                                            contentDescription = "Clear search",
-                                            tint = textSecondaryColor,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                .height(44.dp)
+                                .background(inputBgColor, RoundedCornerShape(22.dp)),
+                            decorationBox = { innerTextField ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier.weight(1f),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = "Search settings...",
+                                                color = textSecondaryColor,
+                                                fontSize = 15.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { searchQuery = "" },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Close,
+                                                contentDescription = "Clear search",
+                                                tint = textSecondaryColor,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -393,6 +416,7 @@ fun SettingsScreen(
                             }
                         }),
                         SettingSearchResult("Clear Cache & Site Data", "Removes cookies, offline data, and frees storage", "PRIVACY & SECURITY", Icons.Rounded.DeleteSweep, { showClearCacheConfirmation = true }),
+                        SettingSearchResult(context.getString(R.string.vpn_section), "Configure custom WireGuard VPN tunnel", "WIREGUARD VPN", Icons.Rounded.VpnLock, {}),
                         SettingSearchResult(context.getString(R.string.native_player_title), "Custom floating video player with gesture controls", "MEDIA", Icons.Rounded.PlayCircle, { viewModel.toggleNativePlayer(context) }),
                         SettingSearchResult(context.getString(R.string.ai_blocker_title), "Filter AI generated search results and web bloat", "MEDIA", Icons.Rounded.Block, { viewModel.toggleAiBlocker(context) }),
                         SettingSearchResult(context.getString(R.string.search_engine_title), "Select default search provider (Google, DuckDuckGo, Bing, Brave, Custom)", "SEARCH", Icons.Rounded.Search, {})
@@ -628,6 +652,281 @@ fun SettingsScreen(
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
                     }
+            }
+
+            // ── WIREGUARD VPN ─────────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader(stringResource(id = R.string.vpn_section))
+                val vpnState by viewModel.vpnManager.state.collectAsState()
+                val hasConfig = !viewModel.customVpnConfig.isNullOrBlank()
+
+                val filePickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.GetContent()
+                ) { uri ->
+                    uri?.let {
+                        try {
+                            val content = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader -> reader.readText() }
+                            if (!content.isNullOrBlank()) {
+                                viewModel.saveCustomVpnConfig(context, content)
+                                Toast.makeText(context, "WireGuard configuration imported successfully!", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Failed to parse file: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+
+                var showVpnEditDialog by remember { mutableStateOf(false) }
+                var configText by remember { mutableStateOf("") }
+
+                SettingsCard {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.VpnLock,
+                                contentDescription = "VPN Lock",
+                                tint = accentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = stringResource(id = R.string.vpn_status_title),
+                                    color = textPrimaryColor,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                val statusText = when (vpnState) {
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> stringResource(id = R.string.vpn_status_connected)
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> stringResource(id = R.string.vpn_status_connecting)
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> stringResource(id = R.string.vpn_status_disconnected)
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> {
+                                        val err = (vpnState as com.rebelroot.omni.privacy.VpnManager.VpnState.Error).message
+                                        stringResource(id = R.string.vpn_status_error_prefix, err)
+                                    }
+                                }
+                                val statusColor = when (vpnState) {
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected -> Color(0xFF30D158)
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Connecting -> Color(0xFFFF9500)
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Disconnected -> textSecondaryColor
+                                    is com.rebelroot.omni.privacy.VpnManager.VpnState.Error -> Color(0xFFFF453A)
+                                }
+                                Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (hasConfig) {
+                            Switch(
+                                checked = vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected,
+                                onCheckedChange = { isChecked ->
+                                    if (isChecked) {
+                                        viewModel.connectCustomVpn()
+                                    } else {
+                                        viewModel.disconnectVpn()
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = accentColor
+                                )
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = { filePickerLauncher.launch("*/*") },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = cardColor.copy(alpha = 0.8f)),
+                                border = BorderStroke(1.dp, accentColor),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.UploadFile,
+                                    contentDescription = "Upload Config",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(id = R.string.vpn_import_conf),
+                                    color = accentColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    configText = viewModel.customVpnConfig ?: ""
+                                    showVpnEditDialog = true
+                                },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = cardColor.copy(alpha = 0.8f)),
+                                border = BorderStroke(1.dp, accentColor),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = "Custom Config",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (hasConfig) "Edit Config" else "Add Config",
+                                    color = accentColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        if (hasConfig) {
+                            if (vpnState is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
+                                Button(
+                                    onClick = { viewModel.disconnectVpn() },
+                                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF453A)),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Stop,
+                                        contentDescription = "Stop",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.vpn_disconnect),
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            } else {
+                                Button(
+                                    onClick = { viewModel.connectCustomVpn() },
+                                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PlayArrow,
+                                        contentDescription = "Start",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.vpn_connect),
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (showVpnEditDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showVpnEditDialog = false },
+                        title = {
+                            Text(
+                                text = "Custom VPN Configuration",
+                                color = textPrimaryColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Enter or paste your WireGuard (.conf) or custom VPN configuration text below. Once connected, your VPN will route and protect all traffic on every site.",
+                                    color = textSecondaryColor,
+                                    fontSize = 12.sp
+                                )
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = configText,
+                                    onValueChange = { configText = it },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 150.dp, max = 280.dp),
+                                    placeholder = {
+                                        Text(
+                                            "[Interface]\nPrivateKey = ...\nAddress = ...\nDNS = ...\n\n[Peer]\nPublicKey = ...\nEndpoint = ...\nAllowedIPs = 0.0.0.0/0",
+                                            color = textSecondaryColor.copy(alpha = 0.5f),
+                                            fontSize = 11.sp
+                                        )
+                                    },
+                                    textStyle = androidx.compose.ui.text.TextStyle(
+                                        color = textPrimaryColor,
+                                        fontSize = 12.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    ),
+                                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = accentColor,
+                                        unfocusedBorderColor = cardBorderColor
+                                    )
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    viewModel.saveCustomVpnConfig(context, configText)
+                                    showVpnEditDialog = false
+                                    Toast.makeText(context, "VPN Configuration Saved", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                            ) {
+                                Text("Save Config", color = Color.White)
+                            }
+                        },
+                        dismissButton = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (hasConfig) {
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.saveCustomVpnConfig(context, "")
+                                            viewModel.disconnectVpn()
+                                            showVpnEditDialog = false
+                                            Toast.makeText(context, "VPN Configuration Cleared", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Text("Clear", color = Color(0xFFFF453A))
+                                    }
+                                }
+                                TextButton(onClick = { showVpnEditDialog = false }) {
+                                    Text("Cancel", color = textSecondaryColor)
+                                }
+                            }
+                        },
+                        containerColor = cardColor,
+                        titleContentColor = textPrimaryColor,
+                        textContentColor = textSecondaryColor
+                    )
                 }
             }
 
@@ -707,6 +1006,24 @@ fun SettingsScreen(
                                 )
                             )
                             Text(stringResource(id = R.string.custom_query_placeholder_desc), color = textSecondaryColor, fontSize = 11.sp)
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Custom Suggestion API URL (Optional)", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            var customSuggestUrlText by remember(viewModel.customSuggestUrl) { mutableStateOf(viewModel.customSuggestUrl) }
+                            OutlinedTextField(
+                                value = customSuggestUrlText,
+                                onValueChange = { customSuggestUrlText = it; viewModel.saveCustomSuggestUrl(context, it) },
+                                placeholder = { Text("https://example.com/suggest?q=%s", color = textSecondaryColor) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = textSecondaryColor) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = textPrimaryColor, unfocusedTextColor = textPrimaryColor,
+                                    focusedBorderColor = accentColor, unfocusedBorderColor = cardBorderColor,
+                                    focusedContainerColor = inputBgColor, unfocusedContainerColor = inputBgColor
+                                )
+                            )
+                            Text("Optional search suggestion API URL using %s.", color = textSecondaryColor, fontSize = 11.sp)
                         }
                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -724,10 +1041,18 @@ fun SettingsScreen(
                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(engine.name, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text(engine.queryUrl, color = textSecondaryColor, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        Text("Search: ${engine.queryUrl}", color = textSecondaryColor, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        if (engine.suggestUrl.isNotEmpty()) {
+                                            Text("Suggest: ${engine.suggestUrl}", color = textSecondaryColor.copy(alpha = 0.8f), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        }
                                     }
-                                    IconButton(onClick = { viewModel.deleteCustomSearchEngine(context, engine) }, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(onClick = { editingSearchEngine = engine }, modifier = Modifier.size(36.dp)) {
+                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit", tint = accentColor, modifier = Modifier.size(18.dp))
+                                        }
+                                        IconButton(onClick = { viewModel.deleteCustomSearchEngine(context, engine) }, modifier = Modifier.size(36.dp)) {
+                                            Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                                        }
                                     }
                                 }
                             }
@@ -741,8 +1066,8 @@ fun SettingsScreen(
                 SectionHeader(stringResource(id = R.string.about_section))
                 SettingsCard {
                     val appVersionName = remember {
-                        try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.6" }
-                        catch (e: Exception) { "1.0.6" }
+                        try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.2.6" }
+                        catch (e: Exception) { "1.2.6" }
                     }
                     var isCheckingUpdate by remember { mutableStateOf(false) }
                     var updateResult by remember { mutableStateOf<BrowserViewModel.UpdateCheckResult?>(null) }
@@ -1025,6 +1350,7 @@ fun SettingsScreen(
     if (showAddSearchEngineDialog) {
         var name by remember { mutableStateOf("") }
         var url by remember { mutableStateOf("") }
+        var suggestUrl by remember { mutableStateOf("") }
         var errorText by remember { mutableStateOf<String?>(null) }
         
         AlertDialog(
@@ -1032,6 +1358,7 @@ fun SettingsScreen(
                 showAddSearchEngineDialog = false
                 name = ""
                 url = ""
+                suggestUrl = ""
                 errorText = null
             },
             title = {
@@ -1047,7 +1374,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Enter the name and the search query URL for the custom search engine.",
+                        text = "Enter the name, search URL, and optional suggestion API URL.",
                         color = textSecondaryColor,
                         fontSize = 13.sp
                     )
@@ -1090,6 +1417,26 @@ fun SettingsScreen(
                             unfocusedContainerColor = inputBgColor
                         )
                     )
+
+                    OutlinedTextField(
+                        value = suggestUrl,
+                        onValueChange = { 
+                            suggestUrl = it
+                            errorText = null
+                        },
+                        label = { Text("Suggestion API URL (Optional, with %s)") },
+                        singleLine = true,
+                        placeholder = { Text("https://example.com/suggest?q=%s") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = inputBgColor,
+                            unfocusedContainerColor = inputBgColor
+                        )
+                    )
                     
                     if (errorText != null) {
                         Text(
@@ -1106,6 +1453,7 @@ fun SettingsScreen(
                     onClick = {
                         val trimmedName = name.trim()
                         val trimmedUrl = url.trim()
+                        val trimmedSuggestUrl = suggestUrl.trim()
                         if (trimmedName.isEmpty()) {
                             errorText = "Name is required"
                             return@Button
@@ -1118,6 +1466,10 @@ fun SettingsScreen(
                             errorText = "URL must contain %s query placeholder"
                             return@Button
                         }
+                        if (trimmedSuggestUrl.isNotEmpty() && !trimmedSuggestUrl.contains("%s")) {
+                            errorText = "Suggestion URL must contain %s query placeholder if provided"
+                            return@Button
+                        }
                         val builtInNames = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
                         if (builtInNames.any { it.equals(trimmedName, ignoreCase = true) }) {
                             errorText = "Name matches a built-in search engine"
@@ -1127,7 +1479,7 @@ fun SettingsScreen(
                             errorText = "A custom search engine with this name already exists"
                             return@Button
                         }
-                        viewModel.addCustomSearchEngine(context, trimmedName, trimmedUrl)
+                        viewModel.addCustomSearchEngine(context, trimmedName, trimmedUrl, trimmedSuggestUrl)
                         showAddSearchEngineDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = accentColor)
@@ -1146,6 +1498,161 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (editingSearchEngine != null) {
+        val oldEngine = editingSearchEngine!!
+        var name by remember(oldEngine) { mutableStateOf(oldEngine.name) }
+        var url by remember(oldEngine) { mutableStateOf(oldEngine.queryUrl) }
+        var suggestUrl by remember(oldEngine) { mutableStateOf(oldEngine.suggestUrl) }
+        var errorText by remember { mutableStateOf<String?>(null) }
+        
+        AlertDialog(
+            onDismissRequest = { 
+                editingSearchEngine = null
+                errorText = null
+            },
+            title = {
+                Text(
+                    text = "Edit Custom Search Engine",
+                    color = textPrimaryColor,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            containerColor = cardColor,
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Edit the name, search URL, or optional suggestion API URL.",
+                        color = textSecondaryColor,
+                        fontSize = 13.sp
+                    )
+                    
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { 
+                            name = it
+                            errorText = null
+                        },
+                        label = { Text("Name (e.g. Startpage)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = inputBgColor,
+                            unfocusedContainerColor = inputBgColor
+                        )
+                    )
+                    
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { 
+                            url = it
+                            errorText = null
+                        },
+                        label = { Text("Search URL (with %s)") },
+                        singleLine = true,
+                        placeholder = { Text("https://example.com/search?q=%s") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = inputBgColor,
+                            unfocusedContainerColor = inputBgColor
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = suggestUrl,
+                        onValueChange = { 
+                            suggestUrl = it
+                            errorText = null
+                        },
+                        label = { Text("Suggestion API URL (Optional, with %s)") },
+                        singleLine = true,
+                        placeholder = { Text("https://example.com/suggest?q=%s") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimaryColor,
+                            unfocusedTextColor = textPrimaryColor,
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = cardBorderColor,
+                            focusedContainerColor = inputBgColor,
+                            unfocusedContainerColor = inputBgColor
+                        )
+                    )
+                    
+                    if (errorText != null) {
+                        Text(
+                            text = errorText!!,
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmedName = name.trim()
+                        val trimmedUrl = url.trim()
+                        val trimmedSuggestUrl = suggestUrl.trim()
+                        if (trimmedName.isEmpty()) {
+                            errorText = "Name is required"
+                            return@Button
+                        }
+                        if (trimmedUrl.isEmpty()) {
+                            errorText = "URL is required"
+                            return@Button
+                        }
+                        if (!trimmedUrl.contains("%s")) {
+                            errorText = "URL must contain %s query placeholder"
+                            return@Button
+                        }
+                        if (trimmedSuggestUrl.isNotEmpty() && !trimmedSuggestUrl.contains("%s")) {
+                            errorText = "Suggestion URL must contain %s query placeholder if provided"
+                            return@Button
+                        }
+                        val builtInNames = listOf("Google", "DuckDuckGo", "Brave", "Bing", "Custom")
+                        if (builtInNames.any { it.equals(trimmedName, ignoreCase = true) } && !trimmedName.equals(oldEngine.name, ignoreCase = true)) {
+                            errorText = "Name matches a built-in search engine"
+                            return@Button
+                        }
+                        if (viewModel.customSearchEngines.any { it.name.equals(trimmedName, ignoreCase = true) && it.name != oldEngine.name }) {
+                            errorText = "A custom search engine with this name already exists"
+                            return@Button
+                        }
+                        viewModel.updateCustomSearchEngine(
+                            context, 
+                            oldEngine, 
+                            com.rebelroot.omni.browser.CustomSearchEngine(trimmedName, trimmedUrl, trimmedSuggestUrl)
+                        )
+                        editingSearchEngine = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                ) {
+                    Text("Save", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        editingSearchEngine = null
+                    }
+                ) {
+                    Text("Cancel", color = textSecondaryColor)
+                }
+            }
+        )
+    }
+}
 }
 
 

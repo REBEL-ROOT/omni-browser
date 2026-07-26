@@ -7,6 +7,7 @@ package com.rebelroot.omni.settings
 
 import android.app.Activity
 import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -40,7 +41,8 @@ import com.rebelroot.omni.browser.BrowserViewModel
 @Composable
 fun PrivacySecurityScreen(
     viewModel: BrowserViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onOpenAdBlockConfig: () -> Unit = {}
 ) {
     BackHandler {
         onNavigateBack()
@@ -101,6 +103,30 @@ fun PrivacySecurityScreen(
                         .background(cardColor)
                         .border(0.5.dp, cardBorderColor, RoundedCornerShape(16.dp))
                 ) {
+                    // Item 0: AdBlock & Custom Filter List Providers
+                    SettingsRow(
+                        icon = Icons.Rounded.Shield,
+                        title = "AdBlock & Custom Filter Providers",
+                        subtitle = "Configure built-in & custom blocklist URLs",
+                        onClick = onOpenAdBlockConfig,
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Item 0.5: WireGuard Custom VPN
+                    SettingsRow(
+                        icon = Icons.Rounded.VpnLock,
+                        title = "WireGuard Custom VPN",
+                        subtitle = "Configure custom VPN tunnel for system-wide protection",
+                        onClick = { Toast.makeText(context, "Configure WireGuard VPN in the main Settings screen", Toast.LENGTH_SHORT).show() },
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
                     // Item 1: Delete browsing data
                     SettingsRow(
                         icon = Icons.Rounded.DeleteOutline,

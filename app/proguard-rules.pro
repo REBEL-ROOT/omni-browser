@@ -130,6 +130,7 @@
 # Removed -repackageclasses '' (breaks GeckoView classpath assumptions)
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
 -optimizationpasses 3
+-dontobfuscate
 
 # 9. Compose — keep internal classes loaded via reflection
 -keep class androidx.compose.** { *; }

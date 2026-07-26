@@ -232,4 +232,55 @@ class PrivateLockerManager(private val context: Context) {
             Log.e(TAG, "Error clearing decrypted cache", e)
         }
     }
+
+    /**
+     * Encrypts and saves a File object into the secure locker sandbox.
+     */
+    suspend fun saveFileToLocker(file: File, originalName: String, mimeType: String): String {
+        val secureId = UUID.randomUUID().toString()
+        val subDirName = getSubfolderForMimeType(mimeType, originalName)
+        val subDir = File(lockerDir, subDirName).apply {
+            if (!exists()) {
+                mkdirs()
+            }
+        }
+        val targetFile = File(subDir, secureId)
+        if (targetFile.exists()) {
+            targetFile.delete()
+        }
+
+        try {
+            val encryptedFile = EncryptedFile.Builder(
+                context,
+                targetFile,
+                masterKey,
+                EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
+            ).build()
+
+            file.inputStream().use { inputStream ->
+                encryptedFile.openFileOutput().use { outputStream ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+
+            val fileSize = targetFile.length()
+            val fileRecord = LockerFile(
+                id = secureId,
+                displayName = originalName,
+                mimeType = mimeType,
+                sizeBytes = fileSize,
+                createdAt = System.currentTimeMillis()
+            )
+            database.fileDao().insert(fileRecord)
+            Log.i(TAG, "File encrypted and saved to sandbox: $secureId ($originalName) under $subDirName")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write encrypted file to locker sandbox", e)
+            throw e
+        }
+        return secureId
+    }
 }

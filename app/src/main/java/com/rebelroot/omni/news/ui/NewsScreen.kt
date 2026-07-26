@@ -13,26 +13,40 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Article
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+
 import com.rebelroot.omni.browser.BrowserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,7 +146,7 @@ fun NewsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Article,
+                                imageVector = Icons.Rounded.Description,
                                 contentDescription = "News Center",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
@@ -241,13 +255,22 @@ fun NewsScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    items(viewModel.newsArticles) { article ->
+                    itemsIndexed(viewModel.newsArticles, key = { index, article -> "${article.link}_$index" }) { _, article ->
+                        val fallbackPhoto = remember(article.title, viewModel.selectedNewsCategory) {
+                            viewModel.getFallbackCategoryPhoto(article.title, viewModel.selectedNewsCategory)
+                        }
+                        val initialPhoto = remember(article.imageUrl, fallbackPhoto) {
+                            if (article.imageUrl.isNotBlank() && article.imageUrl.startsWith("http")) article.imageUrl else fallbackPhoto
+                        }
+                        var currentImgUrl by remember(article.imageUrl, initialPhoto) { mutableStateOf(initialPhoto) }
+                        var isLoadFailed by remember(article.imageUrl, fallbackPhoto) { mutableStateOf(false) }
+
                         Card(
                             onClick = {
                                 viewModel.loadUrl(article.link)
                                 onNavigateHome()
                             },
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surface
                             ),
@@ -257,19 +280,76 @@ fun NewsScreen(
                             Column(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                // Article Image (using Coil AsyncImage)
-                                if (article.imageUrl.isNotEmpty()) {
+                                // Article Headline Photo with Vector Fallback
+                                if (!isLoadFailed && currentImgUrl.isNotBlank()) {
                                     AsyncImage(
-                                        model = article.imageUrl,
-                                        contentDescription = null,
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(currentImgUrl)
+                                            .crossfade(true)
+                                            .setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                                            .listener(
+                                                onError = { _, _ ->
+                                                    if (currentImgUrl != fallbackPhoto) {
+                                                        currentImgUrl = fallbackPhoto
+                                                    } else {
+                                                        isLoadFailed = true
+                                                    }
+                                                }
+                                            )
+                                            .build(),
+                                        contentDescription = article.title,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(180.dp)
-                                            .clip(RoundedCornerShape(20.dp))
+                                            .height(190.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
                                     )
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                } else {
+                                    // Topic / Genre Specific Vector Banner Fallback
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(190.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+                                                )
+                                            )
+                                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(52.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFF6366F1).copy(alpha = 0.2f))
+                                                    .border(1.dp, Color(0xFF818CF8), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Description,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFA5B4FC),
+                                                    modifier = Modifier.size(26.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = article.source.ifBlank { "Omni News" },
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(12.dp))
+
 
                                 Column(
                                     modifier = Modifier.padding(horizontal = 4.dp)
@@ -284,31 +364,43 @@ fun NewsScreen(
                                         overflow = TextOverflow.Ellipsis,
                                         lineHeight = 22.sp
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
 
-                                    // Source & PubDate Row
+                                    // Source Favicon & Source Name & PubDate Row
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        if (article.sourceFaviconUrl.isNotEmpty()) {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(LocalContext.current)
+                                                    .data(article.sourceFaviconUrl)
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = article.source,
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                            )
+                                        }
                                         Text(
                                             text = article.source,
                                             color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 11.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                         Text(
                                             text = "•",
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                            fontSize = 11.sp
+                                            fontSize = 12.sp
                                         )
                                         Text(
                                             text = article.pubDate,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 11.sp
+                                            fontSize = 12.sp
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
                             }
