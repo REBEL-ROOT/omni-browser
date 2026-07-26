@@ -7,7 +7,7 @@ plugins {
 }
 
 val baseVersionCode = 2027
-val baseVersionName = "1.2.6.2"
+val baseVersionName = "1.2.6.1"
 
 android {
     namespace = "com.rebelroot.omni"
