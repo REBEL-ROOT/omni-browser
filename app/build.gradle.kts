@@ -6,8 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val baseVersionCode = 26
-val baseVersionName = "1.2.6.1"
+val baseVersionCode = 2027
+val baseVersionName = "1.2.6.2"
 
 android {
     namespace = "com.rebelroot.omni"
