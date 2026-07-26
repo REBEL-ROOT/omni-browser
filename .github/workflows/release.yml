@@ -23,6 +23,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # default is 1; a shallow clone can't see previous tags
+
+      - name: Fail if baseVersionCode did not increase
+        run: |
+          read_code() { grep -oP 'val baseVersionCode\s*=\s*\K\d+' "$1" || echo 0; }
+          curr=$(read_code app/build.gradle.kts)
+          prev_tag=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
+          [ -z "$prev_tag" ] && exit 0
+          git show "$prev_tag:app/build.gradle.kts" > /tmp/prev.kts
+          prev=$(read_code /tmp/prev.kts)
+          echo "$prev_tag = $prev  ->  ${{ github.ref_name }} = $curr"
+          [ "$curr" -gt "$prev" ] || { echo "::error::versionCode regression: $curr <= $prev"; exit 1; }
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
