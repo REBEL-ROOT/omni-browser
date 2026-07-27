@@ -565,7 +565,7 @@ fun PhoneAddressBar(
                     )
                 }
 
-                ChromeMenuDropdown(
+                omnimenuDropdown(
                     expanded = showMenu,
                     onDismissRequest = { onShowMenuChange(false) },
                     viewModel = viewModel,
@@ -602,7 +602,7 @@ fun PhoneAddressBar(
 }
 
 @Composable
-fun ChromeMenuDropdown(
+fun omnimenuDropdown(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     viewModel: BrowserViewModel,
