@@ -462,6 +462,20 @@ fun BrowserScreen(
         }
     }
 
+    val vpnPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val config = viewModel.customVpnConfig
+            if (!config.isNullOrBlank()) {
+                viewModel.connectCustomVpn()
+                Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "VPN permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Observe pendingFilePrompt and launch the right picker automatically
     LaunchedEffect(viewModel.pendingFilePrompt) {
         val pending = viewModel.pendingFilePrompt ?: return@LaunchedEffect
@@ -1047,7 +1061,7 @@ fun BrowserScreen(
                                             )
                                         }
 
-                                        ChromeMenuDropdown(
+                                        omnimenuDropdown(
                                             expanded = showMenu,
                                             onDismissRequest = { showMenu = false },
                                             viewModel = viewModel,
@@ -6230,8 +6244,13 @@ fun BrowserScreen(
                                 } else {
                                     val config = viewModel.customVpnConfig
                                     if (!config.isNullOrBlank()) {
-                                        viewModel.connectCustomVpn()
-                                        Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+                                        val vpnIntent = android.net.VpnService.prepare(context)
+                                        if (vpnIntent != null) {
+                                            vpnPermissionLauncher.launch(vpnIntent)
+                                        } else {
+                                            viewModel.connectCustomVpn()
+                                            Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+                                        }
                                     } else {
                                         onOpenSettings()
                                         Toast.makeText(context, "Add VPN configuration in Settings first", Toast.LENGTH_LONG).show()
