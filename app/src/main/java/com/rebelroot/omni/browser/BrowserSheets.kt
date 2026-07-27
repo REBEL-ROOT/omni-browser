@@ -2972,6 +2972,7 @@ fun AllInOneMenuSheet(
     onOpenDownloads: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAppearance: () -> Unit = {},
     onShowCustomizationSheet: () -> Unit,
     onShowExtensions: () -> Unit,
     onShowPlayerSettings: () -> Unit,
@@ -3276,10 +3277,10 @@ fun AllInOneMenuSheet(
                         onClick = { onDismissRequest(); onShowPlayerSettings() }
                     )
                     AllInOneGridItem(
-                        icon = Icons.Rounded.Edit,
+                        icon = Icons.Rounded.Palette,
                         label = "Theme",
                         tint = textColor,
-                        onClick = { onDismissRequest(); onShowCustomizationSheet() }
+                        onClick = { onDismissRequest(); onOpenAppearance() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Settings,

@@ -328,6 +328,7 @@ class MainActivity : FragmentActivity() {
                                 onOpenQrTools = { navController.navigate("qr_tools") },
                                 onOpenDownloads = { navController.navigate("downloads") },
                                 onOpenSettings = { navController.navigate("settings") },
+                                onOpenAppearance = { navController.navigate("appearance") },
                                 onOpenHistory = { navController.navigate("history") },
                                 onOpenBookmarks = { navController.navigate("bookmarks") },
                                 onOpenNewsCenter = { navController.navigate("news") },
