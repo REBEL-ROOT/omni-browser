@@ -922,13 +922,6 @@ fun omnimenuDropdown(
                 onClick = { onDismissRequest(); onOpenSettings() }
             )
             MinimalMenuItem(
-                text = "Customize new tab page",
-                icon = Icons.Rounded.Edit,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                onClick = { onDismissRequest(); onShowCustomizationSheet() }
-            )
-            MinimalMenuItem(
                 text = "Help & feedback",
                 icon = Icons.AutoMirrored.Rounded.HelpOutline,
                 iconTint = iconTint,
