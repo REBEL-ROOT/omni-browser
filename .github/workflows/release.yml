@@ -81,7 +81,8 @@ jobs:
 
       - name: Rename APKs
         run: |
-          VERSION=${{ github.ref_name }}
+          VERSION="${{ github.ref_name }}"
+          if [ -z "$VERSION" ]; then VERSION="v1.2.6.3"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -106,9 +107,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "Omni Browser ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
           draft: true
+          make_latest: "true"
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
-          generate_release_notes: true
+          generate_release_notes: false
           files: |
             app/build/outputs/apk/omni-browser-*.apk
           body: |
