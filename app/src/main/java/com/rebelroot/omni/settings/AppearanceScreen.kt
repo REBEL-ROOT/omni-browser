@@ -97,7 +97,178 @@ fun AppearanceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Force Websites to Use Dark Theme (Moved to top)
+            // Address Bar position (Moved to top)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Address Bar", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.saveAddressBarPosition(context, "Top") }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Top", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        if (viewModel.addressBarPosition == "Top") {
+                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
+                        }
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.saveAddressBarPosition(context, "Bottom") }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Bottom", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        if (viewModel.addressBarPosition == "Bottom") {
+                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
+                        }
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.saveAddressBarPosition(context, "Split") }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Split", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        if (viewModel.addressBarPosition == "Split") {
+                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
+                        }
+                    }
+                }
+            }
+
+            // Navigation Visibility Toggles (Moved to top)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Navigation", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                ) {
+                    val isAllInOneEnabled = viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Bottom"
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .alpha(if (isAllInOneEnabled) 1f else 0.5f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("All-in-One Menu Bar", color = textPrimaryColor, fontSize = 16.sp)
+                            Text("Chrome-style single top bar (hides bottom nav)", color = textSecondaryColor, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = viewModel.chromeNavBarEnabled && isAllInOneEnabled,
+                            onCheckedChange = { viewModel.saveChromeNavBarEnabled(context, it) },
+                            enabled = isAllInOneEnabled,
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+                    // All-in-One preview strip — shown when the toggle is ON
+                    AnimatedVisibility(visible = viewModel.chromeNavBarEnabled && isAllInOneEnabled) {
+                        Column {
+                            HorizontalDivider(color = dividerColor)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                            ) {
+                                Text(
+                                    "Preview",
+                                    color = textSecondaryColor,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.align(Alignment.TopStart)
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 20.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFF0F0F0))
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                androidx.compose.ui.graphics.Brush.sweepGradient(
+                                                    listOf(Color(0xFF7B2FBE), Color(0xFF4A90E2), Color(0xFF7B2FBE))
+                                                )
+                                            )
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isDarkMode) Color(0xFF3A3A3C) else Color(0xFFFFFFFF))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(10.dp))
+                                        Text("https://www.rebelroot.", color = textPrimaryColor, fontSize = 10.sp, maxLines = 1)
+                                    }
+                                    Icon(imageVector = Icons.Rounded.Build, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
+                                    Icon(imageVector = Icons.Rounded.Extension, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
+                                    Box(
+                                        modifier = Modifier.size(20.dp).border(1.5.dp, textSecondaryColor, RoundedCornerShape(4.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("4", color = textPrimaryColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Icon(imageVector = Icons.Rounded.Menu, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Hide Upper Navigation Bar", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = viewModel.navBarHideTop,
+                            onCheckedChange = { viewModel.saveNavBarHideTop(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Hide Bottom Navigation Bar", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = viewModel.navBarHideBottom,
+                            onCheckedChange = { viewModel.saveNavBarHideBottom(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+                }
+            }
+
+            // Force Websites to Use Dark Theme
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -383,177 +554,6 @@ fun AppearanceScreen(
                                     color = if (isSelected) Color.White else textPrimaryColor
                                 )
                             }
-                        }
-                    }
-                }
-            }
-
-            // Navigation Visibility Toggles
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Navigation", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cardColor)
-                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                ) {
-                    val isAllInOneEnabled = viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Bottom"
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .alpha(if (isAllInOneEnabled) 1f else 0.5f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("All-in-One Menu Bar", color = textPrimaryColor, fontSize = 16.sp)
-                            Text("Chrome-style single top bar (hides bottom nav)", color = textSecondaryColor, fontSize = 12.sp)
-                        }
-                        Switch(
-                            checked = viewModel.chromeNavBarEnabled && isAllInOneEnabled,
-                            onCheckedChange = { viewModel.saveChromeNavBarEnabled(context, it) },
-                            enabled = isAllInOneEnabled,
-                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
-                        )
-                    }
-                    // All-in-One preview strip — shown when the toggle is ON
-                    AnimatedVisibility(visible = viewModel.chromeNavBarEnabled && isAllInOneEnabled) {
-                        Column {
-                            HorizontalDivider(color = dividerColor)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                Text(
-                                    "Preview",
-                                    color = textSecondaryColor,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.align(Alignment.TopStart)
-                                )
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 20.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isDarkMode) Color(0xFF2C2C2E) else Color(0xFFF0F0F0))
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                androidx.compose.ui.graphics.Brush.sweepGradient(
-                                                    listOf(Color(0xFF7B2FBE), Color(0xFF4A90E2), Color(0xFF7B2FBE))
-                                                )
-                                            )
-                                    )
-                                    Row(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isDarkMode) Color(0xFF3A3A3C) else Color(0xFFFFFFFF))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(10.dp))
-                                        Text("https://www.rebelroot.", color = textPrimaryColor, fontSize = 10.sp, maxLines = 1)
-                                    }
-                                    Icon(imageVector = Icons.Rounded.Build, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
-                                    Icon(imageVector = Icons.Rounded.Extension, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
-                                    Box(
-                                        modifier = Modifier.size(20.dp).border(1.5.dp, textSecondaryColor, RoundedCornerShape(4.dp)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("4", color = textPrimaryColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Icon(imageVector = Icons.Rounded.Menu, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
-                                }
-                            }
-                        }
-                    }
-                    HorizontalDivider(color = dividerColor)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Hide Upper Navigation Bar", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = viewModel.navBarHideTop,
-                            onCheckedChange = { viewModel.saveNavBarHideTop(context, it) },
-                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
-                        )
-                    }
-                    HorizontalDivider(color = dividerColor)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Hide Bottom Navigation Bar", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = viewModel.navBarHideBottom,
-                            onCheckedChange = { viewModel.saveNavBarHideBottom(context, it) },
-                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
-                        )
-                    }
-                }
-            }
-
-            // Address Bar position
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Address Bar", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cardColor)
-                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.saveAddressBarPosition(context, "Top") }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Top", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        if (viewModel.addressBarPosition == "Top") {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
-                        }
-                    }
-                    HorizontalDivider(color = dividerColor)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.saveAddressBarPosition(context, "Bottom") }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Bottom", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        if (viewModel.addressBarPosition == "Bottom") {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
-                        }
-                    }
-                    HorizontalDivider(color = dividerColor)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.saveAddressBarPosition(context, "Split") }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Split", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        if (viewModel.addressBarPosition == "Split") {
-                            Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
                     }
                 }
