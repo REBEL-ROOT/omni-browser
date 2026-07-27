@@ -360,6 +360,7 @@ fun BrowserScreen(
     var showImageGrabberSheet by remember { mutableStateOf(false) }
     var showPageInspectorSheet by remember { mutableStateOf(false) }
     var showAllInOneMenuSheet by remember { mutableStateOf(false) }
+    var showThemeSheet by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(isKeyboardVisible) {
@@ -6093,7 +6094,6 @@ fun BrowserScreen(
                 onOpenDownloads = onOpenDownloads,
                 onOpenBookmarks = onOpenBookmarks,
                 onOpenSettings = onOpenSettings,
-                onOpenAppearance = onOpenAppearance,
                 onShowCustomizationSheet = { showCustomizationSheet = true },
                 onShowExtensions = { showExtensionsSheet = true },
                 onShowPlayerSettings = { showPlayerSettingsDialog = true },
@@ -6110,7 +6110,15 @@ fun BrowserScreen(
                         Toast.makeText(context, "No active tab to group", Toast.LENGTH_SHORT).show()
                     }
                 },
-                hasActiveUserExtensions = hasActiveUserExtensions
+                hasActiveUserExtensions = hasActiveUserExtensions,
+                onShowThemeSheet = { showThemeSheet = true }
+            )
+        }
+
+        if (showThemeSheet) {
+            ThemeSheet(
+                viewModel = viewModel,
+                onDismissRequest = { showThemeSheet = false }
             )
         }
 

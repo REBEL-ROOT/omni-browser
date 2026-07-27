@@ -2972,7 +2972,7 @@ fun AllInOneMenuSheet(
     onOpenDownloads: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenAppearance: () -> Unit = {},
+    onShowThemeSheet: () -> Unit = {},
     onShowCustomizationSheet: () -> Unit,
     onShowExtensions: () -> Unit,
     onShowPlayerSettings: () -> Unit,
@@ -3280,7 +3280,7 @@ fun AllInOneMenuSheet(
                         icon = Icons.Rounded.Palette,
                         label = "Theme",
                         tint = textColor,
-                        onClick = { onDismissRequest(); onOpenAppearance() }
+                        onClick = { onDismissRequest(); onShowThemeSheet() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Settings,
@@ -3405,5 +3405,203 @@ fun AllInOneBottomAction(
             color = color,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ThemeSheet(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit
+) {
+    val context = LocalContext.current
+    val isDark = viewModel.isDarkThemeEnabled
+    val isAmoled = viewModel.isAmoledMode
+    val sheetBg = if (isAmoled) Color(0xFF000000) else if (isDark) Color(0xFF141416) else Color(0xFFF9F9FB)
+    val cardBg = if (isAmoled) Color(0xFF0C0C0E) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val secondaryText = if (isDark) Color(0xFFA0A0A5) else Color(0xFF8E8E93)
+    val dividerColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = sheetBg,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDark) Color(0xFF48484A) else Color(0xFFC7C7CC),
+                width = 32.dp,
+                height = 3.dp
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Theme",
+                color = accentColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 1. Theme Mode: Light | Dark | AMOLED
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Theme Mode", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        val themeMode = when {
+                            viewModel.isAmoledMode -> 2
+                            viewModel.isDarkThemeEnabled -> 1
+                            else -> 0
+                        }
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            val options = listOf("Light", "Dark", "AMOLED")
+                            val icons = listOf(
+                                Icons.Rounded.LightMode,
+                                Icons.Rounded.DarkMode,
+                                Icons.Rounded.Brightness1
+                            )
+                            options.forEachIndexed { index, label ->
+                                SegmentedButton(
+                                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                                    onClick = {
+                                        when (index) {
+                                            0 -> {
+                                                viewModel.saveDarkTheme(context, false)
+                                                viewModel.saveAmoledMode(context, false)
+                                            }
+                                            1 -> {
+                                                viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveAmoledMode(context, false)
+                                            }
+                                            2 -> {
+                                                viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveAmoledMode(context, true)
+                                            }
+                                        }
+                                    },
+                                    selected = themeMode == index,
+                                    icon = {
+                                        SegmentedButtonDefaults.Icon(active = themeMode == index) {
+                                            Icon(imageVector = icons[index], contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
+                                        }
+                                    }
+                                ) {
+                                    Text(label, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor)
+
+                    // 2. App Nav Scaler
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("App Nav Scaler", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "${(viewModel.uiScale * 100).toInt()}%",
+                                color = accentColor,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Slider(
+                            value = viewModel.uiScale,
+                            onValueChange = { newValue ->
+                                val steppedValue = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveUiScale(context, steppedValue.coerceIn(0.8f, 1.3f))
+                            },
+                            valueRange = 0.8f..1.3f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = accentColor,
+                                activeTrackColor = accentColor,
+                                inactiveTrackColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color(0xFFE0E0E0)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Smaller", color = secondaryText, fontSize = 11.sp)
+                            Text("Default", color = secondaryText, fontSize = 11.sp)
+                            Text("Larger", color = secondaryText, fontSize = 11.sp)
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor)
+
+                    // 3. Accent Color
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Accent Color",
+                            color = textColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        val accentOptions = listOf(
+                            "Ocean Blue" to Color(0xFF0A84FF),
+                            "Crimson Red" to Color(0xFFFF3B5C),
+                            "Emerald Green" to Color(0xFF00C853),
+                            "Sunset Orange" to Color(0xFFFF6D00),
+                            "Royal Purple" to Color(0xFF7C4DFF),
+                            "Monochrome" to Color(0xFFAAAAAA)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            accentOptions.forEach { (name, color) ->
+                                val isSelected = viewModel.selectedAccentTheme == name
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .then(
+                                            if (isSelected)
+                                                Modifier.border(3.dp, textColor.copy(alpha = 0.6f), CircleShape)
+                                            else Modifier
+                                        )
+                                        .clickable { viewModel.saveAccentTheme(context, name) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
