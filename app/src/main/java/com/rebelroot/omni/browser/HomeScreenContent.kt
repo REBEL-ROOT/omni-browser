@@ -384,7 +384,7 @@ fun HomeScreenContent(
                             )
                         }
 
-                        ChromeMenuDropdown(
+                        omnimenuDropdown(
                             expanded = showHomeMenu,
                             onDismissRequest = { showHomeMenu = false },
                             viewModel = viewModel,
@@ -1874,12 +1874,12 @@ fun HomeScreenContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     val themes = listOf(
-                        "Ocean Blue" to Color(0xFF007AFF),
-                        "Emerald" to Color(0xFF34C759),
-                        "Purple" to Color(0xFFAF52DE),
-                        "Crimson" to Color(0xFFFF3B30),
-                        "Midnight" to Color(0xFF5E5CE6),
-                        "Amber" to Color(0xFFFF9500)
+                        "Ocean Blue" to Color(0xFF0A84FF),
+                        "Crimson Red" to Color(0xFFFF3B5C),
+                        "Emerald Green" to Color(0xFF00C853),
+                        "Sunset Orange" to Color(0xFFFF6D00),
+                        "Royal Purple" to Color(0xFF7C4DFF),
+                        "Monochrome" to Color(0xFFAAAAAA)
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
