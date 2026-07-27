@@ -2,6 +2,13 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.6.4] - 2026-07-27
+
+### Fixed
+- **Automated GitHub Release Pipeline**: Resolved asset upload failures on immutable release tags by enhancing release draft creation, automatic fallback version naming, and uploading signed APK assets directly to draft releases.
+
+---
+
 ## [1.2.6.3] - 2026-07-27
 
 ### Added
