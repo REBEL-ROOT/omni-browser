@@ -908,13 +908,6 @@ fun omnimenuDropdown(
                 onClick = { onDismissRequest(); onShowThemeSheet() }
             )
             MinimalMenuItem(
-                text = "Quick Tools",
-                icon = Icons.Rounded.Build,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                onClick = { onDismissRequest(); onShowQuickTools() }
-            )
-            MinimalMenuItem(
                 text = "Settings",
                 icon = Icons.Rounded.Settings,
                 iconTint = iconTint,
