@@ -202,7 +202,9 @@ fun HomeScreenContent(
     onShowCustomizationSheetChange: (Boolean) -> Unit,
     onShowTabGroups: () -> Unit = {},
     onOpenWallpapers: () -> Unit = {},
-    onOpenAppearance: () -> Unit = {}
+    onOpenAppearance: () -> Unit = {},
+    onShowThemeSheet: () -> Unit = {},
+    onShowQuickTools: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -409,6 +411,8 @@ fun HomeScreenContent(
                             onOpenDownloads = onOpenDownloads,
                             onOpenBookmarks = onOpenBookmarks,
                             onOpenSettings = onOpenSettings,
+                            onShowThemeSheet = onShowThemeSheet,
+                            onShowQuickTools = onShowQuickTools,
                             onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
                             onShowExtensions = {},
                             onShowPlayerSettings = {},

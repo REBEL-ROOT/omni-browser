@@ -1088,6 +1088,8 @@ fun BrowserScreen(
                                             onOpenDownloads = onOpenDownloads,
                                             onOpenBookmarks = onOpenBookmarks,
                                             onOpenSettings = onOpenSettings,
+                                            onShowThemeSheet = { showThemeSheet = true },
+                                            onShowQuickTools = { showQuickToolsSheet = true },
                                             onShowCustomizationSheet = { showCustomizationSheet = true },
                                             onShowExtensions = { showExtensionsSheet = true },
                                             onShowPlayerSettings = { showPlayerSettingsDialog = true },

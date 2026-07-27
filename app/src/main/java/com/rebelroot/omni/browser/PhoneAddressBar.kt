@@ -147,6 +147,8 @@ fun PhoneAddressBar(
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
     onShowCustomizationSheet: () -> Unit,
+    onShowThemeSheet: () -> Unit = {},
+    onShowQuickTools: () -> Unit = {},
     onShowPlayerSettings: () -> Unit,
     onShowTabGroups: () -> Unit = {},
     onShowSiteInfo: () -> Unit = {},
@@ -590,6 +592,8 @@ fun PhoneAddressBar(
                     onOpenDownloads = onOpenDownloads,
                     onOpenBookmarks = onOpenBookmarks,
                     onOpenSettings = onOpenSettings,
+                    onShowThemeSheet = onShowThemeSheet,
+                    onShowQuickTools = onShowQuickTools,
                     onShowCustomizationSheet = onShowCustomizationSheet,
                     onShowExtensions = onShowExtensionsSheet,
                     onShowPlayerSettings = onShowPlayerSettings,
@@ -613,6 +617,8 @@ fun omnimenuDropdown(
     onOpenDownloads: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
+    onShowThemeSheet: () -> Unit = {},
+    onShowQuickTools: () -> Unit = {},
     onShowCustomizationSheet: () -> Unit,
     onShowExtensions: () -> Unit,
     onShowPlayerSettings: () -> Unit,
@@ -891,6 +897,20 @@ fun omnimenuDropdown(
             HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
 
             // ── Section 4: App Settings ────────────────────────────
+            MinimalMenuItem(
+                text = "Theme",
+                icon = Icons.Rounded.Palette,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); onShowThemeSheet() }
+            )
+            MinimalMenuItem(
+                text = "Quick Tools",
+                icon = Icons.Rounded.Build,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); onShowQuickTools() }
+            )
             MinimalMenuItem(
                 text = "Settings",
                 icon = Icons.Rounded.Settings,
