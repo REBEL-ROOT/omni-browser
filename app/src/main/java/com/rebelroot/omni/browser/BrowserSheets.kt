@@ -3002,8 +3002,8 @@ fun AllInOneMenuSheet(
         dragHandle = {
             BottomSheetDefaults.DragHandle(
                 color = if (isDark) Color(0xFF48484A) else Color(0xFFC7C7CC),
-                width = 36.dp,
-                height = 4.dp
+                width = 32.dp,
+                height = 3.dp
             )
         }
     ) {
@@ -3011,18 +3011,18 @@ fun AllInOneMenuSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             
             // --- Card 0: Tab Actions ---
             Surface(
                 color = cardBg,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     AllInOneGridItem(
@@ -3055,7 +3055,7 @@ fun AllInOneMenuSheet(
             // --- Card 1: Page Actions ---
             Surface(
                 color = cardBg,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Column {
                     // Bookmark Page
@@ -3074,20 +3074,20 @@ fun AllInOneMenuSheet(
                                     Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarOutline,
                             contentDescription = "Bookmark",
                             tint = if (isBookmarked) MaterialTheme.colorScheme.primary else textColor,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Bookmark page", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Bookmark page", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
                     }
 
-                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
 
                     // Add to Shortcuts
                     Row(
@@ -3102,20 +3102,20 @@ fun AllInOneMenuSheet(
                                     Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = "Add to Shortcuts",
                             tint = textColor,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Add to shortcuts", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Add to shortcuts", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
                     }
 
-                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
 
                     // Find in Page
                     Row(
@@ -3129,20 +3129,20 @@ fun AllInOneMenuSheet(
                                     Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Search,
                             contentDescription = "Find",
                             tint = textColor,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Find in page", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Find in page", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
                     }
 
-                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
 
                     // Desktop Site
                     Row(
@@ -3156,34 +3156,34 @@ fun AllInOneMenuSheet(
                                     Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.DesktopWindows,
                             contentDescription = "Desktop Site",
                             tint = textColor,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Desktop site", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Desktop site", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         
                         // Badge for On/Off
                         Box(
                             modifier = Modifier
-                                .background(if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else dividerColor, RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .background(if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else dividerColor, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = if (viewModel.isDesktopMode) "On" else "Off",
-                                fontSize = 13.sp,
+                                fontSize = 11.sp,
                                 color = if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary else textColor,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
 
-                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 56.dp))
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
 
                     // Extensions
                     Row(
@@ -3193,33 +3193,33 @@ fun AllInOneMenuSheet(
                                 onDismissRequest()
                                 onShowExtensions()
                             }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Extension,
                             contentDescription = "Extensions",
                             tint = textColor,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Extensions", fontSize = 16.sp, color = textColor, fontWeight = FontWeight.Medium)
-                            Text("Adblock, scripts & more", fontSize = 12.sp, color = secondaryText)
+                            Text("Extensions", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                            Text("Adblock, scripts & more", fontSize = 11.sp, color = secondaryText)
                         }
                         
                         // Badge for Extensions Count
                         if (hasActiveUserExtensions) {
                             Box(
                                 modifier = Modifier
-                                    .background(dividerColor, RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                                    .background(dividerColor, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 6.dp, vertical = 6.dp)
                             ) {
-                                Box(modifier = Modifier.size(8.dp).background(Color(0xFF8B5CF6), androidx.compose.foundation.shape.CircleShape))
+                                Box(modifier = Modifier.size(7.dp).background(Color(0xFF8B5CF6), androidx.compose.foundation.shape.CircleShape))
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null, tint = secondaryText, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null, tint = secondaryText, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -3227,10 +3227,10 @@ fun AllInOneMenuSheet(
             // --- Card 2: Grid Menu (History, Bookmarks, Downloads, Burn Data) ---
             Surface(
                 color = cardBg,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     AllInOneGridItem(
@@ -3263,10 +3263,10 @@ fun AllInOneMenuSheet(
             // --- Card 3: Theme & Settings ---
             Surface(
                 color = cardBg,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     AllInOneGridItem(
@@ -3300,7 +3300,7 @@ fun AllInOneMenuSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 val canGoBack = activeTab?.canGoBack == true
@@ -3356,19 +3356,19 @@ fun AllInOneGridItem(
     Column(
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(26.dp)
+            modifier = Modifier.size(22.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             color = tint,
             fontWeight = FontWeight.Medium
         )
@@ -3388,19 +3388,19 @@ fun AllInOneBottomAction(
     Column(
         modifier = Modifier
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(12.dp),
+            .padding(vertical = 4.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = color,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             color = color,
             fontWeight = FontWeight.Medium
         )
