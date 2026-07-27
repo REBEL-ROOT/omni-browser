@@ -204,7 +204,8 @@ fun HomeScreenContent(
     onOpenWallpapers: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
     onShowThemeSheet: () -> Unit = {},
-    onShowQuickTools: () -> Unit = {}
+    onShowQuickTools: () -> Unit = {},
+    onShowFeedbackDialog: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -413,6 +414,7 @@ fun HomeScreenContent(
                             onOpenSettings = onOpenSettings,
                             onShowThemeSheet = onShowThemeSheet,
                             onShowQuickTools = onShowQuickTools,
+                            onShowFeedbackDialog = onShowFeedbackDialog,
                             onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
                             onShowExtensions = {},
                             onShowPlayerSettings = {},
