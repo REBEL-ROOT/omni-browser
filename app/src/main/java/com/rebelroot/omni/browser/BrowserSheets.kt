@@ -2973,6 +2973,7 @@ fun AllInOneMenuSheet(
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
     onShowThemeSheet: () -> Unit = {},
+    onShowFeedbackDialog: () -> Unit = {},
     onShowCustomizationSheet: () -> Unit,
     onShowExtensions: () -> Unit,
     onShowPlayerSettings: () -> Unit,
@@ -3292,7 +3293,7 @@ fun AllInOneMenuSheet(
                         icon = Icons.AutoMirrored.Rounded.HelpOutline,
                         label = "Help",
                         tint = textColor,
-                        onClick = { onDismissRequest(); Toast.makeText(context, "Omni Browser v1.0.9", Toast.LENGTH_SHORT).show() }
+                        onClick = { onDismissRequest(); onShowFeedbackDialog() }
                     )
                 }
             }
@@ -3605,3 +3606,149 @@ fun ThemeSheet(
         }
     }
 }
+
+@Composable
+fun HelpFeedbackDialog(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit
+) {
+    val context = LocalContext.current
+    val isDark = viewModel.isDarkThemeEnabled
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var rating by remember { mutableStateOf(5) }
+    var comment by remember { mutableStateOf("") }
+    var isSubmitting by remember { mutableStateOf(false) }
+
+    val dialogBg = if (isDark && viewModel.isAmoledMode) Color(0xFF0C0D10) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val textPrimaryColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val textSecondaryColor = if (isDark) Color(0xFFA0A0A5) else Color(0xFF8E8E93)
+    val cardBorderColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = dialogBg,
+        title = {
+            Text(
+                text = "Help & Feedback",
+                color = textPrimaryColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Send your feedback directly to the development team's Telegram bot. Thank you for helping us improve!",
+                    color = textSecondaryColor,
+                    fontSize = 12.sp
+                )
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimaryColor,
+                        unfocusedTextColor = textPrimaryColor,
+                        focusedLabelColor = accentColor,
+                        unfocusedLabelColor = textSecondaryColor,
+                        focusedBorderColor = accentColor,
+                        unfocusedBorderColor = cardBorderColor
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email Address") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimaryColor,
+                        unfocusedTextColor = textPrimaryColor,
+                        focusedLabelColor = accentColor,
+                        unfocusedLabelColor = textSecondaryColor,
+                        focusedBorderColor = accentColor,
+                        unfocusedBorderColor = cardBorderColor
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Rating", color = textPrimaryColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (i in 1..5) {
+                            IconButton(
+                                onClick = { rating = i },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                    contentDescription = "$i Stars",
+                                    tint = if (i <= rating) Color(0xFFFFD700) else textSecondaryColor,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    label = { Text("Message / Suggestion") },
+                    minLines = 3,
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimaryColor,
+                        unfocusedTextColor = textPrimaryColor,
+                        focusedLabelColor = accentColor,
+                        unfocusedLabelColor = textSecondaryColor,
+                        focusedBorderColor = accentColor,
+                        unfocusedBorderColor = cardBorderColor
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    isSubmitting = true
+                    viewModel.sendFeedbackToTelegram(name, email, rating, comment) { success, error ->
+                        isSubmitting = false
+                        if (success) {
+                            Toast.makeText(context, "Feedback sent successfully!", Toast.LENGTH_SHORT).show()
+                            onDismissRequest()
+                        } else {
+                            Toast.makeText(context, "Failed to send: ${error ?: "Unknown error"}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                enabled = comment.isNotBlank() && !isSubmitting,
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Text("Send Feedback")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Cancel", color = textSecondaryColor)
+            }
+        }
+    )
+}
+

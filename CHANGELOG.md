@@ -2,6 +2,66 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.6.3] - 2026-07-27
+
+### Added
+- **Dedicated Theme Bottom Sheet**: Introduced a quick-access Theme bottom sheet containing Theme Mode options (Light, Dark, AMOLED), an interactive App Nav Scaler slider (80%-130%), and 6 dynamic accent color pickers.
+- **Telegram Bot Direct Help & Feedback Integration**: Upgraded "Help & feedback" across all menus (top bar dropdown, bottom sheet, settings) to connect directly to the team's Telegram bot endpoint for instant user suggestions and bug reports.
+- **Feature Parity in Dropdown Menu**: Added Theme and Quick Tools menu items directly to `omnimenuDropdown` for top and split address bar navigation modes.
+
+### Changed
+- **Compact Quick Tools Grid**: Redesigned the Quick Tools sheet layout to be ~30% vertically sleeker with 50dp circle icons, tighter paddings, and 10.5sp text labels to eliminate empty scroll space.
+- **Version Code Synchronization**: Updated `baseVersionCode` to `2029` for seamless update compatibility across GitHub releases.
+
+---
+
+## [1.2.6.2] - 2026-07-27
+
+### Fixed
+- **Immutable Tag GitHub Deployment**: Fixed GitHub Actions release deployment pipeline handling for tag versioning and automated APK builds.
+- **Dropdown Component Cleanups**: Standardized composable names and menu state callbacks across phone address bar views.
+
+---
+
+## [1.2.6.1] - 2026-07-26
+
+### Fixed
+- **Version Code Mismatch Resolution**: Resolved a build automation versioning issue where local config overrides caused `versionCode` regressions across side-loaded releases.
+- **Split Mode Progress Bar**: Pinned the page load progress indicator strictly to the top bar in split/top modes and bottom bar in bottom mode.
+
+---
+
+## [1.2.6] - 2026-07-26
+
+### Added
+- **Appearance Settings Header Optimization**: Moved Address Bar position and Navigation bar controls to the top of Appearance settings for faster configuration.
+- **Home Palette Accent Color Key Sync**: Fixed a key mismatch between home screen wallpaper accent palettes and the global theme engine map.
+
+---
+
+## [1.2.5.1] - 2026-07-20
+
+### Fixed
+- **Global Language Application**: Updated locale configuration management so language selection updates the entire application UI immediately without requiring manual app restarts.
+
+---
+
+## [1.2.5] - 2026-07-15
+
+### Added
+- **WireGuard Permission Checks**: Enforced system `VpnService.prepare()` checks before initiating WireGuard VPN connections to prevent null-intent exceptions on Android 10+.
+- **Enhanced All-In-One Menu Sheet**: Redesigned the All-In-One bottom menu bar to be more compact, streamlined, and responsive across device orientations.
+
+---
+
+## [1.2.4] - 2026-07-13
+
+### Fixed
+- **GitHub Release Workflow**: Fixed environment variable decoding for base64 keystores during automated GitHub Actions builds.
+- **Private Vault Security Hardening**: Enhanced AES Keystore encryption routines and improved memory cleanup on locker exit.
+
+---
+
 ## [1.2.3] - 2026-07-11
 
 ### Added

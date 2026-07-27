@@ -149,6 +149,7 @@ fun PhoneAddressBar(
     onShowCustomizationSheet: () -> Unit,
     onShowThemeSheet: () -> Unit = {},
     onShowQuickTools: () -> Unit = {},
+    onShowFeedbackDialog: () -> Unit = {},
     onShowPlayerSettings: () -> Unit,
     onShowTabGroups: () -> Unit = {},
     onShowSiteInfo: () -> Unit = {},
@@ -594,6 +595,7 @@ fun PhoneAddressBar(
                     onOpenSettings = onOpenSettings,
                     onShowThemeSheet = onShowThemeSheet,
                     onShowQuickTools = onShowQuickTools,
+                    onShowFeedbackDialog = onShowFeedbackDialog,
                     onShowCustomizationSheet = onShowCustomizationSheet,
                     onShowExtensions = onShowExtensionsSheet,
                     onShowPlayerSettings = onShowPlayerSettings,
@@ -619,6 +621,7 @@ fun omnimenuDropdown(
     onOpenSettings: () -> Unit,
     onShowThemeSheet: () -> Unit = {},
     onShowQuickTools: () -> Unit = {},
+    onShowFeedbackDialog: () -> Unit = {},
     onShowCustomizationSheet: () -> Unit,
     onShowExtensions: () -> Unit,
     onShowPlayerSettings: () -> Unit,
@@ -930,7 +933,7 @@ fun omnimenuDropdown(
                 icon = Icons.AutoMirrored.Rounded.HelpOutline,
                 iconTint = iconTint,
                 textColor = textPrimary,
-                onClick = { onDismissRequest(); Toast.makeText(context, "Omni Browser v1.0.9", Toast.LENGTH_SHORT).show() }
+                onClick = { onDismissRequest(); onShowFeedbackDialog() }
             )
 
             Spacer(modifier = Modifier.height(2.dp))

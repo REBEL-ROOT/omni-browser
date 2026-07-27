@@ -361,6 +361,7 @@ fun BrowserScreen(
     var showPageInspectorSheet by remember { mutableStateOf(false) }
     var showAllInOneMenuSheet by remember { mutableStateOf(false) }
     var showThemeSheet by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(isKeyboardVisible) {
@@ -6113,7 +6114,8 @@ fun BrowserScreen(
                     }
                 },
                 hasActiveUserExtensions = hasActiveUserExtensions,
-                onShowThemeSheet = { showThemeSheet = true }
+                onShowThemeSheet = { showThemeSheet = true },
+                onShowFeedbackDialog = { showFeedbackDialog = true }
             )
         }
 
@@ -6121,6 +6123,13 @@ fun BrowserScreen(
             ThemeSheet(
                 viewModel = viewModel,
                 onDismissRequest = { showThemeSheet = false }
+            )
+        }
+
+        if (showFeedbackDialog) {
+            HelpFeedbackDialog(
+                viewModel = viewModel,
+                onDismissRequest = { showFeedbackDialog = false }
             )
         }
 
