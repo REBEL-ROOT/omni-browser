@@ -6140,9 +6140,9 @@ fun BrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
                             .navigationBarsPadding(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -6152,12 +6152,12 @@ fun BrowserScreen(
                             Text(
                                 text = "Quick Tools",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Long-press & drag to reorder",
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 fontWeight = FontWeight.Medium
                             )
@@ -6165,7 +6165,7 @@ fun BrowserScreen(
 
                         HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
 
-                        val cardModifier = Modifier.width(80.dp)
+                        val cardModifier = Modifier.width(72.dp)
                         val isEditing = activeTab?.isEditModeEnabled ?: false
 
                         // Stable ordered list that reacts to ViewModel state
@@ -6378,7 +6378,7 @@ fun BrowserScreen(
                                 toolOrderState.chunked(4).forEach { row ->
                                     val paddedRow = row + List(4 - row.size) { "" }
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.SpaceEvenly
                                     ) {
                                         paddedRow.forEach { toolId ->
@@ -6409,6 +6409,7 @@ fun BrowserScreen(
                                                         icon = toolIcon(toolId),
                                                         isDarkTheme = isDark,
                                                         modifier = toolCardModifier,
+                                                        isCompact = true,
                                                         onClick = if (isDragged) ({}) else toolAction(toolId)
                                                     )
                                                 }

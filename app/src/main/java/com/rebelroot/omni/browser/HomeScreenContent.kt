@@ -2448,6 +2448,7 @@ fun ToolCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isDarkTheme: Boolean = false,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -2465,11 +2466,17 @@ fun ToolCard(
     val iconTint = if (isDarkTheme) Color(0xFFEAEAEA) else Color(0xFF202124)
     val textColor = if (isDarkTheme) Color(0xFFAEAEB2) else Color(0xFF3C3C43)
 
+    val circleSize = if (isCompact) 50.dp else 62.dp
+    val iconSize = if (isCompact) 22.dp else 26.dp
+    val fontSize = if (isCompact) 10.5.sp else 12.sp
+    val spacing = if (isCompact) 3.dp else 8.dp
+    val cardWidth = if (isCompact) 72.dp else 80.dp
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(spacing),
         modifier = modifier
-            .width(80.dp)
+            .width(cardWidth)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -2482,7 +2489,7 @@ fun ToolCard(
     ) {
         Box(
             modifier = Modifier
-                .size(62.dp)
+                .size(circleSize)
                 .clip(CircleShape)
                 .background(bg),
             contentAlignment = Alignment.Center
@@ -2491,13 +2498,13 @@ fun ToolCard(
                 imageVector = icon,
                 contentDescription = title,
                 tint = iconTint,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
         Text(
             text = title,
             color = textColor,
-            fontSize = 12.sp,
+            fontSize = fontSize,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
