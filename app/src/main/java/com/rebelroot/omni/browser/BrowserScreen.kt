@@ -1131,7 +1131,7 @@ fun BrowserScreen(
                             }
 
                             AnimatedVisibility(
-                                visible = viewModel.isLoading,
+                                visible = viewModel.isLoading && viewModel.addressBarPosition != "Bottom",
                                 enter = fadeIn(),
                                 exit = fadeOut()
                             ) {
@@ -1261,7 +1261,7 @@ fun BrowserScreen(
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             AnimatedVisibility(
-                                visible = viewModel.isLoading && !showHomeScreen,
+                                visible = viewModel.isLoading && !showHomeScreen && viewModel.addressBarPosition == "Bottom",
                                 enter = fadeIn(),
                                 exit = fadeOut()
                             ) {
@@ -1333,7 +1333,7 @@ fun BrowserScreen(
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         AnimatedVisibility(
-                            visible = viewModel.isLoading && !showHomeScreen,
+                            visible = viewModel.isLoading && !showHomeScreen && viewModel.addressBarPosition == "Bottom",
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {
