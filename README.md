@@ -305,6 +305,39 @@ git push origin feature/your-feature
 
 ---
 
+## 👥 Contributors
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/ParasxAgarwal">
+        <img src="https://github.com/ParasxAgarwal.png?size=100" width="80" height="80" style="border-radius:50%" alt="ParasxAgarwal" />
+        <br /><sub><b>ParasxAgarwal</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/rohit-verma-11">
+        <img src="https://github.com/rohit-verma-11.png?size=100" width="80" height="80" style="border-radius:50%" alt="rohit-verma-11" />
+        <br /><sub><b>rohit-verma-11</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/RebelRoot">
+        <img src="https://github.com/RebelRoot.png?size=100" width="80" height="80" style="border-radius:50%" alt="RebelRoot" />
+        <br /><sub><b>RebelRoot</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/prince-kumar-12">
+        <img src="https://github.com/prince-kumar-12.png?size=100" width="80" height="80" style="border-radius:50%" alt="prince-kumar-12" />
+        <br /><sub><b>prince-kumar-12</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 📄 License & Trademark
 
 This project is licensed under the **GNU General Public License v3 (GPLv3)**.
