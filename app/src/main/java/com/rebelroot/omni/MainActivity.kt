@@ -67,6 +67,7 @@ import com.rebelroot.omni.media.player.VideoPlayerScreen
 import com.rebelroot.omni.settings.SettingsScreen
 import com.rebelroot.omni.settings.AppearanceScreen
 import com.rebelroot.omni.settings.WallpaperScreen
+import com.rebelroot.omni.settings.PrivacyHubScreen
 import com.rebelroot.omni.history.HistoryScreen
 import com.rebelroot.omni.bookmarks.BookmarksScreen
 import com.rebelroot.omni.tools.locker.PrivateLockerScreen
@@ -126,6 +127,14 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val themeState = ThemeStateHolder
+        val themeRes = when {
+            themeState.darkThemeEnabled && themeState.amoledMode -> R.style.Theme_OmniBrowser_Amoled
+            themeState.darkThemeEnabled -> R.style.Theme_OmniBrowser_Dark
+            else -> R.style.Theme_OmniBrowser_Light
+        }
+        setTheme(themeRes)
+
         activeActivity = java.lang.ref.WeakReference(this)
 
         // --- Critical fix for PrintManager ("Can print only from an activity") ---
@@ -195,6 +204,12 @@ class MainActivity : FragmentActivity() {
         getSharedPreferences("omni_crash_prefs", android.content.Context.MODE_PRIVATE)
             .edit().putInt("crash_loop_count", 0).apply()
 
+        // Pre-apply persisted theme values to ViewModel so Compose renders
+        // with the correct theme on the very first frame (no white flash).
+        browserViewModel.isDarkThemeEnabled = themeState.darkThemeEnabled
+        browserViewModel.isAmoledMode = themeState.amoledMode
+        browserViewModel.selectedAccentTheme = themeState.accentTheme
+        browserViewModel.isDynamicColorEnabled = themeState.dynamicColorEnabled
 
         val intentUrl = intent?.dataString
         val isDirectVideo = !intentUrl.isNullOrEmpty() && (intentUrl.contains("autoplay=native") || intentUrl.endsWith(".mp4"))
@@ -219,7 +234,13 @@ class MainActivity : FragmentActivity() {
                 androidx.activity.compose.LocalActivityResultRegistryOwner provides this@MainActivity,
                 androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides this@MainActivity
             ) {
-                OmniTheme(darkTheme = browserViewModel.isDarkThemeEnabled, accentTheme = browserViewModel.selectedAccentTheme, amoledMode = browserViewModel.isAmoledMode, dynamicColor = browserViewModel.isDynamicColorEnabled) {
+                OmniTheme(
+                    darkTheme = browserViewModel.isDarkThemeEnabled,
+                    accentTheme = browserViewModel.selectedAccentTheme,
+                    amoledMode = browserViewModel.isAmoledMode,
+                    creamyMode = browserViewModel.isCreamyMode,
+                    dynamicColor = browserViewModel.isDynamicColorEnabled
+                ) {
                     Surface(
                         modifier = Modifier.fillMaxSize()
                     ) {
@@ -445,6 +466,9 @@ class MainActivity : FragmentActivity() {
                                 onOpenPrivacySecurity = {
                                     navController.navigate("privacy_security")
                                 },
+                                onOpenPrivacyHub = {
+                                    navController.navigate("privacy_hub")
+                                },
                                 onOpenTabs = {
                                     navController.navigate("settings_tabs")
                                 },
@@ -463,6 +487,14 @@ class MainActivity : FragmentActivity() {
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
                                 onOpenAdBlockConfig = { navController.navigate("adblock_settings") }
+                            )
+                        }
+
+                        // Privacy Hub Screen
+                        composable("privacy_hub") {
+                            PrivacyHubScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

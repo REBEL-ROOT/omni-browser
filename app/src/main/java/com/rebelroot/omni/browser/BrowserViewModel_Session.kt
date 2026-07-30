@@ -566,13 +566,30 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     }
 
                     val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
+                    if (host.isNotEmpty() && adBlockManager.isHostBlocked(host)) {
+                        Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker host: $uri")
+                        incrementTrackersBlocked(context, 1)
+                        try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
+                        return GeckoResult.fromValue(AllowOrDeny.DENY)
+                    }
+
                     val isAdPopup = BrowserViewModel.POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
                         BrowserViewModel.POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
                     if (isAdPopup) {
                         Log.w(TAG, "🚫 onLoadRequest: Blocked ad popup to $uri")
+                        incrementTrackersBlocked(context, 1)
+                        try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
                         return GeckoResult.fromValue(AllowOrDeny.DENY)
                     }
                 }
+            }
+
+            val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
+            if (host.isNotEmpty() && adBlockManager.isHostBlocked(host)) {
+                Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker sub-navigation: $uri")
+                incrementTrackersBlocked(context, 1)
+                try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
+                return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
             if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") ||

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-bleed launcher layer for the "Aura Light" icon.
+     The source PNG is a complete icon (logo + light plate), so it is scaled to
+     fill the 108dp adaptive-icon canvas and then masked by the launcher shape. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_omni_ring_light"
+    android:gravity="fill" />

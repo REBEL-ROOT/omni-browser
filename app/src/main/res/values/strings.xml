@@ -20,11 +20,61 @@
     <string name="ai_blocker_title">AI Blocker</string>
     <string name="ai_blocker_desc">Block generative search summaries completely</string>
     <string name="default_browser_title">Default Browser</string>
-    <string name="vpn_section">WIREGUARD VPN</string>
-    <string name="vpn_status_title">VPN Tunnel Status</string>
+    <string name="vpn_section">PROXY &amp; VPN</string>
+    <string name="vpn_status_title">Network Routing Status</string>
     <string name="vpn_import_conf">Import .conf</string>
     <string name="vpn_connect">Connect</string>
-    <string name="vpn_disconnect">Disconnect VPN</string>
+    <string name="vpn_disconnect">Disconnect</string>
+    <string name="proxy_provider_title">Network Provider</string>
+    <string name="proxy_provider_direct">Direct</string>
+    <string name="proxy_provider_wireguard">WireGuard</string>
+    <string name="proxy_provider_tor">Tor</string>
+    <string name="tor_section">TOR NETWORK</string>
+    <string name="tor_status_title">Tor Circuit Status</string>
+    <string name="tor_status_connected">Tor Connected</string>
+    <string name="tor_status_connecting">Connecting to Tor…</string>
+    <string name="tor_status_disconnected">Tor Disconnected</string>
+    <string name="tor_status_error_prefix">Tor Error: %1$s</string>
+    <string name="tor_use_bridges">Use Bridges / Snowflake</string>
+    <string name="tor_use_bridges_desc">Route through pluggable transports to bypass blocking</string>
+    <string name="tor_auto_connect">Auto-connect on launch</string>
+    <string name="tor_auto_connect_desc">Automatically start Tor circuit when app opens</string>
+    <string name="tor_onion_routing">Onion Routing for .onion</string>
+    <string name="tor_onion_routing_desc">Allow access to .onion sites through Tor</string>
+    <string name="tor_connect">Connect Tor</string>
+    <string name="tor_disconnect">Disconnect Tor</string>
+    <string name="privacy_hub_title">Proxy Hub</string>
+    <string name="privacy_hub_desc">Network routing, DNS, and identity controls</string>
+    <string name="privacy_hub_connection">Connection</string>
+    <string name="privacy_hub_dns">DNS</string>
+    <string name="privacy_hub_network">Network</string>
+    <string name="privacy_hub_identity">Identity</string>
+    <string name="privacy_hub_fingerprint">Fingerprint</string>
+    <string name="tor_over_vpn">Tor over VPN</string>
+    <string name="custom_proxy">Custom Proxy</string>
+    <string name="custom_proxy_desc">Enter the host and port of your SOCKS5 proxy.</string>
+    <string name="custom_dns">Custom DNS</string>
+    <string name="custom_dns_desc">Set a custom DNS server IP</string>
+    <string name="doh_title">DNS over HTTPS</string>
+    <string name="doh_desc">Encrypted DNS via HTTPS</string>
+    <string name="dot_title">DNS over TLS</string>
+    <string name="dot_desc">Encrypted DNS via TLS</string>
+    <string name="block_quic">Block QUIC</string>
+    <string name="block_quic_desc">Disable QUIC/HTTP3 protocol</string>
+    <string name="disable_webrtc">Disable WebRTC</string>
+    <string name="disable_webrtc_desc">Block WebRTC to prevent IP leaks</string>
+    <string name="randomize_ua">Randomize User-Agent</string>
+    <string name="randomize_ua_desc">Rotate UA daily across common browsers</string>
+    <string name="rotate_identity">Rotate Identity</string>
+    <string name="rotate_identity_desc">Clear cookies on new session</string>
+    <string name="new_tor_circuit">New Tor Circuit</string>
+    <string name="clear_cookies">Clear Cookies</string>
+    <string name="temp_containers">Temporary Containers</string>
+    <string name="temp_containers_desc">Isolated session for each site</string>
+    <string name="temp_containers_restart">Requires restart</string>
+    <string name="fingerprint_protection">Fingerprint Protection</string>
+    <string name="fingerprint_protection_desc">Disable WebGL, canvas, timing APIs</string>
+    <string name="tor_bootstrap">Bootstrapping Tor circuit… %1$d%%</string>
     <string name="search_engine_section">SEARCH ENGINE</string>
     <string name="search_engine_title">Default Search Engine</string>
     <string name="google_accounts_section">GOOGLE ACCOUNTS</string>
@@ -185,4 +235,66 @@
     <string name="cat_science">Science</string>
     <string name="cat_entertainment">Entertainment</string>
     <string name="cat_health">Health</string>
+    <string name="tor_onion_active_desc">Active while Tor is connected</string>
+    <string name="dns_use_system_hint">Set via Android Private DNS (not enforced in-app)</string>
+    <string name="feature_not_available">Not available in this build</string>
+    <string name="privacy_restart_banner">Restart app to apply privacy changes</string>
+    <string name="privacy_restart_now">Restart now</string>
+    <string name="privacy_restart_dismiss">Dismiss</string>
+    <string name="vpn_not_available_hint">Import or add a WireGuard configuration to enable the VPN tunnel.</string>
+    <string name="dns_disabled">Disabled</string>
+    <string name="dot_system_hint">Opens Android Private DNS settings</string>
+
+    <!-- Proxy Hub: provider availability -->
+    <string name="proxy_provider_wireguard_unavailable">WireGuard VPN</string>
+    <string name="proxy_provider_tor_over_vpn_unavailable">Tor over VPN</string>
+    <string name="vpn_connecting_toast">Connecting to VPN…</string>
+    <string name="vpn_disconnected_toast">VPN disconnected</string>
+
+    <!-- Proxy Hub: Tor status -->
+    <string name="tor_connecting_waiting">Waiting for Orbot to start…</string>
+    <string name="tor_connected_restart_hint">Connected — restart to route traffic through Tor</string>
+    <string name="tor_new_circuit_hint">Opens Orbot — tap "New Identity" there</string>
+    <string name="tor_new_circuit_disabled_hint">Only available when Tor is connected</string>
+    <string name="tor_connecting_toast">Connecting to Tor…</string>
+    <string name="tor_disconnected_toast">Tor disconnected</string>
+    <string name="tor_bridges_restart_hint">Takes effect after restart</string>
+
+    <!-- Proxy Hub: custom proxy dialog -->
+    <string name="custom_proxy_host_label">Host</string>
+    <string name="custom_proxy_port_label">Port</string>
+    <string name="custom_proxy_host_empty">Enter a proxy host</string>
+    <string name="custom_proxy_port_invalid">Port must be 1–65535</string>
+    <string name="custom_proxy_saved_restart">Custom proxy saved — restart to apply</string>
+
+    <!-- Proxy Hub: WireGuard -->
+    <string name="wg_config_title">WireGuard Configuration</string>
+    <string name="wg_config_hint">Paste your WireGuard (.conf) configuration below.</string>
+    <string name="wg_config_saved">Config saved</string>
+    <string name="wg_import_success">WireGuard configuration imported</string>
+    <string name="wg_import_failed">Failed to parse file: %1$s</string>
+    <string name="wg_edit_config">Edit Config</string>
+    <string name="wg_add_config">Add Config</string>
+    <string name="wg_not_configured">Not configured</string>
+    <string name="wg_socks5_proxy">SOCKS5 Proxy</string>
+    <string name="wg_edit">Edit</string>
+
+    <!-- Proxy Hub: direct connection -->
+    <string name="direct_connection">Direct Connection</string>
+    <string name="direct_connection_desc">All traffic routes directly without proxy or VPN</string>
+
+    <!-- Proxy Hub: Tor over VPN -->
+    <string name="tor_over_vpn_needs_vpn">Tor over VPN needs an active VPN tunnel first.</string>
+
+    <!-- Proxy Hub: DoH -->
+    <string name="doh_custom_endpoint">Custom DoH endpoint</string>
+    <string name="doh_url_invalid">DoH URL must start with https://</string>
+    <string name="dns_leak_warning">DoH bypasses Tor\'s DNS — disable DoH to avoid DNS leaks while using Tor.</string>
+
+    <!-- Proxy Hub: DoT -->
+    <string name="dot_open_settings">Set Private DNS in Android network settings</string>
+    <string name="dot_open_settings_failed">Could not open network settings</string>
+
+    <!-- Proxy Hub: VPN first toast -->
+    <string name="vpn_first_toast">Connect a VPN first, then select Tor over VPN.</string>
 </resources>

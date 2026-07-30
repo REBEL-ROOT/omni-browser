@@ -261,6 +261,7 @@ fun BrowserScreen(
     }
     var selectedMediaItem by remember { mutableStateOf<MediaInterceptor.DetectedMedia?>(null) }
     var showExtensionsSheet by remember { mutableStateOf(false) }
+    var showPrivacyReportSheet by remember { mutableStateOf(false) }
     var extensionToDelete by remember { mutableStateOf<org.mozilla.geckoview.WebExtension?>(null) }
     var builtInExtensionToDelete by remember { mutableStateOf<String?>(null) }
 
@@ -5255,6 +5256,27 @@ fun BrowserScreen(
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
 
+                        // ── Row 1.5: Voice Article Reader Quick Action ──
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            MenuGridCell(
+                                icon = Icons.Rounded.RecordVoiceOver,
+                                label = "Listen to\nPage",
+                                iconTint = if (viewModel.isTtsPlaying) activeIconTint else inactiveIconTint,
+                                iconBg = if (viewModel.isTtsPlaying) activeIconBg else inactiveIconBg,
+                                onClick = {
+                                    showMenu = false
+                                    if (viewModel.isTtsPlaying) {
+                                        viewModel.stopTts()
+                                    } else {
+                                        viewModel.readCurrentPageAloud()
+                                    }
+                                }
+                            )
+                        }
+
                         // ── Row 2: Secondary actions ──
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -5368,6 +5390,13 @@ fun BrowserScreen(
                 }
             }
 
+            if (showPrivacyReportSheet) {
+                PrivacyReportSheet(
+                    viewModel = viewModel,
+                    onDismissRequest = { showPrivacyReportSheet = false }
+                )
+            }
+
             // 4. Web Extensions Manager Bottom Sheet
             if (showExtensionsSheet) {
                 ModalBottomSheet(
@@ -5391,6 +5420,9 @@ fun BrowserScreen(
                     val totalEnabled = userExts.count {
                         try { it.metaData?.enabled == true } catch (_: Exception) { false }
                     }
+
+                    var selectedExtensionTab by remember { mutableStateOf("Installed") }
+                    var selectedCuratedCategory by remember { mutableStateOf("All") }
 
                     Column(
                         modifier = Modifier
@@ -5491,107 +5523,84 @@ fun BrowserScreen(
                             }
                         }
 
-                        HorizontalDivider(color = if (isDarkExt) Color(0xFF23374A).copy(alpha = 0.5f) else Color.LightGray.copy(alpha = 0.5f))
-
-                        // ── Featured Reference Add-on: uBlock Origin (Firefox Mobile Style) ──
-                        val isUblockInstalled = userExts.any {
-                            try {
-                                it.id.contains("ublock", ignoreCase = true) ||
-                                (it.metaData?.name?.contains("uBlock", ignoreCase = true) == true)
-                            } catch(_: Exception) { false }
-                        }
-
-                        if (!isUblockInstalled) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isDarkExt) Color(0xFF16222F) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                border = BorderStroke(1.dp, Color(0xFFFF3B5C).copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(Color(0xFFFF3B5C).copy(alpha = 0.15f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Shield,
-                                                contentDescription = null,
-                                                tint = Color(0xFFFF3B5C),
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Text(
-                                                    text = "uBlock Origin",
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = Color(0xFFFF3B5C).copy(alpha = 0.15f)
-                                                ) {
-                                                    Text(
-                                                        text = "RECOMMENDED",
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.ExtraBold,
-                                                        color = Color(0xFFFF3B5C),
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                            }
-                                            Text(
-                                                text = "by Raymond Hill · #1 Firefox Content Blocker",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
+                        // ── Segmented Tab Selector: Installed vs Curated Store ──
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf("Installed", "Curated Store").forEach { tab ->
+                                val isSelected = selectedExtensionTab == tab
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                        .clickable { selectedExtensionTab = tab },
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Text(
-                                        text = "An efficient wide-spectrum content blocker. Blocks ads, popups, trackers, and malware sites natively on mobile.",
+                                        text = if (tab == "Installed") "Installed ($totalInstalled)" else "Curated Store",
                                         fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        lineHeight = 16.sp
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    Button(
-                                        onClick = {
-                                            viewModel.installExtensionFromUrl("https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/addon-607454-latest.xpi", context)
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        modifier = Modifier.fillMaxWidth().height(40.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(Icons.Rounded.Download, null, modifier = Modifier.size(16.dp))
-                                            Text("Install uBlock Origin Latest", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        }
-                                    }
                                 }
                             }
                         }
 
-                        // ── User-installed section (shown first for fast access) ────────────
+                        HorizontalDivider(color = if (isDarkExt) Color(0xFF23374A).copy(alpha = 0.5f) else Color.LightGray.copy(alpha = 0.5f))
+
+                        if (selectedExtensionTab == "Curated Store") {
+                            // ── Category Filter Chips ──
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                            ) {
+                                items(com.rebelroot.omni.browser.extensions.CuratedExtensionRepository.categories) { cat ->
+                                    val isCatSelected = selectedCuratedCategory == cat
+                                    FilterChip(
+                                        selected = isCatSelected,
+                                        onClick = { selectedCuratedCategory = cat },
+                                        label = { Text(cat, fontSize = 11.sp, fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Medium) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                }
+                            }
+
+                            // ── Curated Extensions List ──
+                            val filteredCurated = remember(selectedCuratedCategory) {
+                                val list = com.rebelroot.omni.browser.extensions.CuratedExtensionRepository.curatedList
+                                if (selectedCuratedCategory == "All") list
+                                else list.filter { it.category == selectedCuratedCategory }
+                            }
+
+                            val installedExtIds = remember(userExts) {
+                                userExts.mapNotNull { try { it.id } catch (_: Exception) { null } }
+                            }
+
+                            filteredCurated.forEach { curated ->
+                                val isCuratedInstalled = installedExtIds.any { id ->
+                                    id.contains(curated.id.substringBefore("@"), ignoreCase = true) ||
+                                    curated.id.contains(id.substringBefore("@"), ignoreCase = true)
+                                }
+                                CuratedExtensionCard(
+                                    extension = curated,
+                                    isInstalled = isCuratedInstalled,
+                                    onInstallClick = {
+                                        viewModel.installExtensionFromUrl(curated.downloadUrl, context)
+                                    }
+                                )
+                            }
+                        } else {
+                            // ── User-installed section (shown first for fast access) ────────────
                         if (userExts.isNotEmpty()) {
 
                             Row(
@@ -5864,6 +5873,7 @@ fun BrowserScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        }
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -6208,10 +6218,20 @@ fun BrowserScreen(
 
                         // Resolve tool display info
                         fun toolTitle(id: String): String = when (id) {
-                            "image_grabber"  -> "Manga Grabber"
+                            "image_grabber"  -> "Image Grabber"
                             "page_inspector" -> "Page Inspector"
                             "force_zoom"     -> if (viewModel.accessibilityForceZoom) "Zoom: On" else "Force Zoom"
-                            "vpn"            -> if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) "VPN: On" else "VPN"
+                            "vpn"            -> when (viewModel.proxyProvider) {
+                                "tor" -> {
+                                    val state = viewModel.torManager.state.value
+                                    if (state is com.rebelroot.omni.privacy.TorState.Connected) "Tor: On" else "Tor"
+                                }
+                                "wireguard" -> {
+                                    val state = viewModel.vpnManager.state.value
+                                    if (state is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) "VPN: On" else "VPN"
+                                }
+                                else -> "Network"
+                            }
                             "qr_scanner"     -> "QR Scanner"
                             "safe_locker"    -> "Safe Locker"
                             "translator"     -> "Translator"
@@ -6230,7 +6250,11 @@ fun BrowserScreen(
                             "image_grabber"  -> Icons.Rounded.Collections
                             "page_inspector" -> Icons.Rounded.Code
                             "force_zoom"     -> Icons.Rounded.ZoomIn
-                            "vpn"            -> Icons.Rounded.VpnKey
+                            "vpn"            -> when (viewModel.proxyProvider) {
+                                "tor" -> Icons.Rounded.Security
+                                "wireguard" -> Icons.Rounded.VpnKey
+                                else -> Icons.Rounded.Public
+                            }
                             "qr_scanner"     -> Icons.Rounded.QrCodeScanner
                             "safe_locker"    -> Icons.Rounded.Lock
                             "translator"     -> Icons.Rounded.Translate
@@ -6269,22 +6293,39 @@ fun BrowserScreen(
                             })
                             "vpn" -> ({
                                 showQuickToolsSheet = false
-                                if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
-                                    viewModel.disconnectVpn()
-                                    Toast.makeText(context, "🛡️ VPN Disconnected", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    val config = viewModel.customVpnConfig
-                                    if (!config.isNullOrBlank()) {
-                                        val vpnIntent = android.net.VpnService.prepare(context)
-                                        if (vpnIntent != null) {
-                                            vpnPermissionLauncher.launch(vpnIntent)
+                                when (viewModel.proxyProvider) {
+                                    "tor" -> {
+                                        val state = viewModel.torManager.state.value
+                                        if (state is com.rebelroot.omni.privacy.TorState.Connected) {
+                                            viewModel.disconnectTor()
+                                            Toast.makeText(context, "🧅 Tor Disconnected", Toast.LENGTH_SHORT).show()
                                         } else {
-                                            viewModel.connectCustomVpn()
-                                            Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+                                            viewModel.connectTor()
+                                            Toast.makeText(context, "🧅 Connecting to Tor…", Toast.LENGTH_SHORT).show()
                                         }
-                                    } else {
-                                        onOpenSettings()
-                                        Toast.makeText(context, "Add VPN configuration in Settings first", Toast.LENGTH_LONG).show()
+                                    }
+                                    "wireguard" -> {
+                                        if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
+                                            viewModel.disconnectVpn()
+                                            Toast.makeText(context, "🛡️ VPN Disconnected", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val config = viewModel.customVpnConfig
+                                            if (!config.isNullOrBlank()) {
+                                                val vpnIntent = android.net.VpnService.prepare(context)
+                                                if (vpnIntent != null) {
+                                                    vpnPermissionLauncher.launch(vpnIntent)
+                                                } else {
+                                                    viewModel.connectCustomVpn()
+                                                    Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                onOpenSettings()
+                                                Toast.makeText(context, "Add VPN configuration in Settings first", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    }
+                                    else -> {
+                                        Toast.makeText(context, "Direct connection active — no proxy", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             })
@@ -6449,10 +6490,18 @@ fun BrowserScreen(
 
             // 5. Grid Menu Bottom Sheet (Replaces Quick Tools)
             if (showToolsSheet) {
+                val isMenuDark = viewModel.isAmoledMode || viewModel.isDarkThemeEnabled
+                val menuContainerColor = when {
+                    viewModel.isAmoledMode -> Color(0xFF000000)
+                    viewModel.isDarkThemeEnabled -> Color(0xFF141416)
+                    viewModel.isCreamyMode -> Color(0xFFF5F2EE)
+                    else -> Color(0xFFF2F2F7)
+                }
+                val menuDividerColor = if (isMenuDark) Color(0xFF2C2C2E) else Color(0xFFD8D8DE)
                 ModalBottomSheet(
                     onDismissRequest = { showToolsSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else Color(0xFF141416)
+                    containerColor = menuContainerColor
                 ) {
                     Column(
                         modifier = Modifier
@@ -6470,27 +6519,31 @@ fun BrowserScreen(
                             GridMenuTile(
                                 title = "Bookmarks",
                                 icon = Icons.Rounded.Bookmark,
+                                isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; onOpenBookmarks() }
                             )
                             GridMenuTile(
                                 title = "History",
                                 icon = Icons.Rounded.History,
+                                isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; onOpenHistory() }
                             )
                             GridMenuTile(
                                 title = "Downloads",
                                 icon = Icons.Rounded.Download,
+                                isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; onOpenDownloads() }
                             )
                             GridMenuTile(
                                 title = "Settings",
                                 icon = Icons.Rounded.Settings,
+                                isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; onOpenSettings() }
                             )
                         }
 
                         HorizontalDivider(
-                            color = Color(0xFF2C2C2E),
+                            color = menuDividerColor,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
 
@@ -6502,6 +6555,7 @@ fun BrowserScreen(
                             GridMenuTile(
                                 title = "Incognito",
                                 icon = Icons.Rounded.Visibility,
+                                isDark = isMenuDark,
                                 onClick = {
                                     showToolsSheet = false
                                     if (!viewModel.isIncognitoMode) {
@@ -6513,11 +6567,13 @@ fun BrowserScreen(
                             GridMenuTile(
                                 title = "Player\nSettings",
                                 icon = Icons.Rounded.PlayCircle,
+                                isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; showPlayerSettingsDialog = true }
                             )
                             GridMenuTile(
                                 title = "Desktop\nSite",
                                 icon = Icons.Rounded.DesktopWindows,
+                                isDark = isMenuDark,
                                 onClick = {
                                     showToolsSheet = false
                                     if (!showHomeScreen && activeTab != null) {
@@ -6530,6 +6586,7 @@ fun BrowserScreen(
                             GridMenuTile(
                                 title = if (viewModel.navBarHideBottom) "Nav\nHide On" else "Nav\nHide Off",
                                 icon = Icons.Rounded.OpenInFull,
+                                isDark = isMenuDark,
                                 onClick = {
                                     showToolsSheet = false
                                     viewModel.saveNavBarHideBottom(context, !viewModel.navBarHideBottom)
@@ -6545,6 +6602,7 @@ fun BrowserScreen(
                             GridMenuTile(
                                 title = "Find in\nPage",
                                 icon = Icons.Rounded.Search,
+                                isDark = isMenuDark,
                                 onClick = {
                                     showToolsSheet = false
                                     if (!showHomeScreen && activeTab != null) viewModel.openFindInPage()
@@ -6555,6 +6613,7 @@ fun BrowserScreen(
                                 title = "Burn\nData",
                                 icon = Icons.Rounded.Whatshot,
                                 isBurnData = true,
+                                isDark = isMenuDark,
                                 onClick = {
                                     showToolsSheet = false
                                     coroutineScope.launch {
@@ -6568,6 +6627,7 @@ fun BrowserScreen(
                             GridMenuTile(
                                 title = "Add to\nShortcuts",
                                 icon = Icons.Rounded.Add,
+                                isDark = isMenuDark,
                                 onClick = {
                                     showToolsSheet = false
                                     if (!showHomeScreen && activeTab != null) {
@@ -6579,9 +6639,16 @@ fun BrowserScreen(
                                 }
                             )
                             GridMenuTile(
-                                title = "Extension\ns",
+                                title = "Extensions",
                                 icon = Icons.Rounded.Extension,
+                                isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; showExtensionsSheet = true }
+                            )
+                            GridMenuTile(
+                                title = "Privacy\nReport",
+                                icon = Icons.Rounded.Shield,
+                                isDark = isMenuDark,
+                                onClick = { showToolsSheet = false; showPrivacyReportSheet = true }
                             )
                         }
                     }

@@ -115,12 +115,12 @@ fun PrivacySecurityScreen(
                     )
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                    // Item 0.5: WireGuard Custom VPN
+                    // Item 0.5: Proxy & VPN
                     SettingsRow(
                         icon = Icons.Rounded.VpnLock,
-                        title = "WireGuard Custom VPN",
-                        subtitle = "Configure custom VPN tunnel for system-wide protection",
-                        onClick = { Toast.makeText(context, "Configure WireGuard VPN in the main Settings screen", Toast.LENGTH_SHORT).show() },
+                        title = "Proxy & VPN",
+                        subtitle = "Route traffic through WireGuard or Tor",
+                        onClick = { Toast.makeText(context, "Configure Proxy & VPN in the main Settings screen", Toast.LENGTH_SHORT).show() },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor

@@ -44,6 +44,7 @@ import com.rebelroot.omni.media.FFmpegLoader
 import com.rebelroot.omni.media.MediaInterceptor
 import com.rebelroot.omni.media.StreamDownloadEngine
 import com.rebelroot.omni.privacy.VpnManager
+import com.rebelroot.omni.privacy.TorManager
 import com.rebelroot.omni.tools.locker.PrivateLockerManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -61,6 +62,7 @@ import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.StorageController
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebExtension
 import com.rebelroot.omni.tools.qrcode.QrCodeDecoder
@@ -133,6 +135,22 @@ class BrowserViewModel : ViewModel() {
         val YOUTUBE_ENABLED_KEY = booleanPreferencesKey("youtube_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
+        val PROXY_PROVIDER_KEY = stringPreferencesKey("proxy_provider")
+        val TOR_USE_BRIDGES_KEY = booleanPreferencesKey("tor_use_bridges")
+        val TOR_AUTO_CONNECT_KEY = booleanPreferencesKey("tor_auto_connect")
+        val CUSTOM_SOCKS_HOST_KEY = stringPreferencesKey("custom_socks_host")
+        val CUSTOM_SOCKS_PORT_KEY = intPreferencesKey("custom_socks_port")
+        val CUSTOM_DNS_KEY = stringPreferencesKey("custom_dns")
+        val DOH_ENABLED_KEY = booleanPreferencesKey("doh_enabled")
+        val DOH_URI_KEY = stringPreferencesKey("doh_uri")
+        val DOT_ENABLED_KEY = booleanPreferencesKey("dot_enabled")
+        val DOT_HOST_KEY = stringPreferencesKey("dot_host")
+        val BLOCK_QUIC_KEY = booleanPreferencesKey("block_quic")
+        val DISABLE_WEBRTC_KEY = booleanPreferencesKey("disable_webrtc")
+        val RANDOMIZE_UA_KEY = booleanPreferencesKey("randomize_ua")
+        val FINGERPRINT_PROTECTION_KEY = booleanPreferencesKey("fingerprint_protection")
+        val CLEAR_COOKIES_ON_SHUTDOWN_KEY = booleanPreferencesKey("clear_cookies_on_shutdown")
+        val AUTO_ROTATE_IDENTITY_KEY = booleanPreferencesKey("auto_rotate_identity")
         val SEARCH_ENGINE_KEY = stringPreferencesKey("default_search_engine")
         val CUSTOM_SEARCH_URL_KEY = stringPreferencesKey("custom_search_url")
         val CUSTOM_SUGGEST_URL_KEY = stringPreferencesKey("custom_suggest_url")
@@ -189,6 +207,7 @@ class BrowserViewModel : ViewModel() {
         val PLAYER_BACKGROUND_PLAYBACK_KEY = booleanPreferencesKey("player_background_playback")
         val EXTENSION_ORDER_KEY = stringPreferencesKey("extension_order")
         val EXTENSION_VIEW_MODE_KEY = stringPreferencesKey("extension_view_mode")
+        val CREAMY_MODE_KEY = booleanPreferencesKey("creamy_mode")
         
         val COOKIE_BEHAVIOR_KEY = androidx.datastore.preferences.core.intPreferencesKey("cookie_behavior")
         val DO_NOT_TRACK_KEY = booleanPreferencesKey("do_not_track")
@@ -282,6 +301,7 @@ class BrowserViewModel : ViewModel() {
     lateinit var ffmpegBridge: FFmpegBridge
     lateinit var streamDownloadEngine: StreamDownloadEngine
     lateinit var vpnManager: VpnManager
+    lateinit var torManager: TorManager
     lateinit var adBlockManager: com.rebelroot.omni.browser.adblock.AdBlockManager
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     internal var copyManager: UniversalCopyManager? = null
@@ -338,6 +358,23 @@ class BrowserViewModel : ViewModel() {
     var pendingVideoUrl: String? = null
     var activeVideoCookies by mutableStateOf<String?>(null)
     var customVpnConfig by mutableStateOf<String?>(null)
+    var proxyProvider by mutableStateOf("direct")
+    var isTorUseBridges by mutableStateOf(false)
+    var isTorAutoConnect by mutableStateOf(false)
+    var customSocksHost by mutableStateOf("")
+    var customSocksPort by mutableStateOf(9050)
+    var customDns by mutableStateOf("")
+    var isDohEnabled by mutableStateOf(false)
+    var dohUri by mutableStateOf("https://dns.google/dns-query")
+    var isDotEnabled by mutableStateOf(false)
+    var dotHost by mutableStateOf("")
+    var isBlockQuic by mutableStateOf(true)
+    var isDisableWebrtc by mutableStateOf(false)
+    var isRandomizeUa by mutableStateOf(false)
+    var isFingerprintProtection by mutableStateOf(false)
+    var isClearCookiesOnShutdown by mutableStateOf(false)
+    var isAutoRotateIdentity by mutableStateOf(false)
+    var privacyRestartNeeded by mutableStateOf(false)
     var selectedSearchEngine by mutableStateOf("Google")
     var customSearchUrl by mutableStateOf("")
     var customSuggestUrl by mutableStateOf("")
@@ -345,6 +382,7 @@ class BrowserViewModel : ViewModel() {
     val searchSuggestions = androidx.compose.runtime.mutableStateListOf<String>()
     var isDarkThemeEnabled by mutableStateOf(true)
     var isAmoledMode by mutableStateOf(false)
+    var isCreamyMode by mutableStateOf(false)
     var isDynamicColorEnabled by mutableStateOf(false)
     var isIncognitoUnlocked by mutableStateOf(false)
     var cookieBehavior by mutableStateOf(3)
@@ -1852,6 +1890,21 @@ class BrowserViewModel : ViewModel() {
             val cookieBeh = prefs[COOKIE_BEHAVIOR_KEY] ?: 3
             val sbLevel = prefs[SAFE_BROWSING_LEVEL_KEY] ?: 1
             val hc = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
+            proxyProvider = prefs[PROXY_PROVIDER_KEY] ?: "direct"
+            isTorUseBridges = prefs[TOR_USE_BRIDGES_KEY] ?: false
+            customSocksHost = prefs[CUSTOM_SOCKS_HOST_KEY] ?: ""
+            customSocksPort = prefs[CUSTOM_SOCKS_PORT_KEY] ?: 9050
+            customDns = prefs[CUSTOM_DNS_KEY] ?: ""
+            isDohEnabled = prefs[DOH_ENABLED_KEY] ?: false
+            dohUri = prefs[DOH_URI_KEY] ?: "https://dns.google/dns-query"
+            isDotEnabled = prefs[DOT_ENABLED_KEY] ?: false
+            dotHost = prefs[DOT_HOST_KEY] ?: ""
+            isBlockQuic = prefs[BLOCK_QUIC_KEY] ?: true
+            isDisableWebrtc = prefs[DISABLE_WEBRTC_KEY] ?: false
+            isRandomizeUa = prefs[RANDOMIZE_UA_KEY] ?: false
+            isFingerprintProtection = prefs[FINGERPRINT_PROTECTION_KEY] ?: false
+            isClearCookiesOnShutdown = prefs[CLEAR_COOKIES_ON_SHUTDOWN_KEY] ?: false
+            isAutoRotateIdentity = prefs[AUTO_ROTATE_IDENTITY_KEY] ?: false
 
             val cbSettings = org.mozilla.geckoview.ContentBlocking.Settings.Builder()
                 .antiTracking(
@@ -1880,6 +1933,58 @@ class BrowserViewModel : ViewModel() {
                 } else {
                     sb.append("  network.dns.disablePrefetch: false\n")
                     sb.append("  network.prefetch-next: true\n")
+                }
+                if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy") {
+                    val torPort = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
+                    val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
+                    val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
+                    sb.append("  network.proxy.type: 1\n")
+                    sb.append("  network.proxy.socks: $targetHost\n")
+                    sb.append("  network.proxy.socks_port: $targetPort\n")
+                    sb.append("  network.proxy.socks_remote_dns: true\n")
+                } else {
+                    sb.append("  network.proxy.type: 0\n")
+                }
+                val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy"
+                if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
+                    sb.append("  network.trr.uri: $dohUri\n")
+                    // mode 2 = TRR-first with native-DNS fallback. We deliberately
+                    // avoid mode 3 (TRR-only): without a guaranteed bootstrap IP a
+                    // misconfigured/unreachable TRR endpoint would black-hole ALL
+                    // DNS and break browsing entirely. mode 2 still encrypts
+                    // lookups whenever TRR works and degrades gracefully otherwise.
+                    sb.append("  network.trr.mode: 2\n")
+                } else {
+                    sb.append("  network.trr.mode: 0\n")
+                }
+                // NOTE: DoT and plain custom DNS cannot be set via GeckoView prefs.
+                // DoT requires Android 9+ Private DNS (Settings > Network > Private DNS).
+                // We store the user's preference for UI state but cannot enforce it at engine level.
+                sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
+                // Block QUIC/HTTP3 via both pref names — the controlling pref
+                // moved between Gecko versions, so set both to be safe.
+                sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
+                sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+                if (isRandomizeUa) {
+                    val uas = listOf(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
+                    )
+                    val chosen = uas[(System.currentTimeMillis() / 86400000L).toInt() % uas.size]
+                    sb.append("  general.useragent.override: $chosen\n")
+                }
+                sb.append("  privacy.clearOnShutdown.cache: ${isClearCookiesOnShutdown}\n")
+                sb.append("  privacy.clearOnShutdown.cookies: ${isClearCookiesOnShutdown}\n")
+                if (isFingerprintProtection) {
+                    sb.append("  webgl.disabled: true\n")
+                    sb.append("  dom.enable_resource_timing: false\n")
+                    sb.append("  dom.enable_user_timing: false\n")
+                    sb.append("  beacon.enabled: false\n")
+                    sb.append("  dom.battery.enabled: false\n")
+                    sb.append("  canvas.captureStream.enabled: false\n")
+                    sb.append("  dom.webaudio.enabled: false\n")
                 }
                 configFile.writeText(sb.toString())
             } catch (e: Exception) {
@@ -1998,6 +2103,7 @@ class BrowserViewModel : ViewModel() {
             val locker = PrivateLockerManager(appCtx)
             streamDownloadEngine = StreamDownloadEngine(appCtx, ffmpegBridge, locker)
             vpnManager = VpnManager(appCtx)
+            torManager = TorManager(appCtx)
             adBlockManager = com.rebelroot.omni.browser.adblock.AdBlockManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
             aiBlockerManager = BuiltInExtensionManager(
@@ -2042,6 +2148,35 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
+                proxyProvider = getProxyProvider(appCtx).first()
+                isTorUseBridges = getTorUseBridgesPreference(appCtx).first()
+                isTorAutoConnect = getTorAutoConnectPreference(appCtx).first()
+                customSocksHost = getCustomSocksHost(appCtx).first()
+                customSocksPort = getCustomSocksPort(appCtx).first()
+                customDns = getCustomDns(appCtx).first()
+                isDohEnabled = getDohEnabled(appCtx).first()
+                dohUri = getDohUri(appCtx).first()
+                isDotEnabled = getDotEnabled(appCtx).first()
+                dotHost = getDotHost(appCtx).first()
+                isBlockQuic = getBlockQuic(appCtx).first()
+                isDisableWebrtc = getDisableWebrtc(appCtx).first()
+                isRandomizeUa = getRandomizeUa(appCtx).first()
+                isFingerprintProtection = getFingerprintProtection(appCtx).first()
+                isClearCookiesOnShutdown = getClearCookiesOnShutdown(appCtx).first()
+                isAutoRotateIdentity = getAutoRotateIdentity(appCtx).first()
+                if (proxyProvider == "tor" && isTorAutoConnect || proxyProvider == "tor_over_vpn" && isTorAutoConnect) {
+                    connectTor()
+                }
+                if (isAutoRotateIdentity) {
+                    // "Rotate identity on new session" = start each launch with a
+                    // clean cookie jar. We deliberately do NOT auto-open Orbot for
+                    // a new circuit here (that would pop Orbot's UI on every
+                    // launch); the circuit is rotated manually from the Hub.
+                    clearCookiesOnly()
+                }
+            }
+
+            viewModelScope.launch {
                 selectedSearchEngine = getSearchEnginePreference(appCtx).first()
                 customSearchUrl = getCustomSearchUrlPreference(appCtx).first()
                 customSuggestUrl = getCustomSuggestUrlPreference(appCtx).first()
@@ -2065,6 +2200,10 @@ class BrowserViewModel : ViewModel() {
 
             viewModelScope.launch {
                 isAmoledMode = getAmoledModePreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
+                isCreamyMode = getCreamyModePreference(appCtx).first()
             }
 
             viewModelScope.launch {
@@ -2351,8 +2490,8 @@ class BrowserViewModel : ViewModel() {
                         Log.d("WebConsole", "[$level] $msg")
                         // Run on main thread because we are updating a Compose MutableStateList
                         viewModelScope.launch(Dispatchers.Main) {
-                            if (level == "READER_TTS_CONTENT") {
-                                speakText(msg)
+                            if (level == "READER_TTS_CONTENT" || msg.startsWith("READER_TTS_CONTENT:")) {
+                                speakText(msg.removePrefix("READER_TTS_CONTENT:"))
                             } else {
                                 consoleLogs.add(ConsoleLogEntry(level, msg))
                                 if (consoleLogs.size > 200) {
@@ -2758,6 +2897,20 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    // Creamy Mode settings
+    fun getCreamyModePreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CREAMY_MODE_KEY] ?: false
+        }
+    }
+
+    fun saveCreamyMode(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[CREAMY_MODE_KEY] = enabled }
+            isCreamyMode = enabled
+        }
+    }
+
     // Dynamic color (Material You) settings
     fun getDynamicColorPreference(context: Context): Flow<Boolean> {
         return context.dataStore.data.map { preferences ->
@@ -2840,8 +2993,10 @@ class BrowserViewModel : ViewModel() {
             val pm = context.packageManager
             val pkg = context.packageName
             val aliases = listOf(
-                "Default" to ".MainActivityDefault",
-                "Dark"    to ".MainActivityDark"
+                "Default"    to ".MainActivityDefault",
+                "Dark"       to ".MainActivityDark",
+                "Aura Dark"  to ".MainActivityAuraDark",
+                "Aura Light" to ".MainActivityAuraLight"
             )
 
             aliases.forEach { (name, aliasName) ->
@@ -3330,6 +3485,509 @@ class BrowserViewModel : ViewModel() {
 
     fun disconnectVpn() {
         vpnManager.disconnect()
+    }
+
+    // Tor proxy methods
+    fun getProxyProvider(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[PROXY_PROVIDER_KEY] ?: "direct"
+        }
+    }
+
+    fun saveProxyProvider(context: Context, provider: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[PROXY_PROVIDER_KEY] = provider
+            }
+            proxyProvider = provider
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getTorUseBridgesPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[TOR_USE_BRIDGES_KEY] ?: false
+        }
+    }
+
+    fun saveTorUseBridges(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[TOR_USE_BRIDGES_KEY] = enabled
+            }
+            isTorUseBridges = enabled
+            // Bridges change the SOCKS port (9050 → 9052) written into the
+            // Gecko config, so a restart is needed for the change to apply.
+            privacyRestartNeeded = true
+        }
+    }
+
+    fun getTorAutoConnectPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[TOR_AUTO_CONNECT_KEY] ?: false
+        }
+    }
+
+    fun saveTorAutoConnect(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[TOR_AUTO_CONNECT_KEY] = enabled
+            }
+            isTorAutoConnect = enabled
+        }
+    }
+
+    fun getCustomSocksHost(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_SOCKS_HOST_KEY] ?: ""
+        }
+    }
+
+    fun saveCustomSocksHost(context: Context, host: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_SOCKS_HOST_KEY] = host
+            }
+            customSocksHost = host
+            if (host.isNotBlank()) {
+                torManager.setCustomProxy(host, customSocksPort)
+            } else {
+                torManager.clearCustomProxy()
+            }
+        }
+    }
+
+    fun getCustomSocksPort(context: Context): Flow<Int> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_SOCKS_PORT_KEY] ?: 9050
+        }
+    }
+
+    fun saveCustomSocksPort(context: Context, port: Int) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_SOCKS_PORT_KEY] = port
+            }
+            customSocksPort = port
+            if (customSocksHost.isNotBlank()) {
+                torManager.setCustomProxy(customSocksHost, port)
+            }
+        }
+    }
+
+    fun getCustomDns(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CUSTOM_DNS_KEY] ?: ""
+        }
+    }
+
+    fun saveCustomDns(context: Context, dns: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CUSTOM_DNS_KEY] = dns
+                // Mutual exclusion: a plain custom DNS supersedes in-app DoH/DoT.
+                if (dns.isNotBlank()) {
+                    preferences[DOH_ENABLED_KEY] = false
+                    preferences[DOT_ENABLED_KEY] = false
+                }
+            }
+            customDns = dns
+            if (dns.isNotBlank()) {
+                isDohEnabled = false
+                isDotEnabled = false
+            }
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getDohEnabled(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DOH_ENABLED_KEY] ?: false
+        }
+    }
+
+    fun saveDohEnabled(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DOH_ENABLED_KEY] = enabled
+                // DoH is enforced in-engine, so it supersedes DoT / plain DNS.
+                if (enabled) {
+                    preferences[DOT_ENABLED_KEY] = false
+                    preferences[CUSTOM_DNS_KEY] = ""
+                }
+            }
+            isDohEnabled = enabled
+            if (enabled) {
+                isDotEnabled = false
+                customDns = ""
+            }
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getDohUri(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DOH_URI_KEY] ?: "https://dns.google/dns-query"
+        }
+    }
+
+    fun saveDohUri(context: Context, uri: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DOH_URI_KEY] = uri
+            }
+            dohUri = uri
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getDotEnabled(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DOT_ENABLED_KEY] ?: false
+        }
+    }
+
+    fun saveDotEnabled(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DOT_ENABLED_KEY] = enabled
+                // DoT cannot be enforced in-engine; it must not coexist with in-app DoH.
+                if (enabled) {
+                    preferences[DOH_ENABLED_KEY] = false
+                }
+            }
+            isDotEnabled = enabled
+            if (enabled) {
+                isDohEnabled = false
+            }
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getDotHost(context: Context): Flow<String> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DOT_HOST_KEY] ?: ""
+        }
+    }
+
+    fun saveDotHost(context: Context, host: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DOT_HOST_KEY] = host
+            }
+            dotHost = host
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getBlockQuic(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[BLOCK_QUIC_KEY] ?: true
+        }
+    }
+
+    fun saveBlockQuic(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[BLOCK_QUIC_KEY] = enabled
+            }
+            isBlockQuic = enabled
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getDisableWebrtc(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[DISABLE_WEBRTC_KEY] ?: false
+        }
+    }
+
+    fun saveDisableWebrtc(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DISABLE_WEBRTC_KEY] = enabled
+            }
+            isDisableWebrtc = enabled
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getRandomizeUa(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[RANDOMIZE_UA_KEY] ?: false
+        }
+    }
+
+    fun saveRandomizeUa(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[RANDOMIZE_UA_KEY] = enabled
+            }
+            isRandomizeUa = enabled
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getFingerprintProtection(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[FINGERPRINT_PROTECTION_KEY] ?: false
+        }
+    }
+
+    fun saveFingerprintProtection(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[FINGERPRINT_PROTECTION_KEY] = enabled
+            }
+            isFingerprintProtection = enabled
+            regenerateGeckoConfig()
+        }
+    }
+
+    fun getClearCookiesOnShutdown(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CLEAR_COOKIES_ON_SHUTDOWN_KEY] ?: false
+        }
+    }
+
+    fun saveClearCookiesOnShutdown(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CLEAR_COOKIES_ON_SHUTDOWN_KEY] = enabled
+            }
+            isClearCookiesOnShutdown = enabled
+        }
+    }
+
+    fun getAutoRotateIdentity(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[AUTO_ROTATE_IDENTITY_KEY] ?: false
+        }
+    }
+
+    fun saveAutoRotateIdentity(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[AUTO_ROTATE_IDENTITY_KEY] = enabled
+            }
+            isAutoRotateIdentity = enabled
+        }
+    }
+
+    fun rotateIdentity() {
+        try {
+            val rt = geckoRuntime
+            rt?.let {
+                it.storageController.clearData(StorageController.ClearFlags.ALL).accept(
+                    { Log.d(TAG, "Identity rotation: data cleared") },
+                    { err -> Log.e(TAG, "Identity rotation clear error", err) }
+                )
+            }
+            torManager.requestNewCircuit()
+        } catch (e: Exception) {
+            Log.e(TAG, "Identity rotation failed", e)
+        }
+    }
+
+    fun clearCookiesOnly() {
+        try {
+            val rt = geckoRuntime
+            rt?.let {
+                it.storageController.clearData(StorageController.ClearFlags.COOKIES or StorageController.ClearFlags.DOM_STORAGES).accept(
+                    { Log.d(TAG, "Cookies cleared") },
+                    { err -> Log.e(TAG, "Cookie clear error", err) }
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Clear cookies failed", e)
+        }
+    }
+
+    /**
+     * Ask the local Tor (Orbot) to build a fresh circuit WITHOUT wiping any
+     * browser data. Opening Orbot's UI is unavoidable because Orbot exposes no
+     * silent NEWNYM API without the Tor control port. For a remote/custom SOCKS
+     * proxy there is no control channel at all, so the UI disables the control
+     * in that case (see [com.rebelroot.omni.settings.PrivacyHubScreen]).
+     */
+    fun requestNewCircuit() {
+        try {
+            torManager.requestNewCircuit()
+        } catch (e: Exception) {
+            Log.e(TAG, "Request new circuit failed", e)
+        }
+    }
+
+    /**
+     * Restarts the app process so that privacy settings which are only read at
+     * [GeckoRuntime] creation (proxy, DoH, QUIC, WebRTC, fingerprinting, UA)
+     * take effect. The config file is rewritten on every change, but the
+     * running engine never re-reads it, so a process restart is the only way to
+     * apply them in the current session.
+     */
+    fun restartApp(context: Context) {
+        // Use AlarmManager to schedule the relaunch 500 ms in the future so the
+        // new process is guaranteed to be queued before we kill the current one.
+        // A bare startActivity + killProcess races on some OEMs and can leave the
+        // app dead.
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            if (intent != null) {
+                intent.addFlags(
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                )
+                val pending = android.app.PendingIntent.getActivity(
+                    context, 0, intent,
+                    android.app.PendingIntent.FLAG_ONE_SHOT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+                val am = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                am.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + 500, pending)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "restartApp: failed to schedule relaunch", e)
+        }
+        privacyRestartNeeded = false
+        android.os.Process.killProcess(android.os.Process.myPid())
+    }
+
+    fun connectTor() {
+        if (customSocksHost.isNotBlank()) {
+            torManager.setCustomProxy(customSocksHost, customSocksPort)
+            torManager.startTor(customSocksPort)
+        } else {
+            val port = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
+            torManager.startTor(port)
+        }
+        updateGeckoProxyConfig()
+    }
+
+    fun disconnectTor() {
+        torManager.stopTor()
+        updateGeckoProxyConfig(null)
+    }
+
+    fun updateGeckoProxyConfig(port: Int? = null) {
+        val ctx = appContext ?: return
+        val configFile = File(ctx.filesDir, "geckoview-config.yaml")
+        if (!configFile.exists()) return
+        try {
+            val lines = configFile.readLines().toMutableList()
+            val proxyKeys = setOf("network.proxy.type", "network.proxy.socks", "network.proxy.socks_port", "network.proxy.socks_remote_dns")
+            lines.removeAll { line -> proxyKeys.any { key -> line.trim().startsWith("$key:") } }
+
+            val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
+            val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else (port ?: TorManager.DEFAULT_SOCKS_PORT)
+
+            if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy") {
+                val proxyBlock = listOf(
+                    "  network.proxy.type: 1",
+                    "  network.proxy.socks: $targetHost",
+                    "  network.proxy.socks_port: $targetPort",
+                    "  network.proxy.socks_remote_dns: true"
+                )
+                val insertIdx = lines.indexOfFirst { it.trim() == "pref:" }
+                if (insertIdx >= 0) {
+                    lines.addAll(insertIdx + 1, proxyBlock)
+                } else {
+                    lines.addAll(proxyBlock)
+                }
+            } else {
+                val insertIdx = lines.indexOfFirst { it.trim() == "pref:" }
+                if (insertIdx >= 0) {
+                    lines.add(insertIdx + 1, "  network.proxy.type: 0")
+                } else {
+                    lines.add("network.proxy.type: 0")
+                }
+            }
+            configFile.writeText(lines.joinToString("\n"))
+            // The running engine never re-reads the config file, so a proxy
+            // change only takes effect after a process restart.
+            privacyRestartNeeded = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update proxy config", e)
+        }
+    }
+
+    /**
+     * Regenerates the full geckoview-config.yaml from current state variables.
+     * Called after any privacy setting change so the next app launch picks up
+     * the new values. Also sets [privacyRestartNeeded] so the UI can prompt
+     * the user to restart for changes to take effect in the current session.
+     */
+    fun regenerateGeckoConfig() {
+        val ctx = appContext ?: return
+        val configFile = File(ctx.filesDir, "geckoview-config.yaml")
+        try {
+            val sb = StringBuilder()
+            sb.append("pref:\n")
+            sb.append("  dom.ipc.processCount: 1\n")
+            sb.append("  dom.ipc.processCount.webIsolated: 1\n")
+            sb.append("  privacy.donottrackheader.enabled: ${doNotTrack}\n")
+            sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2}\n")
+            if (preloadPages == 0) {
+                sb.append("  network.dns.disablePrefetch: true\n")
+                sb.append("  network.prefetch-next: false\n")
+            } else {
+                sb.append("  network.dns.disablePrefetch: false\n")
+                sb.append("  network.prefetch-next: true\n")
+            }
+            // Proxy
+            if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy") {
+                val torPort = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
+                val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
+                val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
+                sb.append("  network.proxy.type: 1\n")
+                sb.append("  network.proxy.socks: $targetHost\n")
+                sb.append("  network.proxy.socks_port: $targetPort\n")
+                sb.append("  network.proxy.socks_remote_dns: true\n")
+            } else {
+                sb.append("  network.proxy.type: 0\n")
+            }
+            // DoH - Disabled when using Tor or Custom SOCKS proxy to prevent DNS leak bypassing the proxy resolver.
+            val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy"
+            if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
+                sb.append("  network.trr.uri: $dohUri\n")
+                // mode 2 = TRR-first with native-DNS fallback (see the inline
+                // writer in getGeckoRuntime for why we avoid mode 3 here).
+                sb.append("  network.trr.mode: 2\n")
+            } else {
+                sb.append("  network.trr.mode: 0\n")
+            }
+            // WebRTC & QUIC
+            sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
+            sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
+            sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+            // UA randomization
+            if (isRandomizeUa) {
+                val uas = listOf(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+                )
+                // Use a random index seeded by hour-of-day for more variation
+                val idx = (System.currentTimeMillis() / 3600000L).toInt() % uas.size
+                sb.append("  general.useragent.override: ${uas[idx]}\n")
+            }
+            // Clear on shutdown
+            sb.append("  privacy.clearOnShutdown.cache: ${isClearCookiesOnShutdown}\n")
+            sb.append("  privacy.clearOnShutdown.cookies: ${isClearCookiesOnShutdown}\n")
+            // Fingerprint protection
+            if (isFingerprintProtection) {
+                sb.append("  webgl.disabled: true\n")
+                sb.append("  dom.enable_resource_timing: false\n")
+                sb.append("  dom.enable_user_timing: false\n")
+                sb.append("  beacon.enabled: false\n")
+                sb.append("  dom.battery.enabled: false\n")
+                sb.append("  canvas.captureStream.enabled: false\n")
+                sb.append("  dom.webaudio.enabled: false\n")
+            }
+            configFile.writeText(sb.toString())
+            privacyRestartNeeded = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to regenerate geckoview-config.yaml", e)
+        }
     }
 
     private var searchSuggestJob: kotlinx.coroutines.Job? = null
@@ -4880,6 +5538,7 @@ class BrowserViewModel : ViewModel() {
 
     private var tts: TextToSpeech? = null
     var isTtsPlaying by mutableStateOf(false)
+    var ttsRate by mutableStateOf(1.0f)
     
     fun initTts(context: Context) {
         if (tts == null) {
@@ -4890,16 +5549,33 @@ class BrowserViewModel : ViewModel() {
             }
         }
     }
-    
+
     fun speakText(text: String) {
         val engine = tts ?: return
+        engine.setSpeechRate(ttsRate)
         engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "omni_tts")
         isTtsPlaying = true
     }
-    
+
+    fun setTtsSpeechRate(rate: Float) {
+        ttsRate = rate
+        tts?.setSpeechRate(rate)
+    }
+
     fun stopTts() {
         tts?.stop()
         isTtsPlaying = false
+    }
+
+    fun readCurrentPageAloud() {
+        val activeTab = tabs.find { it.id == activeTabId } ?: return
+        val session = activeTab.session
+        val js = "javascript:(function(){" +
+                "  var el = document.querySelector('#omni-reader-container') || document.body;" +
+                "  var text = el ? (el.innerText || el.textContent) : '';" +
+                "  if (text) { console.warn('READER_TTS_CONTENT:' + text.substring(0, 8000)); }" +
+                "})();"
+        session.loadUri(js)
     }
 
     fun installWebAppShortcut(context: Context, title: String, url: String) {

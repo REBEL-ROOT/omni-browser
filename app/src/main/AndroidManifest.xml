@@ -34,6 +34,9 @@
 
     <!-- Declare package visibility queries for resolving custom scheme intents (Android 11+) -->
     <queries>
+        <!-- Orbot (Tor proxy) — required for package visibility on Android 11+ -->
+        <package android:name="org.torproject.android" />
+
         <!-- Generic ACTION_VIEW catch-all — ensures chooser can discover apps for any scheme -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -110,6 +113,7 @@
     </queries>
 
     <application
+        android:name=".OmniApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -179,6 +183,34 @@
             </intent-filter>
         </activity-alias>
 
+        <activity-alias
+            android:name=".MainActivityAuraDark"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_ring_dark"
+            android:roundIcon="@mipmap/ic_launcher_ring_dark_round"
+            android:label="@string/app_name"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAuraLight"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_ring_light"
+            android:roundIcon="@mipmap/ic_launcher_ring_light_round"
+            android:label="@string/app_name"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
 
 
         <!-- Secure file provider to allow temporary viewing of decrypted PDFs or downloads -->
@@ -191,6 +223,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
+
+        <!-- WireGuard VPN backend service -->
+        <service
+            android:name="com.wireguard.android.backend.GoBackend$VpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

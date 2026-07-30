@@ -39,6 +39,7 @@ fun OmniTheme(
     accentTheme: String = "Ocean Blue",
     /** true → use pure-black AMOLED surfaces (only applies when darkTheme = true) */
     amoledMode: Boolean = false,
+    creamyMode: Boolean = false,
     /** true → extract palette from wallpaper via Material You (Android 12+ only) */
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
@@ -48,6 +49,7 @@ fun OmniTheme(
         accentTheme = accentTheme,
         isDark = darkTheme,
         isAmoled = amoledMode,
+        isCreamy = creamyMode,
         isDynamic = dynamicColor,
         context = context
     )

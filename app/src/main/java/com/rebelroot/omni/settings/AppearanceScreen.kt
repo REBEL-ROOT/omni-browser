@@ -12,6 +12,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -309,14 +310,16 @@ fun AppearanceScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Theme Mode", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         val themeMode = when {
-                            viewModel.isAmoledMode -> 2
-                            viewModel.isDarkThemeEnabled -> 1
+                            viewModel.isAmoledMode -> 3
+                            viewModel.isDarkThemeEnabled -> 2
+                            viewModel.isCreamyMode -> 1
                             else -> 0
                         }
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            val options = listOf("Light", "Dark", "AMOLED")
+                            val options = listOf("Light", "Creamy", "Dark", "AMOLED")
                             val icons = listOf(
                                 Icons.Rounded.LightMode,
+                                Icons.Rounded.Palette,
                                 Icons.Rounded.DarkMode,
                                 Icons.Rounded.Brightness1
                             )
@@ -328,14 +331,22 @@ fun AppearanceScreen(
                                             0 -> {
                                                 viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, false)
                                             }
                                             1 -> {
-                                                viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, true)
                                             }
                                             2 -> {
                                                 viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, false)
+                                            }
+                                            3 -> {
+                                                viewModel.saveDarkTheme(context, true)
                                                 viewModel.saveAmoledMode(context, true)
+                                                viewModel.saveCreamyMode(context, false)
                                             }
                                         }
                                     },
@@ -574,8 +585,8 @@ fun AppearanceScreen(
                 }
 
                 val presets = listOf(
-                    Triple("Default", com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
-                    Triple("Dark",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified)
+                    Triple("Default",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
+                    Triple("Dark",       com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified)
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

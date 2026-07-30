@@ -1,19 +1,6 @@
 /*
  * Omni Browser - A premium, private, and secure web browser.
  * Copyright (C) 2026 RebelRoot Ltd
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package com.rebelroot.omni.onboarding
@@ -64,9 +51,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
-// ── Creamy Light Design Tokens (Google / Firefox Soothing Palette) ──────────────
+// ── Soothing & Premium Design Tokens ──────────────────────────────────────────
 private val CreamyLightBackground = Color(0xFFFAF8F5)  // Soothing Creamy Off-White / Ivory
+private val DarkBackground        = Color(0xFF0F172A)  // Slate Dark Background
 private val CardBg                 = Color(0xFFFFFFFF)  // Pure White Surface Card
+private val DarkCardBg             = Color(0xFF1E293B)  // Dark Slate Card
 private val CardBorderColor        = Color(0xFFE2E8F0)  // Soothing Muted Border
 private val TitleTextColor         = Color(0xFF0F172A)  // Deep Charcoal Slate Text
 private val SubtextColor           = Color(0xFF475569)  // Soothing Dark Subtext
@@ -96,9 +85,12 @@ fun OnboardingScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // Navbar selection state for 6th page ("Split" | "Top" | "Bottom")
+    // Interactive onboarding choices
     var selectedNavbarPos by remember { mutableStateOf(viewModel.addressBarPosition) }
     var autoCycleNavbar by remember { mutableStateOf(true) }
+    var selectedSearchEngine by remember { mutableStateOf(viewModel.selectedSearchEngine) }
+    var isDarkTheme by remember { mutableStateOf(viewModel.isDarkThemeEnabled) }
+    var isCreamyTheme by remember { mutableStateOf(viewModel.isCreamyMode) }
 
     val pages = remember {
         listOf(
@@ -107,7 +99,7 @@ fun OnboardingScreen(
                 imageRes = R.drawable.ob_secure_browser,
                 title = "Browse Freely,\nBrowse Privately",
                 accentColor = Color(0xFF0284C7), // Soothing Ocean Blue
-                tagline = "Zero Trackers · Fully On-Device",
+                tagline = "Zero Trackers · Fully On-Device · Hyper-Fast",
                 features = listOf(
                     FeatureItem(Icons.Rounded.Search,          "Smart Address Bar",    "Voice, text, and camera search integrated right in omnibox"),
                     FeatureItem(Icons.Rounded.Newspaper,       "Discover Feed",        "Latest news headlines by category — zero account required"),
@@ -116,17 +108,12 @@ fun OnboardingScreen(
                 )
             ),
             OnboardingPage(
-                id = "tools",
+                id = "theme_setup",
                 imageRes = R.drawable.ob_quick_tools,
-                title = "16 Quick Tools,\nOne Browser",
-                accentColor = Color(0xFF0D9488), // Soothing Teal
-                tagline = "Built-in Utilities · No Extra Apps Needed",
-                features = listOf(
-                    FeatureItem(Icons.Rounded.QrCodeScanner,   "QR Code Scanner",      "Scan QR codes directly from any webpage or image"),
-                    FeatureItem(Icons.Rounded.Description,     "Save as Clean PDF",    "Export articles as clean, formatted PDFs for offline reading"),
-                    FeatureItem(Icons.Rounded.Code,            "Developer Inspector",  "Inspect HTML, view console logs, and edit live CSS"),
-                    FeatureItem(Icons.Rounded.Apps,            "Web App Shortcuts",    "Pin your favorite websites as native apps on your home screen")
-                )
+                title = "Personalize Your\nVisual Experience",
+                accentColor = Color(0xFF818CF8), // Soothing Soft Indigo
+                tagline = "Dark Mode · AMOLED Black · Creamy Light",
+                features = emptyList()
             ),
             OnboardingPage(
                 id = "extensions",
@@ -136,23 +123,26 @@ fun OnboardingScreen(
                 tagline = "uBlock Origin · Firefox Add-ons · Safe Locker",
                 features = listOf(
                     FeatureItem(Icons.Rounded.Shield,          "uBlock Origin Native", "Official Firefox desktop ad blocker — block ads and trackers automatically"),
-                    FeatureItem(Icons.Rounded.AddCircleOutline,"Firefox Store Access", "Install any desktop extension directly from Mozilla Store"),
+                    FeatureItem(Icons.Rounded.AddCircleOutline,"Curated Extension Store", "Install Dark Reader, SponsorBlock, TWP Translate in 1-tap"),
                     FeatureItem(Icons.Rounded.Block,           "AI Overview Blocker",  "Hide forced AI summaries on Google & Bing search results"),
                     FeatureItem(Icons.Rounded.Lock,            "Biometric Safe Vault", "Encrypted vault for downloads, images, and documents")
                 )
             ),
             OnboardingPage(
-                id = "media",
-                imageRes = R.drawable.ob_media_player,
-                title = "Media Downloader\n& Quick Access",
-                accentColor = Color(0xFFEA580C), // Soothing Warm Amber
-                tagline = "Bookmarks · History · Downloads · Burn",
-                features = listOf(
-                    FeatureItem(Icons.Rounded.BookmarkBorder,  "Bookmarks & History",  "Quick tab drawer with history, bookmarks, and tab groups"),
-                    FeatureItem(Icons.Rounded.PlayCircle,      "Media Sniffer",        "Download videos, audio clips, and HLS streams from any site"),
-                    FeatureItem(Icons.Rounded.PlayArrow,       "Background Player",    "Background audio play, speed controls, and PiP floating player"),
-                    FeatureItem(Icons.Rounded.LocalFireDepartment, "1-Tap Burn Mode",   "Instantly wipe all tabs, history, and cache with a single tap")
-                )
+                id = "search_setup",
+                imageRes = R.drawable.ob_search_selector,
+                title = "Choose Your Preferred\nSearch Engine",
+                accentColor = Color(0xFF10B981), // Soothing Emerald
+                tagline = "Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant",
+                features = emptyList()
+            ),
+            OnboardingPage(
+                id = "navbar_position",
+                imageRes = R.drawable.ob_nav_split,
+                title = "Choose Your\nNavigation Layout",
+                accentColor = Color(0xFF6366F1), // Soothing Indigo
+                tagline = "1st Split · 2nd Top · 3rd Bottom",
+                features = emptyList()
             ),
             OnboardingPage(
                 id = "default_browser",
@@ -165,14 +155,6 @@ fun OnboardingScreen(
                     FeatureItem(Icons.Rounded.Bolt,            "Lightning Fast Load",  "Instant page rendering without background telemetry slowdowns"),
                     FeatureItem(Icons.Rounded.Lock,            "Encrypted & Safe",     "Biometric protection and automatic HTTPS encryption for all sites")
                 )
-            ),
-            OnboardingPage(
-                id = "navbar_position",
-                imageRes = R.drawable.ob_nav_split,
-                title = "Choose Your\nNavigation Layout",
-                accentColor = Color(0xFF6366F1), // Soothing Indigo
-                tagline = "1st Split · 2nd Top · 3rd Bottom",
-                features = emptyList() // Suggestions removed per user request
             )
         )
     }
@@ -181,12 +163,12 @@ fun OnboardingScreen(
     val isLastPage = pagerState.currentPage == pages.size - 1
     val currentPage = pages[pagerState.currentPage]
 
-    // Auto-cycle navbar layout animation on 6th page if user hasn't tapped manually
+    // Auto-cycle navbar layout animation on navbar_position page
     LaunchedEffect(pagerState.currentPage, autoCycleNavbar) {
         if (pages[pagerState.currentPage].id == "navbar_position" && autoCycleNavbar) {
             val positions = listOf("Split", "Top", "Bottom")
             var idx = positions.indexOf(selectedNavbarPos).coerceAtLeast(0)
-            while (autoCycleNavbar && pagerState.currentPage == pages.size - 1) {
+            while (autoCycleNavbar && pagerState.currentPage == pages.indexOfFirst { it.id == "navbar_position" }) {
                 delay(3200)
                 idx = (idx + 1) % positions.size
                 val nextPos = positions[idx]
@@ -199,7 +181,13 @@ fun OnboardingScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CreamyLightBackground)
+            .background(
+                when {
+                    isDarkTheme -> DarkBackground
+                    isCreamyTheme -> CreamyLightBackground
+                    else -> Color.White
+                }
+            )
             .windowInsetsPadding(WindowInsets.systemBars)
     ) {
 
@@ -214,8 +202,8 @@ fun OnboardingScreen(
             // Step Chip
             Surface(
                 shape = CircleShape,
-                color = CardBg,
-                border = BorderStroke(1.dp, CardBorderColor)
+                color = if (isDarkTheme) DarkCardBg else CardBg,
+                border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else CardBorderColor)
             ) {
                 Text(
                     text = "STEP ${pagerState.currentPage + 1} OF ${pages.size}",
@@ -230,7 +218,7 @@ fun OnboardingScreen(
             if (!isLastPage) {
                 Text(
                     text = "Skip",
-                    color = SubtextColor,
+                    color = if (isDarkTheme) Color(0xFF94A3B8) else SubtextColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
@@ -287,9 +275,14 @@ fun OnboardingScreen(
                                 .fillMaxWidth()
                         )
                     } else {
-                        // ── Phone Mockup Screenshot for Pages 1–5 ─────────────────
+                        // ── Phone Mockup Screenshot for Standard Pages ─────────────
+                        val imageToDisplay = if (pageData.id == "theme_setup") {
+                            if (isDarkTheme) R.drawable.ob_theme_dark else R.drawable.ob_theme_light
+                        } else {
+                            pageData.imageRes
+                        }
                         PhoneMockup(
-                            imageRes = pageData.imageRes,
+                            imageRes = imageToDisplay,
                             modifier = Modifier
                                 .height(225.dp)
                                 .wrapContentWidth()
@@ -301,7 +294,7 @@ fun OnboardingScreen(
                     // ── Title ────────────────────────────────────────────────────────
                     Text(
                         text = pageData.title,
-                        color = TitleTextColor,
+                        color = if (isDarkTheme) Color(0xFFF8FAFC) else TitleTextColor,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -313,11 +306,16 @@ fun OnboardingScreen(
                     // ── Tagline Chip ─────────────────────────────────────────────────
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = CardBg,
-                        border = BorderStroke(1.dp, CardBorderColor)
+                        color = if (isDarkTheme) DarkCardBg else CardBg,
+                        border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else CardBorderColor)
                     ) {
                         Text(
-                            text = if (pageData.id == "navbar_position") "Active: $selectedNavbarPos Layout" else pageData.tagline,
+                            text = when (pageData.id) {
+                                "navbar_position" -> "Active: $selectedNavbarPos Layout"
+                                "search_setup"    -> "Selected: $selectedSearchEngine"
+                                "theme_setup"     -> if (isDarkTheme) "Dark Theme Active" else (if (isCreamyTheme) "Creamy Light Active" else "Pure Light Active")
+                                else              -> pageData.tagline
+                            },
                             color = pageData.accentColor,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -328,11 +326,167 @@ fun OnboardingScreen(
 
                     Spacer(Modifier.height(14.dp))
 
-                    // ── Interactive Navbar Position Chooser on Page 6 ──────────────
+                    // ── Slide 2: Interactive Theme Preference Chooser ────────────
+                    if (pageData.id == "theme_setup") {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isDarkTheme) DarkCardBg else CardBg,
+                            border = BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Select Preferred Theme Mode",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.5.sp,
+                                    color = if (isDarkTheme) Color.White else TitleTextColor
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(
+                                        Triple("Dark Slate", true, false),
+                                        Triple("Creamy Light", false, true),
+                                        Triple("Pure Light", false, false)
+                                    ).forEach { (label, darkVal, creamyVal) ->
+                                        val isSelected = (isDarkTheme == darkVal && isCreamyTheme == creamyVal)
+                                        Surface(
+                                            onClick = {
+                                                isDarkTheme = darkVal
+                                                isCreamyTheme = creamyVal
+                                                viewModel.saveDarkTheme(context, darkVal)
+                                                viewModel.saveCreamyMode(context, creamyVal)
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isSelected) Color(0xFF818CF8) else (if (isDarkTheme) Color(0xFF0F172A) else (if (isCreamyTheme) CreamyLightBackground else Color.White)),
+                                            border = BorderStroke(1.dp, if (isSelected) Color(0xFF818CF8) else CardBorderColor),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(44.dp)
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = when {
+                                                            darkVal -> Icons.Rounded.DarkMode
+                                                            creamyVal -> Icons.Rounded.FilterVintage
+                                                            else -> Icons.Rounded.LightMode
+                                                        },
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) Color.White else (if (isDarkTheme) Color.White else TitleTextColor),
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Text(
+                                                        text = label,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                        color = if (isSelected) Color.White else (if (isDarkTheme) Color.White else TitleTextColor)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Slide 4: Interactive Search Engine Chooser ────────────────
+                    if (pageData.id == "search_setup") {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isDarkTheme) DarkCardBg else CardBg,
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Select Default Search Engine",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.5.sp,
+                                    color = if (isDarkTheme) Color.White else TitleTextColor
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant").forEach { engine ->
+                                        val isSelected = (selectedSearchEngine == engine)
+                                        Surface(
+                                            onClick = {
+                                                selectedSearchEngine = engine
+                                                viewModel.saveSearchEngine(context, engine)
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isSelected) Color(0xFF10B981) else (if (isDarkTheme) Color(0xFF0F172A) else CreamyLightBackground),
+                                            border = BorderStroke(1.dp, if (isSelected) Color(0xFF10B981) else CardBorderColor),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(40.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(horizontal = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Search,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) Color.White else Color(0xFF10B981),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text(
+                                                        text = engine,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        color = if (isSelected) Color.White else (if (isDarkTheme) Color.White else TitleTextColor)
+                                                    )
+                                                }
+                                                if (isSelected) {
+                                                    Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Slide 5: Interactive Navbar Position Chooser ─────────────
                     if (pageData.id == "navbar_position") {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = CardBg,
+                            color = if (isDarkTheme) DarkCardBg else CardBg,
                             border = BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.4f)),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -346,7 +500,7 @@ fun OnboardingScreen(
                                     text = "Select Preferred Layout",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.5.sp,
-                                    color = TitleTextColor
+                                    color = if (isDarkTheme) Color.White else TitleTextColor
                                 )
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -365,7 +519,7 @@ fun OnboardingScreen(
                                                 Toast.makeText(context, "Layout set to $pos", Toast.LENGTH_SHORT).show()
                                             },
                                             shape = RoundedCornerShape(10.dp),
-                                            color = if (isSelected) Color(0xFF6366F1) else CreamyLightBackground,
+                                            color = if (isSelected) Color(0xFF6366F1) else (if (isDarkTheme) Color(0xFF0F172A) else CreamyLightBackground),
                                             border = BorderStroke(1.dp, if (isSelected) Color(0xFF6366F1) else CardBorderColor),
                                             modifier = Modifier
                                                 .weight(1f)
@@ -383,33 +537,10 @@ fun OnboardingScreen(
                                                     },
                                                     fontSize = 12.sp,
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                                    color = if (isSelected) Color.White else TitleTextColor
+                                                    color = if (isSelected) Color.White else (if (isDarkTheme) Color.White else TitleTextColor)
                                                 )
                                             }
                                         }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                Button(
-                                    onClick = {
-                                        viewModel.saveAddressBarPosition(context, selectedNavbarPos)
-                                        viewModel.saveOnboardingCompleted(context, true)
-                                        onFinish()
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(42.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(Icons.Rounded.CheckCircle, null, modifier = Modifier.size(16.dp), tint = Color.White)
-                                        Text("Set Layout & Start Browsing", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                                     }
                                 }
                             }
@@ -420,7 +551,7 @@ fun OnboardingScreen(
                     if (pageData.id == "extensions") {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = CardBg,
+                            color = if (isDarkTheme) DarkCardBg else CardBg,
                             border = BorderStroke(1.dp, Color(0xFFE11D48).copy(alpha = 0.4f)),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -447,13 +578,13 @@ fun OnboardingScreen(
                                     Column {
                                         Text(
                                             text = "Install uBlock Origin",
-                                            color = TitleTextColor,
+                                            color = if (isDarkTheme) Color.White else TitleTextColor,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
                                             text = "1-Tap automatic background install",
-                                            color = SubtextColor,
+                                            color = if (isDarkTheme) Color(0xFF94A3B8) else SubtextColor,
                                             fontSize = 11.sp
                                         )
                                     }
@@ -480,11 +611,11 @@ fun OnboardingScreen(
                         }
                     }
 
-                    // ── Special Action Card on Slide 5 (Set Default Browser) ────
+                    // ── Special Action Card on Slide 6 (Set Default Browser) ────
                     if (pageData.id == "default_browser") {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = CardBg,
+                            color = if (isDarkTheme) DarkCardBg else CardBg,
                             border = BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.4f)),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -498,13 +629,13 @@ fun OnboardingScreen(
                                     text = "Make Omni Browser Your Default",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
-                                    color = TitleTextColor
+                                    color = if (isDarkTheme) Color.White else TitleTextColor
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "Open system settings to select Omni Browser as your default browser",
                                     fontSize = 11.5.sp,
-                                    color = SubtextColor,
+                                    color = if (isDarkTheme) Color(0xFF94A3B8) else SubtextColor,
                                     textAlign = TextAlign.Center
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -530,8 +661,8 @@ fun OnboardingScreen(
                         }
                     }
 
-                    // ── Feature Card List (Shown for pages 1–5) ───────────────────
-                    if (pageData.id != "navbar_position") {
+                    // ── Feature Card List (Shown for standard feature pages) ─────
+                    if (pageData.features.isNotEmpty()) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -539,7 +670,8 @@ fun OnboardingScreen(
                             pageData.features.forEach { feature ->
                                 FeatureRow(
                                     feature = feature,
-                                    accentColor = pageData.accentColor
+                                    accentColor = pageData.accentColor,
+                                    isDark = isDarkTheme
                                 )
                             }
                         }
@@ -571,7 +703,7 @@ fun OnboardingScreen(
                     )
                     val color by animateColorAsState(
                         targetValue = if (isActive) pages[pagerState.currentPage].accentColor
-                                      else Color(0xFFCBD5E1),
+                                      else (if (isDarkTheme) Color(0xFF475569) else Color(0xFFCBD5E1)),
                         animationSpec = tween(200),
                         label = "dot_c_$index"
                     )
@@ -610,7 +742,7 @@ fun OnboardingScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = if (isLastPage) "Set & Finish" else "Next",
+                        text = if (isLastPage) "Start Browsing" else "Next",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -639,20 +771,20 @@ private fun AnimatedNavbarShowcase(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        // Outer Cartoon Device Frame (Wider aspect ratio for spacious flexing layout)
+        // Outer Cartoon Device Frame
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(0.56f)
                 .shadow(12.dp, RoundedCornerShape(26.dp))
                 .clip(RoundedCornerShape(26.dp))
-                .background(Color(0xFF0F172A)) // Sleek Dark Slate Phone Bezel
+                .background(Color(0xFF0F172A))
                 .border(width = 2.dp, color = Color(0xFF334155), shape = RoundedCornerShape(26.dp))
         ) {
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Device Status Bar (Ultra-Slim Minimalist Notch Line)
+                // Device Status Bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -662,7 +794,6 @@ private fun AnimatedNavbarShowcase(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("9:41", color = Color(0xFF94A3B8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    // Ultra-Slim Camera Speaker Line Notch
                     Box(
                         modifier = Modifier
                             .width(26.dp)
@@ -676,14 +807,14 @@ private fun AnimatedNavbarShowcase(
                     }
                 }
 
-                // ── Webpage View Canvas with Animated Top & Bottom Navbars ─────────
+                // Webpage Canvas
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .background(Color(0xFFF8FAFC)) // Clean Minimalist Light Slate Canvas
+                        .background(Color(0xFFF8FAFC))
                 ) {
-                    // ── 1. Animated Top Bar Container ──────────────────────────────
+                    // Top Bar Container
                     Box(modifier = Modifier.align(Alignment.TopCenter)) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = (selectedPos == "Split" || selectedPos == "Top"),
@@ -691,7 +822,6 @@ private fun AnimatedNavbarShowcase(
                             exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(250)) + fadeOut()
                         ) {
                             if (selectedPos == "Split") {
-                                // Split Top Bar (Address Bar Only - Flush Top, No Top Border Line)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -734,7 +864,6 @@ private fun AnimatedNavbarShowcase(
                                     }
                                 }
                             } else {
-                                // Top Unified Bar (All-in-One Top Navbar - Flush Top, No Top Border Line)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -773,7 +902,7 @@ private fun AnimatedNavbarShowcase(
                         }
                     }
 
-                    // ── 2. Animated Bottom Bar Container ───────────────────────────
+                    // Bottom Bar Container
                     Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                         androidx.compose.animation.AnimatedVisibility(
                             visible = (selectedPos == "Split" || selectedPos == "Bottom"),
@@ -781,7 +910,6 @@ private fun AnimatedNavbarShowcase(
                             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)) + fadeOut()
                         ) {
                             if (selectedPos == "Split") {
-                                // Split Bottom Action Bar
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -799,7 +927,6 @@ private fun AnimatedNavbarShowcase(
                                     Icon(Icons.Rounded.Menu, null, tint = Color(0xFFCBD5E1), modifier = Modifier.size(17.dp))
                                 }
                             } else {
-                                // Bottom Unified Bar (All-in-One Bottom Navbar)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -844,10 +971,6 @@ private fun AnimatedNavbarShowcase(
     }
 }
 
-/**
- * Dead-centered Tab Count Badge icon box [ 1 ].
- * Ensures the number "1" is mathematically centered from top, bottom, left, and right.
- */
 @Composable
 private fun TabCountBadge(
     count: String = "1",
@@ -875,9 +998,6 @@ private fun TabCountBadge(
     }
 }
 
-/**
- * Clean device mockup for creamy light background.
- */
 @Composable
 private fun PhoneMockup(
     imageRes: Int,
@@ -913,19 +1033,17 @@ private fun PhoneMockup(
     }
 }
 
-/**
- * Creamy light feature row with crisp icons.
- */
 @Composable
 private fun FeatureRow(
     feature: FeatureItem,
-    accentColor: Color
+    accentColor: Color,
+    isDark: Boolean = false
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(CardBg, RoundedCornerShape(12.dp))
-            .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
+            .background(if (isDark) DarkCardBg else CardBg, RoundedCornerShape(12.dp))
+            .border(1.dp, if (isDark) Color(0xFF334155) else CardBorderColor, RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -948,14 +1066,14 @@ private fun FeatureRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = feature.title,
-                color = TitleTextColor,
+                color = if (isDark) Color.White else TitleTextColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 lineHeight = 17.sp
             )
             Text(
                 text = feature.detail,
-                color = SubtextColor,
+                color = if (isDark) Color(0xFF94A3B8) else SubtextColor,
                 fontSize = 11.5.sp,
                 lineHeight = 16.sp
             )
@@ -963,9 +1081,6 @@ private fun FeatureRow(
     }
 }
 
-/**
- * Standard Android intent helper to launch default apps settings or browser role dialog.
- */
 private fun openDefaultBrowserSettings(context: Context) {
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

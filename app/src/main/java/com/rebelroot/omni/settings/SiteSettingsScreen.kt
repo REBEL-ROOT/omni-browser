@@ -57,25 +57,14 @@ fun SiteSettingsScreen(
     var selectedSiteHost by remember { mutableStateOf("") }
 
     val accentColor = MaterialTheme.colorScheme.primary
-    val isDark = viewModel.isDarkThemeEnabled
-    val isAmoled = viewModel.isAmoledMode
-    
-    val backgroundColor = when {
-        isAmoled -> Color.Black
-        isDark -> Color(0xFF070A0F)
-        else -> MaterialTheme.colorScheme.background
-    }
-    
-    val cardColor = when {
-        isAmoled -> Color(0xFF000000)
-        isDark -> Color(0xFF0F1B26)
-        else -> MaterialTheme.colorScheme.surface
-    }
 
-    val textPrimaryColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val textSecondaryColor = if (isDark) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant
-    val dividerColor = if (isDark) Color(0xFF23374A).copy(alpha = 0.5f) else Color.LightGray.copy(alpha = 0.4f)
-    val cardBorder = if (isDark) BorderStroke(0.5.dp, Color(0xFF1E2D3F)) else BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.5f))
+    val bgColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surface
+    val cardBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val textPrimaryColor = MaterialTheme.colorScheme.onSurface
+    val textSecondaryColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    val cardBorder = BorderStroke(0.5.dp, cardBorderColor)
 
     Scaffold(
         topBar = {
@@ -118,10 +107,13 @@ fun SiteSettingsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = backgroundColor)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = bgColor),
+                modifier = Modifier.border(
+                    BorderStroke(0.5.dp, cardBorderColor.copy(alpha = 0.2f))
+                )
             )
         },
-        containerColor = backgroundColor
+        containerColor = bgColor
     ) { innerPadding ->
         AnimatedContent(
             targetState = currentSubView,
@@ -330,7 +322,7 @@ fun SiteSettingsScreen(
                                                 modifier = Modifier
                                                     .size(36.dp)
                                                     .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (isDark) Color(0xFF1E2D3F) else Color(0xFFF1F5F9)),
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 coil.compose.AsyncImage(
@@ -530,7 +522,7 @@ fun SiteSettingsScreen(
                         modifier = Modifier
                             .size(28.dp)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (isDark) Color(0xFF1E2D3F) else Color(0xFFF1F5F9)),
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         coil.compose.AsyncImage(

@@ -103,10 +103,10 @@ fun buildDarkScheme(accent: AccentPalette): ColorScheme = darkColorScheme(
     error = accent.error
 )
 
-fun buildLightScheme(accent: AccentPalette): ColorScheme = lightColorScheme(
-    background = LightBg,
-    surface = LightSurface,
-    surfaceVariant = LightSurfaceVar,
+fun buildLightScheme(accent: AccentPalette, isCreamy: Boolean = false): ColorScheme = lightColorScheme(
+    background = if (isCreamy) Color(0xFFFAF8F5) else LightBg,
+    surface = if (isCreamy) Color(0xFFFAF8F5) else LightSurface,
+    surfaceVariant = if (isCreamy) Color(0xFFF3EFE9) else LightSurfaceVar,
     primary = accent.primary,
     secondary = accent.secondary,
     tertiary = accent.tertiary,
@@ -154,6 +154,7 @@ fun getColorScheme(
     accentTheme: String,
     isDark: Boolean,
     isAmoled: Boolean = false,
+    isCreamy: Boolean = false,
     isDynamic: Boolean = false,
     context: android.content.Context? = null
 ): ColorScheme {
@@ -184,7 +185,7 @@ fun getColorScheme(
     return when {
         isDark && isAmoled -> buildAmoledScheme(palette)
         isDark             -> buildDarkScheme(palette)
-        else               -> buildLightScheme(palette)
+        else               -> buildLightScheme(palette, isCreamy)
     }
 }
 
