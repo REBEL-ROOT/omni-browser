@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash logo for dark / night mode: white tint so it is visible on the
+     dark splash background. See drawable/ic_splash_logo.xml for day mode. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_omni_logo"
+    android:tint="#FFFFFF" />

@@ -29,6 +29,7 @@
     <string name="proxy_provider_direct">Direct</string>
     <string name="proxy_provider_wireguard">WireGuard</string>
     <string name="proxy_provider_tor">Tor</string>
+    <string name="proxy_provider_tor_builtin">Tor (Built-in)</string>
     <string name="tor_section">TOR NETWORK</string>
     <string name="tor_status_title">Tor Circuit Status</string>
     <string name="tor_status_connected">Tor Connected</string>
@@ -52,7 +53,7 @@
     <string name="privacy_hub_fingerprint">Fingerprint</string>
     <string name="tor_over_vpn">Tor over VPN</string>
     <string name="custom_proxy">Custom Proxy</string>
-    <string name="custom_proxy_desc">Enter the host and port of your SOCKS5 proxy.</string>
+    <string name="custom_proxy_desc">Enter the host and port of any SOCKS5 proxy. To use your own Tor bridges, run Tor/Orbot with bridges configured and point this at its SOCKS port (e.g. 127.0.0.1:9050).</string>
     <string name="custom_dns">Custom DNS</string>
     <string name="custom_dns_desc">Set a custom DNS server IP</string>
     <string name="doh_title">DNS over HTTPS</string>
@@ -253,8 +254,10 @@
 
     <!-- Proxy Hub: Tor status -->
     <string name="tor_connecting_waiting">Waiting for Orbot to start…</string>
+    <string name="tor_connecting_builtin">Connecting to the Tor network…</string>
     <string name="tor_connected_restart_hint">Connected — restart to route traffic through Tor</string>
     <string name="tor_new_circuit_hint">Opens Orbot — tap "New Identity" there</string>
+    <string name="tor_new_circuit_hint_builtin">Requests a fresh Tor circuit</string>
     <string name="tor_new_circuit_disabled_hint">Only available when Tor is connected</string>
     <string name="tor_connecting_toast">Connecting to Tor…</string>
     <string name="tor_disconnected_toast">Tor disconnected</string>

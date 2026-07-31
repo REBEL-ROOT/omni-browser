@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+  "name": "Omni Proxy Router",
+  "version": "1.0.0",
+  "description": "Routes browser traffic through the active Tor / SOCKS proxy via the WebExtension proxy API.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "omni-proxy-router@omnibrowser.app"
+    }
+  },
+  "permissions": [
+    "proxy",
+    "nativeMessaging",
+    "geckoViewAddons",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  }
+}

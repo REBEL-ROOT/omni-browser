@@ -4,7 +4,11 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:windowBackground">?attr/colorSurface</item>
+        <!-- Solid splash colour, NOT ?attr/colorSurface: in light mode colorSurface
+             is a pale tint that rendered the white logo invisible (white-on-white
+             cold-start screen). splash_bg is night-qualified so the window always
+             contrasts with the logo tint for the current UI mode. -->
+        <item name="android:windowBackground">@color/splash_bg</item>
     </style>
 
     <style name="Theme.OmniBrowser.Dark" parent="Theme.Material3.DayNight.NoActionBar">

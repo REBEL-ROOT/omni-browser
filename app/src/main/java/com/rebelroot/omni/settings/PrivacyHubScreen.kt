@@ -66,7 +66,7 @@ fun PrivacyHubScreen(
     val dividerColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
     val vpnState by viewModel.vpnManager.state.collectAsState()
-    val torState by viewModel.torManager.state.collectAsState()
+    val torState by viewModel.activeTorState().collectAsState()
 
     Scaffold(
         topBar = {
@@ -267,12 +267,13 @@ private fun ConnectionSection(
         }
     }
 
-    // ── 5-provider selector ─────────────────────────────────────────────────
+    // ── 6-provider selector ─────────────────────────────────────────────────
     HubCard(cardColor, cardBorderColor) {
         listOf(
             "direct"       to stringResource(id = R.string.proxy_provider_direct),
             "wireguard"    to stringResource(id = R.string.proxy_provider_wireguard_unavailable),
             "tor"          to stringResource(id = R.string.proxy_provider_tor),
+            "tor_builtin"  to stringResource(id = R.string.proxy_provider_tor_builtin),
             "tor_over_vpn" to stringResource(id = R.string.proxy_provider_tor_over_vpn_unavailable),
             "custom_proxy" to stringResource(id = R.string.custom_proxy)
         ).forEach { (provider, label) ->
@@ -292,6 +293,10 @@ private fun ConnectionSection(
                                 viewModel.disconnectTor()
                             }
                             "tor" -> {
+                                viewModel.saveProxyProvider(context, provider)
+                                viewModel.connectTor()
+                            }
+                            "tor_builtin" -> {
                                 viewModel.saveProxyProvider(context, provider)
                                 viewModel.connectTor()
                             }
@@ -330,6 +335,7 @@ private fun ConnectionSection(
                                 "direct" -> Icons.Rounded.Public
                                 "wireguard" -> Icons.Rounded.VpnKey
                                 "tor" -> Icons.Rounded.Security
+                                "tor_builtin" -> Icons.Rounded.Memory
                                 "tor_over_vpn" -> Icons.Rounded.Lock
                                 "custom_proxy" -> Icons.Rounded.SettingsEthernet
                                 else -> Icons.Rounded.NetworkCheck
@@ -355,7 +361,7 @@ private fun ConnectionSection(
 
     // ── Detail card for the selected provider ───────────────────────────────
     when (selectedProvider) {
-        "tor", "tor_over_vpn" -> TorDetailCard(
+        "tor", "tor_over_vpn", "tor_builtin" -> TorDetailCard(
             viewModel, torState, vpnState, selectedProvider,
             textPrimaryColor, textSecondaryColor, cardColor, cardBorderColor, dividerColor, accentColor, context
         )
@@ -492,18 +498,23 @@ private fun TorDetailCard(
     accentColor: Color,
     context: android.content.Context
 ) {
+    // Built-in Tor bootstraps itself (no Orbot), so its status strings must not
+    // reference Orbot. Its Bootstrap percent is real progress from the daemon,
+    // whereas the Orbot path only ever produced a synthesized percentage.
+    val isBuiltinTor = selectedProvider == "tor_builtin"
     val (statusText, statusColor) = when (torState) {
         is TorState.Connected -> stringResource(R.string.tor_status_connected) to Color(0xFF30D158)
-        is TorState.Connecting -> stringResource(R.string.tor_connecting_waiting) to Color(0xFFFF9500)
+        is TorState.Connecting -> (if (isBuiltinTor) stringResource(R.string.tor_connecting_builtin) else stringResource(R.string.tor_connecting_waiting)) to Color(0xFFFF9500)
         is TorState.Disconnected -> stringResource(R.string.tor_status_disconnected) to textSecondaryColor
         is TorState.Error -> { val e = (torState as TorState.Error).message; stringResource(R.string.tor_status_error_prefix, e) to Color(0xFFFF453A) }
-        // Bootstrap % was previously synthesized from poll iteration count, not
-        // real Tor bootstrap progress. Show an honest indeterminate state instead.
-        is TorState.Bootstrap -> stringResource(R.string.tor_connecting_waiting) to Color(0xFFFF9500)
+        // Orbot path: show an honest indeterminate state. Built-in Tor reports
+        // real bootstrap progress, so surface the actual percent.
+        is TorState.Bootstrap -> (if (isBuiltinTor) stringResource(R.string.tor_bootstrap, torState.percent) else stringResource(R.string.tor_connecting_waiting)) to Color(0xFFFF9500)
     }
 
     // A new circuit can only be requested when Tor is actually connected via
-    // Orbot. Remote/custom SOCKS proxies have no control channel.
+    // Orbot or the built-in daemon. Remote/custom SOCKS proxies have no control
+    // channel.
     val canNewCircuit = torState is TorState.Connected && viewModel.customSocksHost.isBlank()
 
     HubCard(cardColor, cardBorderColor) {
@@ -536,26 +547,28 @@ private fun TorDetailCard(
             )
         }
 
-        // When Tor shows Connected, the SOCKS port is reachable but the Gecko
-        // engine still routes traffic directly until the app is restarted.
-        if (torState is TorState.Connected && viewModel.privacyRestartNeeded) {
-            Text(stringResource(R.string.tor_connected_restart_hint), color = Color(0xFFFF9500), fontSize = 11.sp)
+        // Live proxy prefs are applied via GeckoPreferenceController — routing
+        // takes effect immediately when Tor connects, no restart required.
+        if (torState is TorState.Connected) {
+            Text("✓ Traffic is routed through Tor", color = Color(0xFF34C759), fontSize = 11.sp)
         }
 
         HorizontalDivider(color = dividerColor)
 
+        // Bridges / Snowflake
         ToggleRow(stringResource(R.string.tor_use_bridges), stringResource(R.string.tor_use_bridges_desc), viewModel.isTorUseBridges, onCheckedChange = { viewModel.saveTorUseBridges(context, it) }, textPrimaryColor = textPrimaryColor, textSecondaryColor = textSecondaryColor, accentColor = accentColor)
         ToggleRow(stringResource(R.string.tor_auto_connect), stringResource(R.string.tor_auto_connect_desc), viewModel.isTorAutoConnect, onCheckedChange = { viewModel.saveTorAutoConnect(context, it) }, textPrimaryColor = textPrimaryColor, textSecondaryColor = textSecondaryColor, accentColor = accentColor)
 
         HorizontalDivider(color = dividerColor)
 
-        // New Tor Circuit — opens Orbot so the user can tap "New Identity".
+        // New Tor Circuit — silently sends a NEWNYM signal for built-in Tor,
+        // or opens Orbot so the user can tap "New Identity" when using Orbot.
         // Disabled when Tor is not connected or when using a remote SOCKS proxy.
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(stringResource(R.string.new_tor_circuit), color = textPrimaryColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Text(
-                    text = if (canNewCircuit) stringResource(R.string.tor_new_circuit_hint) else stringResource(R.string.tor_new_circuit_disabled_hint),
+                    text = if (canNewCircuit) (if (isBuiltinTor) stringResource(R.string.tor_new_circuit_hint_builtin) else stringResource(R.string.tor_new_circuit_hint)) else stringResource(R.string.tor_new_circuit_disabled_hint),
                     color = textSecondaryColor, fontSize = 11.sp
                 )
             }
@@ -738,7 +751,7 @@ private fun DnsSection(
         // DNS leak warning: DoH bypasses Tor's DNS routing. When both are
         // active, DNS queries go to the DoH provider instead of through the
         // Tor circuit, leaking the user's browsing destinations.
-        if (viewModel.isDohEnabled && viewModel.proxyProvider == "tor") {
+        if (viewModel.isDohEnabled && (viewModel.proxyProvider == "tor" || viewModel.proxyProvider == "tor_builtin")) {
             Text(stringResource(R.string.dns_leak_warning), color = Color(0xFFFF453A), fontSize = 11.sp)
         }
 

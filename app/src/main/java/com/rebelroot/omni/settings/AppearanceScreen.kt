@@ -586,7 +586,9 @@ fun AppearanceScreen(
 
                 val presets = listOf(
                     Triple("Default",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
-                    Triple("Dark",       com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified)
+                    Triple("Dark",       com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified),
+                    Triple("Aura Dark",  com.rebelroot.omni.R.drawable.ic_omni_ring_dark, Color.Unspecified to Color.Unspecified),
+                    Triple("Aura Light", com.rebelroot.omni.R.drawable.ic_omni_ring_light, Color.Unspecified to Color.Unspecified)
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -622,7 +624,11 @@ fun AppearanceScreen(
                                             modifier = Modifier
                                                 .size(60.dp)
                                                 .clip(RoundedCornerShape(14.dp))
-                                                .background(bgCol)
+                                                .then(
+                                                    if (bgCol != Color.Unspecified)
+                                                        Modifier.background(bgCol)
+                                                    else Modifier
+                                                )
                                                 .border(
                                                     1.dp,
                                                     if (label == "Default") Color.LightGray.copy(alpha = 0.4f)
@@ -631,12 +637,22 @@ fun AppearanceScreen(
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                painter = androidx.compose.ui.res.painterResource(id = resId),
-                                                contentDescription = null,
-                                                tint = iconCol,
-                                                modifier = Modifier.size(38.dp)
-                                            )
+                                            if (bgCol == Color.Unspecified) {
+                                                // Full-bleed icon art (Aura presets)
+                                                androidx.compose.foundation.Image(
+                                                    painter = androidx.compose.ui.res.painterResource(id = resId),
+                                                    contentDescription = null,
+                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                    modifier = Modifier.size(60.dp)
+                                                )
+                                            } else {
+                                                Icon(
+                                                    painter = androidx.compose.ui.res.painterResource(id = resId),
+                                                    contentDescription = null,
+                                                    tint = iconCol,
+                                                    modifier = Modifier.size(38.dp)
+                                                )
+                                            }
                                         }
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,

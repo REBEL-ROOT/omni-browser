@@ -261,7 +261,6 @@ fun BrowserScreen(
     }
     var selectedMediaItem by remember { mutableStateOf<MediaInterceptor.DetectedMedia?>(null) }
     var showExtensionsSheet by remember { mutableStateOf(false) }
-    var showPrivacyReportSheet by remember { mutableStateOf(false) }
     var extensionToDelete by remember { mutableStateOf<org.mozilla.geckoview.WebExtension?>(null) }
     var builtInExtensionToDelete by remember { mutableStateOf<String?>(null) }
 
@@ -5251,32 +5250,6 @@ fun BrowserScreen(
                             )
                         }
 
-                        HorizontalDivider(
-                            color = if (isDark) Color(0xFF23374A).copy(alpha = 0.6f) else Color.LightGray.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-
-                        // ── Row 1.5: Voice Article Reader Quick Action ──
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Start
-                        ) {
-                            MenuGridCell(
-                                icon = Icons.Rounded.RecordVoiceOver,
-                                label = "Listen to\nPage",
-                                iconTint = if (viewModel.isTtsPlaying) activeIconTint else inactiveIconTint,
-                                iconBg = if (viewModel.isTtsPlaying) activeIconBg else inactiveIconBg,
-                                onClick = {
-                                    showMenu = false
-                                    if (viewModel.isTtsPlaying) {
-                                        viewModel.stopTts()
-                                    } else {
-                                        viewModel.readCurrentPageAloud()
-                                    }
-                                }
-                            )
-                        }
-
                         // ── Row 2: Secondary actions ──
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -5388,13 +5361,6 @@ fun BrowserScreen(
                         }
                     }
                 }
-            }
-
-            if (showPrivacyReportSheet) {
-                PrivacyReportSheet(
-                    viewModel = viewModel,
-                    onDismissRequest = { showPrivacyReportSheet = false }
-                )
             }
 
             // 4. Web Extensions Manager Bottom Sheet
@@ -6222,8 +6188,8 @@ fun BrowserScreen(
                             "page_inspector" -> "Page Inspector"
                             "force_zoom"     -> if (viewModel.accessibilityForceZoom) "Zoom: On" else "Force Zoom"
                             "vpn"            -> when (viewModel.proxyProvider) {
-                                "tor" -> {
-                                    val state = viewModel.torManager.state.value
+                                "tor", "tor_builtin" -> {
+                                    val state = viewModel.activeTorState().value
                                     if (state is com.rebelroot.omni.privacy.TorState.Connected) "Tor: On" else "Tor"
                                 }
                                 "wireguard" -> {
@@ -6294,8 +6260,8 @@ fun BrowserScreen(
                             "vpn" -> ({
                                 showQuickToolsSheet = false
                                 when (viewModel.proxyProvider) {
-                                    "tor" -> {
-                                        val state = viewModel.torManager.state.value
+                                    "tor", "tor_builtin" -> {
+                                        val state = viewModel.activeTorState().value
                                         if (state is com.rebelroot.omni.privacy.TorState.Connected) {
                                             viewModel.disconnectTor()
                                             Toast.makeText(context, "🧅 Tor Disconnected", Toast.LENGTH_SHORT).show()
@@ -6643,12 +6609,6 @@ fun BrowserScreen(
                                 icon = Icons.Rounded.Extension,
                                 isDark = isMenuDark,
                                 onClick = { showToolsSheet = false; showExtensionsSheet = true }
-                            )
-                            GridMenuTile(
-                                title = "Privacy\nReport",
-                                icon = Icons.Rounded.Shield,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; showPrivacyReportSheet = true }
                             )
                         }
                     }

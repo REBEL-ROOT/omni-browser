@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash / cold-start window background for dark (night) mode. The base
+         theme references @color/splash_bg so the system splash drawn before
+         onCreate always pairs with a visible logo (white logo on this dark bg). -->
+    <color name="splash_bg">#070A0F</color>
+</resources>

@@ -127,7 +127,8 @@ android {
 
     packaging {
         jniLibs {
-            // false = keep native libraries uncompressed and aligned to 16 KB page boundaries for Android 15+ compatibility.
+            // Using `resource-noexec-tor` (JNI shared library) ensures full 16 KB page
+            // alignment compatibility on Android 15+ (API 35+) and avoids native load crashes.
             useLegacyPackaging = false
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
         }
@@ -226,6 +227,12 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.wireguard.android:tunnel:1.0.20260102")
+
+    // === Embedded Tor (kmp-tor) ===
+    // Runs a real Tor daemon in-process using `resource-noexec-tor` (JNI shared lib).
+    // This maintains 16 KB page alignment compatibility for Android 15+ & GeckoView.
+    implementation("io.matthewnelson.kmp-tor:runtime:2.6.0")
+    implementation("io.matthewnelson.kmp-tor:resource-noexec-tor:409.5.0")
 
     // === Room + SQLCipher Encrypted DB ===
     implementation("androidx.room:room-runtime:2.7.1")

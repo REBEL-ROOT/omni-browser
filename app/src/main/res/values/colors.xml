@@ -2,6 +2,11 @@
 <resources>
     <color name="slaty_black">#070A0F</color>
     <color name="white">#FFFFFF</color>
+    <!-- Splash / cold-start window background for light (day) mode. The night
+         variant lives in values-night/colors.xml. The base theme references this
+         so the system splash drawn before onCreate always pairs with a visible
+         logo (dark logo on this light bg). -->
+    <color name="splash_bg">#FFFFFF</color>
     <color name="app_icon_dark_bg">#1C1C1E</color>
     <color name="app_icon_blue_bg">#0A84FF</color>
     <color name="app_icon_gold_bg">#FFB800</color>

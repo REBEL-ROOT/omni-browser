@@ -4,9 +4,17 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:windowBackground">?attr/colorSurface</item>
-        <item name="android:windowSplashScreenBackground">?attr/colorSurface</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_omni_logo_white</item>
+        <!-- The system draws the Android-12 cold-start splash from THIS base theme
+             (the manifest theme) before onCreate's setTheme() runs, so the per-theme
+             Light/Dark/Amoled splash definitions never apply to that first frame.
+             Previously this used ?attr/colorSurface (a pale tint in light mode) with
+             a white logo => an invisible white-on-white splash. splash_bg and
+             ic_splash_logo are both night-qualified, so the splash always shows a
+             visible logo (dark logo on light bg by day, white logo on dark bg by
+             night) regardless of the user's saved in-app theme. -->
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
     </style>
 

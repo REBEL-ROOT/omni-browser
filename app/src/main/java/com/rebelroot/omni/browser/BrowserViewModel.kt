@@ -45,8 +45,11 @@ import com.rebelroot.omni.media.MediaInterceptor
 import com.rebelroot.omni.media.StreamDownloadEngine
 import com.rebelroot.omni.privacy.VpnManager
 import com.rebelroot.omni.privacy.TorManager
+import com.rebelroot.omni.privacy.EmbeddedTorManager
+import com.rebelroot.omni.privacy.TorState
 import com.rebelroot.omni.tools.locker.PrivateLockerManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -62,6 +65,7 @@ import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoPreferenceController
 import org.mozilla.geckoview.StorageController
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebExtension
@@ -85,6 +89,10 @@ class BrowserViewModel : ViewModel() {
 
         internal const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
         internal const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
+        // Bundled WebExtension that routes traffic through the active Tor / SOCKS
+        // proxy via the WebExtension `proxy` API (network.proxy.* prefs do not
+        // route on GeckoView/Android). Always-on; treated as a protected core id.
+        internal const val PROXY_ROUTER_ID = "omni-proxy-router@omnibrowser.app"
 
         /** Known ad popup / pop-under network domains.
          *  Popups opening any of these URLs are silently blocked regardless of user gesture. */
@@ -302,6 +310,7 @@ class BrowserViewModel : ViewModel() {
     lateinit var streamDownloadEngine: StreamDownloadEngine
     lateinit var vpnManager: VpnManager
     lateinit var torManager: TorManager
+    lateinit var embeddedTorManager: EmbeddedTorManager
     lateinit var adBlockManager: com.rebelroot.omni.browser.adblock.AdBlockManager
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     internal var copyManager: UniversalCopyManager? = null
@@ -1934,18 +1943,30 @@ class BrowserViewModel : ViewModel() {
                     sb.append("  network.dns.disablePrefetch: false\n")
                     sb.append("  network.prefetch-next: true\n")
                 }
-                if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy") {
-                    val torPort = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
+                // Proxy routing via network.proxy.* prefs. On stock GeckoView the
+                // WebExtension `proxy` API is NOT available (WebLibre uses a custom-
+                // patched GeckoView for that). The prefs ARE honored: when type=1
+                // and only SOCKS is set, Gecko uses SOCKS as the universal fallback
+                // for all protocols (http/https/ftp). failover_direct=false ensures
+                // that if the SOCKS port is unreachable (Tor still bootstrapping),
+                // requests ERROR instead of silently leaking the real IP.
+                if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin") {
+                    val torPort = when {
+                        proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
+                        isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT
+                        else -> TorManager.DEFAULT_SOCKS_PORT
+                    }
                     val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
                     val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
                     sb.append("  network.proxy.type: 1\n")
                     sb.append("  network.proxy.socks: $targetHost\n")
                     sb.append("  network.proxy.socks_port: $targetPort\n")
                     sb.append("  network.proxy.socks_remote_dns: true\n")
+                    sb.append("  network.proxy.failover_direct: false\n")
                 } else {
                     sb.append("  network.proxy.type: 0\n")
                 }
-                val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy"
+                val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
                 if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
                     sb.append("  network.trr.uri: $dohUri\n")
                     // mode 2 = TRR-first with native-DNS fallback. We deliberately
@@ -1957,14 +1978,22 @@ class BrowserViewModel : ViewModel() {
                 } else {
                     sb.append("  network.trr.mode: 0\n")
                 }
-                // NOTE: DoT and plain custom DNS cannot be set via GeckoView prefs.
-                // DoT requires Android 9+ Private DNS (Settings > Network > Private DNS).
-                // We store the user's preference for UI state but cannot enforce it at engine level.
-                sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
-                // Block QUIC/HTTP3 via both pref names — the controlling pref
-                // moved between Gecko versions, so set both to be safe.
-                sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
-                sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+                val isTorSession = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin"
+                if (isTorSession) {
+                    // Tor Security Hardening: Disable WebRTC to prevent STUN/TURN IP leaks over non-proxied interfaces
+                    sb.append("  media.peerconnection.enabled: false\n")
+                    sb.append("  media.peerconnection.ice.no_host: true\n")
+                    // Disable UDP QUIC/HTTP3 to prevent UDP bypass leaks outside SOCKS5 TCP proxying
+                    sb.append("  network.quic.enabled: false\n")
+                    sb.append("  network.http.http3.enabled: false\n")
+                    // Tor Browser anti-fingerprinting & cross-tab circuit isolation
+                    sb.append("  privacy.resistFingerprinting: true\n")
+                    sb.append("  privacy.firstparty.isolate: true\n")
+                } else {
+                    sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
+                    sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
+                    sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+                }
                 if (isRandomizeUa) {
                     val uas = listOf(
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1987,6 +2016,10 @@ class BrowserViewModel : ViewModel() {
                     sb.append("  dom.webaudio.enabled: false\n")
                 }
                 configFile.writeText(sb.toString())
+                // DIAGNOSTIC: dump the config file content at startup so we can
+                // verify the proxy prefs are actually present on disk (and not
+                // being clobbered by writeGeckoConfigFile or any other writer).
+                Log.i(TAG, "=== geckoview-config.yaml written at startup (proxyProvider=$proxyProvider) ===\n${sb}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to write geckoview-config.yaml", e)
             }
@@ -2006,6 +2039,11 @@ class BrowserViewModel : ViewModel() {
             try {
                 geckoRuntime = GeckoRuntime.create(appCtx, settings)
                 geckoRuntimeError = null   // clear any previous failure
+                // The config file set startup defaults, but apply the proxy prefs
+                // live too so the freshly-created engine immediately matches the
+                // persisted provider (covers a cold launch where provider was
+                // already tor_builtin from a prior session).
+                applyProxyPrefsLive()
             } catch (t: Throwable) {
                 // GeckoRuntime.create can fail when native .so loading fails at
                 // runtime (e.g. UnsatisfiedLinkError / dlopen on Android 15+ with
@@ -2104,6 +2142,7 @@ class BrowserViewModel : ViewModel() {
             streamDownloadEngine = StreamDownloadEngine(appCtx, ffmpegBridge, locker)
             vpnManager = VpnManager(appCtx)
             torManager = TorManager(appCtx)
+            embeddedTorManager = EmbeddedTorManager(appCtx)
             adBlockManager = com.rebelroot.omni.browser.adblock.AdBlockManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
             aiBlockerManager = BuiltInExtensionManager(
@@ -2164,7 +2203,7 @@ class BrowserViewModel : ViewModel() {
                 isFingerprintProtection = getFingerprintProtection(appCtx).first()
                 isClearCookiesOnShutdown = getClearCookiesOnShutdown(appCtx).first()
                 isAutoRotateIdentity = getAutoRotateIdentity(appCtx).first()
-                if (proxyProvider == "tor" && isTorAutoConnect || proxyProvider == "tor_over_vpn" && isTorAutoConnect) {
+                if ((proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin") && isTorAutoConnect) {
                     connectTor()
                 }
                 if (isAutoRotateIdentity) {
@@ -2354,9 +2393,11 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             isMediaGrabberEnabled = getMediaGrabberPreference(context).first()
             installGrabberExtension(runtime)
-            
 
-            
+            // Always-on: routes traffic through the active Tor / SOCKS proxy via
+            // the WebExtension `proxy` API. No user toggle.
+            installProxyRouterExtension(runtime)
+
             isUniversalCopyEnabled = getUniversalCopyPreference(context).first()
             syncUniversalCopyState(shouldReload = false)
             
@@ -2389,6 +2430,76 @@ class BrowserViewModel : ViewModel() {
                 Log.e(TAG, "Failed to load Aggressive Media Grabber", error)
             }
         )
+    }
+
+    /**
+     * Installs the always-on proxy_router WebExtension, which routes HTTP(S)
+     * traffic through the active Tor / SOCKS proxy via the WebExtension `proxy`
+     * API (browser.proxy.onRequest). The `network.proxy.*` preferences written
+     * into geckoview-config.yaml do NOT route on GeckoView/Android, so this
+     * extension is the only reliable routing mechanism — mirroring WebLibre.
+     *
+     * It is always enabled (no user toggle) and registers the shared "omniApp"
+     * native-messaging delegate so it can poll [currentProxyEndpoint].
+     */
+    private fun installProxyRouterExtension(runtime: GeckoRuntime) {
+        runtime.webExtensionController.ensureBuiltIn(
+            "resource://android/assets/web_extensions/proxy_router/",
+            PROXY_ROUTER_ID
+        ).accept(
+            { ext ->
+                ext?.let {
+                    runtime.webExtensionController.setAllowedInPrivateBrowsing(it, true)
+                    runtime.webExtensionController.enable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
+                    // Dedicated delegate on its OWN native-app name "omniProxy".
+                    // media_grabber already owns "omniApp"; reusing it here breaks
+                    // native-message routing in GeckoView (the poll for the proxy
+                    // endpoint would never be answered -> traffic goes direct).
+                    setupProxyRouterMessageDelegate(it)
+                }
+                Log.i(TAG, "Proxy Router extension active.")
+            },
+            { error ->
+                Log.e(TAG, "Failed to load Proxy Router extension", error)
+            }
+        )
+    }
+
+    /**
+     * Native-messaging delegate for the proxy_router extension only. It answers
+     * the extension's `GET_PROXY_ENDPOINT` poll with the current SOCKS endpoint
+     * (or a null host = direct). Registered under the native-app name
+     * "omniProxy", which MUST match `NATIVE_APP` in the extension's background.js
+     * and MUST NOT collide with media_grabber's "omniApp".
+     */
+    private fun setupProxyRouterMessageDelegate(extension: WebExtension) {
+        extension.setMessageDelegate(object : WebExtension.MessageDelegate {
+            override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
+                try {
+                    val type = if (message is org.json.JSONObject) {
+                        if (message.has("type")) message.getString("type") else null
+                    } else {
+                        (message as? Map<*, *>)?.get("type") as? String
+                    }
+                    if (type == "GET_PROXY_ENDPOINT") {
+                        val ep = currentProxyEndpoint()
+                        val response = org.json.JSONObject().apply {
+                            if (ep != null) {
+                                put("host", ep.first)
+                                put("port", ep.second)
+                            } else {
+                                put("host", org.json.JSONObject.NULL)
+                            }
+                        }
+                        Log.i(TAG, "ProxyRouter GET_PROXY_ENDPOINT -> ${if (ep != null) "${ep.first}:${ep.second}" else "DIRECT"} (provider=$proxyProvider)")
+                        return GeckoResult.fromValue(response.toString())
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "ProxyRouter onMessage error", e)
+                }
+                return null
+            }
+        }, "omniProxy")
     }
 
     /**
@@ -3501,6 +3612,7 @@ class BrowserViewModel : ViewModel() {
             }
             proxyProvider = provider
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3516,9 +3628,10 @@ class BrowserViewModel : ViewModel() {
                 preferences[TOR_USE_BRIDGES_KEY] = enabled
             }
             isTorUseBridges = enabled
-            // Bridges change the SOCKS port (9050 → 9052) written into the
-            // Gecko config, so a restart is needed for the change to apply.
-            privacyRestartNeeded = true
+            // Bridges change the SOCKS port (9050 → 9052). With live pref
+            // writes the running engine picks this up immediately — no restart.
+            regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3554,6 +3667,8 @@ class BrowserViewModel : ViewModel() {
             } else {
                 torManager.clearCustomProxy()
             }
+            regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3572,6 +3687,8 @@ class BrowserViewModel : ViewModel() {
             if (customSocksHost.isNotBlank()) {
                 torManager.setCustomProxy(customSocksHost, port)
             }
+            regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3622,6 +3739,7 @@ class BrowserViewModel : ViewModel() {
                 customDns = ""
             }
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3638,6 +3756,7 @@ class BrowserViewModel : ViewModel() {
             }
             dohUri = uri
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3693,6 +3812,7 @@ class BrowserViewModel : ViewModel() {
             }
             isBlockQuic = enabled
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3709,6 +3829,7 @@ class BrowserViewModel : ViewModel() {
             }
             isDisableWebrtc = enabled
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3725,6 +3846,7 @@ class BrowserViewModel : ViewModel() {
             }
             isRandomizeUa = enabled
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3741,6 +3863,7 @@ class BrowserViewModel : ViewModel() {
             }
             isFingerprintProtection = enabled
             regenerateGeckoConfig()
+            applyProxyPrefsLive()
         }
     }
 
@@ -3783,7 +3906,11 @@ class BrowserViewModel : ViewModel() {
                     { err -> Log.e(TAG, "Identity rotation clear error", err) }
                 )
             }
-            torManager.requestNewCircuit()
+            if (proxyProvider == "tor_builtin") {
+                embeddedTorManager.requestNewCircuit()
+            } else {
+                torManager.requestNewCircuit()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Identity rotation failed", e)
         }
@@ -3812,7 +3939,11 @@ class BrowserViewModel : ViewModel() {
      */
     fun requestNewCircuit() {
         try {
-            torManager.requestNewCircuit()
+            if (proxyProvider == "tor_builtin") {
+                embeddedTorManager.requestNewCircuit()
+            } else {
+                torManager.requestNewCircuit()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Request new circuit failed", e)
         }
@@ -3851,62 +3982,208 @@ class BrowserViewModel : ViewModel() {
         android.os.Process.killProcess(android.os.Process.myPid())
     }
 
-    fun connectTor() {
-        if (customSocksHost.isNotBlank()) {
-            torManager.setCustomProxy(customSocksHost, customSocksPort)
-            torManager.startTor(customSocksPort)
-        } else {
-            val port = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
-            torManager.startTor(port)
+    /**
+     * Returns the [StateFlow] for whichever Tor backend is currently active
+     * (Orbot for `"tor"`/`"tor_over_vpn"`, or the built-in daemon for
+     * `"tor_builtin"`).
+     */
+    fun activeTorState(): StateFlow<TorState> {
+        return if (proxyProvider == "tor_builtin") embeddedTorManager.state else torManager.state
+    }
+
+    // Providers for which traffic must be routed through a SOCKS endpoint.
+    // "direct" is the only value NOT in this set.
+    private val proxyProviders = setOf("tor", "tor_over_vpn", "custom_proxy", "tor_builtin")
+
+    /**
+     * The SOCKS endpoint the bundled proxy_router extension should route through
+     * for the current provider, or `null` when traffic must go direct. This is the
+     * single source of truth — it replaces the three duplicated port/host blocks
+     * that used to write dead `network.proxy.*` prefs into geckoview-config.yaml.
+     *
+     * Routing is applied LIVE by the extension via the WebExtension `proxy` API,
+     * so toggling the provider / connecting Tor / editing a custom proxy takes
+     * effect on the next request with no process restart.
+     */
+    private fun currentProxyEndpoint(): Pair<String, Int>? {
+        if (proxyProvider !in proxyProviders) return null
+        // A custom proxy with no host configured cannot route anywhere.
+        if (proxyProvider == "custom_proxy" && customSocksHost.isBlank()) return null
+        val torPort = when {
+            proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
+            isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT
+            else -> TorManager.DEFAULT_SOCKS_PORT
         }
-        updateGeckoProxyConfig()
+        val host = customSocksHost.ifBlank { "127.0.0.1" }
+        val port = if (customSocksHost.isNotBlank()) customSocksPort else torPort
+        return host to port
+    }
+
+    /**
+     * Writes the current SOCKS proxy configuration onto the RUNNING Gecko engine
+     * via GeckoPreferenceController.setGeckoPref (the only public way to set
+     * arbitrary prefs on a live stock-GeckoView runtime; no restart, no config-
+     * file reread). This is what actually makes Tor routing take effect when the
+     * user enables it mid-session.
+     *
+     * Why this exists: network.proxy.* written to geckoview-config.yaml are read
+     * ONCE at GeckoRuntime.create(), and the cached runtime never re-reads them.
+     * So enabling Tor in-session (the common case) left the engine stuck on
+     * type:0 = direct = real-IP leak. This live write closes that hole.
+     *
+     * Fail-closed: for a proxy-active provider we ALWAYS set type:1 with
+     * failover_direct:false, so an unreachable SOCKS port errors the request
+     * instead of leaking direct. For "direct" we set type:0 and clear the socks
+     * user-prefs so no stale proxy lingers.
+     *
+     * After applying, getGeckoPref reads the values back and logs them so routing
+     * can be proven (VERIFY network.proxy...). Call from every state-change site.
+     */
+    private fun applyProxyPrefsLive() {
+        // Controller API is static, but prefs cannot be applied before the runtime exists.
+        if (geckoRuntime == null) {
+            Log.d(TAG, "applyProxyPrefsLive: geckoRuntime not yet created, skipping (provider=$proxyProvider)")
+            return
+        }
+        val ep = currentProxyEndpoint()
+        val branch = GeckoPreferenceController.PREF_BRANCH_USER
+        if (ep != null) {
+            val (host, port) = ep
+            Log.i(TAG, "applyProxyPrefsLive: -> PROXY ${host}:${port} (provider=$proxyProvider)")
+            // Order matters: set host/port BEFORE flipping type to 1, so there is
+            // never a window where type=1 points at a stale/empty SOCKS host.
+            GeckoPreferenceController.setGeckoPref("network.proxy.socks", host, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.socks = $host") }, { e -> Log.e(TAG, "  FAILED network.proxy.socks", e) })
+            GeckoPreferenceController.setGeckoPref("network.proxy.socks_port", port as Int, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.socks_port = $port") }, { e -> Log.e(TAG, "  FAILED network.proxy.socks_port", e) })
+            GeckoPreferenceController.setGeckoPref("network.proxy.socks_remote_dns", true, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.socks_remote_dns = true") }, { e -> Log.e(TAG, "  FAILED network.proxy.socks_remote_dns", e) })
+            GeckoPreferenceController.setGeckoPref("network.proxy.failover_direct", false, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.failover_direct = false") }, { e -> Log.e(TAG, "  FAILED network.proxy.failover_direct", e) })
+            GeckoPreferenceController.setGeckoPref("network.proxy.type", 1, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.type = 1") }, { e -> Log.e(TAG, "  FAILED network.proxy.type", e) })
+        } else {
+            Log.i(TAG, "applyProxyPrefsLive: -> DIRECT (provider=$proxyProvider)")
+            // Clear stale user values first, then drop type to 0 last.
+            GeckoPreferenceController.clearGeckoUserPref("network.proxy.socks")
+            GeckoPreferenceController.clearGeckoUserPref("network.proxy.socks_port")
+            GeckoPreferenceController.setGeckoPref("network.proxy.type", 0, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.type = 0 (direct)") }, { e -> Log.e(TAG, "  FAILED network.proxy.type=0", e) })
+        }
+
+        // ── Leak prevention: disable UDP-based protocols that bypass SOCKS ──
+        // WebRTC (STUN/TURN) and QUIC/HTTP3 both use UDP, which SOCKS5 cannot
+        // proxy. If left enabled while a proxy is active, they reveal the real
+        // IP. Disable them live for ALL proxy types, not just Tor.
+        val isProxyActive = ep != null
+        val isTorSession = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin"
+
+        val webrtcDisabled = isProxyActive || isDisableWebrtc
+        GeckoPreferenceController.setGeckoPref("media.peerconnection.enabled", !webrtcDisabled, branch)
+            .accept({ Log.d(TAG, "  set media.peerconnection.enabled = ${!webrtcDisabled}") }, { e -> Log.e(TAG, "  FAILED media.peerconnection.enabled", e) })
+        GeckoPreferenceController.setGeckoPref("media.peerconnection.ice.no_host", webrtcDisabled, branch)
+            .accept({ Log.d(TAG, "  set media.peerconnection.ice.no_host = $webrtcDisabled") }, { e -> Log.e(TAG, "  FAILED media.peerconnection.ice.no_host", e) })
+
+        val quicDisabled = isProxyActive || isBlockQuic
+        GeckoPreferenceController.setGeckoPref("network.quic.enabled", !quicDisabled, branch)
+            .accept({ Log.d(TAG, "  set network.quic.enabled = ${!quicDisabled}") }, { e -> Log.e(TAG, "  FAILED network.quic.enabled", e) })
+        GeckoPreferenceController.setGeckoPref("network.http.http3.enabled", !quicDisabled, branch)
+            .accept({ Log.d(TAG, "  set network.http.http3.enabled = ${!quicDisabled}") }, { e -> Log.e(TAG, "  FAILED network.http.http3.enabled", e) })
+
+        // DoH: when proxied, DNS must go through the proxy (socks_remote_dns),
+        // not to a DoH provider — otherwise DNS queries leak browsing destinations.
+        if (isProxyActive) {
+            GeckoPreferenceController.setGeckoPref("network.trr.mode", 0, branch)
+                .accept({ Log.d(TAG, "  set network.trr.mode = 0 (DoH off, proxied)") }, { e -> Log.e(TAG, "  FAILED network.trr.mode", e) })
+        } else if (isDohEnabled && dohUri.isNotBlank()) {
+            GeckoPreferenceController.setGeckoPref("network.trr.uri", dohUri, branch)
+                .accept({ Log.d(TAG, "  set network.trr.uri = $dohUri") }, { e -> Log.e(TAG, "  FAILED network.trr.uri", e) })
+            GeckoPreferenceController.setGeckoPref("network.trr.mode", 2, branch)
+                .accept({ Log.d(TAG, "  set network.trr.mode = 2 (TRR-first)") }, { e -> Log.e(TAG, "  FAILED network.trr.mode=2", e) })
+        } else {
+            GeckoPreferenceController.setGeckoPref("network.trr.mode", 0, branch)
+                .accept({ Log.d(TAG, "  set network.trr.mode = 0 (DoH off)") }, { e -> Log.e(TAG, "  FAILED network.trr.mode=0", e) })
+        }
+
+        // Tor-only hardening (matches Tor Browser behaviour).
+        if (isTorSession) {
+            GeckoPreferenceController.setGeckoPref("privacy.resistFingerprinting", true, branch)
+                .accept({ Log.d(TAG, "  set privacy.resistFingerprinting = true") }, { e -> Log.e(TAG, "  FAILED privacy.resistFingerprinting", e) })
+            GeckoPreferenceController.setGeckoPref("privacy.firstparty.isolate", true, branch)
+                .accept({ Log.d(TAG, "  set privacy.firstparty.isolate = true") }, { e -> Log.e(TAG, "  FAILED privacy.firstparty.isolate", e) })
+        } else {
+            GeckoPreferenceController.setGeckoPref("privacy.resistFingerprinting", false, branch)
+                .accept({ Log.d(TAG, "  set privacy.resistFingerprinting = false") }, { e -> Log.e(TAG, "  FAILED privacy.resistFingerprinting=false", e) })
+            GeckoPreferenceController.setGeckoPref("privacy.firstparty.isolate", false, branch)
+                .accept({ Log.d(TAG, "  set privacy.firstparty.isolate = false") }, { e -> Log.e(TAG, "  FAILED privacy.firstparty.isolate=false", e) })
+        }
+
+        // PROOF: read back what necko actually received. This turns "does it work?"
+        // from a guess into a log fact. If these show type=1/socks=127.0.0.1/9150
+        // yet ipify still returns the real IP, we're in the documented F2 case
+        // (necko ignores user-branch network.proxy.*); otherwise routing is armed.
+        GeckoPreferenceController.getGeckoPref("network.proxy.type").accept(
+            { typePref ->
+                val typeVal = typePref?.value
+                GeckoPreferenceController.getGeckoPref("network.proxy.socks").accept(
+                    { hostPref ->
+                        val hostVal = hostPref?.value
+                        GeckoPreferenceController.getGeckoPref("network.proxy.socks_port").accept(
+                            { portPref ->
+                                val portVal = portPref?.value
+                                GeckoPreferenceController.getGeckoPref("media.peerconnection.enabled").accept(
+                                    { webrtcPref ->
+                                        val webrtcVal = webrtcPref?.value
+                                        GeckoPreferenceController.getGeckoPref("network.quic.enabled").accept(
+                                            { quicPref ->
+                                                val quicVal = quicPref?.value
+                                                Log.i(TAG, "VERIFY proxy.type=$typeVal socks=$hostVal socks_port=$portVal webrtc=$webrtcVal quic=$quicVal (provider=$proxyProvider)")
+                                            },
+                                            { Log.e(TAG, "VERIFY: could not read network.quic.enabled") }
+                                        )
+                                    },
+                                    { Log.e(TAG, "VERIFY: could not read media.peerconnection.enabled") }
+                                )
+                            },
+                            { Log.e(TAG, "VERIFY: could not read network.proxy.socks_port") }
+                        )
+                    },
+                    { Log.e(TAG, "VERIFY: could not read network.proxy.socks") }
+                )
+            },
+            { Log.e(TAG, "VERIFY: could not read network.proxy.type") }
+        )
+    }
+
+    fun connectTor() {
+        if (proxyProvider == "tor_builtin") {
+            embeddedTorManager.startTor()
+        } else {
+            if (customSocksHost.isNotBlank()) {
+                torManager.setCustomProxy(customSocksHost, customSocksPort)
+                torManager.startTor(customSocksPort)
+            } else {
+                val port = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
+                torManager.startTor(port)
+            }
+        }
+        // Point the running engine at the SOCKS proxy now (no restart), AND keep
+        // the on-disk config file correct for the next launch.
+        applyProxyPrefsLive()
+        regenerateGeckoConfig()
     }
 
     fun disconnectTor() {
-        torManager.stopTor()
-        updateGeckoProxyConfig(null)
-    }
-
-    fun updateGeckoProxyConfig(port: Int? = null) {
-        val ctx = appContext ?: return
-        val configFile = File(ctx.filesDir, "geckoview-config.yaml")
-        if (!configFile.exists()) return
-        try {
-            val lines = configFile.readLines().toMutableList()
-            val proxyKeys = setOf("network.proxy.type", "network.proxy.socks", "network.proxy.socks_port", "network.proxy.socks_remote_dns")
-            lines.removeAll { line -> proxyKeys.any { key -> line.trim().startsWith("$key:") } }
-
-            val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
-            val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else (port ?: TorManager.DEFAULT_SOCKS_PORT)
-
-            if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy") {
-                val proxyBlock = listOf(
-                    "  network.proxy.type: 1",
-                    "  network.proxy.socks: $targetHost",
-                    "  network.proxy.socks_port: $targetPort",
-                    "  network.proxy.socks_remote_dns: true"
-                )
-                val insertIdx = lines.indexOfFirst { it.trim() == "pref:" }
-                if (insertIdx >= 0) {
-                    lines.addAll(insertIdx + 1, proxyBlock)
-                } else {
-                    lines.addAll(proxyBlock)
-                }
-            } else {
-                val insertIdx = lines.indexOfFirst { it.trim() == "pref:" }
-                if (insertIdx >= 0) {
-                    lines.add(insertIdx + 1, "  network.proxy.type: 0")
-                } else {
-                    lines.add("network.proxy.type: 0")
-                }
-            }
-            configFile.writeText(lines.joinToString("\n"))
-            // The running engine never re-reads the config file, so a proxy
-            // change only takes effect after a process restart.
-            privacyRestartNeeded = true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to update proxy config", e)
+        if (proxyProvider == "tor_builtin") {
+            embeddedTorManager.stopTor()
+        } else {
+            torManager.stopTor()
         }
+        // The provider is still a Tor/custom type; leave routing armed so the
+        // next connect picks it up, but note the daemon is down so requests will
+        // fail closed until it reconnects. Refresh both live + on-disk state.
+        applyProxyPrefsLive()
+        regenerateGeckoConfig()
     }
 
     /**
@@ -3932,20 +4209,27 @@ class BrowserViewModel : ViewModel() {
                 sb.append("  network.dns.disablePrefetch: false\n")
                 sb.append("  network.prefetch-next: true\n")
             }
-            // Proxy
-            if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy") {
-                val torPort = if (isTorUseBridges) TorManager.BRIDGE_SOCKS_PORT else TorManager.DEFAULT_SOCKS_PORT
+            // Proxy routing via network.proxy.* prefs (see getGeckoRuntime for
+            // the full explanation of why the WebExtension proxy API is not used
+            // on stock GeckoView).
+            if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin") {
+                val torPort = when {
+                    proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
+                    isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT
+                    else -> TorManager.DEFAULT_SOCKS_PORT
+                }
                 val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
                 val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
                 sb.append("  network.proxy.type: 1\n")
                 sb.append("  network.proxy.socks: $targetHost\n")
                 sb.append("  network.proxy.socks_port: $targetPort\n")
                 sb.append("  network.proxy.socks_remote_dns: true\n")
+                sb.append("  network.proxy.failover_direct: false\n")
             } else {
                 sb.append("  network.proxy.type: 0\n")
             }
             // DoH - Disabled when using Tor or Custom SOCKS proxy to prevent DNS leak bypassing the proxy resolver.
-            val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy"
+            val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
             if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
                 sb.append("  network.trr.uri: $dohUri\n")
                 // mode 2 = TRR-first with native-DNS fallback (see the inline
@@ -3954,10 +4238,24 @@ class BrowserViewModel : ViewModel() {
             } else {
                 sb.append("  network.trr.mode: 0\n")
             }
-            // WebRTC & QUIC
-            sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
-            sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
-            sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+            val isTorSession = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin"
+            val isAnyProxy = isTorSession || proxyProvider == "custom_proxy"
+            if (isAnyProxy) {
+                // WebRTC (STUN/TURN) and QUIC/HTTP3 use UDP, which SOCKS5 cannot
+                // proxy. Disable them for ALL proxy types to prevent real-IP leaks.
+                sb.append("  media.peerconnection.enabled: false\n")
+                sb.append("  media.peerconnection.ice.no_host: true\n")
+                sb.append("  network.quic.enabled: false\n")
+                sb.append("  network.http.http3.enabled: false\n")
+            } else {
+                sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
+                sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
+                sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+            }
+            if (isTorSession) {
+                sb.append("  privacy.resistFingerprinting: true\n")
+                sb.append("  privacy.firstparty.isolate: true\n")
+            }
             // UA randomization
             if (isRandomizeUa) {
                 val uas = listOf(
@@ -4623,7 +4921,7 @@ class BrowserViewModel : ViewModel() {
         runtime.webExtensionController.list()
             .accept(
                 { list ->
-                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app")
+                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app", PROXY_ROUTER_ID)
                     val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
                     val leftoverAgent = list?.find { it.id == "omni-agent@omnibrowser.app" }
                     if (leftoverAgent != null) {
@@ -5955,26 +6253,15 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun writeGeckoConfigFile(context: Context) {
-        val file = File(context.filesDir, "geckoview-config.yaml")
-        try {
-            val sb = java.lang.StringBuilder()
-            sb.append("pref:\n")
-            sb.append("  dom.ipc.processCount: 1\n")
-            sb.append("  dom.ipc.processCount.webIsolated: 1\n")
-            sb.append("  privacy.donottrackheader.enabled: ${doNotTrack}\n")
-            sb.append("  dom.security.https_only_mode: ${httpsOnlyMode || safeBrowsingLevel == 2}\n")
-            if (preloadPages == 0) {
-                sb.append("  network.dns.disablePrefetch: true\n")
-                sb.append("  network.prefetch-next: false\n")
-            } else {
-                sb.append("  network.dns.disablePrefetch: false\n")
-                sb.append("  network.prefetch-next: true\n")
-            }
-            file.writeText(sb.toString())
-            Log.d("BrowserViewModel", "Updated geckoview-config.yaml: \n$sb")
-        } catch (e: Exception) {
-            Log.e("BrowserViewModel", "Failed to write geckoview-config.yaml", e)
-        }
+        // DELEGATE to the canonical full-config writer. Previously this function
+        // wrote a reduced set of prefs (dom.ipc, DNT, https-only, prefetch) and
+        // CLOBBERED the proxy / Tor-hardening / DoH / fingerprinting settings that
+        // getGeckoRuntime and regenerateGeckoConfig had written. That meant any
+        // call to saveDoNotTrack / saveHttpsOnlyMode / saveSafeBrowsingLevel /
+        // savePreloadPages / updateRuntimeContentBlocking would silently strip
+        // proxy settings from the config file, causing the next restart to go
+        // direct (leaking the real IP).
+        regenerateGeckoConfig()
     }
 
     fun updateRuntimeContentBlocking(context: Context) {
