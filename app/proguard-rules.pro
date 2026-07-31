@@ -217,3 +217,14 @@
 # objects from these at runtime; keep the manager + its extension delegates.
 -keep class com.rebelroot.omni.browser.extensions.** { *; }
 -keep class com.rebelroot.omni.browser.tabs.** { *; }
+
+# 19. kmp-tor / kmp-process — the embedded Tor daemon and its process
+# management library. kmp-process has a JVM PID path that references
+# java.lang.management.* (ManagementFactory, RuntimeMXBean) which do not
+# exist on Android. At runtime the Android-specific PID path is used instead,
+# so these missing classes are harmless. Tell R8 to not error on them.
+-keep class io.matthewnelson.kmp.tor.** { *; }
+-keep class io.matthewnelson.kmp.process.** { *; }
+-dontwarn java.lang.management.**
+-dontwarn io.matthewnelson.kmp.process.**
+-dontwarn io.matthewnelson.kmp.tor.**
