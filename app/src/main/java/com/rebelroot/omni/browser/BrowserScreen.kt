@@ -562,6 +562,8 @@ fun BrowserScreen(
         session.scrollDelegate = object : org.mozilla.geckoview.GeckoSession.ScrollDelegate {
             override fun onScrollChanged(sess: org.mozilla.geckoview.GeckoSession, scrollX: Int, scrollY: Int) {
                 scrollChannel.trySend(scrollY)  // non-blocking; drops stale values automatically
+                // Force-refresh scroll metrics via the GeckoView subclass lambda
+                viewModel.refreshScrollMetrics?.invoke()
             }
         }
     }
@@ -1763,12 +1765,18 @@ fun BrowserScreen(
                                                     return o
                                                 }
 
-                                                override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
-                                                    super.onScrollChanged(l, t, oldl, oldt)
-                                                    // Force framework to recompute scroll metrics on every scroll
-                                                    awakenScrollBars()
+                                                // Expose protected compute methods via a lambda stored on the ViewModel.
+                                                // This lambda captures `this` (the GeckoView subclass instance),
+                                                // so it can call protected methods from within the View's scope.
+                                                fun setupScrollMetricsRefresher() {
+                                                    viewModel.refreshScrollMetrics = {
+                                                        viewModel.currentScrollOffset = computeVerticalScrollOffset()
+                                                        viewModel.currentScrollRange = computeVerticalScrollRange()
+                                                        viewModel.currentScrollExtent = computeVerticalScrollExtent()
+                                                    }
                                                 }
                                             }.apply {
+                                                setupScrollMetricsRefresher()
                                                 layoutParams = ViewGroup.LayoutParams(
                                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                                     ViewGroup.LayoutParams.MATCH_PARENT

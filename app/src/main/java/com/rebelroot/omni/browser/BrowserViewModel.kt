@@ -454,6 +454,7 @@ class BrowserViewModel : ViewModel() {
     var currentScrollRange by mutableStateOf(0)
     var currentScrollExtent by mutableStateOf(0)
     var currentScrollOffset by mutableStateOf(0)
+    var refreshScrollMetrics: (() -> Unit)? = null
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
     var addressBarPosition by mutableStateOf("Split")
