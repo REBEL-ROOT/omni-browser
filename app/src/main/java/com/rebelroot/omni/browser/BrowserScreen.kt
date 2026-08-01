@@ -323,7 +323,7 @@ fun BrowserScreen(
         }
     }
     // Direct Native Player Interception on Web Fullscreen trigger
-    LaunchedEffect(viewModel.isFullscreen, nonDrmMedia) {
+    LaunchedEffect(viewModel.isFullscreen) {
         if (viewModel.isFullscreen) {
             showFullscreenDownloadBtn = true
             if (viewModel.isNativePlayerEnabled) {
