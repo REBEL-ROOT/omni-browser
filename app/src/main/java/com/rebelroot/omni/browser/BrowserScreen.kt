@@ -7476,7 +7476,7 @@ private fun MediaSnifferBanner(
                         onPlay(firstMedia.url)
                     }
                 },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
@@ -7486,11 +7486,11 @@ private fun MediaSnifferBanner(
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
             IconButton(
                 onClick = onDownloadClick,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Download,

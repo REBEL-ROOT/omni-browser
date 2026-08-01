@@ -22,6 +22,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -198,6 +199,12 @@ fun DownloadItemCard(
             .border(
                 BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                 RoundedCornerShape(12.dp)
+            )
+            .then(
+                if (progressState is StreamDownloadEngine.DownloadProgress.Complete && !job.saveToLocker) {
+                    val completeState = progressState as StreamDownloadEngine.DownloadProgress.Complete
+                    Modifier.clickable { onOpenFile(completeState.file, completeState.openUri) }
+                } else Modifier
             ),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
     ) {
@@ -340,14 +347,16 @@ fun DownloadItemCard(
 
                         // Actions
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Play button for local video downloads
-                            if (!job.saveToLocker && !job.isGeneric &&
-                                (job.filename.endsWith(".mp4") || job.filename.endsWith(".webm"))) {
+                            val lowerName = job.filename.lowercase()
+                            val isVideoFile = lowerName.endsWith(".mp4") || lowerName.endsWith(".webm") || lowerName.endsWith(".mkv") || lowerName.endsWith(".mov") || lowerName.endsWith(".avi")
+                            
+                            // Play button for in-app video playback
+                            if (!job.saveToLocker && isVideoFile) {
                                 Button(
                                     onClick = { onPlayVideo(progress.file) },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                     shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                     modifier = Modifier.height(32.dp)
                                 ) {
                                     Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
@@ -355,13 +364,13 @@ fun DownloadItemCard(
                                     Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.play_text), fontSize = 11.sp)
                                 }
                             }
-                            // Open button for generic local downloads
-                            if (!job.saveToLocker && job.isGeneric) {
+                            // Open / Open with button for ALL completed local downloads (Music, Video, Image, Doc, Zip, etc.)
+                            if (!job.saveToLocker) {
                                 Button(
                                     onClick = { onOpenFile(progress.file, progress.openUri) },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                                     shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                     modifier = Modifier.height(32.dp)
                                 ) {
                                     Icon(Icons.Rounded.FolderOpen, contentDescription = "Open", modifier = Modifier.size(16.dp))
