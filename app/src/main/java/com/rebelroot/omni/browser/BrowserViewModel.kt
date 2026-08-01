@@ -6167,6 +6167,126 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    var isDownloadingUpdate by mutableStateOf(false)
+    var updateDownloadProgress by mutableStateOf(0f)
+    var updateDownloadError by mutableStateOf<String?>(null)
+
+    fun downloadAndInstallApk(context: Context, downloadUrl: String) {
+        isDownloadingUpdate = true
+        updateDownloadProgress = 0f
+        updateDownloadError = null
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var targetUrl = downloadUrl
+                // If it is a github release url, parse it to extract the latest APK asset
+                if (downloadUrl.contains("github.com") && downloadUrl.contains("/releases")) {
+                    try {
+                        val apiConnection = java.net.URL("https://api.github.com/repos/REBEL-ROOT/omni-browser/releases/latest").openConnection() as java.net.HttpURLConnection
+                        apiConnection.requestMethod = "GET"
+                        apiConnection.setRequestProperty("Accept", "application/vnd.github+json")
+                        apiConnection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                        apiConnection.connectTimeout = 8000
+                        apiConnection.connect()
+                        if (apiConnection.responseCode == 200) {
+                            val apiResponse = apiConnection.inputStream.bufferedReader().use { it.readText() }
+                            val apiJson = org.json.JSONObject(apiResponse)
+                            val assets = apiJson.optJSONArray("assets")
+                            if (assets != null) {
+                                for (i in 0 until assets.length()) {
+                                    val asset = assets.getJSONObject(i)
+                                    val name = asset.getString("name")
+                                    if (name.endsWith(".apk")) {
+                                        targetUrl = asset.getString("browser_download_url")
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "GitHub API fetch failed, fallback to direct url", e)
+                    }
+                }
+
+                val url = java.net.URL(targetUrl)
+                var connection = url.openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+                connection.connect()
+
+                var responseCode = connection.responseCode
+                var tries = 0
+                while ((responseCode == 301 || responseCode == 302 || responseCode == 303 || responseCode == 307 || responseCode == 308) && tries < 5) {
+                    val redirectUrl = connection.getHeaderField("Location")
+                    connection = java.net.URL(redirectUrl).openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 10000
+                    connection.readTimeout = 10000
+                    connection.connect()
+                    responseCode = connection.responseCode
+                    tries++
+                }
+
+                if (responseCode == 200) {
+                    val length = connection.contentLength
+                    val destination = java.io.File(context.cacheDir, "omni-browser-update.apk")
+                    if (destination.exists()) destination.delete()
+
+                    connection.inputStream.use { input ->
+                        java.io.FileOutputStream(destination).use { output ->
+                            val buffer = ByteArray(4096)
+                            var bytesRead: Int
+                            var totalBytesRead = 0L
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                output.write(buffer, 0, bytesRead)
+                                totalBytesRead += bytesRead
+                                if (length > 0) {
+                                    val progress = totalBytesRead.toFloat() / length.toFloat()
+                                    withContext(Dispatchers.Main) {
+                                        updateDownloadProgress = progress
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        isDownloadingUpdate = false
+                        try {
+                            val apkFile = java.io.File(context.cacheDir, "omni-browser-update.apk")
+                            if (apkFile.exists() && apkFile.length() > 0) {
+                                val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    apkFile
+                                )
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                    setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } else {
+                                updateDownloadError = "Downloaded file is empty"
+                            }
+                        } catch (e: Exception) {
+                            updateDownloadError = "Installation failed: ${e.localizedMessage}"
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        isDownloadingUpdate = false
+                        updateDownloadError = "Server returned HTTP $responseCode"
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isDownloadingUpdate = false
+                    updateDownloadError = e.localizedMessage ?: "Failed to download update"
+                }
+            }
+        }
+    }
+
 
 
     fun sendFeedbackToTelegram(

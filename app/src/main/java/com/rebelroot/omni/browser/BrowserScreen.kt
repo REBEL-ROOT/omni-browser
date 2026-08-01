@@ -1826,65 +1826,6 @@ fun BrowserScreen(
                                                 }
                                             }
                                         }
-
-                                        if (viewModel.showScrollButtons && !currentShowHomeScreen) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .align(Alignment.CenterEnd)
-                                                    .padding(end = 16.dp),
-                                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                                            ) {
-                                                // Scroll to Top Button
-                                                IconButton(
-                                                    onClick = {
-                                                        val js = "javascript:(function(){window.scrollTo({top:0,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:0,behavior:'smooth'});}}}})();"
-                                                        activeTab?.session?.loadUri(js)
-                                                    },
-                                                    modifier = Modifier
-                                                        .size(44.dp)
-                                                        .background(
-                                                            color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                                            shape = CircleShape
-                                                        )
-                                                        .border(
-                                                            BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                                                            shape = CircleShape
-                                                        )
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.KeyboardArrowUp,
-                                                        contentDescription = "Scroll to Top",
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(26.dp)
-                                                    )
-                                                }
-
-                                                // Scroll to Bottom Button
-                                                IconButton(
-                                                    onClick = {
-                                                        val js = "javascript:(function(){window.scrollTo({top:document.documentElement.scrollHeight||document.body.scrollHeight,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:e.scrollHeight,behavior:'smooth'});}}}})();"
-                                                        activeTab?.session?.loadUri(js)
-                                                    },
-                                                    modifier = Modifier
-                                                        .size(44.dp)
-                                                        .background(
-                                                            color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                                            shape = CircleShape
-                                                        )
-                                                        .border(
-                                                            BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                                                            shape = CircleShape
-                                                        )
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.KeyboardArrowDown,
-                                                        contentDescription = "Scroll to Bottom",
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(26.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
                                     }
 
                                     DisposableEffect(activeTab.id) {
@@ -6815,6 +6756,66 @@ fun BrowserScreen(
                                 Text("Save", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                }
+            }
+
+            // Floating scroll buttons overlay (Overlay at root Box level to prevent clipping)
+            if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Scroll to Top Button
+                    IconButton(
+                        onClick = {
+                            val js = "javascript:(function(){window.scrollTo({top:0,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:0,behavior:'smooth'});}}}})();"
+                            activeTab.session.loadUri(js)
+                        },
+                        modifier = Modifier
+                            .size(46.dp)
+                            .background(
+                                color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                                shape = CircleShape
+                            ),
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowUp,
+                            contentDescription = "Scroll to Top",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    // Scroll to Bottom Button
+                    IconButton(
+                        onClick = {
+                            val js = "javascript:(function(){window.scrollTo({top:document.documentElement.scrollHeight||document.body.scrollHeight,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:e.scrollHeight,behavior:'smooth'});}}}})();"
+                            activeTab.session.loadUri(js)
+                        },
+                        modifier = Modifier
+                            .size(46.dp)
+                            .background(
+                                color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                                shape = CircleShape
+                            ),
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = "Scroll to Bottom",
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 }
             }

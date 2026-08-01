@@ -835,10 +835,17 @@ fun SettingsScreen(
                                     containerColor = cardColor,
                                     confirmButton = {
                                         Button(onClick = {
+                                            val url = result.playStoreUrl
                                             updateResult = null
-                                            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(result.playStoreUrl)).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
-                                            catch (e: Exception) { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
-                                        }) { Text(stringResource(id = R.string.update_dialog_btn)) }
+                                            if (url.contains("github.com")) {
+                                                viewModel.downloadAndInstallApk(context, url)
+                                            } else {
+                                                try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                                                catch (e: Exception) { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                                            }
+                                        }) { 
+                                            Text(if (result.playStoreUrl.contains("github.com")) "Download & Install" else stringResource(id = R.string.update_dialog_btn)) 
+                                        }
                                     },
                                     dismissButton = { TextButton(onClick = { updateResult = null }) { Text(stringResource(id = R.string.update_dialog_later), color = textSecondaryColor) } }
                                 )
@@ -861,6 +868,48 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+
+                    if (viewModel.isDownloadingUpdate) {
+                        AlertDialog(
+                            onDismissRequest = { /* Prevent dismiss while downloading */ },
+                            title = { Text("Downloading Update", color = textPrimaryColor) },
+                            text = {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                ) {
+                                    androidx.compose.material3.LinearProgressIndicator(
+                                        progress = viewModel.updateDownloadProgress,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = accentColor,
+                                        trackColor = dividerColor
+                                    )
+                                    Text(
+                                        text = "${(viewModel.updateDownloadProgress * 100).toInt()}%",
+                                        fontWeight = FontWeight.Bold,
+                                        color = textPrimaryColor
+                                    )
+                                }
+                            },
+                            containerColor = cardColor,
+                            confirmButton = {}
+                        )
+                    }
+
+                    viewModel.updateDownloadError?.let { error ->
+                        AlertDialog(
+                            onDismissRequest = { viewModel.updateDownloadError = null },
+                            title = { Text("Download Failed", color = textPrimaryColor) },
+                            text = { Text(error, color = textPrimaryColor) },
+                            containerColor = cardColor,
+                            confirmButton = {
+                                Button(onClick = { viewModel.updateDownloadError = null }) {
+                                    Text("OK")
+                                }
+                            }
+                        )
                     }
 
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
