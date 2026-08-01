@@ -2837,131 +2837,7 @@ fun BrowserScreen(
                 )
             }
 
-            // ─── Unified smart download button ─────────────────────────────────────
-            // • Fullscreen: fades while playing, stays / reappears while paused or on tap
-            val nonDrmMedia = detectedMedia.filter { !it.isDrmProtected }
-            val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
-                if (viewModel.isFullscreen) {
-                    // Fullscreen mode — overlay with auto-fade controls
-                    // Transparent tap-catcher; restores controls on any tap
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ) { showFullscreenDownloadBtn = true }
-                    ) {
-                        // Top-left controls: Back + Exit Fullscreen
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showFullscreenDownloadBtn,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .safeDrawingPadding()
-                                .padding(start = 12.dp, top = 12.dp)
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Back to browser button
-                                IconButton(
-                                    onClick = { viewModel.goBack() },
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Color.Black.copy(alpha = 0.65f)
-                                    ),
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                // Exit fullscreen button — tells GeckoView to exit fullscreen
-                                IconButton(
-                                    onClick = {
-                                        activeTab?.session?.exitFullScreen()
-                                    },
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Color.Black.copy(alpha = 0.65f)
-                                    ),
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.FullscreenExit,
-                                        contentDescription = "Exit Fullscreen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                        }
 
-                        // Bottom-right controls: Play FAB + Download FAB
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showFullscreenDownloadBtn,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 20.dp, bottom = 32.dp)
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                horizontalAlignment = Alignment.End
-                            ) {
-                                val firstMedia = nonDrmMedia.firstOrNull()
-                                if (firstMedia != null) {
-                                    FloatingActionButton(
-                                        onClick = {
-                                            onPlayOnlineStream(firstMedia.url, viewModel.currentUrl)
-                                        },
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = Color.White,
-                                        shape = RoundedCornerShape(32.dp),
-                                        modifier = Modifier.size(56.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.PlayArrow,
-                                            contentDescription = "Play in Premium Player",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    }
-                                }
-
-                                FloatingActionButton(
-                                    onClick = {
-                                        if (!viewModel.hasSeenVideoOverview) {
-                                            pendingVideoAction = { showDownloadSheet = true }
-                                            showVideoOverviewDialog = true
-                                        } else {
-                                            showDownloadSheet = true
-                                        }
-                                    },
-                                    containerColor = Color.Black.copy(alpha = 0.78f),
-                                    contentColor = Color.White,
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier.size(56.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Download,
-                                        contentDescription = "Download Video",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // ───────────────────────────────────────────────────────────────────────
 
             // Context Menu Bottom Sheet
             val activeContextMenu = viewModel.activeContextMenu
@@ -7469,14 +7345,19 @@ private fun MediaSnifferBanner(
                     ) { onDownloadClick() }
             )
 
-            IconButton(
-                onClick = {
-                    val firstMedia = nonDrmMedia.firstOrNull()
-                    if (firstMedia != null) {
-                        onPlay(firstMedia.url)
-                    }
-                },
-                modifier = Modifier.size(40.dp)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable {
+                        val firstMedia = nonDrmMedia.firstOrNull()
+                        if (firstMedia != null) {
+                            onPlay(firstMedia.url)
+                        } else {
+                            onDownloadClick()
+                        }
+                    },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
@@ -7488,9 +7369,12 @@ private fun MediaSnifferBanner(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            IconButton(
-                onClick = onDownloadClick,
-                modifier = Modifier.size(40.dp)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable { onDownloadClick() },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Download,
