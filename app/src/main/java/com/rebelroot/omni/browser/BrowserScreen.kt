@@ -195,6 +195,7 @@ fun BrowserScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val coroutineScope = rememberCoroutineScope()
     val config = getUiSizeConfig(viewModel.uiScale, configuration.screenWidthDp)
     var dragAmountAccumulated by remember { mutableStateOf(0f) }
@@ -1578,9 +1579,9 @@ fun BrowserScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (!viewModel.isFullscreen) Modifier.navigationBarsPadding() else Modifier)
+                .then(if (!viewModel.isFullscreen && !isLandscape) Modifier.navigationBarsPadding() else Modifier)
                 .clip(androidx.compose.ui.graphics.RectangleShape)
-                .background(MaterialTheme.colorScheme.background)
+                .background(if (viewModel.isFullscreen || isLandscape) Color.Black else MaterialTheme.colorScheme.background)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize()
@@ -1620,7 +1621,7 @@ fun BrowserScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .then(if (needsStatusBarPadding && !viewModel.isFullscreen) Modifier.statusBarsPadding() else Modifier)
+                        .then(if (needsStatusBarPadding && !viewModel.isFullscreen && !isLandscape) Modifier.statusBarsPadding() else Modifier)
                 ) {
                     AnimatedContent(
                         targetState = Pair(viewModel.activeTabId, showHomeScreen),
@@ -1648,7 +1649,7 @@ fun BrowserScreen(
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (activeTab != null && !isHome) {
                                 val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.uiScale) {
-                                    if (viewModel.addressBarPosition == "Bottom" && !isTablet && !isHome && !viewModel.isFullscreen) {
+                                    if (viewModel.addressBarPosition == "Bottom" && !isTablet && !isHome && !viewModel.isFullscreen && !isLandscape) {
                                         val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
                                         if (viewModel.chromeNavBarEnabled) {
                                             searchHeight
@@ -1667,10 +1668,10 @@ fun BrowserScreen(
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                                 val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
                                 
-                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
-                                val geckoBottomPad = bottomNavBarHeight * (1f - bottomBarFraction)
+                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
+                                val geckoBottomPad = if (!viewModel.isFullscreen && !isLandscape) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
                                 
-                                val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
+                                val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen && !isLandscape) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
                                 
                                 Box(
                                     modifier = Modifier
