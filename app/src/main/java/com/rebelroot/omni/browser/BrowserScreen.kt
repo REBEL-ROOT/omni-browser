@@ -3210,6 +3210,43 @@ fun BrowserScreen(
                                                     showDownloadSheet = false
                                                     coroutineScope.launch {
                                                         val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val targetUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                            nonDrmMedia.find { 
+                                                                it.url.contains("googlevideo.com") && 
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url ?: item.url
+                                                        } else item.url
+
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Audio"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Audio"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}.mp3"
+
+                                                        viewModel.streamDownloadEngine.startDownload(
+                                                            url = targetUrl,
+                                                            suggestedName = suggestedName,
+                                                            type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
+                                                            saveToLocker = false,
+                                                            referrerUrl = viewModel.currentUrl,
+                                                            cookies = viewModel.activeVideoCookies
+                                                        )
+                                                        Toast.makeText(context, "Audio (MP3) download started...", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.MusicNote, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFAB47BC))
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text("MP3", fontSize = 11.sp, color = Color(0xFFAB47BC), fontWeight = FontWeight.Bold)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showDownloadSheet = false
+                                                    coroutineScope.launch {
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
                                                         val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
                                                             nonDrmMedia.find { 
                                                                 it.url.contains("googlevideo.com") && 
