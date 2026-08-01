@@ -1762,6 +1762,12 @@ fun BrowserScreen(
                                                     viewModel.currentScrollOffset = o
                                                     return o
                                                 }
+
+                                                override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+                                                    super.onScrollChanged(l, t, oldl, oldt)
+                                                    // Force framework to recompute scroll metrics on every scroll
+                                                    awakenScrollBars()
+                                                }
                                             }.apply {
                                                 layoutParams = ViewGroup.LayoutParams(
                                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -6779,119 +6785,123 @@ fun BrowserScreen(
                 }
             }
 
-            // Floating Fast Scrollbar Overlay (Overlay at root Box level to prevent clipping)
+            // iOS-style Capsule Scrollbar Overlay
             if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
+                // Use the GeckoView's computeVerticalScroll* overrides for tracking.
+                // scrollRange & scrollExtent are in physical pixels.
+                // currentScrollPos is in CSS pixels from the scroll delegate.
+                // Convert by using: fraction = (scrollPos * density) / maxPhysicalScroll
                 val scrollRange = viewModel.currentScrollRange
                 val scrollExtent = viewModel.currentScrollExtent
-                val maxScroll = (scrollRange - scrollExtent).coerceAtLeast(0)
+                val maxPhysicalScroll = (scrollRange - scrollExtent).coerceAtLeast(1)
+                val density = androidx.compose.ui.platform.LocalDensity.current.density
+
+                // Also use computeVerticalScrollOffset which is in same units as range
+                val physicalOffset = viewModel.currentScrollOffset
                 
-                val densityValue = androidx.compose.ui.platform.LocalDensity.current.density
-                val scrollOffsetInPx = currentScrollPos * densityValue
-                
-                val scrollFraction = if (maxScroll > 0) {
-                    (scrollOffsetInPx / maxScroll.toFloat()).coerceIn(0f, 1f)
+                val scrollFraction = if (maxPhysicalScroll > 1) {
+                    (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
                 } else {
+                    // Fallback: use CSS pixel approach
                     0f
                 }
-                
-                var isDraggingScrollbar by remember { mutableStateOf(false) }
-                var scrollbarAlpha by remember { mutableStateOf(0f) }
-                
+
+                // Thumb proportional size
+                val thumbFraction = if (scrollRange > 0) {
+                    (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.08f, 0.4f)
+                } else 0.15f
+
+                var isDragging by remember { mutableStateOf(false) }
+                var showScrollbar by remember { mutableStateOf(false) }
+
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-                
-                LaunchedEffect(currentScrollPos, isDraggingScrollbar) {
-                    if (currentScrollPos > 0 || isDraggingScrollbar) {
-                        scrollbarAlpha = 1f
-                        if (!isDraggingScrollbar) {
-                            kotlinx.coroutines.delay(1500)
-                            scrollbarAlpha = 0f
+
+                // Auto show/hide
+                LaunchedEffect(currentScrollPos, isDragging) {
+                    if (currentScrollPos > 0 || isDragging) {
+                        showScrollbar = true
+                        if (!isDragging) {
+                            kotlinx.coroutines.delay(1200)
+                            showScrollbar = false
                         }
                     } else {
-                        scrollbarAlpha = 0f
+                        showScrollbar = false
                     }
                 }
-                
-                val alphaAnimated by animateFloatAsState(
-                    targetValue = scrollbarAlpha,
-                    animationSpec = tween(durationMillis = 250),
-                    label = "scrollbarAlpha"
+
+                val alphaAnim by animateFloatAsState(
+                    targetValue = if (showScrollbar || isDragging) 1f else 0f,
+                    animationSpec = tween(durationMillis = if (showScrollbar || isDragging) 150 else 400),
+                    label = "scrollAlpha"
                 )
-                
-                val trackWidthAnimated by animateDpAsState(
-                    targetValue = if (isDraggingScrollbar) 8.dp else 4.dp,
-                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
-                    label = "trackWidth"
+
+                // iOS capsule width animation: thin when idle, thick when grabbed
+                val capsuleWidth by animateDpAsState(
+                    targetValue = if (isDragging) 12.dp else 4.dp,
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                    label = "capsuleWidth"
                 )
-                
-                val thumbWidthAnimated by animateDpAsState(
-                    targetValue = if (isDraggingScrollbar) 10.dp else 6.dp,
-                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
-                    label = "thumbWidth"
-                )
-                
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
+
+                // Touch target is always present on right edge
+                Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(50.dp)
+                            .width(44.dp)
                             .align(Alignment.CenterEnd)
                             .pointerInput(Unit) {
                                 detectVerticalDragGestures(
                                     onDragStart = {
-                                        isDraggingScrollbar = true
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        isDragging = true
+                                        haptic.performHapticFeedback(
+                                            androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                        )
                                     },
-                                    onDragEnd = { isDraggingScrollbar = false },
-                                    onDragCancel = { isDraggingScrollbar = false },
-                                    onVerticalDrag = { change, dragAmount ->
-                                        val totalHeight = size.height.toFloat()
-                                        if (totalHeight > 0f) {
-                                            val currentY = change.position.y.coerceIn(0f, totalHeight)
-                                            val fraction = currentY / totalHeight
-                                            val js = "javascript:(function(){window.scrollTo({top: $fraction * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top: $fraction * (e.scrollHeight - e.clientHeight), behavior: 'auto'});}}}})();"
-                                            activeTab.session.loadUri(js)
+                                    onDragEnd = { isDragging = false },
+                                    onDragCancel = { isDragging = false },
+                                    onVerticalDrag = { change, _ ->
+                                        val h = size.height.toFloat()
+                                        if (h > 0f) {
+                                            val frac = (change.position.y / h).coerceIn(0f, 1f)
+                                            activeTab.session.loadUri(
+                                                "javascript:void(window.scrollTo(0,$frac*(document.documentElement.scrollHeight-window.innerHeight)))"
+                                            )
                                         }
                                     }
                                 )
                             }
                     ) {
-                        if (alphaAnimated > 0f) {
-                            Box(
+                        // iOS capsule thumb — no track, just the pill
+                        if (alphaAnim > 0.01f) {
+                            val thumbHeightFraction = thumbFraction
+                            androidx.compose.foundation.Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .graphicsLayer {
-                                        alpha = alphaAnimated
-                                    }
+                                    .graphicsLayer { alpha = alphaAnim }
+                                    .padding(end = 2.dp, top = 2.dp, bottom = 2.dp)
                             ) {
-                                // Scrollbar Track (Silver/Gray Apple-like)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight()
-                                        .width(trackWidthAnimated)
-                                        .align(Alignment.CenterEnd)
-                                        .background(
-                                            color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-                                        )
-                                )
-                                
-                                // Scrollbar Thumb (Silver/Gray Apple-like)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                        .width(thumbWidthAnimated)
-                                        .align(Alignment.TopEnd)
-                                        .graphicsLayer {
-                                            val trackHeight = size.height
-                                            val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                            translationY = scrollFraction * (trackHeight - thumbHeight)
-                                        }
-                                        .padding(end = 1.dp)
-                                        .background(
-                                            color = if (viewModel.isDarkThemeEnabled) Color(0xFFE5E5EA).copy(alpha = 0.45f) else Color(0xFF3A3A3C).copy(alpha = 0.5f),
-                                            shape = RoundedCornerShape(4.dp)
-                                        )
+                                val trackH = size.height
+                                val thumbH = (trackH * thumbHeightFraction).coerceAtLeast(36.dp.toPx())
+                                val maxThumbY = trackH - thumbH
+                                val thumbY = scrollFraction * maxThumbY
+                                val w = capsuleWidth.toPx()
+                                val x = size.width - w
+
+                                val thumbColor = if (viewModel.isDarkThemeEnabled) {
+                                    androidx.compose.ui.graphics.Color(0xFFAAAAAA).copy(
+                                        alpha = if (isDragging) 0.7f else 0.45f
+                                    )
+                                } else {
+                                    androidx.compose.ui.graphics.Color(0xFF888888).copy(
+                                        alpha = if (isDragging) 0.7f else 0.45f
+                                    )
+                                }
+
+                                drawRoundRect(
+                                    color = thumbColor,
+                                    topLeft = androidx.compose.ui.geometry.Offset(x, thumbY),
+                                    size = androidx.compose.ui.geometry.Size(w, thumbH),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2f, w / 2f)
                                 )
                             }
                         }
