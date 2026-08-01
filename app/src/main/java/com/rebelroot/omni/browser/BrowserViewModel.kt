@@ -453,6 +453,7 @@ class BrowserViewModel : ViewModel() {
     var showScrollButtons by mutableStateOf(false)
     var currentScrollRange by mutableStateOf(0)
     var currentScrollExtent by mutableStateOf(0)
+    var currentScrollOffset by mutableStateOf(0)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
     var addressBarPosition by mutableStateOf("Split")

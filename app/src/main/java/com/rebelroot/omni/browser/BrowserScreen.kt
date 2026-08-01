@@ -1756,6 +1756,12 @@ fun BrowserScreen(
                                                     viewModel.currentScrollExtent = e
                                                     return e
                                                 }
+
+                                                override fun computeVerticalScrollOffset(): Int {
+                                                    val o = super.computeVerticalScrollOffset()
+                                                    viewModel.currentScrollOffset = o
+                                                    return o
+                                                }
                                             }.apply {
                                                 layoutParams = ViewGroup.LayoutParams(
                                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -6780,7 +6786,7 @@ fun BrowserScreen(
                 val maxScroll = (scrollRange - scrollExtent).coerceAtLeast(0)
                 
                 val scrollFraction = if (maxScroll > 0) {
-                    (currentScrollPos.toFloat() / maxScroll.toFloat()).coerceIn(0f, 1f)
+                    (viewModel.currentScrollOffset.toFloat() / maxScroll.toFloat()).coerceIn(0f, 1f)
                 } else {
                     0f
                 }
@@ -6788,8 +6794,10 @@ fun BrowserScreen(
                 var isDraggingScrollbar by remember { mutableStateOf(false) }
                 var scrollbarAlpha by remember { mutableStateOf(0f) }
                 
-                LaunchedEffect(currentScrollPos, isDraggingScrollbar) {
-                    if (currentScrollPos > 0 || isDraggingScrollbar) {
+                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+                
+                LaunchedEffect(viewModel.currentScrollOffset, isDraggingScrollbar) {
+                    if (viewModel.currentScrollOffset > 0 || isDraggingScrollbar) {
                         scrollbarAlpha = 1f
                         if (!isDraggingScrollbar) {
                             kotlinx.coroutines.delay(1500)
@@ -6802,8 +6810,20 @@ fun BrowserScreen(
                 
                 val alphaAnimated by animateFloatAsState(
                     targetValue = scrollbarAlpha,
-                    animationSpec = tween(durationMillis = 200),
+                    animationSpec = tween(durationMillis = 250),
                     label = "scrollbarAlpha"
+                )
+                
+                val trackWidthAnimated by animateDpAsState(
+                    targetValue = if (isDraggingScrollbar) 6.dp else 3.dp,
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+                    label = "trackWidth"
+                )
+                
+                val thumbWidthAnimated by animateDpAsState(
+                    targetValue = if (isDraggingScrollbar) 8.dp else 5.dp,
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+                    label = "thumbWidth"
                 )
                 
                 if (alphaAnimated > 0f) {
@@ -6820,7 +6840,10 @@ fun BrowserScreen(
                                 }
                                 .pointerInput(Unit) {
                                     detectVerticalDragGestures(
-                                        onDragStart = { isDraggingScrollbar = true },
+                                        onDragStart = {
+                                            isDraggingScrollbar = true
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        },
                                         onDragEnd = { isDraggingScrollbar = false },
                                         onDragCancel = { isDraggingScrollbar = false },
                                         onVerticalDrag = { change, dragAmount ->
@@ -6835,32 +6858,32 @@ fun BrowserScreen(
                                     )
                                 }
                         ) {
-                            // Scrollbar Track
+                            // Scrollbar Track (Silver/Gray Apple-like)
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .width(4.dp)
+                                    .width(trackWidthAnimated)
                                     .align(Alignment.CenterEnd)
                                     .background(
                                         color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
                                     )
                             )
                             
-                            // Scrollbar Thumb (Pill)
+                            // Scrollbar Thumb (Silver/Gray Apple-like)
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                    .width(6.dp)
+                                    .width(thumbWidthAnimated)
                                     .align(Alignment.TopEnd)
                                     .graphicsLayer {
                                         val trackHeight = size.height
                                         val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
                                         translationY = scrollFraction * (trackHeight - thumbHeight)
                                     }
-                                    .padding(end = 2.dp)
+                                    .padding(end = 1.dp)
                                     .background(
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
-                                        shape = RoundedCornerShape(3.dp)
+                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFFE5E5EA).copy(alpha = 0.45f) else Color(0xFF3A3A3C).copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(4.dp)
                                     )
                             )
                         }
