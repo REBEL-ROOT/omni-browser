@@ -65,3 +65,19 @@ APK_SIZE_OPTIMIZATION_PLAN.md
 
 # Build deliverables
 build_deliverables/
+
+# AI / editor tool directories
+.zcode/
+.kilo/
+.kotlin/
+.gemini/
+
+# Scratch / throwaway scripts
+scratch/
+
+# Binary data blobs
+*.dat
+
+# Loose marketing assets (keep in images/ or fastlane/ only)
+app_icon_from_project.png
+feature_graphic_1024.png
