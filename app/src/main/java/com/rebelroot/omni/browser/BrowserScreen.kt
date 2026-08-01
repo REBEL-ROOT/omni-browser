@@ -34,6 +34,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
@@ -1742,6 +1743,18 @@ fun BrowserScreen(
                                                         }
                                                     }
                                                     return super.dispatchTouchEvent(ev)
+                                                }
+
+                                                override fun computeVerticalScrollRange(): Int {
+                                                    val r = super.computeVerticalScrollRange()
+                                                    viewModel.currentScrollRange = r
+                                                    return r
+                                                }
+
+                                                override fun computeVerticalScrollExtent(): Int {
+                                                    val e = super.computeVerticalScrollExtent()
+                                                    viewModel.currentScrollExtent = e
+                                                    return e
                                                 }
                                             }.apply {
                                                 layoutParams = ViewGroup.LayoutParams(
@@ -6760,61 +6773,92 @@ fun BrowserScreen(
                 }
             }
 
-            // Floating scroll buttons overlay (Overlay at root Box level to prevent clipping)
+            // Floating Fast Scrollbar Overlay (Overlay at root Box level to prevent clipping)
             if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Scroll to Top Button
-                    IconButton(
-                        onClick = {
-                            val js = "javascript:(function(){window.scrollTo({top:0,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:0,behavior:'smooth'});}}}})();"
-                            activeTab.session.loadUri(js)
-                        },
-                        modifier = Modifier
-                            .size(46.dp)
-                            .background(
-                                color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                shape = CircleShape
-                            )
-                            .border(
-                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
-                                shape = CircleShape
-                            ),
-                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.KeyboardArrowUp,
-                            contentDescription = "Scroll to Top",
-                            modifier = Modifier.size(28.dp)
-                        )
+                val scrollRange = viewModel.currentScrollRange
+                val scrollExtent = viewModel.currentScrollExtent
+                val maxScroll = (scrollRange - scrollExtent).coerceAtLeast(0)
+                
+                val scrollFraction = if (maxScroll > 0) {
+                    (currentScrollPos.toFloat() / maxScroll.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                
+                var isDraggingScrollbar by remember { mutableStateOf(false) }
+                var scrollbarAlpha by remember { mutableStateOf(0f) }
+                
+                LaunchedEffect(currentScrollPos, isDraggingScrollbar) {
+                    if (currentScrollPos > 0 || isDraggingScrollbar) {
+                        scrollbarAlpha = 1f
+                        if (!isDraggingScrollbar) {
+                            kotlinx.coroutines.delay(1500)
+                            scrollbarAlpha = 0f
+                        }
+                    } else {
+                        scrollbarAlpha = 0f
                     }
-
-                    // Scroll to Bottom Button
-                    IconButton(
-                        onClick = {
-                            val js = "javascript:(function(){window.scrollTo({top:document.documentElement.scrollHeight||document.body.scrollHeight,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:e.scrollHeight,behavior:'smooth'});}}}})();"
-                            activeTab.session.loadUri(js)
-                        },
+                }
+                
+                val alphaAnimated by animateFloatAsState(
+                    targetValue = scrollbarAlpha,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "scrollbarAlpha"
+                )
+                
+                if (alphaAnimated > 0f) {
+                    Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .background(
-                                color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                shape = CircleShape
-                            )
-                            .border(
-                                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
-                                shape = CircleShape
-                            ),
-                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                            .fillMaxHeight()
+                            .width(36.dp)
+                            .align(Alignment.CenterEnd)
+                            .graphicsLayer {
+                                alpha = alphaAnimated
+                            }
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragStart = { isDraggingScrollbar = true },
+                                    onDragEnd = { isDraggingScrollbar = false },
+                                    onDragCancel = { isDraggingScrollbar = false },
+                                    onVerticalDrag = { change, dragAmount ->
+                                        val totalHeight = size.height.toFloat()
+                                        if (totalHeight > 0f) {
+                                            val currentY = change.position.y.coerceIn(0f, totalHeight)
+                                            val fraction = currentY / totalHeight
+                                            val js = "javascript:(function(){window.scrollTo({top: $fraction * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top: $fraction * (e.scrollHeight - e.clientHeight), behavior: 'auto'});}}}})();"
+                                            activeTab.session.loadUri(js)
+                                        }
+                                    }
+                                )
+                            }
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.KeyboardArrowDown,
-                            contentDescription = "Scroll to Bottom",
-                            modifier = Modifier.size(28.dp)
+                        // Scrollbar Track
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(4.dp)
+                                .align(Alignment.CenterEnd)
+                                .background(
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+                                )
+                        )
+                        
+                        // Scrollbar Thumb (Pill)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
+                                .width(6.dp)
+                                .align(Alignment.TopEnd)
+                                .graphicsLayer {
+                                    val trackHeight = size.height
+                                    val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
+                                    translationY = scrollFraction * (trackHeight - thumbHeight)
+                                }
+                                .padding(end = 2.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                                    shape = RoundedCornerShape(3.dp)
+                                )
                         )
                     }
                 }

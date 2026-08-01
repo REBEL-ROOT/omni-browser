@@ -450,7 +450,9 @@ class BrowserViewModel : ViewModel() {
     var isOnboardingCompleted by mutableStateOf(false)
     var selectedAccentTheme by mutableStateOf("Ocean Blue")
     var forceDarkWebsites by mutableStateOf(false)
-    var showScrollButtons by mutableStateOf(true)
+    var showScrollButtons by mutableStateOf(false)
+    var currentScrollRange by mutableStateOf(0)
+    var currentScrollExtent by mutableStateOf(0)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
     var addressBarPosition by mutableStateOf("Split")
@@ -2345,7 +2347,7 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 appCtx.dataStore.data.first().let { prefs ->
                     forceDarkWebsites = prefs[FORCE_DARK_WEBSITES_KEY] ?: false
-                    showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: true
+                    showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: false
                     navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
                     navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
                     addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Split"
