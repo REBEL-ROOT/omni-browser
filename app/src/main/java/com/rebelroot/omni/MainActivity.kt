@@ -134,6 +134,7 @@ class MainActivity : FragmentActivity() {
             else -> R.style.Theme_OmniBrowser_Light
         }
         setTheme(themeRes)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
 
         activeActivity = java.lang.ref.WeakReference(this)
 
