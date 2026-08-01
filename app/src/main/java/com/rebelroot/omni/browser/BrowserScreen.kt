@@ -6808,58 +6808,62 @@ fun BrowserScreen(
                 
                 if (alphaAnimated > 0f) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(36.dp)
-                            .align(Alignment.CenterEnd)
-                            .graphicsLayer {
-                                alpha = alphaAnimated
-                            }
-                            .pointerInput(Unit) {
-                                detectVerticalDragGestures(
-                                    onDragStart = { isDraggingScrollbar = true },
-                                    onDragEnd = { isDraggingScrollbar = false },
-                                    onDragCancel = { isDraggingScrollbar = false },
-                                    onVerticalDrag = { change, dragAmount ->
-                                        val totalHeight = size.height.toFloat()
-                                        if (totalHeight > 0f) {
-                                            val currentY = change.position.y.coerceIn(0f, totalHeight)
-                                            val fraction = currentY / totalHeight
-                                            val js = "javascript:(function(){window.scrollTo({top: $fraction * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top: $fraction * (e.scrollHeight - e.clientHeight), behavior: 'auto'});}}}})();"
-                                            activeTab.session.loadUri(js)
-                                        }
-                                    }
-                                )
-                            }
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        // Scrollbar Track
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .width(4.dp)
+                                .width(36.dp)
                                 .align(Alignment.CenterEnd)
-                                .background(
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-                                )
-                        )
-                        
-                        // Scrollbar Thumb (Pill)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                .width(6.dp)
-                                .align(Alignment.TopEnd)
                                 .graphicsLayer {
-                                    val trackHeight = size.height
-                                    val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                    translationY = scrollFraction * (trackHeight - thumbHeight)
+                                    alpha = alphaAnimated
                                 }
-                                .padding(end = 2.dp)
-                                .background(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
-                                    shape = RoundedCornerShape(3.dp)
-                                )
-                        )
+                                .pointerInput(Unit) {
+                                    detectVerticalDragGestures(
+                                        onDragStart = { isDraggingScrollbar = true },
+                                        onDragEnd = { isDraggingScrollbar = false },
+                                        onDragCancel = { isDraggingScrollbar = false },
+                                        onVerticalDrag = { change, dragAmount ->
+                                            val totalHeight = size.height.toFloat()
+                                            if (totalHeight > 0f) {
+                                                val currentY = change.position.y.coerceIn(0f, totalHeight)
+                                                val fraction = currentY / totalHeight
+                                                val js = "javascript:(function(){window.scrollTo({top: $fraction * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top: $fraction * (e.scrollHeight - e.clientHeight), behavior: 'auto'});}}}})();"
+                                                activeTab.session.loadUri(js)
+                                            }
+                                        }
+                                    )
+                                }
+                        ) {
+                            // Scrollbar Track
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(4.dp)
+                                    .align(Alignment.CenterEnd)
+                                    .background(
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+                                    )
+                            )
+                            
+                            // Scrollbar Thumb (Pill)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
+                                    .width(6.dp)
+                                    .align(Alignment.TopEnd)
+                                    .graphicsLayer {
+                                        val trackHeight = size.height
+                                        val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
+                                        translationY = scrollFraction * (trackHeight - thumbHeight)
+                                    }
+                                    .padding(end = 2.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                                        shape = RoundedCornerShape(3.dp)
+                                    )
+                            )
+                        }
                     }
                 }
             }
