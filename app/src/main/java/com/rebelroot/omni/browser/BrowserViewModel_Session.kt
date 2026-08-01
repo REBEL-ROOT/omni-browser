@@ -893,6 +893,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     if (tab.url.contains(".translate.goog")) {
                         injectTranslateBadgeSuppressor()
                     }
+                    if (showScrollButtons) {
+                        tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
+                    }
                     if (siteStyleAppliedGlobally) {
                         applySiteStyleToActiveTab()
                     }
