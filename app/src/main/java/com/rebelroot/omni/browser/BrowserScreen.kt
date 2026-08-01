@@ -1763,8 +1763,6 @@ fun BrowserScreen(
                                                     return o
                                                 }
                                             }.apply {
-                                                isVerticalScrollBarEnabled = false
-                                                isHorizontalScrollBarEnabled = false
                                                 layoutParams = ViewGroup.LayoutParams(
                                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -6787,8 +6785,11 @@ fun BrowserScreen(
                 val scrollExtent = viewModel.currentScrollExtent
                 val maxScroll = (scrollRange - scrollExtent).coerceAtLeast(0)
                 
+                val densityValue = androidx.compose.ui.platform.LocalDensity.current.density
+                val scrollOffsetInPx = currentScrollPos * densityValue
+                
                 val scrollFraction = if (maxScroll > 0) {
-                    (viewModel.currentScrollOffset.toFloat() / maxScroll.toFloat()).coerceIn(0f, 1f)
+                    (scrollOffsetInPx / maxScroll.toFloat()).coerceIn(0f, 1f)
                 } else {
                     0f
                 }
@@ -6798,8 +6799,8 @@ fun BrowserScreen(
                 
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
                 
-                LaunchedEffect(viewModel.currentScrollOffset, isDraggingScrollbar) {
-                    if (viewModel.currentScrollOffset > 0 || isDraggingScrollbar) {
+                LaunchedEffect(currentScrollPos, isDraggingScrollbar) {
+                    if (currentScrollPos > 0 || isDraggingScrollbar) {
                         scrollbarAlpha = 1f
                         if (!isDraggingScrollbar) {
                             kotlinx.coroutines.delay(1500)
