@@ -322,9 +322,21 @@ fun BrowserScreen(
             showFullscreenDownloadBtn = true
         }
     }
-    // Reset visibility whenever fullscreen is entered fresh
-    LaunchedEffect(viewModel.isFullscreen) {
-        if (viewModel.isFullscreen) showFullscreenDownloadBtn = true
+    // Direct Native Player Interception on Web Fullscreen trigger
+    LaunchedEffect(viewModel.isFullscreen, nonDrmMedia) {
+        if (viewModel.isFullscreen) {
+            showFullscreenDownloadBtn = true
+            if (viewModel.isNativePlayerEnabled) {
+                val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
+                if (!isYouTubePage) {
+                    val mediaUrl = nonDrmMedia.firstOrNull()?.url ?: viewModel.mediaInterceptor.detectedMedia.value.firstOrNull { !it.isDrmProtected }?.url
+                    if (mediaUrl != null) {
+                        viewModel.isFullscreen = false
+                        onPlayOnlineStream(mediaUrl, viewModel.currentUrl)
+                    }
+                }
+            }
+        }
     }
 
     // Offline Translation states
