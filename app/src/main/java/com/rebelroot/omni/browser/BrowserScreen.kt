@@ -216,7 +216,7 @@ fun BrowserScreen(
     var showDownloadSheet by remember { mutableStateOf(false) }
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
     val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
-    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive
+    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -1578,7 +1578,7 @@ fun BrowserScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
+                .then(if (!viewModel.isFullscreen) Modifier.navigationBarsPadding() else Modifier)
                 .clip(androidx.compose.ui.graphics.RectangleShape)
                 .background(MaterialTheme.colorScheme.background)
         ) {
@@ -1670,7 +1670,7 @@ fun BrowserScreen(
                                 val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
                                 val geckoBottomPad = bottomNavBarHeight * (1f - bottomBarFraction)
                                 
-                                val geckoTopPad = if (hasTopBar) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
+                                val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
                                 
                                 Box(
                                     modifier = Modifier
