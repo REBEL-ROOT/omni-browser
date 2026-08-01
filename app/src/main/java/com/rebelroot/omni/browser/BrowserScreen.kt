@@ -6795,29 +6795,39 @@ fun BrowserScreen(
 
             // iOS-style Capsule Scrollbar Overlay
             if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
-                // Use the GeckoView's computeVerticalScroll* overrides for tracking.
-                // scrollRange & scrollExtent are in physical pixels.
-                // currentScrollPos is in CSS pixels from the scroll delegate.
-                // Convert by using: fraction = (scrollPos * density) / maxPhysicalScroll
-                val scrollRange = viewModel.currentScrollRange
-                val scrollExtent = viewModel.currentScrollExtent
-                val maxPhysicalScroll = (scrollRange - scrollExtent).coerceAtLeast(1)
-                val density = androidx.compose.ui.platform.LocalDensity.current.density
-
-                // Also use computeVerticalScrollOffset which is in same units as range
-                val physicalOffset = viewModel.currentScrollOffset
-                
-                val scrollFraction = if (maxPhysicalScroll > 1) {
-                    (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    // Fallback: use CSS pixel approach
-                    0f
+                // Poll page height & viewport height via JS title protocol whenever scroll position changes
+                LaunchedEffect(currentScrollPos) {
+                    activeTab.session.loadUri(
+                        "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
+                    )
                 }
 
-                // Thumb proportional size
-                val thumbFraction = if (scrollRange > 0) {
-                    (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.08f, 0.4f)
-                } else 0.15f
+                val pageSH = viewModel.pageScrollHeight
+                val pageVH = viewModel.pageViewportHeight
+
+                val (scrollFraction, thumbFraction) = remember(
+                    currentScrollPos, pageSH, pageVH,
+                    viewModel.currentScrollOffset, viewModel.currentScrollRange, viewModel.currentScrollExtent
+                ) {
+                    if (pageSH > 0f && pageVH > 0f && pageSH > pageVH) {
+                        val maxScroll = pageSH - pageVH
+                        val frac = (currentScrollPos.toFloat() / maxScroll).coerceIn(0f, 1f)
+                        val thumbFrac = (pageVH / pageSH).coerceIn(0.08f, 0.4f)
+                        Pair(frac, thumbFrac)
+                    } else {
+                        val scrollRange = viewModel.currentScrollRange
+                        val scrollExtent = viewModel.currentScrollExtent
+                        val maxPhysicalScroll = (scrollRange - scrollExtent).coerceAtLeast(1)
+                        val physicalOffset = viewModel.currentScrollOffset
+                        val frac = if (maxPhysicalScroll > 1) {
+                            (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
+                        } else 0f
+                        val thumbFrac = if (scrollRange > 0) {
+                            (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.08f, 0.4f)
+                        } else 0.15f
+                        Pair(frac, thumbFrac)
+                    }
+                }
 
                 var isDragging by remember { mutableStateOf(false) }
                 var showScrollbar by remember { mutableStateOf(false) }

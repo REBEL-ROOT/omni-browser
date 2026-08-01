@@ -366,6 +366,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
         override fun onTitleChange(session: GeckoSession, title: String?) {
             title?.let {
+                // Intercept scroll metrics sent from injected JS
+                if (it.startsWith("__omni__:")) {
+                    try {
+                        val parts = it.removePrefix("__omni__:").split(":")
+                        if (parts.size >= 2) {
+                            pageScrollHeight = parts[0].toFloat()
+                            pageViewportHeight = parts[1].toFloat()
+                        }
+                    } catch (_: Exception) {}
+                    return
+                }
                 val idx = tabs.indexOfFirst { it.id == tab.id }
                 if (idx != -1) {
                     val currentTabUrl = tabs[idx].url
@@ -895,6 +906,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     }
                     if (showScrollButtons) {
                         tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
+                        tab.session.loadUri("javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();")
                     }
                     if (siteStyleAppliedGlobally) {
                         applySiteStyleToActiveTab()
