@@ -6795,8 +6795,8 @@ fun BrowserScreen(
 
             // iOS-style Capsule Scrollbar Overlay
             if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
-                // Poll page height & viewport height via JS title protocol whenever scroll position changes
-                LaunchedEffect(currentScrollPos) {
+                // Fetch page dimensions once when active tab changes (or on page load / drag start)
+                LaunchedEffect(activeTab.id) {
                     activeTab.session.loadUri(
                         "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
                     )
@@ -6805,28 +6805,24 @@ fun BrowserScreen(
                 val pageSH = viewModel.pageScrollHeight
                 val pageVH = viewModel.pageViewportHeight
 
-                val (scrollFraction, thumbFraction) = remember(
-                    currentScrollPos, pageSH, pageVH,
-                    viewModel.currentScrollOffset, viewModel.currentScrollRange, viewModel.currentScrollExtent
-                ) {
-                    if (pageSH > 0f && pageVH > 0f && pageSH > pageVH) {
-                        val maxScroll = pageSH - pageVH
-                        val frac = (currentScrollPos.toFloat() / maxScroll).coerceIn(0f, 1f)
-                        val thumbFrac = (pageVH / pageSH).coerceIn(0.08f, 0.4f)
-                        Pair(frac, thumbFrac)
-                    } else {
-                        val scrollRange = viewModel.currentScrollRange
-                        val scrollExtent = viewModel.currentScrollExtent
-                        val maxPhysicalScroll = (scrollRange - scrollExtent).coerceAtLeast(1)
-                        val physicalOffset = viewModel.currentScrollOffset
-                        val frac = if (maxPhysicalScroll > 1) {
-                            (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
-                        val thumbFrac = if (scrollRange > 0) {
-                            (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.08f, 0.4f)
-                        } else 0.15f
-                        Pair(frac, thumbFrac)
-                    }
+                val scrollFraction: Float
+                val thumbFraction: Float
+
+                if (pageSH > 0f && pageVH > 0f && pageSH > pageVH) {
+                    val maxScroll = pageSH - pageVH
+                    scrollFraction = (currentScrollPos.toFloat() / maxScroll).coerceIn(0f, 1f)
+                    thumbFraction = (pageVH / pageSH).coerceIn(0.08f, 0.4f)
+                } else {
+                    val scrollRange = viewModel.currentScrollRange
+                    val scrollExtent = viewModel.currentScrollExtent
+                    val maxPhysicalScroll = (scrollRange - scrollExtent).coerceAtLeast(1)
+                    val physicalOffset = viewModel.currentScrollOffset
+                    scrollFraction = if (maxPhysicalScroll > 1) {
+                        (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+                    thumbFraction = if (scrollRange > 0) {
+                        (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.08f, 0.4f)
+                    } else 0.15f
                 }
 
                 var isDragging by remember { mutableStateOf(false) }
@@ -6873,6 +6869,9 @@ fun BrowserScreen(
                                         isDragging = true
                                         haptic.performHapticFeedback(
                                             androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                        )
+                                        activeTab.session.loadUri(
+                                            "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
                                         )
                                     },
                                     onDragEnd = { isDragging = false },
