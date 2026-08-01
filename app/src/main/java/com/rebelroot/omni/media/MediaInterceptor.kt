@@ -115,10 +115,18 @@ class MediaInterceptor {
         return false
     }
 
+    private fun cleanStreamUrl(url: String): String {
+        if (!url.contains("googlevideo.com")) return url
+        return url.replace(Regex("[?&]range=[^&]+"), "")
+                  .replace(Regex("[?&]rn=[^&]+"), "")
+                  .replace(Regex("[?&]rbuf=[^&]+"), "")
+    }
+
     /**
      * Called when the network interceptor detects a media asset request.
      */
-    fun onMediaRequestDetected(url: String, headers: Map<String, String>? = null) {
+    fun onMediaRequestDetected(rawUrl: String, headers: Map<String, String>? = null) {
+        val url = cleanStreamUrl(rawUrl)
         if (isTrackingOrStaticResource(url)) return
         if (isAdVideo(url)) {
             Log.i("MediaInterceptor", "🚫 Skipping ad video: $url")

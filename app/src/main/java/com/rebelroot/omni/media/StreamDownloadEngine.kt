@@ -337,15 +337,18 @@ class StreamDownloadEngine(
             }
         }
 
+        val cleanTargetUrl = cleanStreamUrl(url)
+        val cleanTargetAudioUrl = audioUrl?.let { cleanStreamUrl(it) }
+
         // Launch asynchronous downloader in Coroutine Dispatcher context
         val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
-                if (!audioUrl.isNullOrEmpty()) {
-                    downloadSplitMux(jobId, url, audioUrl, filename, saveToLocker, referrerUrl, progressFlow, cookies)
+                if (!cleanTargetAudioUrl.isNullOrEmpty()) {
+                    downloadSplitMux(jobId, cleanTargetUrl, cleanTargetAudioUrl, filename, saveToLocker, referrerUrl, progressFlow, cookies)
                 } else if (type == MediaInterceptor.MediaType.HLS) {
-                    downloadHLS(jobId, url, filename, saveToLocker, referrerUrl, progressFlow, cookies)
+                    downloadHLS(jobId, cleanTargetUrl, filename, saveToLocker, referrerUrl, progressFlow, cookies)
                 } else {
-                    downloadDirect(jobId, url, filename, saveToLocker, referrerUrl, progressFlow, cookies)
+                    downloadDirect(jobId, cleanTargetUrl, filename, saveToLocker, referrerUrl, progressFlow, cookies)
                 }
             } catch (e: Exception) {
                 Log.e("DownloadEngine", "Download failed for job $jobId", e)
@@ -1257,6 +1260,13 @@ class StreamDownloadEngine(
             output.write(decryptedBytes)
         }
         return decryptedBytes.size.toLong()
+    }
+
+    private fun cleanStreamUrl(url: String): String {
+        if (!url.contains("googlevideo.com")) return url
+        return url.replace(Regex("[?&]range=[^&]+"), "")
+                  .replace(Regex("[?&]rn=[^&]+"), "")
+                  .replace(Regex("[?&]rbuf=[^&]+"), "")
     }
 
     private fun getMimeTypeForFile(filename: String): String {
