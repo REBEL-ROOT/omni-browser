@@ -1263,7 +1263,14 @@ fun BrowserScreen(
                             .fillMaxWidth()
                             .run {
                                 if (isBottomNavBarVisible) this else navigationBarsPadding()
-                            },
+                            }
+                            // When the URL field is focused the soft keyboard
+                            // opens. The navigation-bar inset then collapses to 0
+                            // while the IME inset appears; without consuming the
+                            // IME inset the bottom address bar stays pinned to the
+                            // bottom edge and is hidden behind the keyboard. Lift
+                            // it above the IME so it remains visible while typing.
+                            .then(if (isInputFocused) Modifier.imePadding() else Modifier),
                         color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
                         shadowElevation = 12.dp,
                         tonalElevation = 2.dp

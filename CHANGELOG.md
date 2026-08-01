@@ -2,6 +2,13 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.6.7] - 2026-08-01
+
+### Fixed
+- **Direct Connection Network Loading**: Fixed major network loading bug where direct connection requests failed across all sites due to `proxy_router` WebExtension returning empty proxy array instead of direct routing (`[{ type: "direct" }]`).
+
+---
+
 ## [1.2.6.4] - 2026-07-27
 
 ### Fixed

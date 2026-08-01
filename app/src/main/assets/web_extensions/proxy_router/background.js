@@ -86,7 +86,7 @@ function refresh() {
 }
 
 function proxyFor() {
-  if (!endpoint) return [];
+  if (!endpoint) return [{ type: "direct" }];
   // type "socks" == SOCKS5 in the proxy API. proxyDNS routes DNS through the
   // proxy (remote DNS, like Tor's socks_remote_dns). failoverTimeout 0 disables
   // any silent fallback to a direct connection.
@@ -110,7 +110,7 @@ function registerProxyApi() {
         const url = details && details.url ? details.url : "";
         // Only HTTP(S) goes through the proxy; let other schemes (about:, data:,
         // moz-extension:, etc.) go direct.
-        if (!/^https?:/i.test(url)) return [];
+        if (!/^https?:/i.test(url)) return [{ type: "direct" }];
         let result;
         if (!ready) {
           // Until the first native reply lands, await it so we never leak direct
