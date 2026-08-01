@@ -6815,77 +6815,82 @@ fun BrowserScreen(
                 )
                 
                 val trackWidthAnimated by animateDpAsState(
-                    targetValue = if (isDraggingScrollbar) 6.dp else 3.dp,
+                    targetValue = if (isDraggingScrollbar) 8.dp else 4.dp,
                     animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
                     label = "trackWidth"
                 )
                 
                 val thumbWidthAnimated by animateDpAsState(
-                    targetValue = if (isDraggingScrollbar) 8.dp else 5.dp,
+                    targetValue = if (isDraggingScrollbar) 10.dp else 6.dp,
                     animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
                     label = "thumbWidth"
                 )
                 
-                if (alphaAnimated > 0f) {
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
                     Box(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(36.dp)
-                                .align(Alignment.CenterEnd)
-                                .graphicsLayer {
-                                    alpha = alphaAnimated
-                                }
-                                .pointerInput(Unit) {
-                                    detectVerticalDragGestures(
-                                        onDragStart = {
-                                            isDraggingScrollbar = true
-                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        },
-                                        onDragEnd = { isDraggingScrollbar = false },
-                                        onDragCancel = { isDraggingScrollbar = false },
-                                        onVerticalDrag = { change, dragAmount ->
-                                            val totalHeight = size.height.toFloat()
-                                            if (totalHeight > 0f) {
-                                                val currentY = change.position.y.coerceIn(0f, totalHeight)
-                                                val fraction = currentY / totalHeight
-                                                val js = "javascript:(function(){window.scrollTo({top: $fraction * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top: $fraction * (e.scrollHeight - e.clientHeight), behavior: 'auto'});}}}})();"
-                                                activeTab.session.loadUri(js)
-                                            }
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(50.dp)
+                            .align(Alignment.CenterEnd)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                        isDraggingScrollbar = true
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    },
+                                    onDragEnd = { isDraggingScrollbar = false },
+                                    onDragCancel = { isDraggingScrollbar = false },
+                                    onVerticalDrag = { change, dragAmount ->
+                                        val totalHeight = size.height.toFloat()
+                                        if (totalHeight > 0f) {
+                                            val currentY = change.position.y.coerceIn(0f, totalHeight)
+                                            val fraction = currentY / totalHeight
+                                            val js = "javascript:(function(){window.scrollTo({top: $fraction * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'auto'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top: $fraction * (e.scrollHeight - e.clientHeight), behavior: 'auto'});}}}})();"
+                                            activeTab.session.loadUri(js)
                                         }
-                                    )
-                                }
-                        ) {
-                            // Scrollbar Track (Silver/Gray Apple-like)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(trackWidthAnimated)
-                                    .align(Alignment.CenterEnd)
-                                    .background(
-                                        color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-                                    )
-                            )
-                            
-                            // Scrollbar Thumb (Silver/Gray Apple-like)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                    .width(thumbWidthAnimated)
-                                    .align(Alignment.TopEnd)
-                                    .graphicsLayer {
-                                        val trackHeight = size.height
-                                        val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
-                                        translationY = scrollFraction * (trackHeight - thumbHeight)
                                     }
-                                    .padding(end = 1.dp)
-                                    .background(
-                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFFE5E5EA).copy(alpha = 0.45f) else Color(0xFF3A3A3C).copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                            )
+                                )
+                            }
+                    ) {
+                        if (alphaAnimated > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        alpha = alphaAnimated
+                                    }
+                            ) {
+                                // Scrollbar Track (Silver/Gray Apple-like)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(trackWidthAnimated)
+                                        .align(Alignment.CenterEnd)
+                                        .background(
+                                            color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+                                        )
+                                )
+                                
+                                // Scrollbar Thumb (Silver/Gray Apple-like)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight(if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
+                                        .width(thumbWidthAnimated)
+                                        .align(Alignment.TopEnd)
+                                        .graphicsLayer {
+                                            val trackHeight = size.height
+                                            val thumbHeight = trackHeight * (if (scrollRange > 0) (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.1f, 1f) else 0.15f)
+                                            translationY = scrollFraction * (trackHeight - thumbHeight)
+                                        }
+                                        .padding(end = 1.dp)
+                                        .background(
+                                            color = if (viewModel.isDarkThemeEnabled) Color(0xFFE5E5EA).copy(alpha = 0.45f) else Color(0xFF3A3A3C).copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                )
+                            }
                         }
                     }
                 }
