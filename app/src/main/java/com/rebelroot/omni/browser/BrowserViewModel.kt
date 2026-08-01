@@ -179,6 +179,7 @@ class BrowserViewModel : ViewModel() {
         val EDIT_PAGE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("edit_page_overview_seen")
         val CONSOLE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("console_overview_seen")
         val FORCE_DARK_WEBSITES_KEY = booleanPreferencesKey("force_dark_websites")
+        val SHOW_SCROLL_BUTTONS_KEY = booleanPreferencesKey("show_scroll_buttons")
         val NAV_BAR_HIDE_TOP_KEY = booleanPreferencesKey("nav_bar_hide_top")
         val NAV_BAR_HIDE_BOTTOM_KEY = booleanPreferencesKey("nav_bar_hide_bottom")
         val ADDRESS_BAR_POSITION_KEY = stringPreferencesKey("address_bar_position")
@@ -449,6 +450,7 @@ class BrowserViewModel : ViewModel() {
     var isOnboardingCompleted by mutableStateOf(false)
     var selectedAccentTheme by mutableStateOf("Ocean Blue")
     var forceDarkWebsites by mutableStateOf(false)
+    var showScrollButtons by mutableStateOf(false)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
     var addressBarPosition by mutableStateOf("Split")
@@ -2343,6 +2345,7 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 appCtx.dataStore.data.first().let { prefs ->
                     forceDarkWebsites = prefs[FORCE_DARK_WEBSITES_KEY] ?: false
+                    showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: false
                     navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
                     navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
                     addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Split"
@@ -3081,6 +3084,13 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[FORCE_DARK_WEBSITES_KEY] = forceDark }
             forceDarkWebsites = forceDark
+        }
+    }
+
+    fun saveShowScrollButtons(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[SHOW_SCROLL_BUTTONS_KEY] = enabled }
+            showScrollButtons = enabled
         }
     }
 

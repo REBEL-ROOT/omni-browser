@@ -240,6 +240,59 @@ fun SiteSettingsScreen(
                                 }
                             }
                         }
+
+                        // Section 4: Scroll Settings
+                        Text(
+                            "Scroll Preferences",
+                            color = accentColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = cardColor,
+                            border = cardBorder,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val context = LocalContext.current
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(accentColor.copy(alpha = 0.08f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.SwapVert, null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                    }
+                                    Column {
+                                        Text("Scroll Buttons", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("Show buttons to scroll quickly to top or bottom", color = textSecondaryColor, fontSize = 11.sp)
+                                    }
+                                }
+                                Switch(
+                                    checked = viewModel.showScrollButtons,
+                                    onCheckedChange = { viewModel.saveShowScrollButtons(context, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = accentColor
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
                 SiteSettingsSubView.ALL_SITES -> {

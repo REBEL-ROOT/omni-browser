@@ -1826,6 +1826,63 @@ fun BrowserScreen(
                                                 }
                                             }
                                         }
+
+                                        if (viewModel.showScrollButtons && !currentShowHomeScreen) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .align(Alignment.CenterEnd)
+                                                    .padding(end = 16.dp),
+                                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                // Scroll to Top Button
+                                                IconButton(
+                                                    onClick = {
+                                                        activeTab?.session?.loadUri("javascript:window.scrollTo({top: 0, behavior: 'smooth'});")
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .background(
+                                                            color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                            shape = CircleShape
+                                                        )
+                                                        .border(
+                                                            BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                                            shape = CircleShape
+                                                        )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.KeyboardArrowUp,
+                                                        contentDescription = "Scroll to Top",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(26.dp)
+                                                    )
+                                                }
+
+                                                // Scroll to Bottom Button
+                                                IconButton(
+                                                    onClick = {
+                                                        activeTab?.session?.loadUri("javascript:window.scrollTo({top: document.documentElement.scrollHeight || document.body.scrollHeight, behavior: 'smooth'});")
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .background(
+                                                            color = if (viewModel.isAmoledMode) Color.Black.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                            shape = CircleShape
+                                                        )
+                                                        .border(
+                                                            BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                                            shape = CircleShape
+                                                        )
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.KeyboardArrowDown,
+                                                        contentDescription = "Scroll to Bottom",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(26.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
 
                                     DisposableEffect(activeTab.id) {
