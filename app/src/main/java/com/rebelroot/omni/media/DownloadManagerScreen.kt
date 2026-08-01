@@ -22,7 +22,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,6 +33,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -199,12 +199,6 @@ fun DownloadItemCard(
             .border(
                 BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                 RoundedCornerShape(12.dp)
-            )
-            .then(
-                if (progressState is StreamDownloadEngine.DownloadProgress.Complete && !job.saveToLocker) {
-                    val completeState = progressState as StreamDownloadEngine.DownloadProgress.Complete
-                    Modifier.clickable { onOpenFile(completeState.file, completeState.openUri) }
-                } else Modifier
             ),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
     ) {
@@ -346,12 +340,10 @@ fun DownloadItemCard(
                         }
 
                         // Actions
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val lowerName = job.filename.lowercase()
-                            val isVideoFile = lowerName.endsWith(".mp4") || lowerName.endsWith(".webm") || lowerName.endsWith(".mkv") || lowerName.endsWith(".mov") || lowerName.endsWith(".avi")
-                            
-                            // Play button for in-app video playback
-                            if (!job.saveToLocker && isVideoFile) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Play button for local video downloads
+                            if (!job.saveToLocker &&
+                                (job.filename.endsWith(".mp4") || job.filename.endsWith(".webm") || job.filename.endsWith(".mkv"))) {
                                 Button(
                                     onClick = { onPlayVideo(progress.file) },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -360,11 +352,11 @@ fun DownloadItemCard(
                                     modifier = Modifier.height(32.dp)
                                 ) {
                                     Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
                                     Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.play_text), fontSize = 11.sp)
                                 }
                             }
-                            // Open / Open with button for ALL completed local downloads (Music, Video, Image, Doc, Zip, etc.)
+                            // Open button for ALL completed downloads (images in gallery, audio in music player, etc.)
                             if (!job.saveToLocker) {
                                 Button(
                                     onClick = { onOpenFile(progress.file, progress.openUri) },
@@ -374,8 +366,43 @@ fun DownloadItemCard(
                                     modifier = Modifier.height(32.dp)
                                 ) {
                                     Icon(Icons.Rounded.FolderOpen, contentDescription = "Open", modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
                                     Text("Open", fontSize = 11.sp)
+                                }
+                            }
+                            // Share button for all completed non-locker downloads
+                            if (!job.saveToLocker) {
+                                val context = LocalContext.current
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val ext = progress.file.extension.lowercase()
+                                            val mime = android.webkit.MimeTypeMap.getSingleton()
+                                                .getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+                                            val uri = progress.openUri ?: FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                progress.file
+                                            )
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = mime
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Share").apply {
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            })
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(context, "Could not share file", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(Icons.Rounded.Share, contentDescription = "Share", modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Share", fontSize = 11.sp)
                                 }
                             }
                         }

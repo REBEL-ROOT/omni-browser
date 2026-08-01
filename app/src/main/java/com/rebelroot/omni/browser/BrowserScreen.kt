@@ -1182,7 +1182,12 @@ fun BrowserScreen(
                                     onDismiss = { isAlohaBannerDismissed = true },
                                     onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
                                     onDownloadClick = {
-                                        showDownloadSheet = true
+                                        if (!viewModel.hasSeenVideoOverview) {
+                                            pendingVideoAction = { showDownloadSheet = true }
+                                            showVideoOverviewDialog = true
+                                        } else {
+                                            showDownloadSheet = true
+                                        }
                                     }
                                 )
                             }
@@ -2837,7 +2842,131 @@ fun BrowserScreen(
                 )
             }
 
+            // ─── Unified smart download button ─────────────────────────────────────
+            // • Fullscreen: fades while playing, stays / reappears while paused or on tap
+            val nonDrmMedia = detectedMedia.filter { !it.isDrmProtected }
+            val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
+            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
+                if (viewModel.isFullscreen) {
+                    // Fullscreen mode — overlay with auto-fade controls
+                    // Transparent tap-catcher; restores controls on any tap
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                            ) { showFullscreenDownloadBtn = true }
+                    ) {
+                        // Top-left controls: Back + Exit Fullscreen
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showFullscreenDownloadBtn,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .safeDrawingPadding()
+                                .padding(start = 12.dp, top = 12.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Back to browser button
+                                IconButton(
+                                    onClick = { viewModel.goBack() },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = Color.Black.copy(alpha = 0.65f)
+                                    ),
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                // Exit fullscreen button — tells GeckoView to exit fullscreen
+                                IconButton(
+                                    onClick = {
+                                        activeTab?.session?.exitFullScreen()
+                                    },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = Color.Black.copy(alpha = 0.65f)
+                                    ),
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.FullscreenExit,
+                                        contentDescription = "Exit Fullscreen",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
 
+                        // Bottom-right controls: Play FAB + Download FAB
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showFullscreenDownloadBtn,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 20.dp, bottom = 32.dp)
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                val firstMedia = nonDrmMedia.firstOrNull()
+                                if (firstMedia != null) {
+                                    FloatingActionButton(
+                                        onClick = {
+                                            onPlayOnlineStream(firstMedia.url, viewModel.currentUrl)
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = Color.White,
+                                        shape = RoundedCornerShape(32.dp),
+                                        modifier = Modifier.size(56.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlayArrow,
+                                            contentDescription = "Play in Premium Player",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+
+                                FloatingActionButton(
+                                    onClick = {
+                                        if (!viewModel.hasSeenVideoOverview) {
+                                            pendingVideoAction = { showDownloadSheet = true }
+                                            showVideoOverviewDialog = true
+                                        } else {
+                                            showDownloadSheet = true
+                                        }
+                                    },
+                                    containerColor = Color.Black.copy(alpha = 0.78f),
+                                    contentColor = Color.White,
+                                    shape = RoundedCornerShape(32.dp),
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = "Download Video",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // ───────────────────────────────────────────────────────────────────────
 
             // Context Menu Bottom Sheet
             val activeContextMenu = viewModel.activeContextMenu
@@ -3017,33 +3146,17 @@ fun BrowserScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "Download Video",
+                            text = "Download Media",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
                         
-                        val mediaListToDownload = remember(nonDrmMedia, viewModel.currentUrl) {
-                            if (nonDrmMedia.isNotEmpty()) {
-                                nonDrmMedia
-                            } else {
-                                val detected = viewModel.mediaInterceptor.detectedMedia.value.filter { !it.isDrmProtected }
-                                if (detected.isNotEmpty()) detected else listOf(
-                                    com.rebelroot.omni.media.MediaInterceptor.DetectedMedia(
-                                        url = viewModel.currentUrl,
-                                        type = com.rebelroot.omni.media.MediaInterceptor.MediaType.MP4,
-                                        quality = "Source HD",
-                                        isDrmProtected = false
-                                    )
-                                )
-                            }
-                        }
-
                         androidx.compose.foundation.lazy.LazyColumn(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(mediaListToDownload) { item ->
+                            items(nonDrmMedia) { item ->
                                 Surface(
                                     shape = RoundedCornerShape(24.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -3091,43 +3204,6 @@ fun BrowserScreen(
                                                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("Play", fontSize = 12.sp)
-                                            }
-                                            OutlinedButton(
-                                                onClick = {
-                                                    showDownloadSheet = false
-                                                    coroutineScope.launch {
-                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                        val targetUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
-                                                            nonDrmMedia.find { 
-                                                                it.url.contains("googlevideo.com") && 
-                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                            }?.url ?: item.url
-                                                        } else item.url
-
-                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                        val rawTitle = activeTab?.title ?: "Audio"
-                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                        } else "Audio"
-                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}.mp3"
-
-                                                        viewModel.streamDownloadEngine.startDownload(
-                                                            url = targetUrl,
-                                                            suggestedName = suggestedName,
-                                                            type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
-                                                            saveToLocker = false,
-                                                            referrerUrl = viewModel.currentUrl,
-                                                            cookies = viewModel.activeVideoCookies
-                                                        )
-                                                        Toast.makeText(context, "Audio (MP3) download started...", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Rounded.MusicNote, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFAB47BC))
-                                                Spacer(modifier = Modifier.width(2.dp))
-                                                Text("MP3", fontSize = 11.sp, color = Color(0xFFAB47BC), fontWeight = FontWeight.Bold)
                                             }
                                             OutlinedButton(
                                                 onClick = {
@@ -3204,6 +3280,46 @@ fun BrowserScreen(
                                                 Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("Locker", fontSize = 12.sp)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showDownloadSheet = false
+                                                    coroutineScope.launch {
+                                                        // For YouTube/googlevideo, find the audio-only stream
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val mp3Url = if (isYouTubeUrl) {
+                                                            nonDrmMedia.find {
+                                                                it.url.contains("googlevideo.com") &&
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url ?: item.url
+                                                        } else {
+                                                            item.url
+                                                        }
+
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Audio"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Audio"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
+                                                        viewModel.streamDownloadEngine.startDownload(
+                                                            url = mp3Url,
+                                                            suggestedName = suggestedName,
+                                                            type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
+                                                            saveToLocker = false,
+                                                            referrerUrl = viewModel.currentUrl,
+                                                            cookies = viewModel.activeVideoCookies
+                                                        )
+                                                        Toast.makeText(context, "Downloading as MP3...", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("MP3", fontSize = 12.sp)
                                             }
                                         }
                                     }
@@ -7332,32 +7448,29 @@ private fun MediaSnifferBanner(
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            val hasOnlyAudio = nonDrmMedia.all { it.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO }
+            val bannerText = when {
+                viewModel.isVideoPlayingInPage && hasOnlyAudio -> "Audio is playing"
+                viewModel.isVideoPlayingInPage -> "Video is playing"
+                hasOnlyAudio -> "Audio detected"
+                else -> "Media detected"
+            }
             Text(
-                text = if (viewModel.isVideoPlayingInPage) "Video is playing" else "Video playing detected",
+                text = bannerText,
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                    ) { onDownloadClick() }
+                modifier = Modifier.weight(1f)
             )
 
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .clickable {
-                        val firstMedia = nonDrmMedia.firstOrNull()
-                        if (firstMedia != null) {
-                            onPlay(firstMedia.url)
-                        } else {
-                            onDownloadClick()
-                        }
-                    },
-                contentAlignment = Alignment.Center
+            IconButton(
+                onClick = {
+                    val firstMedia = nonDrmMedia.firstOrNull()
+                    if (firstMedia != null) {
+                        onPlay(firstMedia.url)
+                    }
+                },
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
@@ -7367,14 +7480,11 @@ private fun MediaSnifferBanner(
                 )
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .clickable { onDownloadClick() },
-                contentAlignment = Alignment.Center
+            IconButton(
+                onClick = onDownloadClick,
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Download,

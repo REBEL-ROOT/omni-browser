@@ -115,18 +115,10 @@ class MediaInterceptor {
         return false
     }
 
-    private fun cleanStreamUrl(url: String): String {
-        if (!url.contains("googlevideo.com")) return url
-        return url.replace(Regex("[?&]range=[^&]+"), "")
-                  .replace(Regex("[?&]rn=[^&]+"), "")
-                  .replace(Regex("[?&]rbuf=[^&]+"), "")
-    }
-
     /**
      * Called when the network interceptor detects a media asset request.
      */
-    fun onMediaRequestDetected(rawUrl: String, headers: Map<String, String>? = null) {
-        val url = cleanStreamUrl(rawUrl)
+    fun onMediaRequestDetected(url: String, headers: Map<String, String>? = null) {
         if (isTrackingOrStaticResource(url)) return
         if (isAdVideo(url)) {
             Log.i("MediaInterceptor", "🚫 Skipping ad video: $url")
@@ -319,7 +311,7 @@ class MediaInterceptor {
             lower.endsWith(".mpd") || lower.contains(".mpd") || lower.contains("/dash/") -> MediaType.DASH
             lower.endsWith(".mp4") || lower.contains(".mp4") -> MediaType.MP4
             lower.endsWith(".webm") || lower.contains(".webm") -> MediaType.WEBM
-            lower.endsWith(".mp3") || lower.contains(".mp3") || lower.contains("audio/mp3") || lower.contains("audio/mpeg") || lower.endsWith(".aac") || lower.contains(".aac") || lower.endsWith(".m4a") || lower.contains(".m4a") || lower.endsWith(".ogg") || lower.contains(".ogg") || lower.endsWith(".opus") || lower.contains(".opus") || lower.endsWith(".wav") || lower.endsWith(".flac") -> MediaType.AUDIO
+            lower.endsWith(".mp3") || lower.endsWith(".aac") || lower.endsWith(".m4a") -> MediaType.AUDIO
             else -> null
         }
     }
