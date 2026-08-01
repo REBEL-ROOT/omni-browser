@@ -1965,7 +1965,7 @@ class BrowserViewModel : ViewModel() {
                     sb.append("  network.proxy.socks_remote_dns: true\n")
                     sb.append("  network.proxy.failover_direct: false\n")
                 } else {
-                    sb.append("  network.proxy.type: 0\n")
+                    sb.append("  network.proxy.type: 5\n")
                 }
                 val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
                 if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
@@ -4083,12 +4083,12 @@ class BrowserViewModel : ViewModel() {
             GeckoPreferenceController.setGeckoPref("network.proxy.type", 1, branch)
                 .accept({ Log.d(TAG, "  set network.proxy.type = 1") }, { e -> Log.e(TAG, "  FAILED network.proxy.type", e) })
         } else {
-            Log.i(TAG, "applyProxyPrefsLive: -> DIRECT (provider=$proxyProvider)")
-            // Clear stale user values first, then drop type to 0 last.
+            Log.i(TAG, "applyProxyPrefsLive: -> SYSTEM (provider=$proxyProvider)")
+            // Clear stale user values first, then drop type to 5 (system proxy) last.
             GeckoPreferenceController.clearGeckoUserPref("network.proxy.socks")
             GeckoPreferenceController.clearGeckoUserPref("network.proxy.socks_port")
-            GeckoPreferenceController.setGeckoPref("network.proxy.type", 0, branch)
-                .accept({ Log.d(TAG, "  set network.proxy.type = 0 (direct)") }, { e -> Log.e(TAG, "  FAILED network.proxy.type=0", e) })
+            GeckoPreferenceController.setGeckoPref("network.proxy.type", 5, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.type = 5 (system)") }, { e -> Log.e(TAG, "  FAILED network.proxy.type=5", e) })
         }
 
         // ── Leak prevention: disable UDP-based protocols that bypass SOCKS ──
@@ -4246,7 +4246,7 @@ class BrowserViewModel : ViewModel() {
                 sb.append("  network.proxy.socks_remote_dns: true\n")
                 sb.append("  network.proxy.failover_direct: false\n")
             } else {
-                sb.append("  network.proxy.type: 0\n")
+                sb.append("  network.proxy.type: 5\n")
             }
             // DoH - Disabled when using Tor or Custom SOCKS proxy to prevent DNS leak bypassing the proxy resolver.
             val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"

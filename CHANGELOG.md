@@ -2,17 +2,12 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
-## [1.2.6.8] - 2026-08-01
-
-### Fixed
-- **Seamless Dynamic Proxy & Tor Routing**: Fixed site loading failures when Tor is disconnected, off, or bootstrapping by checking `TorState.Connected` before arming SOCKS proxy endpoints. Automatically falls back to direct connection whenever Tor is not connected and dynamically re-arms proxy routing as soon as Tor connects.
-
----
-
 ## [1.2.6.7] - 2026-08-01
 
 ### Fixed
-- **Direct Connection Network Loading**: Fixed major network loading bug where direct connection requests failed across all sites due to `proxy_router` WebExtension returning empty proxy array instead of direct routing (`[{ type: "direct" }]`).
+- **Direct Connection Network Loading**: Fixed `network.proxy.type: 0` (No Proxy) bypassing Android's DNS resolver and system network stack — changed to type `5` (System Proxy) so direct browsing respects the device's network configuration.
+- **Seamless Dynamic Proxy & Tor Routing**: `currentProxyEndpoint()` now checks `TorState.Connected` before arming SOCKS proxy endpoints. Automatically falls back to system proxy whenever Tor is off/disconnected and re-arms routing as soon as Tor connects.
+- **Proxy Router WebExtension**: Fixed `proxy.onRequest` handler to return `[]` (defer to GeckoView system settings) instead of `[{ type: "direct" }]` which explicitly bypassed Android system proxy.
 
 ---
 
