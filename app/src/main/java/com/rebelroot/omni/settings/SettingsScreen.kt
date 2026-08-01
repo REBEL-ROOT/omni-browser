@@ -669,6 +669,8 @@ fun SettingsScreen(
                 SettingsCard {
                     SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.native_player_title), stringResource(id = R.string.native_player_desc), viewModel.isNativePlayerEnabled) { viewModel.toggleNativePlayer(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.VideoLibrary, "Media Sniffer / Fetcher", "Detect web page videos and display sniffer banner at top of site", viewModel.isMediaGrabberEnabled) { viewModel.toggleMediaGrabber(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
                 }
             }

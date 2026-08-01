@@ -216,7 +216,7 @@ fun BrowserScreen(
     var showDownloadSheet by remember { mutableStateOf(false) }
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
     val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
-    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen
+    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }

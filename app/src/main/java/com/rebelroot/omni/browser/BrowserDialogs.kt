@@ -471,6 +471,24 @@ fun PlayerSettingsDialog(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
+                // Switch 1.5: Media Sniffer / Fetcher
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Media Sniffer / Fetcher", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("Detect web page videos and display sniffer banner at top of site", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = viewModel.isMediaGrabberEnabled,
+                        onCheckedChange = { viewModel.toggleMediaGrabber(context) }
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
                 // Switch 2: Auto-Play
                 Row(
                     modifier = Modifier.fillMaxWidth(),
