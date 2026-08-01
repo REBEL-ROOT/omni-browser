@@ -6812,7 +6812,7 @@ fun BrowserScreen(
                 if (pageSH > 0f && pageVH > 0f && pageSH > pageVH) {
                     val maxScroll = pageSH - pageVH
                     scrollFraction = (currentScrollPos.toFloat() / maxScroll).coerceIn(0f, 1f)
-                    thumbFraction = (pageVH / pageSH).coerceIn(0.08f, 0.4f)
+                    thumbFraction = (pageVH / pageSH).coerceIn(0.04f, 0.18f)
                 } else {
                     val scrollRange = viewModel.currentScrollRange
                     val scrollExtent = viewModel.currentScrollExtent
@@ -6822,8 +6822,8 @@ fun BrowserScreen(
                         (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
                     } else 0f
                     thumbFraction = if (scrollRange > 0) {
-                        (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.08f, 0.4f)
-                    } else 0.15f
+                        (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.04f, 0.18f)
+                    } else 0.08f
                 }
 
                 var isDragging by remember { mutableStateOf(false) }
@@ -6899,7 +6899,7 @@ fun BrowserScreen(
                                     .padding(end = 2.dp, top = 2.dp, bottom = 2.dp)
                             ) {
                                 val trackH = size.height
-                                val thumbH = (trackH * thumbHeightFraction).coerceAtLeast(36.dp.toPx())
+                                val thumbH = (trackH * thumbHeightFraction).coerceIn(32.dp.toPx(), 84.dp.toPx())
                                 val maxThumbY = trackH - thumbH
                                 val thumbY = scrollFraction * maxThumbY
                                 val w = capsuleWidth.toPx()
