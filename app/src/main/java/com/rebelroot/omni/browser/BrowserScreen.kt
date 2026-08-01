@@ -1182,12 +1182,7 @@ fun BrowserScreen(
                                     onDismiss = { isAlohaBannerDismissed = true },
                                     onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
                                     onDownloadClick = {
-                                        if (!viewModel.hasSeenVideoOverview) {
-                                            pendingVideoAction = { showDownloadSheet = true }
-                                            showVideoOverviewDialog = true
-                                        } else {
-                                            showDownloadSheet = true
-                                        }
+                                        showDownloadSheet = true
                                     }
                                 )
                             }
@@ -3152,11 +3147,27 @@ fun BrowserScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         
+                        val mediaListToDownload = remember(nonDrmMedia, viewModel.currentUrl) {
+                            if (nonDrmMedia.isNotEmpty()) {
+                                nonDrmMedia
+                            } else {
+                                val detected = viewModel.mediaInterceptor.detectedMedia.value.filter { !it.isDrmProtected }
+                                if (detected.isNotEmpty()) detected else listOf(
+                                    com.rebelroot.omni.media.MediaInterceptor.DetectedMedia(
+                                        url = viewModel.currentUrl,
+                                        type = com.rebelroot.omni.media.MediaInterceptor.MediaType.MP4,
+                                        quality = "Source HD",
+                                        isDrmProtected = false
+                                    )
+                                )
+                            }
+                        }
+
                         androidx.compose.foundation.lazy.LazyColumn(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(nonDrmMedia) { item ->
+                            items(mediaListToDownload) { item ->
                                 Surface(
                                     shape = RoundedCornerShape(24.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -7450,7 +7461,12 @@ private fun MediaSnifferBanner(
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ) { onDownloadClick() }
             )
 
             IconButton(
