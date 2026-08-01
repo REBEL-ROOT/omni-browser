@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
@@ -2216,6 +2217,15 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
+                // Observe Tor state transitions (Disconnected <-> Connecting <-> Connected)
+                // and dynamically apply or clear live proxy preferences so browsing never breaks.
+                combine(embeddedTorManager.state, torManager.state) { eState, tState -> eState to tState }
+                    .collect {
+                        applyProxyPrefsLive()
+                    }
+            }
+
+            viewModelScope.launch {
                 selectedSearchEngine = getSearchEnginePreference(appCtx).first()
                 customSearchUrl = getCustomSearchUrlPreference(appCtx).first()
                 customSuggestUrl = getCustomSuggestUrlPreference(appCtx).first()
@@ -4008,7 +4018,17 @@ class BrowserViewModel : ViewModel() {
     private fun currentProxyEndpoint(): Pair<String, Int>? {
         if (proxyProvider !in proxyProviders) return null
         // A custom proxy with no host configured cannot route anywhere.
-        if (proxyProvider == "custom_proxy" && customSocksHost.isBlank()) return null
+        if (proxyProvider == "custom_proxy") {
+            if (customSocksHost.isBlank()) return null
+            return customSocksHost to customSocksPort
+        }
+        // For Tor providers ("tor", "tor_builtin", "tor_over_vpn"), only route
+        // through SOCKS when the Tor daemon is actually CONNECTED. If Tor is OFF,
+        // disconnected, or still bootstrapping, fall back to null (direct connection)
+        // so browsing never hangs or errors against a closed local port.
+        val state = activeTorState().value
+        if (state !is TorState.Connected) return null
+
         val torPort = when {
             proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
             isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT

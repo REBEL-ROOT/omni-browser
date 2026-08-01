@@ -2,6 +2,13 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.6.8] - 2026-08-01
+
+### Fixed
+- **Seamless Dynamic Proxy & Tor Routing**: Fixed site loading failures when Tor is disconnected, off, or bootstrapping by checking `TorState.Connected` before arming SOCKS proxy endpoints. Automatically falls back to direct connection whenever Tor is not connected and dynamically re-arms proxy routing as soon as Tor connects.
+
+---
+
 ## [1.2.6.7] - 2026-08-01
 
 ### Fixed
