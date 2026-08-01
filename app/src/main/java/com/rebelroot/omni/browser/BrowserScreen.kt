@@ -1837,7 +1837,8 @@ fun BrowserScreen(
                                                 // Scroll to Top Button
                                                 IconButton(
                                                     onClick = {
-                                                        activeTab?.session?.loadUri("javascript:window.scrollTo({top: 0, behavior: 'smooth'});")
+                                                        val js = "javascript:(function(){window.scrollTo({top:0,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:0,behavior:'smooth'});}}}})();"
+                                                        activeTab?.session?.loadUri(js)
                                                     },
                                                     modifier = Modifier
                                                         .size(44.dp)
@@ -1861,7 +1862,8 @@ fun BrowserScreen(
                                                 // Scroll to Bottom Button
                                                 IconButton(
                                                     onClick = {
-                                                        activeTab?.session?.loadUri("javascript:window.scrollTo({top: document.documentElement.scrollHeight || document.body.scrollHeight, behavior: 'smooth'});")
+                                                        val js = "javascript:(function(){window.scrollTo({top:document.documentElement.scrollHeight||document.body.scrollHeight,behavior:'smooth'});var es=document.querySelectorAll('*');for(var i=0;i<es.length;i++){var e=es[i];if(e.scrollHeight>e.clientHeight){var s=window.getComputedStyle(e);if(s.overflowY==='scroll'||s.overflowY==='auto'){e.scrollTo({top:e.scrollHeight,behavior:'smooth'});}}}})();"
+                                                        activeTab?.session?.loadUri(js)
                                                     },
                                                     modifier = Modifier
                                                         .size(44.dp)

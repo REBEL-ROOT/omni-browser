@@ -1365,6 +1365,42 @@ fun SiteStyleCustomizerSheetContent(
                             modifier = Modifier.scale(0.85f)
                         )
                     }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Row 4: Scroll Buttons
+                    var showScrollButtons by remember { mutableStateOf(viewModel.showScrollButtons) }
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.SwapVert,
+                                contentDescription = null,
+                                tint = textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text("Scroll Buttons", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text("Show buttons to scroll quickly to top or bottom", fontSize = 10.sp, color = textSecondary)
+                            }
+                        }
+                        Switch(
+                            checked = showScrollButtons,
+                            onCheckedChange = {
+                                showScrollButtons = it
+                                viewModel.saveShowScrollButtons(context, it)
+                            },
+                            modifier = Modifier.scale(0.85f)
+                        )
+                    }
                 }
             }
 
