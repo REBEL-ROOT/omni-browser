@@ -587,4 +587,13 @@
     <string name="toast_vpn_setup_required">أضف إعداد VPN أولاً من الإعدادات</string>
     <string name="toast_direct_connection">اتصال مباشر نشط — لا وكيل</string>
     <string name="toast_burn_all">🔥 تم حذف جميع السجل والتبويبات</string>
+    <string name="exit_sheet_title">الخروج من Omni Browser؟</string>
+    <string name="exit_sheet_subtitle">اختر طريقة الخروج</string>
+    <string name="exit_quit">خروج</string>
+    <string name="exit_quit_desc">إغلاق المتصفح</string>
+    <string name="exit_quit_clear_history">خروج وحذف السجل</string>
+    <string name="exit_quit_clear_history_desc">إغلاق وحذف سجل التصفح</string>
+    <string name="exit_quit_burn_all">خروج وحذف كل شيء</string>
+    <string name="exit_quit_burn_all_desc">إغلاق وحذف جميع التبويبات والسجل والذاكرة المؤقتة</string>
+    <string name="exit_cancel">إلغاء</string>
 </resources>

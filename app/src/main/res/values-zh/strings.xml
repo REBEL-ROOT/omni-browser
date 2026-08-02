@@ -587,4 +587,13 @@
     <string name="toast_vpn_setup_required">请先在设置中添加VPN配置</string>
     <string name="toast_direct_connection">直接连接活动 — 无代理</string>
     <string name="toast_burn_all">🔥 所有历史和标签已清除</string>
+    <string name="exit_sheet_title">退出Omni Browser？</string>
+    <string name="exit_sheet_subtitle">选择退出方式</string>
+    <string name="exit_quit">退出</string>
+    <string name="exit_quit_desc">关闭浏览器</string>
+    <string name="exit_quit_clear_history">退出并清除历史</string>
+    <string name="exit_quit_clear_history_desc">关闭并删除浏览历史</string>
+    <string name="exit_quit_burn_all">退出并清除所有数据</string>
+    <string name="exit_quit_burn_all_desc">关闭并删除所有标签、历史和缓存</string>
+    <string name="exit_cancel">取消</string>
 </resources>

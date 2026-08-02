@@ -587,4 +587,13 @@
     <string name="toast_vpn_setup_required">まず設定でVPN構成を追加してください</string>
     <string name="toast_direct_connection">ダイレクト接続中 — プロキシなし</string>
     <string name="toast_burn_all">🔥 全履歴とタブが削除されました</string>
+    <string name="exit_sheet_title">Omni Browserを終了しますか？</string>
+    <string name="exit_sheet_subtitle">終了方法を選んでください</string>
+    <string name="exit_quit">終了</string>
+    <string name="exit_quit_desc">ブラウザを閉じる</string>
+    <string name="exit_quit_clear_history">終了して履歴を削除</string>
+    <string name="exit_quit_clear_history_desc">閉じて閲覧履歴を削除する</string>
+    <string name="exit_quit_burn_all">終了して全て削除</string>
+    <string name="exit_quit_burn_all_desc">全タブ、履歴、キャッシュを削除する</string>
+    <string name="exit_cancel">キャンセル</string>
 </resources>

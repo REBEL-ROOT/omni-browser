@@ -587,4 +587,13 @@ Festlegen</string>
     <string name="toast_vpn_setup_required">Zuerst VPN-Konfiguration in den Einstellungen hinzufügen</string>
     <string name="toast_direct_connection">Direkte Verbindung aktiv — kein Proxy</string>
     <string name="toast_burn_all">🔥 Gesamter Verlauf und alle Tabs gelöscht</string>
+    <string name="exit_sheet_title">Omni Browser beenden?</string>
+    <string name="exit_sheet_subtitle">Wähle, wie du beenden möchtest</string>
+    <string name="exit_quit">Beenden</string>
+    <string name="exit_quit_desc">Browser schließen</string>
+    <string name="exit_quit_clear_history">Beenden &amp; Verlauf löschen</string>
+    <string name="exit_quit_clear_history_desc">Schließen und Browserverlauf löschen</string>
+    <string name="exit_quit_burn_all">Beenden &amp; Alles vernichten</string>
+    <string name="exit_quit_burn_all_desc">Schließen und alle Tabs, Verlauf &amp; Cache löschen</string>
+    <string name="exit_cancel">Abbrechen</string>
 </resources>

@@ -587,4 +587,13 @@ Domyślną przeglądarkę</string>
     <string name="toast_vpn_setup_required">Najpierw dodaj konfigurację VPN w Ustawieniach</string>
     <string name="toast_direct_connection">Połączenie bezpośrednie aktywne — bez proxy</string>
     <string name="toast_burn_all">🔥 Cała historia i zakładki usunięte</string>
+    <string name="exit_sheet_title">Wyjść z Omni Browser?</string>
+    <string name="exit_sheet_subtitle">Wybierz sposób wyjścia</string>
+    <string name="exit_quit">Wyjść</string>
+    <string name="exit_quit_desc">Zamknij przeglądarkę</string>
+    <string name="exit_quit_clear_history">Wyjść i wyczyść historię</string>
+    <string name="exit_quit_clear_history_desc">Zamknij i usuń historię przeglądania</string>
+    <string name="exit_quit_burn_all">Wyjść i usuń wszystko</string>
+    <string name="exit_quit_burn_all_desc">Zamknij i usuń karty, historię i pamięć podręczną</string>
+    <string name="exit_cancel">Anuluj</string>
 </resources>

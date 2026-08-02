@@ -587,4 +587,13 @@
     <string name="toast_vpn_setup_required">पहले सेटिंग्स में VPN कॉनफ़िगरेशन जोड़ें</string>
     <string name="toast_direct_connection">सीधा कनेक्शन सक्रिय — कोई प्रॉक्सी नहीं</string>
     <string name="toast_burn_all">🔥 सभी इतिहास और टैब मिटाए गए</string>
+    <string name="exit_sheet_title">Omni Browser अनुपयोग?</string>
+    <string name="exit_sheet_subtitle">बाहर निकलने का तरीका चुनें</string>
+    <string name="exit_quit">बंद करें</string>
+    <string name="exit_quit_desc">ब्राउज़र बंद करें</string>
+    <string name="exit_quit_clear_history">बंद करें और इतिहास हटाएं</string>
+    <string name="exit_quit_clear_history_desc">बंद करें और ब्राउज़िंग इतिहास हटाएं</string>
+    <string name="exit_quit_burn_all">बंद करें और सब इतिहास आदि साफ करें</string>
+    <string name="exit_quit_burn_all_desc">सभी टैब, इतिहास और कैश मिटाएं</string>
+    <string name="exit_cancel">रद्द करें</string>
 </resources>

@@ -622,9 +622,8 @@ fun BrowserScreen(
         }
     }
 
-    // Add back gesture handler to handle system back clicks safely
-    var showExitConfirmDialog by remember { mutableStateOf(false) }
-    var lastBackPressTime by remember { mutableStateOf(0L) }
+    // Exit bottom sheet — shown on first back press from home screen
+    var showExitSheet by remember { mutableStateOf(false) }
 
     // Only intercept back when the browser screen is actually in focus.
     // The video player screen has its own BackHandler that takes priority when it is
@@ -642,45 +641,125 @@ fun BrowserScreen(
                 viewModel.navigateHomeDirectly()
             }
         } else {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastBackPressTime < 2000) {
-                showExitConfirmDialog = true
-            } else {
-                lastBackPressTime = currentTime
-                Toast.makeText(context, "Tap again to exit Omni Browser", Toast.LENGTH_SHORT).show()
-            }
+            // On home screen — open exit options sheet immediately (single press)
+            showExitSheet = true
         }
     }
 
-    if (showExitConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showExitConfirmDialog = false },
-            title = {
-                Text("Exit Browser?", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
-            },
-            text = {
-                Text("Are you sure you want to exit Omni Browser?", fontSize = 14.sp, color = if (viewModel.isDarkThemeEnabled) Color.LightGray else Color.DarkGray)
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showExitConfirmDialog = false
-                        onExitBrowser()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(20.dp)
+    if (showExitSheet) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { showExitSheet = false },
+            containerColor = if (viewModel.isAmoledMode) Color(0xFF0A0A0A) else MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 12.dp, bottom = 4.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("Yes", color = Color.White)
+                    Text("🚪", fontSize = 24.sp)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExitConfirmDialog = false }) {
-                    Text("No", color = if (viewModel.isDarkThemeEnabled) Color.Gray else Color.DarkGray)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.exit_sheet_title),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.exit_sheet_subtitle),
+                    fontSize = 12.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 2.dp, bottom = 20.dp)
+                )
+
+                // --- Option 1: Just Quit ---
+                ExitOptionRow(
+                    icon = "🚶",
+                    title = stringResource(R.string.exit_quit),
+                    subtitle = stringResource(R.string.exit_quit_desc),
+                    titleColor = MaterialTheme.colorScheme.onSurface,
+                    isDark = viewModel.isDarkThemeEnabled,
+                    onClick = {
+                        showExitSheet = false
+                        onExitBrowser()
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // --- Option 2: Quit & Clear History ---
+                ExitOptionRow(
+                    icon = "🗑️",
+                    title = stringResource(R.string.exit_quit_clear_history),
+                    subtitle = stringResource(R.string.exit_quit_clear_history_desc),
+                    titleColor = MaterialTheme.colorScheme.primary,
+                    isDark = viewModel.isDarkThemeEnabled,
+                    onClick = {
+                        showExitSheet = false
+                        coroutineScope.launch {
+                            viewModel.clearAllHistory()
+                            onExitBrowser()
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // --- Option 3: Quit & Burn All ---
+                ExitOptionRow(
+                    icon = "🔥",
+                    title = stringResource(R.string.exit_quit_burn_all),
+                    subtitle = stringResource(R.string.exit_quit_burn_all_desc),
+                    titleColor = MaterialTheme.colorScheme.error,
+                    isDark = viewModel.isDarkThemeEnabled,
+                    onClick = {
+                        showExitSheet = false
+                        coroutineScope.launch {
+                            val runtime = viewModel.getGeckoRuntime(context)
+                            FireButton(runtime, context).burn()
+                            viewModel.burnAllData(context)
+                            onExitBrowser()
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- Cancel ---
+                OutlinedButton(
+                    onClick = { showExitSheet = false },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                ) {
+                    Text(
+                        text = stringResource(R.string.exit_cancel),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
-            },
-            containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(32.dp)
-        )
+            }
+        }
     }
 
     // Uncaught exception crash recovery notification dialog
@@ -7316,5 +7395,67 @@ fun GridMenuTile(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+@Composable
+private fun ExitOptionRow(
+    icon: String,
+    title: String,
+    subtitle: String,
+    titleColor: androidx.compose.ui.graphics.Color,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "exit_row_scale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.04f)
+            )
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .background(titleColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(icon, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    color = titleColor
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = if (isDark) Color.Gray else Color.DarkGray,
+                    lineHeight = 16.sp
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = titleColor.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }

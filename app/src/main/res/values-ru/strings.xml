@@ -587,4 +587,13 @@
     <string name="toast_vpn_setup_required">Сначала добавьте настройку VPN в настройках</string>
     <string name="toast_direct_connection">Прямое соединение — прокси нет</string>
     <string name="toast_burn_all">🔥 Вся история и вкладки удалены</string>
+    <string name="exit_sheet_title">Выйти из Omni Browser?</string>
+    <string name="exit_sheet_subtitle">Выберите способ выхода</string>
+    <string name="exit_quit">Выйти</string>
+    <string name="exit_quit_desc">Закрыть браузер</string>
+    <string name="exit_quit_clear_history">Выйти и очистить историю</string>
+    <string name="exit_quit_clear_history_desc">Закрыть и удалить историю просмотра</string>
+    <string name="exit_quit_burn_all">Выйти и удалить всё</string>
+    <string name="exit_quit_burn_all_desc">Закрыть и удалить все вкладки, историю и кэш</string>
+    <string name="exit_cancel">Отмена</string>
 </resources>
