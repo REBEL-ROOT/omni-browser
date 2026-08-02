@@ -649,13 +649,13 @@ fun BrowserScreen(
     if (showExitSheet) {
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showExitSheet = false },
-            containerColor = if (viewModel.isAmoledMode) Color(0xFF0A0A0A) else MaterialTheme.colorScheme.surface,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = if (viewModel.isAmoledMode) Color(0xFF0D0D0D) else MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             dragHandle = {
                 Box(
                     modifier = Modifier
-                        .padding(top = 12.dp, bottom = 4.dp)
-                        .width(40.dp)
+                        .padding(top = 10.dp, bottom = 6.dp)
+                        .width(36.dp)
                         .height(4.dp)
                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), RoundedCornerShape(2.dp))
                 )
@@ -665,38 +665,31 @@ fun BrowserScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(bottom = 28.dp),
+                horizontalAlignment = Alignment.Start
             ) {
                 // Header
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("🚪", fontSize = 24.sp)
-                }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = stringResource(R.string.exit_sheet_title),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
+                    fontSize = 19.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = stringResource(R.string.exit_sheet_subtitle),
-                    fontSize = 12.5.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 2.dp, bottom = 20.dp)
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier.padding(top = 3.dp, bottom = 20.dp)
                 )
 
                 // --- Option 1: Just Quit ---
                 ExitOptionRow(
-                    icon = "🚶",
+                    icon = Icons.AutoMirrored.Rounded.Logout,
                     title = stringResource(R.string.exit_quit),
                     subtitle = stringResource(R.string.exit_quit_desc),
+                    iconTint = MaterialTheme.colorScheme.onSurface,
+                    iconBg = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                     titleColor = MaterialTheme.colorScheme.onSurface,
                     isDark = viewModel.isDarkThemeEnabled,
                     onClick = {
@@ -705,13 +698,15 @@ fun BrowserScreen(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // --- Option 2: Quit & Clear History ---
                 ExitOptionRow(
-                    icon = "🗑️",
+                    icon = Icons.Rounded.History,
                     title = stringResource(R.string.exit_quit_clear_history),
                     subtitle = stringResource(R.string.exit_quit_clear_history_desc),
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    iconBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                     titleColor = MaterialTheme.colorScheme.primary,
                     isDark = viewModel.isDarkThemeEnabled,
                     onClick = {
@@ -723,13 +718,15 @@ fun BrowserScreen(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // --- Option 3: Quit & Burn All ---
                 ExitOptionRow(
-                    icon = "🔥",
+                    icon = Icons.Rounded.DeleteForever,
                     title = stringResource(R.string.exit_quit_burn_all),
                     subtitle = stringResource(R.string.exit_quit_burn_all_desc),
+                    iconTint = MaterialTheme.colorScheme.error,
+                    iconBg = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
                     titleColor = MaterialTheme.colorScheme.error,
                     isDark = viewModel.isDarkThemeEnabled,
                     onClick = {
@@ -750,12 +747,13 @@ fun BrowserScreen(
                     onClick = { showExitSheet = false },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 ) {
                     Text(
                         text = stringResource(R.string.exit_cancel),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -7400,17 +7398,19 @@ fun GridMenuTile(
 
 @Composable
 private fun ExitOptionRow(
-    icon: String,
+    icon: ImageVector,
     title: String,
     subtitle: String,
-    titleColor: androidx.compose.ui.graphics.Color,
+    iconTint: Color,
+    iconBg: Color,
+    titleColor: Color,
     isDark: Boolean,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "exit_row_scale"
     )
@@ -7421,7 +7421,12 @@ private fun ExitOptionRow(
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.04f)
+                if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.03f)
+            )
+            .border(
+                width = 0.5.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(16.dp)
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp)
@@ -7429,11 +7434,16 @@ private fun ExitOptionRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .background(titleColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                    .size(40.dp)
+                    .background(iconBg, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(icon, fontSize = 20.sp)
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -7446,14 +7456,14 @@ private fun ExitOptionRow(
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
-                    color = if (isDark) Color.Gray else Color.DarkGray,
+                    color = if (isDark) Color(0xFF9E9E9E) else Color(0xFF666666),
                     lineHeight = 16.sp
                 )
             }
             Icon(
-                imageVector = Icons.Rounded.ChevronRight,
+                imageVector = Icons.AutoMirrored.Rounded.NavigateNext,
                 contentDescription = null,
-                tint = titleColor.copy(alpha = 0.5f),
+                tint = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.25f),
                 modifier = Modifier.size(20.dp)
             )
         }
