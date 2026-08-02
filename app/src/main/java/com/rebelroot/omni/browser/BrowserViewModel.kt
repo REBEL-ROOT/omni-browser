@@ -2363,8 +2363,19 @@ class BrowserViewModel : ViewModel() {
                 isDynamicColorEnabled = false
             }
 
+            try {
+                val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+                val savedLang = sp.getString("selected_language", null)
+                if (!savedLang.isNullOrEmpty()) {
+                    selectedLanguageCode = savedLang
+                }
+            } catch (_: Exception) {}
+
             viewModelScope.launch {
-                selectedLanguageCode = getLanguagePreference(appCtx).first()
+                val langFromDs = getLanguagePreference(appCtx).first()
+                if (langFromDs.isNotEmpty()) {
+                    selectedLanguageCode = langFromDs
+                }
             }
 
             viewModelScope.launch {
@@ -3496,7 +3507,7 @@ class BrowserViewModel : ViewModel() {
             }
             try {
                 val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
-                sp.edit().putString("selected_language", langCode).apply()
+                sp.edit().putString("selected_language", langCode).commit()
             } catch (e: Exception) { /* ignore */ }
             withContext(Dispatchers.Main) {
                 try {

@@ -106,14 +106,8 @@ class MainActivity : FragmentActivity() {
 
     override fun attachBaseContext(newBase: android.content.Context) {
         val lang = try {
-            val datastore = newBase.dataStore
-            val key = androidx.datastore.preferences.core.stringPreferencesKey("selected_language")
-            var savedLang = "en"
-            runBlocking {
-                val prefs = datastore.data.first()
-                savedLang = prefs[key] ?: "en"
-            }
-            savedLang
+            val sp = newBase.getSharedPreferences("omni_prefs", android.content.Context.MODE_PRIVATE)
+            sp.getString("selected_language", "en") ?: "en"
         } catch (e: Exception) {
             "en"
         }
@@ -122,6 +116,7 @@ class MainActivity : FragmentActivity() {
         java.util.Locale.setDefault(locale)
         val config = android.content.res.Configuration(newBase.resources.configuration)
         config.setLocale(locale)
+        config.setLayoutDirection(locale)
         val context = newBase.createConfigurationContext(config)
         super.attachBaseContext(context)
     }
@@ -222,11 +217,14 @@ class MainActivity : FragmentActivity() {
         setContent {
             val context = LocalContext.current
             val currentLanguage = browserViewModel.selectedLanguageCode
-            val localizedContext = remember(currentLanguage) {
+            val localizedContext = remember(currentLanguage, context) {
                 val locale = java.util.Locale.forLanguageTag(currentLanguage)
                 java.util.Locale.setDefault(locale)
                 val config = android.content.res.Configuration(context.resources.configuration)
                 config.setLocale(locale)
+                config.setLayoutDirection(locale)
+                @Suppress("DEPRECATION")
+                context.resources.updateConfiguration(config, context.resources.displayMetrics)
                 context.createConfigurationContext(config)
             }
             CompositionLocalProvider(
