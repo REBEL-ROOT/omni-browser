@@ -3273,25 +3273,25 @@ fun AllInOneMenuSheet(
                 ) {
                     AllInOneGridItem(
                         icon = Icons.Rounded.History,
-                        label = "History",
+                        label = stringResource(id = R.string.history_title),
                         tint = textColor,
                         onClick = { onDismissRequest(); onOpenHistory() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Bookmark,
-                        label = "Bookmarks",
+                        label = stringResource(id = R.string.bookmarks_title),
                         tint = textColor,
                         onClick = { onDismissRequest(); onOpenBookmarks() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Download,
-                        label = "Downloads",
+                        label = stringResource(id = R.string.downloads_title),
                         tint = textColor,
                         onClick = { onDismissRequest(); onOpenDownloads() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Whatshot,
-                        label = "Burn Data",
+                        label = stringResource(id = R.string.menu_burn_data),
                         tint = Color(0xFFFF4444),
                         onClick = { onDismissRequest(); onBurnData() }
                     )
@@ -3321,7 +3321,7 @@ fun AllInOneMenuSheet(
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Settings,
-                        label = "Settings",
+                        label = stringResource(id = R.string.settings_title),
                         tint = textColor,
                         onClick = { onDismissRequest(); onOpenSettings() }
                     )

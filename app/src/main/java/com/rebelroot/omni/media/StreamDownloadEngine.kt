@@ -21,6 +21,7 @@ package com.rebelroot.omni.media
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import com.rebelroot.omni.R
 import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
@@ -115,8 +116,8 @@ class StreamDownloadEngine(
 
     private fun createNotificationChannel() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val name = "Downloads"
-            val descriptionText = "Shows download progress for videos and audio streams."
+            val name = context.getString(R.string.channel_downloads_name)
+            val descriptionText = context.getString(R.string.channel_downloads_desc)
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(channelId, name, importance).apply {
                 description = descriptionText

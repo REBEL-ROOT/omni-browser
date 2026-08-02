@@ -140,9 +140,11 @@ fun SettingsScreen(
         "de" to "Deutsch",
         "hi" to "हिन्दी",
         "pt" to "Português",
+        "pl" to "Polski",
         "ru" to "Русский",
         "zh" to "简体中文",
-        "ja" to "日本語"
+        "ja" to "日本語",
+        "ar" to "العربية"
     )
 
     val currentLangName = languages.find { it.first == viewModel.selectedLanguageCode }?.second ?: "English"

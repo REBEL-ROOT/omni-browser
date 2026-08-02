@@ -260,3 +260,39 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 }
+
+tasks.register("checkStringParity") {
+    group = "verification"
+    description = "Verifies that all values-*/strings.xml files contain all keys from values/strings.xml"
+    doLast {
+        val resDir = file("src/main/res")
+        val mainStringsFile = file("src/main/res/values/strings.xml")
+        check(mainStringsFile.exists()) { "Main strings.xml not found!" }
+
+        fun extractKeys(f: File): Set<String> {
+            val regex = """<string\s+name="([^"]+)"""".toRegex()
+            return regex.findAll(f.readText()).map { it.groupValues[1] }.toSet()
+        }
+
+        val baseKeys = extractKeys(mainStringsFile)
+        var missingFound = false
+
+        resDir.listFiles()?.filter { it.isDirectory && it.name.startsWith("values-") }?.forEach { dir ->
+            val stringsFile = File(dir, "strings.xml")
+            if (stringsFile.exists()) {
+                val localeKeys = extractKeys(stringsFile)
+                val missing = baseKeys - localeKeys
+                if (missing.isNotEmpty()) {
+                    println("❌ ${dir.name}/strings.xml is missing ${missing.size} keys: $missing")
+                    missingFound = true
+                }
+            }
+        }
+
+        if (missingFound) {
+            throw GradleException("String key parity check failed! Fill in missing locale keys.")
+        } else {
+            println("✅ All locale resource files have 100% key parity with values/strings.xml (${baseKeys.size} keys).")
+        }
+    }
+}

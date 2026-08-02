@@ -300,4 +300,26 @@
 
     <!-- Proxy Hub: VPN first toast -->
     <string name="vpn_first_toast">Connect a VPN first, then select Tor over VPN.</string>
+
+    <!-- Menu, Home & Channel Strings -->
+    <string name="menu_burn_data">Burn Data &amp; Clear Cookies</string>
+    <string name="home_recently_visited">Recently Visited</string>
+    <string name="home_see_all">See All</string>
+    <string name="home_more">More</string>
+    <string name="home_shield_active">Omni Shield Active</string>
+    <string name="home_view_report">View Privacy Report</string>
+    <string name="home_trackers_blocked">Trackers Blocked</string>
+    <string name="home_data_saved">Data Saved</string>
+    <string name="channel_downloads_name">Background Downloads</string>
+    <string name="channel_downloads_desc">Displays download progress for offline media files</string>
+    <string name="menu_open_in_browser">Open in Browser</string>
+    <string name="menu_share">Share Link</string>
+    <string name="menu_copy_link">Copy Link</string>
+    <string name="menu_reload">Reload Page</string>
+    <string name="menu_desktop_site">Desktop Site</string>
+    <string name="menu_find_in_page">Find in Page</string>
+    <string name="menu_add_to_home">Add to Home Screen</string>
+    <string name="menu_new_tab">New Tab</string>
+    <string name="menu_new_incognito_tab">New Incognito Tab</string>
+    <string name="menu_close_all_tabs">Close All Tabs</string>
 </resources>

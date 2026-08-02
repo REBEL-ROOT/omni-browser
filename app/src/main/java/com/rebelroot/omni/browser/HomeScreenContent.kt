@@ -815,7 +815,7 @@ fun HomeScreenContent(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
                     Text(
-                        text = if (shortcutsExpanded) "Show less" else "More ›",
+                        text = if (shortcutsExpanded) "Show less" else stringResource(id = R.string.home_more),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
@@ -839,7 +839,7 @@ fun HomeScreenContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Recently Visited",
+                        text = stringResource(id = R.string.home_recently_visited),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (viewModel.browserWallpaperUri != null || viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
@@ -852,7 +852,7 @@ fun HomeScreenContent(
                         )
                     )
                     Text(
-                        text = "See All",
+                        text = stringResource(id = R.string.home_see_all),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
