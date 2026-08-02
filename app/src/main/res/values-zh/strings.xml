@@ -283,7 +283,7 @@
     <string name="vpn_disconnected_toast">VPN 已断开</string>
     <string name="tor_connecting_builtin">正在连接到 Tor 网络…</string>
     <string name="tor_new_circuit_hint_builtin">请求新的 Tor 线路</string>
-    <string name="menu_burn_data">销毁数据并清除 Cookie</string>
+    <string name="menu_burn_data">销毁数据</string>
     <string name="home_recently_visited">最近访问</string>
     <string name="home_see_all">查看全部</string>
     <string name="home_more">更多</string>

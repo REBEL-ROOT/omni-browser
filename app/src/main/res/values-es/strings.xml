@@ -283,7 +283,7 @@
     <string name="vpn_disconnected_toast">VPN desconectada</string>
     <string name="tor_connecting_builtin">Conectando a la red Tor…</string>
     <string name="tor_new_circuit_hint_builtin">Solicita un nuevo circuito Tor</string>
-    <string name="menu_burn_data">Borrar datos y eliminar cookies</string>
+    <string name="menu_burn_data">Borrar datos</string>
     <string name="home_recently_visited">Visitados recientemente</string>
     <string name="home_see_all">Ver todo</string>
     <string name="home_more">Más</string>

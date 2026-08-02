@@ -282,7 +282,7 @@
     <string name="dot_open_settings">Ustaw prywatny DNS w ustawieniach sieci Androida</string>
     <string name="dot_open_settings_failed">Nie można otworzyć ustawień sieciowych</string>
     <string name="vpn_first_toast">Połącz się najpierw z VPN, a następnie wybierz Tor przez VPN.</string>
-    <string name="menu_burn_data">Usuń dane i wyczyść pliki cookie</string>
+    <string name="menu_burn_data">Usuń dane</string>
     <string name="home_recently_visited">Ostatnio odwiedzane</string>
     <string name="home_see_all">Zobacz wszystko</string>
     <string name="home_more">Więcej</string>

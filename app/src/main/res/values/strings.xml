@@ -302,7 +302,7 @@
     <string name="vpn_first_toast">Connect a VPN first, then select Tor over VPN.</string>
 
     <!-- Menu, Home &amp; Channel Strings -->
-    <string name="menu_burn_data">Burn Data &amp; Clear Cookies</string>
+    <string name="menu_burn_data">Burn Data</string>
     <string name="home_recently_visited">Recently Visited</string>
     <string name="home_see_all">See All</string>
     <string name="home_more">More</string>

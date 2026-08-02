@@ -283,7 +283,7 @@
     <string name="vpn_disconnected_toast">VPN切断</string>
     <string name="tor_connecting_builtin">Torネットワークに接続中…</string>
     <string name="tor_new_circuit_hint_builtin">新しいTorサーキットをリクエスト</string>
-    <string name="menu_burn_data">データを消去してクッキーを削除</string>
+    <string name="menu_burn_data">データを消去</string>
     <string name="home_recently_visited">最近アクセスしたサイト</string>
     <string name="home_see_all">すべて表示</string>
     <string name="home_more">その他</string>

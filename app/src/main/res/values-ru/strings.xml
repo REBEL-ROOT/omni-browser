@@ -283,7 +283,7 @@
     <string name="vpn_disconnected_toast">VPN отключен</string>
     <string name="tor_connecting_builtin">Подключение к сети Tor…</string>
     <string name="tor_new_circuit_hint_builtin">Запрашивает новый цепочку Tor</string>
-    <string name="menu_burn_data">Стереть данные и очистить куки</string>
+    <string name="menu_burn_data">Стереть данные</string>
     <string name="home_recently_visited">Недавно посещенные</string>
     <string name="home_see_all">Посмотреть все</string>
     <string name="home_more">Ещё</string>

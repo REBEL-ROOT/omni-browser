@@ -283,7 +283,7 @@
     <string name="vpn_disconnected_toast">VPN getrennt</string>
     <string name="tor_connecting_builtin">Verbindung zum Tor-Netzwerk wird hergestellt…</string>
     <string name="tor_new_circuit_hint_builtin">Fordert einen neuen Tor-Kanal an</string>
-    <string name="menu_burn_data">Daten löschen &amp; Cookies entfernen</string>
+    <string name="menu_burn_data">Daten löschen</string>
     <string name="home_recently_visited">Zuletzt besucht</string>
     <string name="home_see_all">Alle anzeigen</string>
     <string name="home_more">Mehr</string>

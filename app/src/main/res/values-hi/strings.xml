@@ -283,7 +283,7 @@
     <string name="vpn_disconnected_toast">वीपीएन डिस्कनेक्ट हो गया</string>
     <string name="tor_connecting_builtin">टॉर नेटवर्क से जुड़ रहा है…</string>
     <string name="tor_new_circuit_hint_builtin">एक नया टॉर सर्किट मांगता है</string>
-    <string name="menu_burn_data">डेटा हटाएं और कुकीज़ साफ़ करें</string>
+    <string name="menu_burn_data">डेटा मिटाएं</string>
     <string name="home_recently_visited">हाल ही में देखे गए</string>
     <string name="home_see_all">सभी देखें</string>
     <string name="home_more">अतिरिक्त</string>

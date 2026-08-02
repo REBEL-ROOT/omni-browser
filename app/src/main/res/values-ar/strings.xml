@@ -282,7 +282,7 @@
     <string name="dot_open_settings">تعيين DNS الخاص في إعدادات شبكة Android</string>
     <string name="dot_open_settings_failed">تعذر فتح إعدادات الشبكة</string>
     <string name="vpn_first_toast">قم بالاتصال بـ VPN أولاً ثم اختر Tor عبر VPN.</string>
-    <string name="menu_burn_data">مسح البيانات والكوكيز</string>
+    <string name="menu_burn_data">مسح البيانات</string>
     <string name="home_recently_visited">المزارة مؤخرًا</string>
     <string name="home_see_all">عرض الكل</string>
     <string name="home_more">المزيد</string>
