@@ -381,8 +381,9 @@
     <string name="style_square">Square</string>
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
-    <string name="icon_preset_default">Default</string>
-    <string name="icon_preset_dark">Dark</string>
+    <string name="icon_preset_default">Standard</string>
+    <string name="icon_preset_light">Hell</string>
+    <string name="icon_preset_dark">Dunkel</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
     <string name="app_icon_warning">⚠️ Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.</string>
@@ -613,4 +614,8 @@ Festlegen</string>
     <string name="settings_backup_import_invalid">Ungültige Sicherungsdatei: %1$s</string>
     <string name="settings_backup_import_bad_version">Diese Sicherung wurde von einer neueren Version erstellt und kann nicht importiert werden.</string>
     <string name="settings_backup_skipped">%1$d nicht unterstützt übersprungen</string>
+    <string name="theme_settings_title">Design &amp; Theme</string>
+    <string name="theme_settings_desc">Heller &amp; dunkler Modus, Akzentfarben, App-Icons</string>
+    <string name="preferences_layout_title">Einstellungen &amp; Layout</string>
+    <string name="preferences_layout_desc">Adressleistenposition, Navigationsleisten, Skalierung</string>
 </resources>

@@ -1,26 +1,73 @@
 /* ─────────────────────────────────────────────────────────────────────────────
- * Omni Glitch-Free Smart Dark Engine
+ * Omni Smart Force Dark Engine
+ * Applied ONLY when a site lacks native dark mode support (.omni-force-dark-active)
  * ───────────────────────────────────────────────────────────────────────────── */
 
 :root, html {
     color-scheme: dark !important;
 }
 
-html {
+/* Forced Dark Mode overrides - scoped to .omni-force-dark-active */
+html.omni-force-dark-active, 
+html.omni-force-dark-active body {
     background-color: #121214 !important;
     color: #e8eaed !important;
 }
 
-body {
+html.omni-force-dark-active div:not([class*="player"]):not([class*="video"]):not([class*="canvas"]), 
+html.omni-force-dark-active section, 
+html.omni-force-dark-active article, 
+html.omni-force-dark-active main, 
+html.omni-force-dark-active header, 
+html.omni-force-dark-active footer, 
+html.omni-force-dark-active nav, 
+html.omni-force-dark-active aside, 
+html.omni-force-dark-active p, 
+html.omni-force-dark-active span, 
+html.omni-force-dark-active h1, 
+html.omni-force-dark-active h2, 
+html.omni-force-dark-active h3, 
+html.omni-force-dark-active h4, 
+html.omni-force-dark-active h5, 
+html.omni-force-dark-active h6, 
+html.omni-force-dark-active li, 
+html.omni-force-dark-active ul, 
+html.omni-force-dark-active ol, 
+html.omni-force-dark-active td, 
+html.omni-force-dark-active th, 
+html.omni-force-dark-active tr, 
+html.omni-force-dark-active table, 
+html.omni-force-dark-active form {
     background-color: #121214 !important;
     color: #e8eaed !important;
+    border-color: #2e2e38 !important;
 }
 
-a:not([class*="button"]):not([class*="btn"]):not([role="button"]) {
+html.omni-force-dark-active input, 
+html.omni-force-dark-active textarea, 
+html.omni-force-dark-active select, 
+html.omni-force-dark-active button {
+    background-color: #1e1e24 !important;
+    color: #ffffff !important;
+    border: 1px solid #3e3e4a !important;
+}
+
+html.omni-force-dark-active a, 
+html.omni-force-dark-active a * {
     color: #8ab4f8 !important;
 }
 
-img, video, canvas, svg, iframe, embed, object {
+html.omni-force-dark-active a:visited, 
+html.omni-force-dark-active a:visited * {
+    color: #c58af9 !important;
+}
+
+html.omni-force-dark-active img, 
+html.omni-force-dark-active video, 
+html.omni-force-dark-active canvas, 
+html.omni-force-dark-active svg image, 
+html.omni-force-dark-active [style*="background-image"] {
+    filter: none !important;
     background-color: transparent !important;
 }
 

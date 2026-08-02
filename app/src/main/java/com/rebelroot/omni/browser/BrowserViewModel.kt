@@ -3224,31 +3224,11 @@ class BrowserViewModel : ViewModel() {
         } else {
             GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
         }
-        forceDarkManager?.setEnabled(forceDarkWebsites || isDarkThemeEnabled)
+        forceDarkManager?.setEnabled(isDark)
     }
 
     fun injectForceDarkCssIfNeeded(targetTab: TabState? = activeTab) {
-        val tab = targetTab ?: activeTab ?: return
-        if (!forceDarkWebsites && !isDarkThemeEnabled) return
-        val script = "(function(){try{" +
-            "var docEl=document.documentElement||document.getElementsByTagName('html')[0];" +
-            "if(docEl)docEl.style.setProperty('color-scheme','dark','important');" +
-            "if(location.hostname.indexOf('google.')!==-1){try{" +
-            "var host=location.hostname;var domain=host.substring(host.indexOf('google.'));" +
-            "document.cookie='PREF=f6=400; path=/; domain='+domain;" +
-            "}catch(e){}}" +
-            "if(!document.getElementById('omni-force-dark-style')){" +
-            "var style=document.createElement('style');" +
-            "style.id='omni-force-dark-style';" +
-            "style.textContent=':root,html{color-scheme:dark!important;}html,body{background-color:#121214!important;color:#e8eaed!important;}a:not([class*=\"button\"]):not([class*=\"btn\"]):not([role=\"button\"]){color:#8ab4f8!important;}img,video,canvas,svg,iframe,embed,object{background-color:transparent!important;}';" +
-            "(document.head||docEl).appendChild(style);" +
-            "}" +
-            "}catch(e){}})();"
-        try {
-            tab.session.loadUri("javascript:$script")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in injectForceDarkCssIfNeeded", e)
-        }
+        updateGeckoColorScheme()
     }
 
     fun saveForceDarkWebsites(context: Context, forceDark: Boolean) {
@@ -3256,11 +3236,7 @@ class BrowserViewModel : ViewModel() {
             context.dataStore.edit { it[FORCE_DARK_WEBSITES_KEY] = forceDark }
             forceDarkWebsites = forceDark
             updateGeckoColorScheme()
-            if (forceDark) {
-                injectForceDarkCssIfNeeded()
-            } else if (!isDarkThemeEnabled) {
-                activeTab?.session?.reload()
-            }
+            activeTab?.session?.reload()
         }
     }
 
@@ -3310,6 +3286,7 @@ class BrowserViewModel : ViewModel() {
             val pkg = context.packageName
             val aliases = listOf(
                 "Default"    to ".MainActivityDefault",
+                "Light"      to ".MainActivityLight",
                 "Dark"       to ".MainActivityDark",
                 "Aura Dark"  to ".MainActivityAuraDark",
                 "Aura Light" to ".MainActivityAuraLight"
@@ -3345,6 +3322,120 @@ class BrowserViewModel : ViewModel() {
                 }
             }
             customIconPath = path
+        }
+    }
+
+    var isWallpaperDownloading by mutableStateOf(false)
+        private set
+    var downloadingWallpaperUrl by mutableStateOf<String?>(null)
+        private set
+
+    fun downloadAndSetWallpaper(context: Context, url: String?, onResult: ((Boolean) -> Unit)? = null) {
+        if (url.isNullOrEmpty() || url == "null") {
+            saveBrowserWallpaperUri(context, null)
+            onResult?.invoke(true)
+            return
+        }
+
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            saveBrowserWallpaperUri(context, url)
+            onResult?.invoke(true)
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                isWallpaperDownloading = true
+                downloadingWallpaperUrl = url
+            }
+            try {
+                val dir = File(context.filesDir, "wallpapers")
+                if (!dir.exists()) dir.mkdirs()
+
+                val extension = when {
+                    url.lowercase().contains(".mp4") -> ".mp4"
+                    url.lowercase().contains(".webm") -> ".webm"
+                    url.lowercase().contains(".gif") -> ".gif"
+                    else -> ".jpg"
+                }
+                val hashName = java.security.MessageDigest.getInstance("MD5")
+                    .digest(url.toByteArray())
+                    .joinToString("") { "%02x".format(it) } + extension
+                val localFile = File(dir, hashName)
+
+                if (!localFile.exists() || localFile.length() == 0L) {
+                    var currentUrl = url
+                    var redirectCount = 0
+                    val maxRedirects = 5
+                    var connection: java.net.HttpURLConnection? = null
+                    var inputStream: java.io.InputStream? = null
+
+                    while (redirectCount < maxRedirects) {
+                        val conn = java.net.URL(currentUrl).openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "GET"
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        conn.connectTimeout = 20000
+                        conn.readTimeout = 40000
+                        conn.instanceFollowRedirects = true
+                        conn.connect()
+
+                        val status = conn.responseCode
+                        if (status == java.net.HttpURLConnection.HTTP_MOVED_TEMP ||
+                            status == java.net.HttpURLConnection.HTTP_MOVED_PERM ||
+                            status == 307 || status == 308 || status == 303) {
+                            val newUrl = conn.getHeaderField("Location")
+                            conn.disconnect()
+                            if (newUrl != null) {
+                                currentUrl = newUrl
+                                redirectCount++
+                                continue
+                            }
+                        }
+
+                        if (status == java.net.HttpURLConnection.HTTP_OK) {
+                            connection = conn
+                            inputStream = conn.inputStream
+                            break
+                        } else {
+                            conn.disconnect()
+                            throw java.io.IOException("HTTP error code: $status")
+                        }
+                    }
+
+                    if (inputStream == null || connection == null) {
+                        throw java.io.IOException("Failed to connect or redirect limit exceeded")
+                    }
+
+                    val output = java.io.FileOutputStream(localFile)
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+                    output.flush()
+                    output.close()
+                    inputStream.close()
+                    connection.disconnect()
+                }
+
+                val localUriStr = "file://${localFile.absolutePath}"
+                withContext(Dispatchers.Main) {
+                    saveBrowserWallpaperUri(context, localUriStr)
+                    isWallpaperDownloading = false
+                    downloadingWallpaperUrl = null
+                    Toast.makeText(context, "Wallpaper downloaded & applied!", Toast.LENGTH_SHORT).show()
+                    onResult?.invoke(true)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error downloading wallpaper: $url", e)
+                withContext(Dispatchers.Main) {
+                    saveBrowserWallpaperUri(context, url)
+                    isWallpaperDownloading = false
+                    downloadingWallpaperUrl = null
+                    Toast.makeText(context, "Using online wallpaper", Toast.LENGTH_SHORT).show()
+                    onResult?.invoke(false)
+                }
+            }
         }
     }
 

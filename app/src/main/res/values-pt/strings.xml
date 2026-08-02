@@ -382,6 +382,7 @@
     <string name="style_glass">Vidro</string>
     <string name="app_icon">Ícone do App</string>
     <string name="icon_preset_default">Padrão</string>
+    <string name="icon_preset_light">Claro</string>
     <string name="icon_preset_dark">Escuro</string>
     <string name="icon_preset_aura_dark">Aura Escuro</string>
     <string name="icon_preset_aura_light">Aura Claro</string>
@@ -613,4 +614,8 @@ Navegador padrão</string>
     <string name="settings_backup_import_invalid">Arquivo de backup inválido: %1$s</string>
     <string name="settings_backup_import_bad_version">Este backup foi feito por uma versão mais recente e não pode ser importado.</string>
     <string name="settings_backup_skipped">%1$d não suportado(s) ignorado(s)</string>
+    <string name="theme_settings_title">Tema</string>
+    <string name="theme_settings_desc">Modo claro e escuro, cores de acento, ícones do aplicativo</string>
+    <string name="preferences_layout_title">Preferências e layout</string>
+    <string name="preferences_layout_desc">Posição da barra de endereços, barras de navegação, escala</string>
 </resources>

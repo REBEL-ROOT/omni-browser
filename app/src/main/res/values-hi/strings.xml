@@ -382,6 +382,7 @@
     <string name="style_glass">ग्लास</string>
     <string name="app_icon">ऐप आइकन</string>
     <string name="icon_preset_default">डिफ़ॉल्ट</string>
+    <string name="icon_preset_light">लाइट</string>
     <string name="icon_preset_dark">डार्क</string>
     <string name="icon_preset_aura_dark">ऑरा डार्क</string>
     <string name="icon_preset_aura_light">ऑरा लाइट</string>
@@ -613,4 +614,8 @@
     <string name="settings_backup_import_invalid">अमान्य बैकअप फ़ाइल: %1$s</string>
     <string name="settings_backup_import_bad_version">यह बैकअप नए संस्करण द्वारा बनाया गया था और इसे इंपोर्ट नहीं किया जा सकता।</string>
     <string name="settings_backup_skipped">%1$d असामयिक छोड़े गए</string>
+    <string name="theme_settings_title">थीम</string>
+    <string name="theme_settings_desc">लाइट और डार्क मोड, एक्सेंट रंग, ऐप आइकन</string>
+    <string name="preferences_layout_title">प्राथमिकताएं और लेआउट</string>
+    <string name="preferences_layout_desc">एड्रेस बार स्थिति, नेविगेशन बार, यूआई स्केलिंग</string>
 </resources>

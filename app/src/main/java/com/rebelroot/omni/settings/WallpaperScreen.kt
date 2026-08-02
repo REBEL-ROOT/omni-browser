@@ -85,6 +85,7 @@ data class OnlineWallpaper(
 
 // ─── Category definitions ───────────────────────────────────────────────────
 val WALLPAPER_CATEGORIES = listOf(
+    "Live Wallpapers" to "live_wallpapers",
     "Featured"   to "featured",
     "Nature"     to "nature",
     "Space"      to "space",
@@ -106,6 +107,46 @@ private fun picsumFull(seed: String)  = "https://picsum.photos/seed/$seed/1600/2
 
 // Generate a large deterministic collection per category
 private fun generateCategoryWallpapers(categoryKey: String, count: Int = 48): List<OnlineWallpaper> {
+    if (categoryKey == "live_wallpapers") {
+        val livePresets = listOf(
+            Pair("Cyberpunk Night", "https://assets.mixkit.co/videos/preview/mixkit-futuristic-city-with-bright-neon-lights-at-night-41554-large.mp4"),
+            Pair("Rainy City Window", "https://assets.mixkit.co/videos/preview/mixkit-raindrops-on-a-window-pane-at-night-41549-large.mp4"),
+            Pair("Neon Fluid Waves", "https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-screens-with-graphs-and-data-41536-large.mp4"),
+            Pair("Deep Space Cosmos", "https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-4040-large.mp4"),
+            Pair("Calm Ocean Waves", "https://assets.mixkit.co/videos/preview/mixkit-sea-waves-approaching-the-sand-41530-large.mp4"),
+            Pair("Matrix Digital Code", "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdW9uaXZ4OWYwNGd1bmM1c3Q4ZGFzeXJ4NnM2azE5enptcW5vdDVzdiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/L1R1tvI9svkIWwpVYr/giphy.gif"),
+            Pair("Lo-Fi Coffee Shop", "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHpucjNlOWRxeWFvZmVudDFndDFjcHZtZ3d1NHEycDdmcDduYmsyeCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/d480lR5b5h8k9X0M/giphy.gif"),
+            Pair("Foggy Mountain Pines", "https://assets.mixkit.co/videos/preview/mixkit-sun-rays-through-the-trees-in-a-forest-41537-large.mp4"),
+            Pair("Retro Synthwave Grid", "https://assets.mixkit.co/videos/preview/mixkit-flying-over-a-retro-grid-with-neon-lights-41543-large.mp4"),
+            Pair("Green Aurora Lights", "https://assets.mixkit.co/videos/preview/mixkit-green-aurora-borealis-in-the-night-sky-41551-large.mp4"),
+            Pair("Cyber Neon Tunnel", "https://assets.mixkit.co/videos/preview/mixkit-loop-of-a-tunnel-with-neon-light-patterns-41544-large.mp4"),
+            Pair("Forest Waterfall", "https://assets.mixkit.co/videos/preview/mixkit-waterfall-in-a-dense-green-forest-41557-large.mp4")
+        )
+        return livePresets.mapIndexed { idx, (title, url) ->
+            val isVid = url.endsWith(".mp4")
+            val thumb = when (idx) {
+                0 -> "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400"
+                1 -> "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=400"
+                2 -> "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400"
+                3 -> "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400"
+                4 -> "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400"
+                5 -> "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400"
+                6 -> "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400"
+                7 -> "https://images.unsplash.com/photo-1448375240586-882707db888b?w=400"
+                8 -> "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400"
+                9 -> "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?w=400"
+                10 -> "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400"
+                else -> "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400"
+            }
+            OnlineWallpaper(
+                id = "live_preset_$idx",
+                thumbUrl = thumb,
+                fullUrl = url,
+                description = title,
+                photographer = if (isVid) "Mixkit Video" else "Giphy Animation"
+            )
+        }
+    }
     return (1..count).map { i ->
         val seed = "${categoryKey}_$i"
         OnlineWallpaper(
@@ -431,16 +472,24 @@ private fun WallpaperHome(
             }
 
             items(com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS) { preset ->
-                val sel = selectedWallpaper == preset.mediaUrl
+                val isDownloadingThis = viewModel.isWallpaperDownloading && viewModel.downloadingWallpaperUrl == preset.mediaUrl
+                val sel = selectedWallpaper == preset.mediaUrl || (selectedWallpaper != null && selectedWallpaper.contains(preset.id))
                 WallpaperTile(
                     imageUrl = preset.thumbUrl,
                     isSelected = sel,
                     accent = accent,
                     cardColor = cardColor,
                     cardBorder = cardBorder,
-                    onClick = { viewModel.saveBrowserWallpaperUri(context, preset.mediaUrl) }
+                    onClick = { viewModel.downloadAndSetWallpaper(context, preset.mediaUrl) }
                 ) {
                     Box(Modifier.fillMaxSize()) {
+                        if (isDownloadingThis) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp).align(Alignment.Center),
+                                color = accent,
+                                strokeWidth = 2.dp
+                            )
+                        }
                         Surface(
                             color = Color.Black.copy(alpha = 0.65f),
                             shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp),
@@ -637,9 +686,7 @@ fun OnlineWallpaperGallery(
                     isDownloading = downloadingId == wp.id,
                     accent = accent,
                     onTap = {
-                        // Apply directly via URL (no download needed for online URLs)
-                        viewModel.saveBrowserWallpaperUri(context, wp.fullUrl)
-                        Toast.makeText(context, "Wallpaper applied!", Toast.LENGTH_SHORT).show()
+                        viewModel.downloadAndSetWallpaper(context, wp.fullUrl)
                     },
                     onLongPress = {
                         // Download and edit
@@ -707,6 +754,35 @@ private fun OnlineWallpaperTile(
                 }
             }
         )
+
+        val isVid = isVideoWallpaperUri(wallpaper.fullUrl)
+        val isGif = isGifWallpaperUri(wallpaper.fullUrl)
+        if (isVid || isGif) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.65f),
+                shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isVid) Icons.Rounded.PlayArrow else Icons.Rounded.Gif,
+                        contentDescription = null,
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = if (isVid) "LIVE" else "GIF",
+                        color = Color.White,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
 
         // Gradient overlay + info
         Box(

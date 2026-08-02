@@ -381,8 +381,9 @@
     <string name="style_square">Square</string>
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
-    <string name="icon_preset_default">Default</string>
-    <string name="icon_preset_dark">Dark</string>
+    <string name="icon_preset_default">По умолчанию</string>
+    <string name="icon_preset_light">Светлый</string>
+    <string name="icon_preset_dark">Тёмный</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
     <string name="app_icon_warning">⚠️ Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.</string>
@@ -613,4 +614,8 @@
     <string name="settings_backup_import_invalid">Недействительный файл резервной копии: %1$s</string>
     <string name="settings_backup_import_bad_version">Эта резервная копия была создана более новой версией и не может быть импортирована.</string>
     <string name="settings_backup_skipped">Пропущено неподдерживаемых: %1$d</string>
+    <string name="theme_settings_title">Тема</string>
+    <string name="theme_settings_desc">Светлый и тёмный режим, акцентные цвета, значки приложения</string>
+    <string name="preferences_layout_title">Предпочтения и макет</string>
+    <string name="preferences_layout_desc">Положение адресной строки, панели навигации, масштабирование</string>
 </resources>

@@ -382,6 +382,7 @@
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
     <string name="icon_preset_default">Default</string>
+    <string name="icon_preset_light">Light</string>
     <string name="icon_preset_dark">Dark</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
@@ -613,4 +614,8 @@ Default Browser</string>
     <string name="settings_backup_import_invalid">Invalid backup file: %1$s</string>
     <string name="settings_backup_import_bad_version">This backup was made by a newer version and cannot be imported.</string>
     <string name="settings_backup_skipped">%1$d unsupported skipped</string>
+    <string name="theme_settings_title">Theme</string>
+    <string name="theme_settings_desc">Light &amp; dark mode, accent colors, app icons</string>
+    <string name="preferences_layout_title">Preferences &amp; Layout</string>
+    <string name="preferences_layout_desc">Address bar position, navigation bars, UI scaling</string>
 </resources>

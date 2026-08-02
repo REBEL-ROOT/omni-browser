@@ -7,6 +7,7 @@ package com.rebelroot.omni.settings
 
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -22,9 +23,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
@@ -114,13 +118,15 @@ fun isVideoWallpaperUri(uri: String?): Boolean {
     return lower.endsWith(".mp4") || lower.endsWith(".webm") ||
             lower.endsWith(".mkv") || lower.endsWith(".mov") ||
             lower.contains("video/") || lower.contains(".mp4?") ||
-            lower.contains(".webm?") || lower.startsWith("content://")
+            lower.contains(".webm?") || lower.startsWith("content://") ||
+            (lower.startsWith("file://") && (lower.contains(".mp4") || lower.contains(".webm") || lower.contains(".mkv") || lower.contains(".mov")))
 }
 
 fun isGifWallpaperUri(uri: String?): Boolean {
     if (uri == null || uri.trim().isEmpty()) return false
     val lower = uri.lowercase()
-    return lower.endsWith(".gif") || lower.contains(".gif?") || lower.contains("giphy.com")
+    return lower.endsWith(".gif") || lower.contains(".gif?") || lower.contains("giphy.com") ||
+            (lower.startsWith("file://") && lower.contains(".gif"))
 }
 
 @Composable
@@ -133,34 +139,42 @@ fun AnimatedWallpaperBackground(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isVideo = remember(wallpaperUri) { isVideoWallpaperUri(wallpaperUri) }
-    val isGif = remember(wallpaperUri) { isGifWallpaperUri(wallpaperUri) }
-    val preset = remember(wallpaperUri) { LIVE_ANIMATED_WALLPAPERS.find { it.mediaUrl == wallpaperUri } }
+    val resolvedPreset = remember(wallpaperUri) {
+        LIVE_ANIMATED_WALLPAPERS.find { it.mediaUrl == wallpaperUri || it.id == wallpaperUri }
+    }
+    val actualMediaUrl = resolvedPreset?.mediaUrl ?: wallpaperUri
+    val isVideo = remember(actualMediaUrl) {
+        resolvedPreset?.isVideo ?: isVideoWallpaperUri(actualMediaUrl)
+    }
+    val isGif = remember(actualMediaUrl) {
+        !isVideo && (resolvedPreset?.isVideo == false || isGifWallpaperUri(actualMediaUrl))
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Fallback static thumbnail while video/GIF is loading or buffering
-        val fallbackModel = preset?.thumbUrl ?: wallpaperUri
-        AsyncImage(
-            model = fallbackModel,
-            contentDescription = null,
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offsetX
-                    translationY = offsetY
-                }
-                .then(
-                    if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
-                )
-        )
+        if (!isVideo) {
+            val fallbackModel = resolvedPreset?.thumbUrl ?: actualMediaUrl
+            AsyncImage(
+                model = fallbackModel,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    }
+                    .then(
+                        if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
+                    )
+            )
+        }
 
         when {
             isVideo -> {
                 VideoWallpaperPlayer(
-                    wallpaperUri = wallpaperUri,
+                    wallpaperUri = actualMediaUrl,
                     scale = scale,
                     offsetX = offsetX,
                     offsetY = offsetY,
@@ -168,9 +182,9 @@ fun AnimatedWallpaperBackground(
                 )
             }
             isGif -> {
-                val imageRequest = remember(wallpaperUri, context) {
+                val imageRequest = remember(actualMediaUrl, context) {
                     ImageRequest.Builder(context)
-                        .data(wallpaperUri)
+                        .data(actualMediaUrl)
                         .decoderFactory(
                             if (Build.VERSION.SDK_INT >= 28) {
                                 ImageDecoderDecoder.Factory()
@@ -214,13 +228,32 @@ private fun VideoWallpaperPlayer(
     val context = LocalContext.current
 
     val exoPlayer = remember(wallpaperUri) {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_ONE
-            volume = 0f
-            setMediaItem(MediaItem.fromUri(Uri.parse(wallpaperUri)))
-            prepare()
-            playWhenReady = true
-        }
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
+
+        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpDataSourceFactory)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
+                repeatMode = Player.REPEAT_MODE_ONE
+                volume = 0f
+                setMediaItem(MediaItem.fromUri(Uri.parse(wallpaperUri)))
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        Log.e("AnimatedWallpaper", "ExoPlayer playback error: ${error.message}", error)
+                        prepare()
+                        playWhenReady = true
+                    }
+                })
+                prepare()
+                playWhenReady = true
+            }
     }
 
     DisposableEffect(exoPlayer) {
@@ -232,15 +265,36 @@ private fun VideoWallpaperPlayer(
 
     AndroidView(
         factory = { ctx ->
-            PlayerView(ctx).apply {
-                player = exoPlayer
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+            android.view.TextureView(ctx).apply {
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
+                surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(
+                        surface: android.graphics.SurfaceTexture,
+                        width: Int,
+                        height: Int
+                    ) {
+                        exoPlayer.setVideoTextureView(this@apply)
+                    }
+
+                    override fun onSurfaceTextureSizeChanged(
+                        surface: android.graphics.SurfaceTexture,
+                        width: Int,
+                        height: Int
+                    ) {}
+
+                    override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
+                        exoPlayer.clearVideoTextureView(this@apply)
+                        return true
+                    }
+
+                    override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {}
+                }
+                if (isAvailable) {
+                    exoPlayer.setVideoTextureView(this)
+                }
             }
         },
         modifier = Modifier

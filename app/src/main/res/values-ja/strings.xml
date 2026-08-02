@@ -381,8 +381,9 @@
     <string name="style_square">Square</string>
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
-    <string name="icon_preset_default">Default</string>
-    <string name="icon_preset_dark">Dark</string>
+    <string name="icon_preset_default">デフォルト</string>
+    <string name="icon_preset_light">ライト</string>
+    <string name="icon_preset_dark">ダーク</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
     <string name="app_icon_warning">⚠️ Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.</string>
@@ -613,4 +614,8 @@
     <string name="settings_backup_import_invalid">無効なバックアップファイル: %1$s</string>
     <string name="settings_backup_import_bad_version">このバックアップは新しいバージョンで作成されたためインポートできません。</string>
     <string name="settings_backup_skipped">%1$d 件の未対応項目をスキップしました</string>
+    <string name="theme_settings_title">テーマ</string>
+    <string name="theme_settings_desc">ライト/ダークモード、アクセントカラー、アプリアイコン</string>
+    <string name="preferences_layout_title">設定とレイアウト</string>
+    <string name="preferences_layout_desc">アドレスバーの位置、ナビゲーションバー、UIスケーリング</string>
 </resources>

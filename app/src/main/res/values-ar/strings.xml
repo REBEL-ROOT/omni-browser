@@ -381,8 +381,9 @@
     <string name="style_square">Square</string>
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
-    <string name="icon_preset_default">Default</string>
-    <string name="icon_preset_dark">Dark</string>
+    <string name="icon_preset_default">افتراضي</string>
+    <string name="icon_preset_light">فاتح</string>
+    <string name="icon_preset_dark">داكن</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
     <string name="app_icon_warning">⚠️ Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.</string>
@@ -613,4 +614,8 @@
     <string name="settings_backup_import_invalid">ملف نسخة احتياطية غير صالح: %1$s</string>
     <string name="settings_backup_import_bad_version">تم إنشاء هذه النسخة الاحتياطية بواسطة إصدار أحدث ولا يمكن استيرادها.</string>
     <string name="settings_backup_skipped">تم تخطي %1$d غير مدعوم</string>
+    <string name="theme_settings_title">المظهر والسمات</string>
+    <string name="theme_settings_desc">الوضع الفاتح والداكن، ألوان التمييز، وأيقونات التطبيق</string>
+    <string name="preferences_layout_title">التفضيلات والتخطيط</string>
+    <string name="preferences_layout_desc">موضع شريط العناوين، أشرطة التنقل، وتحجيم الواجهة</string>
 </resources>

@@ -381,8 +381,9 @@
     <string name="style_square">Square</string>
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
-    <string name="icon_preset_default">Default</string>
-    <string name="icon_preset_dark">Dark</string>
+    <string name="icon_preset_default">Predeterminado</string>
+    <string name="icon_preset_light">Claro</string>
+    <string name="icon_preset_dark">Oscuro</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
     <string name="app_icon_warning">⚠️ Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.</string>
@@ -613,4 +614,8 @@ Navegador predeterminado</string>
     <string name="settings_backup_import_invalid">Archivo de copia de seguridad no válido: %1$s</string>
     <string name="settings_backup_import_bad_version">Esta copia de seguridad fue realizada por una versión más reciente y no se puede importar.</string>
     <string name="settings_backup_skipped">%1$d no admitido(s) omitidos</string>
+    <string name="theme_settings_title">Tema</string>
+    <string name="theme_settings_desc">Modo claro y oscuro, colores de acento, iconos de aplicación</string>
+    <string name="preferences_layout_title">Preferencias y diseño</string>
+    <string name="preferences_layout_desc">Posición de la barra de direcciones, barras de navegación, escala</string>
 </resources>

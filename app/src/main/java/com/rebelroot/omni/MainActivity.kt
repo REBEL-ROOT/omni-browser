@@ -66,6 +66,7 @@ import com.rebelroot.omni.media.DownloadManagerScreen
 import com.rebelroot.omni.media.player.VideoPlayerScreen
 import com.rebelroot.omni.settings.SettingsScreen
 import com.rebelroot.omni.settings.AppearanceScreen
+import com.rebelroot.omni.settings.ThemeScreen
 import com.rebelroot.omni.settings.WallpaperScreen
 import com.rebelroot.omni.settings.PrivacyHubScreen
 import com.rebelroot.omni.history.HistoryScreen
@@ -459,6 +460,9 @@ class MainActivity : FragmentActivity() {
                                 onOpenAppearance = {
                                     navController.navigate("appearance")
                                 },
+                                onOpenTheme = {
+                                    navController.navigate("theme")
+                                },
                                 onOpenWallpapers = {
                                     navController.navigate("wallpapers")
                                 },
@@ -532,12 +536,20 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
-                        // Appearance Settings Screen
+                        // Appearance & Layout Settings Screen
                         composable("appearance") {
                             AppearanceScreen(
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
                                 onOpenWallpapers = { navController.navigate("wallpapers") }
+                            )
+                        }
+
+                        // Theme Settings Screen
+                        composable("theme") {
+                            ThemeScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

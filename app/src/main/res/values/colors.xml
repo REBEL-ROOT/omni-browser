@@ -8,6 +8,7 @@
          logo (dark logo on this light bg). -->
     <color name="splash_bg">#FFFFFF</color>
     <color name="app_icon_dark_bg">#1C1C1E</color>
+    <color name="app_icon_light_bg">#FFFFFF</color>
     <color name="app_icon_blue_bg">#0A84FF</color>
     <color name="app_icon_gold_bg">#FFB800</color>
 </resources>

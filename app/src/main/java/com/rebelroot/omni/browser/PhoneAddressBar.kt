@@ -35,6 +35,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
@@ -251,6 +253,45 @@ fun PhoneAddressBar(
                     color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                     shape = RoundedCornerShape(config.searchBoxHeight / 2)
                 )
+                .pointerInput(isInputFocused, viewModel.addressBarPosition) {
+                    if (isInputFocused) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalDragY = 0f
+                        var totalDragX = 0f
+                        var isMoved = false
+                        val pointerId = down.id
+
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.firstOrNull { it.id == pointerId } ?: break
+                            if (pointer.pressed) {
+                                val dragChange = pointer.position - pointer.previousPosition
+                                totalDragY += dragChange.y
+                                totalDragX += dragChange.x
+
+                                val verticalThreshold = 40.dp.toPx()
+                                if (!isMoved && kotlin.math.abs(totalDragY) > verticalThreshold && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDragX) * 1.4f) {
+                                    val currentPos = viewModel.addressBarPosition
+                                    if (totalDragY > 0 && (currentPos == "Top" || currentPos == "Split")) {
+                                        pointer.consume()
+                                        isMoved = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.saveAddressBarPosition(context, "Bottom")
+                                    } else if (totalDragY < 0 && currentPos == "Bottom") {
+                                        pointer.consume()
+                                        isMoved = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.saveAddressBarPosition(context, "Top")
+                                    }
+                                }
+                                if (isMoved) {
+                                    pointer.consume()
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
                 .combinedClickable(
                     onClick = {
                         if (!isInputFocused) {

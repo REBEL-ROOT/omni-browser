@@ -381,8 +381,9 @@
     <string name="style_square">Square</string>
     <string name="style_glass">Glass</string>
     <string name="app_icon">App Icon</string>
-    <string name="icon_preset_default">Default</string>
-    <string name="icon_preset_dark">Dark</string>
+    <string name="icon_preset_default">Domyślny</string>
+    <string name="icon_preset_light">Jasny</string>
+    <string name="icon_preset_dark">Ciemny</string>
     <string name="icon_preset_aura_dark">Aura Dark</string>
     <string name="icon_preset_aura_light">Aura Light</string>
     <string name="app_icon_warning">⚠️ Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.</string>
@@ -613,4 +614,8 @@ Domyślną przeglądarkę</string>
     <string name="settings_backup_import_invalid">Nieprawidłowy plik kopii zapasowej: %1$s</string>
     <string name="settings_backup_import_bad_version">Ta kopia zapasowa została wykonana przez nowszą wersję i nie można jej zaimportować.</string>
     <string name="settings_backup_skipped">Pominięto %1$d nieobsługiwanych</string>
+    <string name="theme_settings_title">Motyw</string>
+    <string name="theme_settings_desc">Tryb jasny i ciemny, kolory akcentujące, ikony aplikacji</string>
+    <string name="preferences_layout_title">Preferencje i układ</string>
+    <string name="preferences_layout_desc">Pozycja paska adresu, paski nawigacyjne, skalowanie UI</string>
 </resources>

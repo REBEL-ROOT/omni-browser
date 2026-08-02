@@ -75,6 +75,7 @@ fun SettingsScreen(
     onOpenUrl: (String) -> Unit,
     onLanguageChanged: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
+    onOpenTheme: () -> Unit = {},
     onOpenWallpapers: () -> Unit = {},
     onOpenPrivacySecurity: () -> Unit = {},
     onOpenPrivacyHub: () -> Unit = {},
@@ -465,7 +466,8 @@ fun SettingsScreen(
                 val query = searchQuery.trim()
                 val allSettingsItems = remember(query, isDefaultBrowser, currentLangName) {
                     listOf(
-                        SettingSearchResult("Appearance", "Theme mode, accent colors, layout, and UI scale", "PERSONALIZATION", Icons.Rounded.Palette, onOpenAppearance),
+                        SettingSearchResult(context.getString(R.string.theme_settings_title), context.getString(R.string.theme_settings_desc), "PERSONALIZATION", Icons.Rounded.Palette, onOpenTheme),
+                        SettingSearchResult(context.getString(R.string.preferences_layout_title), context.getString(R.string.preferences_layout_desc), "PERSONALIZATION", Icons.Rounded.Tune, onOpenAppearance),
                         SettingSearchResult("Wallpapers", "Browser background, dynamic wallpaper blur/dim", "PERSONALIZATION", Icons.Rounded.Wallpaper, onOpenWallpapers),
                         SettingSearchResult("Accessibility", "Text scaling, force enable zoom, high contrast mode", "PERSONALIZATION", Icons.Rounded.AccessibilityNew, onOpenAccessibility),
                         SettingSearchResult("Tabs", "Tab layouts, background tabs, auto-closing settings", "BROWSING", Icons.Rounded.Tab, onOpenTabs),
@@ -551,7 +553,9 @@ fun SettingsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionHeader(stringResource(id = R.string.settings_section_personalization))
                 SettingsCard {
-                    NavRow(Icons.Rounded.Palette, stringResource(id = R.string.appearance_title), stringResource(id = R.string.appearance_desc), onOpenAppearance)
+                    NavRow(Icons.Rounded.Palette, stringResource(id = R.string.theme_settings_title), stringResource(id = R.string.theme_settings_desc), onOpenTheme)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Tune, stringResource(id = R.string.preferences_layout_title), stringResource(id = R.string.preferences_layout_desc), onOpenAppearance)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.Wallpaper, stringResource(id = R.string.wallpapers_title), stringResource(id = R.string.wallpapers_desc), onOpenWallpapers, badge = "Experimental")
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
