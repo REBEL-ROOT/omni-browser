@@ -159,15 +159,37 @@ fun WallpaperScreen(
     var showOnlineGallery by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
-        uri?.let {
-            try {
-                val flag = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(it, flag)
-            } catch (e: Exception) { }
-            editingWallpaperUri = it.toString()
+        uri?.let { inputUri ->
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val mime = context.contentResolver.getType(inputUri) ?: ""
+                    val ext = when {
+                        mime.contains("video/mp4") -> "mp4"
+                        mime.contains("video/webm") -> "webm"
+                        mime.contains("image/gif") -> "gif"
+                        else -> "jpg"
+                    }
+                    val localFile = File(context.filesDir, "custom_wallpaper_${System.currentTimeMillis()}.$ext")
+                    context.contentResolver.openInputStream(inputUri)?.use { input ->
+                        FileOutputStream(localFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    val localUri = android.net.Uri.fromFile(localFile).toString()
+                    withContext(Dispatchers.Main) {
+                        viewModel.saveBrowserWallpaperUri(context, localUri)
+                        editingWallpaperUri = localUri
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        editingWallpaperUri = inputUri.toString()
+                    }
+                }
+            }
         }
     }
 

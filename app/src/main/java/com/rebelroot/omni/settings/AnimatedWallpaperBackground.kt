@@ -114,7 +114,7 @@ fun isVideoWallpaperUri(uri: String?): Boolean {
     return lower.endsWith(".mp4") || lower.endsWith(".webm") ||
             lower.endsWith(".mkv") || lower.endsWith(".mov") ||
             lower.contains("video/") || lower.contains(".mp4?") ||
-            lower.contains(".webm?")
+            lower.contains(".webm?") || lower.startsWith("content://")
 }
 
 fun isGifWallpaperUri(uri: String?): Boolean {
@@ -135,8 +135,28 @@ fun AnimatedWallpaperBackground(
     val context = LocalContext.current
     val isVideo = remember(wallpaperUri) { isVideoWallpaperUri(wallpaperUri) }
     val isGif = remember(wallpaperUri) { isGifWallpaperUri(wallpaperUri) }
+    val preset = remember(wallpaperUri) { LIVE_ANIMATED_WALLPAPERS.find { it.mediaUrl == wallpaperUri } }
 
     Box(modifier = modifier.fillMaxSize()) {
+        // Fallback static thumbnail while video/GIF is loading or buffering
+        val fallbackModel = preset?.thumbUrl ?: wallpaperUri
+        AsyncImage(
+            model = fallbackModel,
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY
+                }
+                .then(
+                    if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
+                )
+        )
+
         when {
             isVideo -> {
                 VideoWallpaperPlayer(
@@ -163,24 +183,6 @@ fun AnimatedWallpaperBackground(
                 }
                 AsyncImage(
                     model = imageRequest,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            translationX = offsetX
-                            translationY = offsetY
-                        }
-                        .then(
-                            if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
-                        )
-                )
-            }
-            else -> {
-                AsyncImage(
-                    model = wallpaperUri,
                     contentDescription = null,
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     modifier = Modifier
@@ -234,6 +236,7 @@ private fun VideoWallpaperPlayer(
                 player = exoPlayer
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
