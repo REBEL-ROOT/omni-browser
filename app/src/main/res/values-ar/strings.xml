@@ -293,10 +293,10 @@
     <string name="channel_downloads_name">التنزيلات في الخلفية</string>
     <string name="channel_downloads_desc">عرض تقدم تنزيل الملفات</string>
     <string name="menu_open_in_browser">فتح في المتصفح</string>
-    <string name="menu_share">مشاركة الرابط</string>
+    <string name="menu_share">مشاركة</string>
     <string name="menu_copy_link">نسخ الرابط</string>
     <string name="menu_reload">إعادة تحميل الصفحة</string>
-    <string name="menu_desktop_site">عرض موقع سطح المكتب</string>
+    <string name="menu_desktop_site">موقع سطح المكتب</string>
     <string name="menu_find_in_page">البحث في الصفحة</string>
     <string name="menu_add_to_home">إضافة للشاشة الرئيسية</string>
     <string name="menu_new_tab">تبويب جديد</string>
@@ -532,4 +532,24 @@
     <string name="onboarding_default_card_title">اجعل Omni متصفحك الافتراضي</string>
     <string name="onboarding_default_card_desc">افتح إعدادات النظام لاختيار Omni كمتصفح افتراضي</string>
     <string name="onboarding_set_default_button">تعيين كمتصفح افتراضي</string>
+    <string name="menu_incognito">خفي</string>
+    <string name="menu_group">مجموعة</string>
+    <string name="menu_recent">الأخيرة</string>
+    <string name="menu_bookmark_page">إضافة علامة مرجعية</string>
+    <string name="menu_remove_bookmark">إزالة العلامة المرجعية</string>
+    <string name="menu_add_to_shortcuts">إضافة إلى الاختصارات</string>
+    <string name="menu_extensions">الإضافات</string>
+    <string name="menu_extensions_subtext">مانع الإعلانات، النصوص والمزيد</string>
+    <string name="menu_player">المشغل</string>
+    <string name="menu_theme">المظهر</string>
+    <string name="menu_help">المساعدة</string>
+    <string name="menu_back">رجوع</string>
+    <string name="menu_forward">إلى الأمام</string>
+    <string name="menu_refresh">تحديث</string>
+    <string name="on">مفعل</string>
+    <string name="off">معطل</string>
+    <string name="menu_move_address_bar_top">نقل شريط العناوين للأعلى</string>
+    <string name="menu_move_address_bar_bottom">نقل شريط العناوين الأسفل</string>
+    <string name="toast_open_webpage_first">افتح صفحة ويب أولاً</string>
+    <string name="toast_added_to_shortcuts">تمت الإضافة إلى الاختصارات</string>
 </resources>

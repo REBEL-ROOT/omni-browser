@@ -3065,25 +3065,25 @@ fun AllInOneMenuSheet(
                 ) {
                     AllInOneGridItem(
                         icon = Icons.Rounded.Add,
-                        label = "New Tab",
+                        label = stringResource(id = R.string.menu_new_tab),
                         tint = textColor,
                         onClick = { onDismissRequest(); onNewTab() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.VisibilityOff,
-                        label = "Incognito",
+                        label = stringResource(id = R.string.menu_incognito),
                         tint = textColor,
                         onClick = { onDismissRequest(); onNewIncognitoTab() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.GridView,
-                        label = "Group",
+                        label = stringResource(id = R.string.menu_group),
                         tint = textColor,
                         onClick = { onDismissRequest(); onAddTabToNewGroup() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Devices,
-                        label = "Recent",
+                        label = stringResource(id = R.string.menu_recent),
                         tint = textColor,
                         onClick = { onDismissRequest(); onOpenHistory() }
                     )
@@ -3109,7 +3109,7 @@ fun AllInOneMenuSheet(
                                         viewModel.addToBookmarks(activeTab.title ?: "Page", viewModel.currentUrl)
                                     }
                                 } else {
-                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
@@ -3122,7 +3122,12 @@ fun AllInOneMenuSheet(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Bookmark page", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = if (isBookmarked) stringResource(id = R.string.menu_remove_bookmark) else stringResource(id = R.string.menu_bookmark_page),
+                            fontSize = 14.sp,
+                            color = textColor,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
@@ -3135,9 +3140,9 @@ fun AllInOneMenuSheet(
                                 onDismissRequest()
                                 if (activeTab != null && !showHomeScreen) {
                                     viewModel.addShortcut(activeTab.title ?: "Page", viewModel.currentUrl)
-                                    Toast.makeText(context, "Added to shortcuts", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_added_to_shortcuts), Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
@@ -3150,7 +3155,7 @@ fun AllInOneMenuSheet(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Add to shortcuts", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        Text(stringResource(id = R.string.menu_add_to_shortcuts), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
                     }
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
@@ -3164,7 +3169,7 @@ fun AllInOneMenuSheet(
                                 if (activeTab != null && !showHomeScreen) {
                                     onFindInPage()
                                 } else {
-                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
@@ -3177,7 +3182,7 @@ fun AllInOneMenuSheet(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Find in page", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        Text(stringResource(id = R.string.menu_find_in_page), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
                     }
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
@@ -3191,7 +3196,7 @@ fun AllInOneMenuSheet(
                                 if (activeTab != null && !showHomeScreen) {
                                     viewModel.toggleDesktopMode(context)
                                 } else {
-                                    Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
@@ -3204,7 +3209,7 @@ fun AllInOneMenuSheet(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Desktop site", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.menu_desktop_site), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         
                         // Badge for On/Off
                         Box(
@@ -3213,7 +3218,7 @@ fun AllInOneMenuSheet(
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = if (viewModel.isDesktopMode) "On" else "Off",
+                                text = if (viewModel.isDesktopMode) stringResource(id = R.string.on) else stringResource(id = R.string.off),
                                 fontSize = 11.sp,
                                 color = if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary else textColor,
                                 fontWeight = FontWeight.SemiBold
@@ -3242,8 +3247,8 @@ fun AllInOneMenuSheet(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Extensions", fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
-                            Text("Adblock, scripts & more", fontSize = 11.sp, color = secondaryText)
+                            Text(stringResource(id = R.string.menu_extensions), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                            Text(stringResource(id = R.string.menu_extensions_subtext), fontSize = 11.sp, color = secondaryText)
                         }
                         
                         // Badge for Extensions Count
@@ -3309,13 +3314,13 @@ fun AllInOneMenuSheet(
                 ) {
                     AllInOneGridItem(
                         icon = Icons.Rounded.PlayCircle,
-                        label = "Player",
+                        label = stringResource(id = R.string.menu_player),
                         tint = textColor,
                         onClick = { onDismissRequest(); onShowPlayerSettings() }
                     )
                     AllInOneGridItem(
                         icon = Icons.Rounded.Palette,
-                        label = "Theme",
+                        label = stringResource(id = R.string.menu_theme),
                         tint = textColor,
                         onClick = { onDismissRequest(); onShowThemeSheet() }
                     )
@@ -3327,7 +3332,7 @@ fun AllInOneMenuSheet(
                     )
                     AllInOneGridItem(
                         icon = Icons.AutoMirrored.Rounded.HelpOutline,
-                        label = "Help",
+                        label = stringResource(id = R.string.menu_help),
                         tint = textColor,
                         onClick = { onDismissRequest(); onShowFeedbackDialog() }
                     )
@@ -3346,19 +3351,19 @@ fun AllInOneMenuSheet(
 
                 AllInOneBottomAction(
                     icon = Icons.Rounded.ArrowBack,
-                    label = "Back",
+                    label = stringResource(id = R.string.menu_back),
                     enabled = canGoBack,
                     onClick = { viewModel.goBack() }
                 )
                 AllInOneBottomAction(
                     icon = Icons.Rounded.ArrowForward,
-                    label = "Forward",
+                    label = stringResource(id = R.string.menu_forward),
                     enabled = canGoForward,
                     onClick = { viewModel.goForward() }
                 )
                 AllInOneBottomAction(
                     icon = Icons.Rounded.Share,
-                    label = "Share",
+                    label = stringResource(id = R.string.menu_share),
                     enabled = activeTab != null && !showHomeScreen,
                     onClick = {
                         onDismissRequest()
@@ -3375,7 +3380,7 @@ fun AllInOneMenuSheet(
                 )
                 AllInOneBottomAction(
                     icon = Icons.Rounded.Refresh,
-                    label = "Refresh",
+                    label = stringResource(id = R.string.menu_refresh),
                     enabled = activeTab != null && !showHomeScreen,
                     onClick = { viewModel.reload(); onDismissRequest() }
                 )

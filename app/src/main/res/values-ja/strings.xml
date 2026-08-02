@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">バックグラウンドダウンロード</string>
     <string name="channel_downloads_desc">オフラインメディアファイルのダウンロード進捗を表示</string>
     <string name="menu_open_in_browser">ブラウザで開く</string>
-    <string name="menu_share">リンクを共有</string>
+    <string name="menu_share">共有</string>
     <string name="menu_copy_link">リンクをコピー</string>
     <string name="menu_reload">ページを再読み込み</string>
     <string name="menu_desktop_site">PC版サイト</string>
@@ -532,4 +532,24 @@
     <string name="onboarding_default_card_title">Omniをデフォルトブラウザに設定</string>
     <string name="onboarding_default_card_desc">システム設定を開いてOmniをデフォルトとして選択します</string>
     <string name="onboarding_set_default_button">デフォルトブラウザに設定</string>
+    <string name="menu_incognito">シークレット</string>
+    <string name="menu_group">グループ</string>
+    <string name="menu_recent">履歴</string>
+    <string name="menu_bookmark_page">ブックマークに追加</string>
+    <string name="menu_remove_bookmark">ブックマークを削除</string>
+    <string name="menu_add_to_shortcuts">ショートカットに追加</string>
+    <string name="menu_extensions">拡張機能</string>
+    <string name="menu_extensions_subtext">広告ブロック、スクリプトなど</string>
+    <string name="menu_player">プレーヤー</string>
+    <string name="menu_theme">テーマ</string>
+    <string name="menu_help">ヘルプ</string>
+    <string name="menu_back">戻る</string>
+    <string name="menu_forward">進む</string>
+    <string name="menu_refresh">更新</string>
+    <string name="on">オン</string>
+    <string name="off">オフ</string>
+    <string name="menu_move_address_bar_top">アドレスバーを上に移動</string>
+    <string name="menu_move_address_bar_bottom">アドレスバーを下に移動</string>
+    <string name="toast_open_webpage_first">最初にWebページを開いてください</string>
+    <string name="toast_added_to_shortcuts">ショートカットに追加しました</string>
 </resources>

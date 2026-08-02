@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">Downloads em segundo plano</string>
     <string name="channel_downloads_desc">Exibe o progresso de download para arquivos de mídia offline</string>
     <string name="menu_open_in_browser">Abrir no navegador</string>
-    <string name="menu_share">Compartilhar link</string>
+    <string name="menu_share">Compartilhar</string>
     <string name="menu_copy_link">Copiar link</string>
     <string name="menu_reload">Recarregar página</string>
     <string name="menu_desktop_site">Versão para computador</string>
@@ -532,4 +532,24 @@ Navegador padrão</string>
     <string name="onboarding_default_card_title">Torne o Omni seu navegador padrão</string>
     <string name="onboarding_default_card_desc">Abra as configurações do sistema para selecionar o Omni como padrão</string>
     <string name="onboarding_set_default_button">Definir como navegador padrão</string>
+    <string name="menu_incognito">Anônimo</string>
+    <string name="menu_group">Grupo</string>
+    <string name="menu_recent">Recentes</string>
+    <string name="menu_bookmark_page">Adicionar aos favoritos</string>
+    <string name="menu_remove_bookmark">Remover dos favoritos</string>
+    <string name="menu_add_to_shortcuts">Adicionar aos atalhos</string>
+    <string name="menu_extensions">Extensões</string>
+    <string name="menu_extensions_subtext">Bloqueador, scripts e mais</string>
+    <string name="menu_player">Player</string>
+    <string name="menu_theme">Tema</string>
+    <string name="menu_help">Ajuda</string>
+    <string name="menu_back">Voltar</string>
+    <string name="menu_forward">Avançar</string>
+    <string name="menu_refresh">Atualizar</string>
+    <string name="on">Ativado</string>
+    <string name="off">Desativado</string>
+    <string name="menu_move_address_bar_top">Mover barra de endereço para cima</string>
+    <string name="menu_move_address_bar_bottom">Mover barra de endereço para baixo</string>
+    <string name="toast_open_webpage_first">Abra uma página da web primeiro</string>
+    <string name="toast_added_to_shortcuts">Adicionado aos atalhos</string>
 </resources>

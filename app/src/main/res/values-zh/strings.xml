@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">后台下载</string>
     <string name="channel_downloads_desc">显示离线媒体文件的下载进度</string>
     <string name="menu_open_in_browser">在浏览器中打开</string>
-    <string name="menu_share">分享链接</string>
+    <string name="menu_share">分享</string>
     <string name="menu_copy_link">复制链接</string>
     <string name="menu_reload">刷新页面</string>
     <string name="menu_desktop_site">桌面版网站</string>
@@ -532,4 +532,24 @@
     <string name="onboarding_default_card_title">将 Omni 设为默认浏览器</string>
     <string name="onboarding_default_card_desc">打开系统设置选择 Omni 作为默认浏览器</string>
     <string name="onboarding_set_default_button">设置为默认浏览器</string>
+    <string name="menu_incognito">无痕</string>
+    <string name="menu_group">分组</string>
+    <string name="menu_recent">最近</string>
+    <string name="menu_bookmark_page">添加书签</string>
+    <string name="menu_remove_bookmark">移除书签</string>
+    <string name="menu_add_to_shortcuts">添加到快捷方式</string>
+    <string name="menu_extensions">扩展程序</string>
+    <string name="menu_extensions_subtext">广告拦截、脚本等</string>
+    <string name="menu_player">播放器</string>
+    <string name="menu_theme">主题</string>
+    <string name="menu_help">帮助</string>
+    <string name="menu_back">返回</string>
+    <string name="menu_forward">前进</string>
+    <string name="menu_refresh">刷新</string>
+    <string name="on">开启</string>
+    <string name="off">关闭</string>
+    <string name="menu_move_address_bar_top">将地址栏移至顶部</string>
+    <string name="menu_move_address_bar_bottom">将地址栏移至底部</string>
+    <string name="toast_open_webpage_first">请先打开一个网页</string>
+    <string name="toast_added_to_shortcuts">已添加到快捷方式</string>
 </resources>

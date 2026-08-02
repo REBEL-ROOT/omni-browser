@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">Pobieranie w tle</string>
     <string name="channel_downloads_desc">Wyświetla postęp pobierania plików mediów offline</string>
     <string name="menu_open_in_browser">Otwórz w przeglądarce</string>
-    <string name="menu_share">Udostępnij link</string>
+    <string name="menu_share">Udostępnij</string>
     <string name="menu_copy_link">Kopiuj link</string>
     <string name="menu_reload">Odśwież stronę</string>
     <string name="menu_desktop_site">Wersja na komputer</string>
@@ -532,4 +532,24 @@ Domyślną przeglądarkę</string>
     <string name="onboarding_default_card_title">Ustaw Omni jako domyślną przeglądarkę</string>
     <string name="onboarding_default_card_desc">Otwórz ustawienia systemowe, aby wybrać Omni jako domyślną</string>
     <string name="onboarding_set_default_button">Ustaw jako domyślną przeglądarkę</string>
+    <string name="menu_incognito">Incognito</string>
+    <string name="menu_group">Grupa</string>
+    <string name="menu_recent">Ostatnie</string>
+    <string name="menu_bookmark_page">Dodaj zakładkę</string>
+    <string name="menu_remove_bookmark">Usuń zakładkę</string>
+    <string name="menu_add_to_shortcuts">Dodaj do skrótów</string>
+    <string name="menu_extensions">Rozszerzenia</string>
+    <string name="menu_extensions_subtext">Adblock, skrypty i więcej</string>
+    <string name="menu_player">Odtwarzacz</string>
+    <string name="menu_theme">Motyw</string>
+    <string name="menu_help">Pomoc</string>
+    <string name="menu_back">Wstecz</string>
+    <string name="menu_forward">Dalej</string>
+    <string name="menu_refresh">Odśwież</string>
+    <string name="on">Wł.</string>
+    <string name="off">Wył.</string>
+    <string name="menu_move_address_bar_top">Przenieś pasek adresu na górę</string>
+    <string name="menu_move_address_bar_bottom">Przenieś pasek adresu na dół</string>
+    <string name="toast_open_webpage_first">Najpierw otwórz stronę internetową</string>
+    <string name="toast_added_to_shortcuts">Dodano do skrótów</string>
 </resources>

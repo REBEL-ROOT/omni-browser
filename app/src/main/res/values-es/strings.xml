@@ -293,10 +293,10 @@
     <string name="channel_downloads_name">Descargas en segundo plano</string>
     <string name="channel_downloads_desc">Muestra el progreso de descarga de archivos multimedia offline</string>
     <string name="menu_open_in_browser">Abrir en navegador</string>
-    <string name="menu_share">Compartir enlace</string>
+    <string name="menu_share">Compartir</string>
     <string name="menu_copy_link">Copiar enlace</string>
     <string name="menu_reload">Recargar página</string>
-    <string name="menu_desktop_site">Sitio de escritorio</string>
+    <string name="menu_desktop_site">Sitio para ordenador</string>
     <string name="menu_find_in_page">Buscar en la página</string>
     <string name="menu_add_to_home">Añadir a la pantalla de inicio</string>
     <string name="menu_new_tab">Nueva pestaña</string>
@@ -532,4 +532,24 @@ Navegador predeterminado</string>
     <string name="onboarding_default_card_title">Haz de Omni tu navegador predeterminado</string>
     <string name="onboarding_default_card_desc">Abre la configuración para seleccionar Omni como predeterminado</string>
     <string name="onboarding_set_default_button">Establecer como navegador predeterminado</string>
+    <string name="menu_incognito">Incógnito</string>
+    <string name="menu_group">Grupo</string>
+    <string name="menu_recent">Reciente</string>
+    <string name="menu_bookmark_page">Añadir a marcadores</string>
+    <string name="menu_remove_bookmark">Eliminar marcador</string>
+    <string name="menu_add_to_shortcuts">Añadir a atajos</string>
+    <string name="menu_extensions">Extensiones</string>
+    <string name="menu_extensions_subtext">Bloqueador, scripts y más</string>
+    <string name="menu_player">Reproductor</string>
+    <string name="menu_theme">Tema</string>
+    <string name="menu_help">Ayuda</string>
+    <string name="menu_back">Atrás</string>
+    <string name="menu_forward">Adelante</string>
+    <string name="menu_refresh">Actualizar</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="menu_move_address_bar_top">Mover barra de direcciones arriba</string>
+    <string name="menu_move_address_bar_bottom">Mover barra de direcciones abajo</string>
+    <string name="toast_open_webpage_first">Abre una página web primero</string>
+    <string name="toast_added_to_shortcuts">Añadido a atajos</string>
 </resources>

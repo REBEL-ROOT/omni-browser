@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">बैकग्राउंड डाउनलोड</string>
     <string name="channel_downloads_desc">ऑफ़लाइन मीडिया फ़ाइलों के लिए डाउनलोड प्रगति दिखाता है</string>
     <string name="menu_open_in_browser">ब्राउज़र में खोलें</string>
-    <string name="menu_share">लिंक साझा करें</string>
+    <string name="menu_share">साझा करें</string>
     <string name="menu_copy_link">लिंक कॉपी करें</string>
     <string name="menu_reload">पेज पुनः लोड करें</string>
     <string name="menu_desktop_site">डेस्कटॉप साइट</string>
@@ -532,4 +532,24 @@
     <string name="onboarding_default_card_title">ऑम्नि ब्राउज़र को डिफ़ॉल्ट बनाएं</string>
     <string name="onboarding_default_card_desc">ऑम्नि को डिफ़ॉल्ट ब्राउज़र के रूप में चुनने के लिए सिस्टम सेटिंग्स खोलें</string>
     <string name="onboarding_set_default_button">डिफ़ॉल्ट ब्राउज़र के रूप में सेट करें</string>
+    <string name="menu_incognito">इन्कॉग्निटो</string>
+    <string name="menu_group">समूह</string>
+    <string name="menu_recent">हालिया</string>
+    <string name="menu_bookmark_page">पेज बुकमार्क करें</string>
+    <string name="menu_remove_bookmark">बुकमार्क हटाएं</string>
+    <string name="menu_add_to_shortcuts">शॉर्टकट में जोड़ें</string>
+    <string name="menu_extensions">एक्सटेंशन</string>
+    <string name="menu_extensions_subtext">विज्ञापन अवरोधक, स्क्रिप्ट और अधिक</string>
+    <string name="menu_player">प्लेयर</string>
+    <string name="menu_theme">थीम</string>
+    <string name="menu_help">सहायता</string>
+    <string name="menu_back">पीछे</string>
+    <string name="menu_forward">आगे</string>
+    <string name="menu_refresh">रिफ्रेश करें</string>
+    <string name="on">चालू</string>
+    <string name="off">बंद</string>
+    <string name="menu_move_address_bar_top">एड्रेस बार को ऊपर ले जाएं</string>
+    <string name="menu_move_address_bar_bottom">एड्रेस बार को नीचे ले जाएं</string>
+    <string name="toast_open_webpage_first">पहले एक वेबपेज खोलें</string>
+    <string name="toast_added_to_shortcuts">शॉर्टकट में जोड़ा गया</string>
 </resources>

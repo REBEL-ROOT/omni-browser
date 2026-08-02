@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">Téléchargements en arrière-plan</string>
     <string name="channel_downloads_desc">Affiche la progression des téléchargements pour les fichiers hors ligne</string>
     <string name="menu_open_in_browser">Ouvrir dans le navigateur</string>
-    <string name="menu_share">Partager le lien</string>
+    <string name="menu_share">Partager</string>
     <string name="menu_copy_link">Copier le lien</string>
     <string name="menu_reload">Recharger la page</string>
     <string name="menu_desktop_site">Version pour ordinateur</string>
@@ -532,4 +532,24 @@ Navigateur par défaut</string>
     <string name="onboarding_default_card_title">Faites d'Omni votre navigateur par défaut</string>
     <string name="onboarding_default_card_desc">Ouvrez les paramètres système pour choisir Omni par défaut</string>
     <string name="onboarding_set_default_button">Définir comme navigateur par défaut</string>
+    <string name="menu_incognito">Privé</string>
+    <string name="menu_group">Groupe</string>
+    <string name="menu_recent">Récents</string>
+    <string name="menu_bookmark_page">Marquer la page</string>
+    <string name="menu_remove_bookmark">Supprimer le marque-page</string>
+    <string name="menu_add_to_shortcuts">Ajouter aux raccourcis</string>
+    <string name="menu_extensions">Extensions</string>
+    <string name="menu_extensions_subtext">Bloqueur, scripts et plus</string>
+    <string name="menu_player">Lecteur</string>
+    <string name="menu_theme">Thème</string>
+    <string name="menu_help">Aide</string>
+    <string name="menu_back">Retour</string>
+    <string name="menu_forward">Avancer</string>
+    <string name="menu_refresh">Actualiser</string>
+    <string name="on">Activé</string>
+    <string name="off">Désactivé</string>
+    <string name="menu_move_address_bar_top">Placer la barre d'adresse en haut</string>
+    <string name="menu_move_address_bar_bottom">Placer la barre d'adresse en bas</string>
+    <string name="toast_open_webpage_first">Ouvrez d'abord une page web</string>
+    <string name="toast_added_to_shortcuts">Ajouté aux raccourcis</string>
 </resources>

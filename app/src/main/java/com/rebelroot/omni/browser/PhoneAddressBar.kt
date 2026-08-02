@@ -280,7 +280,7 @@ fun PhoneAddressBar(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = if (isBottom) "Move address bar to the top" else "Move address bar to the bottom",
+                            text = if (isBottom) stringResource(id = R.string.menu_move_address_bar_top) else stringResource(id = R.string.menu_move_address_bar_bottom),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (viewModel.isDarkThemeEnabled) Color(0xFFF3F4F6) else Color(0xFF1F2937)
@@ -298,7 +298,6 @@ fun PhoneAddressBar(
                         showAddressBarContextMenu = false
                         val newPos = if (isBottom) "Top" else "Bottom"
                         viewModel.saveAddressBarPosition(context, newPos)
-                        Toast.makeText(context, "Address bar moved to $newPos", Toast.LENGTH_SHORT).show()
                     }
                 )
 
@@ -307,7 +306,7 @@ fun PhoneAddressBar(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = "Copy link",
+                            text = stringResource(id = R.string.menu_copy_link),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (viewModel.isDarkThemeEnabled) Color(0xFFF3F4F6) else Color(0xFF1F2937)
@@ -326,7 +325,7 @@ fun PhoneAddressBar(
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                         val clip = android.content.ClipData.newPlainText("URL", viewModel.currentUrl)
                         clipboard?.setPrimaryClip(clip)
-                        Toast.makeText(context, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.menu_copy_link), Toast.LENGTH_SHORT).show()
                     }
                 )
             }

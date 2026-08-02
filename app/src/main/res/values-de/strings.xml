@@ -293,7 +293,7 @@
     <string name="channel_downloads_name">Hintergrund-Downloads</string>
     <string name="channel_downloads_desc">Zeigt den Download-Fortschritt für Offline-Mediendateien an</string>
     <string name="menu_open_in_browser">Im Browser öffnen</string>
-    <string name="menu_share">Link teilen</string>
+    <string name="menu_share">Teilen</string>
     <string name="menu_copy_link">Link kopieren</string>
     <string name="menu_reload">Seite neu laden</string>
     <string name="menu_desktop_site">Desktop-Website</string>
@@ -532,4 +532,24 @@ Festlegen</string>
     <string name="onboarding_default_card_title">Omni Browser zum Standard machen</string>
     <string name="onboarding_default_card_desc">Systemeinstellungen öffnen, um Omni als Standardbrowser auszuwählen</string>
     <string name="onboarding_set_default_button">Als Standardbrowser festlegen</string>
+    <string name="menu_incognito">Inkubation</string>
+    <string name="menu_group">Gruppe</string>
+    <string name="menu_recent">Kürzlich</string>
+    <string name="menu_bookmark_page">Lesezeichen hinzufügen</string>
+    <string name="menu_remove_bookmark">Lesezeichen entfernen</string>
+    <string name="menu_add_to_shortcuts">Zu Verknüpfungen hinzufügen</string>
+    <string name="menu_extensions">Erweiterungen</string>
+    <string name="menu_extensions_subtext">Werbeblocker, Skripte &amp; mehr</string>
+    <string name="menu_player">Player</string>
+    <string name="menu_theme">Design</string>
+    <string name="menu_help">Hilfe</string>
+    <string name="menu_back">Zurück</string>
+    <string name="menu_forward">Vorwärts</string>
+    <string name="menu_refresh">Aktualisieren</string>
+    <string name="on">An</string>
+    <string name="off">Aus</string>
+    <string name="menu_move_address_bar_top">Adressleiste nach oben verschieben</string>
+    <string name="menu_move_address_bar_bottom">Adressleiste nach unten verschieben</string>
+    <string name="toast_open_webpage_first">Zuerst eine Webseite öffnen</string>
+    <string name="toast_added_to_shortcuts">Zu Verknüpfungen hinzugefügt</string>
 </resources>
