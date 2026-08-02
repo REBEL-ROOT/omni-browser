@@ -173,7 +173,7 @@ fun TabItem(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
-                    contentDescription = "Close Tab",
+                    contentDescription = stringResource(R.string.close_tab_desc),
                     modifier = Modifier.size(8.dp),
                     tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )

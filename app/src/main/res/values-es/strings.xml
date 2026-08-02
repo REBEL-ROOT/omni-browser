@@ -944,5 +944,30 @@
     <string name="overview_devnotes_title">Notas dev y bóveda</string>
     <string name="overview_devnotes_subtitle">Credenciales y fragmentos seguros sin conexión</string>
     <string name="overview_devnotes_desc" formatted="false">Guarda contraseñas, claves API, fragmentos de código y URLs 100% sin conexión dentro del sandbox de la app.\n\nIncluye una fila de teclado auxiliar para símbolos (`{}`, `[]`, `=&gt;`, `;`), operadores de copiar/pegar y navegación directa de URL con copia automática de contraseña.</string>
-    <string name="autoscroll_speed">Desplazar %1$dx</string>
+    <string name="autoscroll_speed">Desplazamiento %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">Nueva pestaña</string>
+    <string name="close_tab_desc">Cerrar pestaña</string>
+    <string name="tab_thumbnail_desc">Miniatura del sitio</string>
+    <string name="tab_mode_normal">Normal</string>
+    <string name="tab_mode_group">Grupo</string>
+    <string name="tab_mode_incognito">Incógnito</string>
+    <string name="tab_group_count_plural">%1$d pestañas</string>
+    <string name="tab_group_count_singular">1 pestaña</string>
+    <string name="tab_groups_title">Grupos de pestañas</string>
+    <string name="remove_from_group">Quitar de \"%1$s\"</string>
+    <string name="add_to_existing_group">Añadir a grupo existente:</string>
+    <string name="create_new_group">Crear nuevo grupo:</string>
+    <string name="group_name_placeholder">Nombre del grupo (ej. Trabajo, Social)</string>
+    <string name="group_name_simple_placeholder">Nombre del grupo</string>
+    <string name="create_and_add">Crear y añadir</string>
+    <string name="close_button">Cerrar</string>
+    <string name="rename_group_title">Renombrar grupo</string>
+    <string name="change_color_title">Cambiar color:</string>
+    <string name="menu_open_link_new_tab">Abrir enlace en una nueva pestaña</string>
+    <string name="menu_open_image_new_tab">Abrir imagen en una nueva pestaña</string>
+    <string name="menu_add_tab_to_new_group">Añadir pestaña a un nuevo grupo</string>
+    <string name="menu_recent_tabs">Pestañas recientes</string>
+    <string name="toast_group_created">Grupo creado con la pestaña activa</string>
 </resources>

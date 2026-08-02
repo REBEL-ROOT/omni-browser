@@ -856,25 +856,25 @@ fun omnimenuDropdown(
 
             // ── Section 1: Tabs ────────────────────────────────────
             MinimalMenuItem(
-                text = "New tab",
+                text = stringResource(R.string.menu_new_tab),
                 icon = Icons.Rounded.Add,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onNewTab() }
             )
             MinimalMenuItem(
-                text = "New Incognito tab",
+                text = stringResource(R.string.menu_new_incognito_tab),
                 icon = Icons.Rounded.VisibilityOff,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onNewIncognitoTab() }
             )
             MinimalMenuItem(
-                text = "Add tab to new group",
+                text = stringResource(R.string.menu_add_tab_to_new_group),
                 icon = Icons.Rounded.GridView,
                 iconTint = iconTint,
                 textColor = textPrimary,
-                onClick = { onDismissRequest(); Toast.makeText(context, "Group created with active tab", Toast.LENGTH_SHORT).show() }
+                onClick = { onDismissRequest(); Toast.makeText(context, context.getString(R.string.toast_group_created), Toast.LENGTH_SHORT).show() }
             )
 
             HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
@@ -913,7 +913,7 @@ fun omnimenuDropdown(
                 onClick = { onDismissRequest(); onOpenBookmarks() }
             )
             MinimalMenuItem(
-                text = "Recent tabs",
+                text = stringResource(R.string.menu_recent_tabs),
                 icon = Icons.Rounded.Devices,
                 iconTint = iconTint,
                 textColor = textPrimary,

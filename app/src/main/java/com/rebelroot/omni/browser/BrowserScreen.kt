@@ -860,7 +860,7 @@ fun BrowserScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Text(
-                                                    text = if (tab.title.isNullOrBlank()) "New Tab" else tab.title,
+                                                    text = if (tab.title.isNullOrBlank()) stringResource(R.string.new_tab_title) else tab.title,
                                                     color = tabTextColor,
                                                     fontSize = 12.sp,
                                                     maxLines = 1,
@@ -878,7 +878,7 @@ fun BrowserScreen(
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Rounded.Close,
-                                                            contentDescription = "Close Tab",
+                                                            contentDescription = stringResource(R.string.close_tab_desc),
                                                             tint = tabTextColor.copy(alpha = 0.7f),
                                                             modifier = Modifier.size(12.dp)
                                                         )
@@ -896,7 +896,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Add,
-                                            contentDescription = "New Tab",
+                                            contentDescription = stringResource(R.string.menu_new_tab),
                                             tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -3141,7 +3141,7 @@ fun BrowserScreen(
                             // Open in New Tab
                             ContextMenuItem(
                                 icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                                title = "Open image in new tab",
+                                title = stringResource(R.string.menu_open_image_new_tab),
                                 onClick = {
                                     viewModel.dismissContextMenu()
                                     viewModel.createNewTab(context, imageUrl)
@@ -3169,7 +3169,7 @@ fun BrowserScreen(
                             // Open Link in New Tab
                             ContextMenuItem(
                                 icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                                title = "Open link in new tab",
+                                title = stringResource(R.string.menu_open_link_new_tab),
                                 onClick = {
                                     viewModel.dismissContextMenu()
                                     viewModel.createNewTab(context, linkUrl)
@@ -3860,7 +3860,7 @@ fun BrowserScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "Normal",
+                                        text = stringResource(R.string.tab_mode_normal),
                                         color = if (!viewModel.isIncognitoMode && !showOnlyGroups) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
@@ -3880,7 +3880,7 @@ fun BrowserScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "Group",
+                                        text = stringResource(R.string.tab_mode_group),
                                         color = if (showOnlyGroups) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
@@ -3903,7 +3903,7 @@ fun BrowserScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "Incognito",
+                                        text = stringResource(R.string.tab_mode_incognito),
                                         color = if (viewModel.isIncognitoMode && !showOnlyGroups) Color.White else (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
@@ -4047,7 +4047,7 @@ fun BrowserScreen(
                                     // Title and URL
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") "New Tab" else tab.title,
+                                            text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") stringResource(R.string.new_tab_title) else tab.title,
                                             color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 13.sp,
@@ -4095,7 +4095,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Close,
-                                            contentDescription = "Close Tab",
+                                            contentDescription = stringResource(R.string.close_tab_desc),
                                             tint = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(14.dp)
                                         )
@@ -4197,7 +4197,7 @@ fun BrowserScreen(
                                                 )
                                             }
                                             Text(
-                                                text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") "New Tab" else tab.title,
+                                                text = if (tab.title == "about:blank" || tab.title.isEmpty() || tab.url == "about:blank") stringResource(R.string.new_tab_title) else tab.title,
                                                 color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 11.sp,
@@ -4215,7 +4215,7 @@ fun BrowserScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Close,
-                                                contentDescription = "Close Tab",
+                                                contentDescription = stringResource(R.string.close_tab_desc),
                                                 tint = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(12.dp)
                                             )
@@ -4247,7 +4247,7 @@ fun BrowserScreen(
                                                     .size(96, 96)
                                                     .crossfade(true)
                                                     .build(),
-                                                contentDescription = "Site Thumbnail",
+                                                contentDescription = stringResource(R.string.tab_thumbnail_desc),
                                                 modifier = Modifier.size(40.dp)
                                             )
                                         } else {
@@ -4411,7 +4411,8 @@ fun BrowserScreen(
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(text = group.title, color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(text = "${groupTabs.size} tabs", color = groupColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        val groupTabCountText = if (groupTabs.size == 1) stringResource(R.string.tab_group_count_singular) else stringResource(R.string.tab_group_count_plural, groupTabs.size)
+                                        Text(text = groupTabCountText, color = groupColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -4581,13 +4582,13 @@ fun BrowserScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.DeleteOutline,
-                                    contentDescription = "Close All",
+                                    contentDescription = stringResource(R.string.menu_close_all_tabs),
                                     tint = Color(0xFFFF4D4D),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Close All",
+                                    text = stringResource(R.string.menu_close_all_tabs),
                                     color = Color(0xFFFF4D4D),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp
@@ -4607,7 +4608,7 @@ fun BrowserScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Add,
-                                    contentDescription = "New Tab",
+                                    contentDescription = stringResource(R.string.menu_new_tab),
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )

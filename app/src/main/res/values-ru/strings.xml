@@ -939,5 +939,30 @@
     <string name="overview_devnotes_title">Заметки и хранилище</string>
     <string name="overview_devnotes_subtitle">Безопасные офлайн-данные и сниппеты</string>
     <string name="overview_devnotes_desc" formatted="false">Храните пароли, API-ключи, сниппеты кода и URL на 100% офлайн в песочнице приложения.\n\nЕсть вспомогательный ряд клавиатуры для символов (`{}`, `[]`, `=&gt;`, `;`), копирование/вставка и переход по URL с автокопированием пароля.</string>
-    <string name="autoscroll_speed">Прокр. %1$dx</string>
+    <string name="autoscroll_speed">Прокрутка %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">Новая вкладка</string>
+    <string name="close_tab_desc">Закрыть вкладку</string>
+    <string name="tab_thumbnail_desc">Миниатюра сайта</string>
+    <string name="tab_mode_normal">Обычный</string>
+    <string name="tab_mode_group">Группа</string>
+    <string name="tab_mode_incognito">Инкогнито</string>
+    <string name="tab_group_count_plural">%1$d вкладок</string>
+    <string name="tab_group_count_singular">1 вкладка</string>
+    <string name="tab_groups_title">Группы вкладок</string>
+    <string name="remove_from_group">Удалить из \"%1$s\"</string>
+    <string name="add_to_existing_group">Добавить в существующую группу:</string>
+    <string name="create_new_group">Создать новую группу:</string>
+    <string name="group_name_placeholder">Название группы (напр. Работа, Соцсети)</string>
+    <string name="group_name_simple_placeholder">Название группы</string>
+    <string name="create_and_add">Создать и добавить</string>
+    <string name="close_button">Закрыть</string>
+    <string name="rename_group_title">Переименовать группу</string>
+    <string name="change_color_title">Изменить цвет:</string>
+    <string name="menu_open_link_new_tab">Открыть ссылку в новой вкладке</string>
+    <string name="menu_open_image_new_tab">Открыть изображение в новой вкладке</string>
+    <string name="menu_add_tab_to_new_group">Добавить вкладку в новую группу</string>
+    <string name="menu_recent_tabs">Недавние вкладки</string>
+    <string name="toast_group_created">Группа создана с активной вкладкой</string>
 </resources>

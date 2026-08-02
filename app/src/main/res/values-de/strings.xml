@@ -938,5 +938,30 @@ tellungen &amp; Layout</string>
     <string name="overview_devnotes_title">Dev-Notizen &amp; Tresor</string>
     <string name="overview_devnotes_subtitle">Sichere Offline-Zugangsdaten &amp; Snippets</string>
     <string name="overview_devnotes_desc" formatted="false">Speichere Passwörter, API-Schlüssel, Code-Snippets und URLs 100% offline sicher in der App-Sandbox.\n\nInkl. Helfer-Tastenleiste für Symbole (`{}`, `[]`, `=&gt;`, `;`), Kopieren/Einfügen und direkte URL-Navigation mit automatischem Passwort-Kopieren.</string>
-    <string name="autoscroll_speed">Scroll %1$dx</string>
+    <string name="autoscroll_speed">Scrollen %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">Neuer Tab</string>
+    <string name="close_tab_desc">Tab schließen</string>
+    <string name="tab_thumbnail_desc">Website-Vorschau</string>
+    <string name="tab_mode_normal">Normal</string>
+    <string name="tab_mode_group">Gruppe</string>
+    <string name="tab_mode_incognito">Inkognito</string>
+    <string name="tab_group_count_plural">%1$d Tabs</string>
+    <string name="tab_group_count_singular">1 Tab</string>
+    <string name="tab_groups_title">Tab-Gruppen</string>
+    <string name="remove_from_group">Aus \"%1$s\" entfernen</string>
+    <string name="add_to_existing_group">Zu bestehender Gruppe hinzufügen:</string>
+    <string name="create_new_group">Neue Gruppe erstellen:</string>
+    <string name="group_name_placeholder">Gruppenname (z. B. Arbeit, Soziales)</string>
+    <string name="group_name_simple_placeholder">Gruppenname</string>
+    <string name="create_and_add">Erstellen &amp; Hinzufügen</string>
+    <string name="close_button">Schließen</string>
+    <string name="rename_group_title">Gruppe umbenennen</string>
+    <string name="change_color_title">Farbe ändern:</string>
+    <string name="menu_open_link_new_tab">Link in neuem Tab öffnen</string>
+    <string name="menu_open_image_new_tab">Bild in neuem Tab öffnen</string>
+    <string name="menu_add_tab_to_new_group">Tab zu neuer Gruppe hinzufügen</string>
+    <string name="menu_recent_tabs">Kürzlich geöffnete Tabs</string>
+    <string name="toast_group_created">Gruppe mit aktivem Tab erstellt</string>
 </resources>

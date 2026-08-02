@@ -941,5 +941,30 @@
     <string name="overview_devnotes_title">Notatki dev i sejf</string>
     <string name="overview_devnotes_subtitle">Bezpieczne dane i fragmenty offline</string>
     <string name="overview_devnotes_desc" formatted="false">Przechowuj hasła, klucze API, fragmenty kodu i URL-e w 100% offline w piaskownicy aplikacji.\n\nZawiera pomocniczy pasek klawiatury do symboli (`{}`, `[]`, `=&gt;`, `;`), kopiowanie/wklejanie i nawigację URL z automatycznym kopiowaniem hasła.</string>
-    <string name="autoscroll_speed">Przewiń %1$dx</string>
+    <string name="autoscroll_speed">Przewijanie %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">Nowa karta</string>
+    <string name="close_tab_desc">Zamknij kartę</string>
+    <string name="tab_thumbnail_desc">Miniatura strony</string>
+    <string name="tab_mode_normal">Normalne</string>
+    <string name="tab_mode_group">Grupa</string>
+    <string name="tab_mode_incognito">Incognito</string>
+    <string name="tab_group_count_plural">%1$d kart</string>
+    <string name="tab_group_count_singular">1 karta</string>
+    <string name="tab_groups_title">Grupy kart</string>
+    <string name="remove_from_group">Usuń z \"%1$s\"</string>
+    <string name="add_to_existing_group">Dodaj do istniejącej grupy:</string>
+    <string name="create_new_group">Utwórz nową grupę:</string>
+    <string name="group_name_placeholder">Nazwa grupy (np. Praca, Społeczności)</string>
+    <string name="group_name_simple_placeholder">Nazwa grupy</string>
+    <string name="create_and_add">Utwórz i dodaj</string>
+    <string name="close_button">Zamknij</string>
+    <string name="rename_group_title">Zmień nazwę grupy</string>
+    <string name="change_color_title">Zmień kolor:</string>
+    <string name="menu_open_link_new_tab">Otwórz link w nowej karcie</string>
+    <string name="menu_open_image_new_tab">Otwórz obraz w nowej karcie</string>
+    <string name="menu_add_tab_to_new_group">Dodaj kartę do nowej grupy</string>
+    <string name="menu_recent_tabs">Ostatnie karty</string>
+    <string name="toast_group_created">Utworzono grupę z aktywną kartą</string>
 </resources>

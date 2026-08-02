@@ -942,4 +942,29 @@
     <string name="overview_devnotes_subtitle">सुरक्षित ऑफ़लाइन क्रेडेंशियल और स्निपेट</string>
     <string name="overview_devnotes_desc" formatted="false">पासवर्ड, API कुंजियाँ, कोड स्निपेट और url 100% ऑफ़लाइन ऐप सैंडबॉक्स में सुरक्षित रूप से संग्रहीत करें।\n\nत्वरित प्रतीक सम्मिलन (`{}`, `[]`, `=&gt;`, `;`), पेस्ट/कॉपी और स्वचालित पासवर्ड कॉपी के साथ सीधे URL नेविगेशन के लिए सहायक कीबोर्ड पंक्ति शामिल है।</string>
     <string name="autoscroll_speed">स्क्रॉल %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">नया टैब</string>
+    <string name="close_tab_desc">टैब बंद करें</string>
+    <string name="tab_thumbnail_desc">साइट थंबनेल</string>
+    <string name="tab_mode_normal">सामान्य</string>
+    <string name="tab_mode_group">समूह</string>
+    <string name="tab_mode_incognito">इन्कॉग्निटो</string>
+    <string name="tab_group_count_plural">%1$d टैब</string>
+    <string name="tab_group_count_singular">1 टैब</string>
+    <string name="tab_groups_title">टैब समूह</string>
+    <string name="remove_from_group">\"%1$s\" से हटाएं</string>
+    <string name="add_to_existing_group">मौजूदा समूह में जोड़ें:</string>
+    <string name="create_new_group">नया समूह बनाएं:</string>
+    <string name="group_name_placeholder">समूह नाम (उदा. काम, सोशल)</string>
+    <string name="group_name_simple_placeholder">समूह नाम</string>
+    <string name="create_and_add">बनाएं और जोड़ें</string>
+    <string name="close_button">बंद करें</string>
+    <string name="rename_group_title">समूह का नाम बदलें</string>
+    <string name="change_color_title">रंग बदलें:</string>
+    <string name="menu_open_link_new_tab">नए टैब में लिंक खोलें</string>
+    <string name="menu_open_image_new_tab">नए टैब में छवि खोलें</string>
+    <string name="menu_add_tab_to_new_group">नए समूह में टैब जोड़ें</string>
+    <string name="menu_recent_tabs">हाल के टैब</string>
+    <string name="toast_group_created">सक्रिय टैब के साथ समूह बनाया गया</string>
 </resources>

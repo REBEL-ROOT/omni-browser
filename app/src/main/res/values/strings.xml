@@ -944,4 +944,29 @@
     <string name="overview_devnotes_subtitle">Secure Offline Credentials &amp; Snippets</string>
     <string name="overview_devnotes_desc" formatted="false">Store passwords, API keys, code snippets, and urls 100% offline securely inside the app sandbox.\n\nIncludes a helper keyboard row for quick symbols insertion (`{}`, `[]`, `=&gt;`, `;`), paste/copy clipboard operators, and direct URL navigation with automated password copying.</string>
     <string name="autoscroll_speed">Scroll %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">New Tab</string>
+    <string name="close_tab_desc">Close Tab</string>
+    <string name="tab_thumbnail_desc">Site Thumbnail</string>
+    <string name="tab_mode_normal">Normal</string>
+    <string name="tab_mode_group">Group</string>
+    <string name="tab_mode_incognito">Incognito</string>
+    <string name="tab_group_count_plural">%1$d tabs</string>
+    <string name="tab_group_count_singular">1 tab</string>
+    <string name="tab_groups_title">Tab Groups</string>
+    <string name="remove_from_group">Remove from \"%1$s\"</string>
+    <string name="add_to_existing_group">Add to existing group:</string>
+    <string name="create_new_group">Create new group:</string>
+    <string name="group_name_placeholder">Group name (e.g. Work, Social)</string>
+    <string name="group_name_simple_placeholder">Group name</string>
+    <string name="create_and_add">Create &amp; Add</string>
+    <string name="close_button">Close</string>
+    <string name="rename_group_title">Rename Group</string>
+    <string name="change_color_title">Change color:</string>
+    <string name="menu_open_link_new_tab">Open link in new tab</string>
+    <string name="menu_open_image_new_tab">Open image in new tab</string>
+    <string name="menu_add_tab_to_new_group">Add tab to new group</string>
+    <string name="menu_recent_tabs">Recent tabs</string>
+    <string name="toast_group_created">Group created with active tab</string>
 </resources>

@@ -939,5 +939,30 @@
     <string name="overview_devnotes_title">ملاحظات المطور والخزنة</string>
     <string name="overview_devnotes_subtitle">بيانات اعتماد ومقتطفات آمنة دون اتصال</string>
     <string name="overview_devnotes_desc" formatted="false">احفظ كلمات المرور ومفاتيح API ومقتطفات الكود والروابط دون اتصال 100% بأمان داخل عزل التطبيق.\n\nيتضمن صف لوحة مفاتيح مساعد لإدراج الرموز بسرعة (`{}`, `[]`, `=&gt;`, `;`) وعمليات النسخ/اللصق والتنقل المباشر للرابط مع نسخ كلمة المرور تلقائياً.</string>
-    <string name="autoscroll_speed">تمرير %1$d×</string>
+    <string name="autoscroll_speed">تمرير %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">علامة تبويب جديدة</string>
+    <string name="close_tab_desc">إغلاق علامة التبويب</string>
+    <string name="tab_thumbnail_desc">صورة مصغرة للموقع</string>
+    <string name="tab_mode_normal">عادي</string>
+    <string name="tab_mode_group">مجموعة</string>
+    <string name="tab_mode_incognito">تصفح خفي</string>
+    <string name="tab_group_count_plural">%1$d علامات تبويب</string>
+    <string name="tab_group_count_singular">علامة تبويب واحدة</string>
+    <string name="tab_groups_title">مجموعات علامات التبويب</string>
+    <string name="remove_from_group">إزالة من \"%1$s\"</string>
+    <string name="add_to_existing_group">إضافة إلى مجموعة حالية:</string>
+    <string name="create_new_group">إنشاء مجموعة جديدة:</string>
+    <string name="group_name_placeholder">اسم المجموعة (مثال: العمل، تواصل)</string>
+    <string name="group_name_simple_placeholder">اسم المجموعة</string>
+    <string name="create_and_add">إنشاء وإضافة</string>
+    <string name="close_button">إغلاق</string>
+    <string name="rename_group_title">إعادة تسمية المجموعة</string>
+    <string name="change_color_title">تغيير اللون:</string>
+    <string name="menu_open_link_new_tab">فتح الرابط في علامة تبويب جديدة</string>
+    <string name="menu_open_image_new_tab">فتح الصورة في علامة تبويب جديدة</string>
+    <string name="menu_add_tab_to_new_group">إضافة علامة التبويب إلى مجموعة جديدة</string>
+    <string name="menu_recent_tabs">علامات التبويب الأخيرة</string>
+    <string name="toast_group_created">تم إنشاء المجموعة مع علامة التبويب النشطة</string>
 </resources>

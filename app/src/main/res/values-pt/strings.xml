@@ -939,5 +939,30 @@
     <string name="overview_devnotes_title">Notas dev e cofre</string>
     <string name="overview_devnotes_subtitle">Credenciais e trechos seguros offline</string>
     <string name="overview_devnotes_desc" formatted="false">Armazene senhas, chaves de API, trechos de código e URLs 100% offline com segurança no sandbox do app.\n\nInclui uma linha de teclado auxiliar para símbolos (`{}`, `[]`, `=&gt;`, `;`), copiar/colar e navegação de URL com cópia automática de senha.</string>
-    <string name="autoscroll_speed">Rolar %1$dx</string>
+    <string name="autoscroll_speed">Rolagem %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">Nova guia</string>
+    <string name="close_tab_desc">Fechar guia</string>
+    <string name="tab_thumbnail_desc">Miniatura do site</string>
+    <string name="tab_mode_normal">Normal</string>
+    <string name="tab_mode_group">Grupo</string>
+    <string name="tab_mode_incognito">Anônimo</string>
+    <string name="tab_group_count_plural">%1$d guias</string>
+    <string name="tab_group_count_singular">1 guia</string>
+    <string name="tab_groups_title">Grupos de guias</string>
+    <string name="remove_from_group">Remover de \"%1$s\"</string>
+    <string name="add_to_existing_group">Adicionar ao grupo existente:</string>
+    <string name="create_new_group">Criar novo grupo:</string>
+    <string name="group_name_placeholder">Nome do grupo (ex. Trabalho, Social)</string>
+    <string name="group_name_simple_placeholder">Nome do grupo</string>
+    <string name="create_and_add">Criar e adicionar</string>
+    <string name="close_button">Fechar</string>
+    <string name="rename_group_title">Renomear grupo</string>
+    <string name="change_color_title">Alterar cor:</string>
+    <string name="menu_open_link_new_tab">Abrir link em uma nova guia</string>
+    <string name="menu_open_image_new_tab">Abrir imagem em uma nova guia</string>
+    <string name="menu_add_tab_to_new_group">Adicionar guia a um novo grupo</string>
+    <string name="menu_recent_tabs">Guias recentes</string>
+    <string name="toast_group_created">Grupo criado com a guia ativa</string>
 </resources>

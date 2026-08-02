@@ -1361,7 +1361,7 @@ fun TabGroupDialog(
         containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
         title = {
             Text(
-                "Tab Groups",
+                stringResource(R.string.tab_groups_title),
                 color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
@@ -1384,7 +1384,7 @@ fun TabGroupDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Rounded.Close, null, tint = Color(0xFFFF3B5C), modifier = Modifier.size(16.dp))
-                        Text("Remove from \"${currentGroup.title}\"", color = Color(0xFFFF3B5C), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.remove_from_group, currentGroup.title), color = Color(0xFFFF3B5C), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -1392,7 +1392,7 @@ fun TabGroupDialog(
                 val existingGroups = viewModel.tabGroups.filter { it.id != currentGroup?.id }
                 if (existingGroups.isNotEmpty()) {
                     Text(
-                        "Add to existing group:",
+                        stringResource(R.string.add_to_existing_group),
                         color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp, fontWeight = FontWeight.SemiBold
                     )
@@ -1413,8 +1413,11 @@ fun TabGroupDialog(
                             Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(group.color)))
                             Text(group.title, color = Color(group.color), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.weight(1f))
-                            Text("${group.tabIds.size} tab${if (group.tabIds.size != 1) "s" else ""}",
-                                color = Color(group.color).copy(alpha = 0.6f), fontSize = 10.sp)
+                            val tabCountText = if (group.tabIds.size == 1)
+                                stringResource(R.string.tab_group_count_singular)
+                            else
+                                stringResource(R.string.tab_group_count_plural, group.tabIds.size)
+                            Text(tabCountText, color = Color(group.color).copy(alpha = 0.6f), fontSize = 10.sp)
                         }
                     }
                 }
@@ -1423,14 +1426,14 @@ fun TabGroupDialog(
 
                 // Create new group
                 Text(
-                    "Create new group:",
+                    stringResource(R.string.create_new_group),
                     color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp, fontWeight = FontWeight.SemiBold
                 )
                 androidx.compose.material3.OutlinedTextField(
                     value = newGroupTitle,
                     onValueChange = onNewGroupTitleChange,
-                    placeholder = { Text("Group name (e.g. Work, Social)", fontSize = 12.sp) },
+                    placeholder = { Text(stringResource(R.string.group_name_placeholder), fontSize = 12.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
@@ -1472,13 +1475,13 @@ fun TabGroupDialog(
                     onDismissRequest()
                 }
             ) {
-                Text(if (newGroupTitle.isNotBlank()) "Create & Add" else "Close",
+                Text(if (newGroupTitle.isNotBlank()) stringResource(R.string.create_and_add) else stringResource(R.string.close_button),
                     color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.cancel_text), color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )
@@ -1498,7 +1501,7 @@ fun RenameTabGroupDialog(
         onDismissRequest = onDismissRequest,
         containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
         title = {
-            Text("Rename Group",
+            Text(stringResource(R.string.rename_group_title),
                 color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold)
         },
@@ -1507,7 +1510,7 @@ fun RenameTabGroupDialog(
                 androidx.compose.material3.OutlinedTextField(
                     value = renameGroupText,
                     onValueChange = onRenameGroupTextChange,
-                    placeholder = { Text("Group name") },
+                    placeholder = { Text(stringResource(R.string.group_name_simple_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
@@ -1519,7 +1522,7 @@ fun RenameTabGroupDialog(
                     )
                 )
                 // Color change row
-                Text("Change color:", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                Text(stringResource(R.string.change_color_title), color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     groupColors.forEach { colorLong ->
                         Box(
@@ -1547,12 +1550,12 @@ fun RenameTabGroupDialog(
                 }
                 onDismissRequest()
             }) {
-                Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.save_text), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.cancel_text), color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

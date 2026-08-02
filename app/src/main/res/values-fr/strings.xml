@@ -941,5 +941,30 @@
     <string name="overview_devnotes_title">Notes dev &amp; coffre</string>
     <string name="overview_devnotes_subtitle">Identifiants &amp; snippets sécurisés hors ligne</string>
     <string name="overview_devnotes_desc" formatted="false">Stockez mots de passe, clés API, snippets de code et URLs 100% hors ligne dans le sandbox de l\'app.\n\nInclut une rangée de clavier d\'aide pour les symboles (`{}`, `[]`, `=&gt;`, `;`), copier/coller et navigation URL avec copie auto du mot de passe.</string>
-    <string name="autoscroll_speed">Défiler %1$dx</string>
+    <string name="autoscroll_speed">Défilement %1$dx</string>
+
+    <!-- Tabs Ecosystem -->
+    <string name="new_tab_title">Nouvel onglet</string>
+    <string name="close_tab_desc">Fermer l\'onglet</string>
+    <string name="tab_thumbnail_desc">Aperçu du site</string>
+    <string name="tab_mode_normal">Normal</string>
+    <string name="tab_mode_group">Groupe</string>
+    <string name="tab_mode_incognito">Privé</string>
+    <string name="tab_group_count_plural">%1$d onglets</string>
+    <string name="tab_group_count_singular">1 onglet</string>
+    <string name="tab_groups_title">Groupes d\'onglets</string>
+    <string name="remove_from_group">Retirer de \"%1$s\"</string>
+    <string name="add_to_existing_group">Ajouter à un groupe existant :</string>
+    <string name="create_new_group">Créer un nouveau groupe :</string>
+    <string name="group_name_placeholder">Nom du groupe (ex. Travail, Social)</string>
+    <string name="group_name_simple_placeholder">Nom du groupe</string>
+    <string name="create_and_add">Créer et ajouter</string>
+    <string name="close_button">Fermer</string>
+    <string name="rename_group_title">Renommer le groupe</string>
+    <string name="change_color_title">Changer la couleur :</string>
+    <string name="menu_open_link_new_tab">Ouvrir le lien dans un nouvel onglet</string>
+    <string name="menu_open_image_new_tab">Ouvrir l\'image dans un nouvel onglet</string>
+    <string name="menu_add_tab_to_new_group">Ajouter l\'onglet à un nouveau groupe</string>
+    <string name="menu_recent_tabs">Onglets récents</string>
+    <string name="toast_group_created">Groupe créé avec l\'onglet actif</string>
 </resources>
