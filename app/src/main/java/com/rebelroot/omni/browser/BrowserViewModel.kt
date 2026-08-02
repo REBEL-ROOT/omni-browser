@@ -4636,12 +4636,21 @@ class BrowserViewModel : ViewModel() {
         } catch (e: java.io.UnsupportedEncodingException) {
             query.replace(" ", "+")
         }
+        val lang = selectedLanguageCode.ifBlank { "en" }
+        val googleLangParam = if (lang != "en") "&hl=$lang" else ""
+        val bingLangParam = if (lang != "en") "&setlang=$lang" else ""
+        val ddgLangParam = if (lang != "en") "&kl=${lang}-${lang}" else ""
+
         return when (selectedSearchEngine) {
+            "Google" -> {
+                val base = "https://www.google.com/search?q=$encodedQuery$googleLangParam"
+                if (isAiBlockerEnabled) "$base&udm=14" else base
+            }
             "Yahoo" -> "https://search.yahoo.com/search?p=$encodedQuery"
             "Yandex" -> "https://yandex.com/search/?text=$encodedQuery"
-            "DuckDuckGo" -> "https://duckduckgo.com/?q=$encodedQuery"
+            "DuckDuckGo" -> "https://duckduckgo.com/?q=$encodedQuery$ddgLangParam"
             "Brave" -> "https://search.brave.com/search?q=$encodedQuery"
-            "Bing" -> "https://www.bing.com/search?q=$encodedQuery"
+            "Bing" -> "https://www.bing.com/search?q=$encodedQuery$bingLangParam"
             "Ecosia" -> "https://www.ecosia.org/search?q=$encodedQuery"
             "Startpage" -> "https://www.startpage.com/sp/search?query=$encodedQuery"
             "Qwant" -> "https://www.qwant.com/?q=$encodedQuery"
@@ -4663,7 +4672,7 @@ class BrowserViewModel : ViewModel() {
                         customUrl + encodedQuery
                     }
                 } else {
-                    val base = "https://www.google.com/search?q=$encodedQuery"
+                    val base = "https://www.google.com/search?q=$encodedQuery$googleLangParam"
                     if (isAiBlockerEnabled) "$base&udm=14" else base
                 }
             }

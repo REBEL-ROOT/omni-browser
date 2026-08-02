@@ -3480,6 +3480,11 @@ fun BrowserScreen(
                     "Korean" to "ko",
                     "Vietnamese" to "vi"
                 )
+                val defaultLang = languages.find { it.second == viewModel.selectedLanguageCode } ?: ("English" to "en")
+                LaunchedEffect(showTranslationDialog) {
+                    selectedPageTargetLang = defaultLang
+                    selectedTargetLang = defaultLang
+                }
 
                 AlertDialog(
                     onDismissRequest = { showTranslationDialog = false; viewModel.translationManager.close() },
@@ -3565,7 +3570,7 @@ fun BrowserScreen(
                                                         val path = parsedUri.path?.takeIf { it.isNotEmpty() } ?: "/"
                                                         val existingQuery = parsedUri.query
                                                         val scheme = if (parsedUri.scheme == "http") "http" else "https"
-                                                        val translateParams = "_x_tr_sl=auto&_x_tr_tl=$targetLang&_x_tr_hl=en&_x_tr_pto=wapp"
+                                                        val translateParams = "_x_tr_sl=auto&_x_tr_tl=$targetLang&_x_tr_hl=$targetLang&_x_tr_pto=wapp"
                                                         val fullQuery = if (!existingQuery.isNullOrEmpty()) "$existingQuery&$translateParams" else translateParams
                                                         val translateUrl = "$scheme://$sanitizedHost.translate.goog$path?$fullQuery"
                                                         android.util.Log.d("Translator", "Translate URL: $translateUrl")
