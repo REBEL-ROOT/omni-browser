@@ -36,6 +36,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
@@ -82,6 +85,12 @@ import androidx.core.graphics.drawable.IconCompat
 import android.speech.tts.TextToSpeech
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+
+sealed class BackupImportResult {
+    data class Success(val restored: Int, val skipped: Int) : BackupImportResult()
+    object InvalidFile : BackupImportResult()
+    object InvalidVersion : BackupImportResult()
+}
 
 val Context.dataStore by preferencesDataStore(name = "omni_settings")
 
@@ -7230,6 +7239,309 @@ class BrowserViewModel : ViewModel() {
             })();
         """.trimIndent()
         activeTab.session.loadUri(js)
+    }
+
+    // Backup & Export Settings (GitHub #43)
+    suspend fun buildSettingsBackupJson(context: Context): String {
+        val root = JSONObject()
+        root.put("app", "OmniBrowser")
+        root.put("schema_version", 1)
+        root.put("exported_at_ms", System.currentTimeMillis())
+
+        val ds = context.dataStore.data.first()
+        val dsArray = JSONArray()
+        var skippedCount = 0
+
+        for ((k, v) in ds.asMap()) {
+            val entry = JSONObject()
+            entry.put("key", k.name)
+            when (v) {
+                is Boolean -> {
+                    entry.put("type", "bool")
+                    entry.put("value", v)
+                }
+                is Int -> {
+                    entry.put("type", "int")
+                    entry.put("value", v)
+                }
+                is Float -> {
+                    entry.put("type", "float")
+                    entry.put("value", v.toDouble())
+                }
+                is Long -> {
+                    entry.put("type", "long")
+                    entry.put("value", v)
+                }
+                is Double -> {
+                    entry.put("type", "double")
+                    entry.put("value", v)
+                }
+                is String -> {
+                    entry.put("type", "string")
+                    entry.put("value", v)
+                }
+                is Set<*> -> {
+                    entry.put("type", "string_set")
+                    val arr = JSONArray()
+                    for (item in v) {
+                        if (item != null) arr.put(item.toString())
+                    }
+                    entry.put("value", arr)
+                }
+                else -> {
+                    skippedCount++
+                    continue
+                }
+            }
+            dsArray.put(entry)
+        }
+
+        val dsObj = JSONObject()
+        dsObj.put("omni_settings", dsArray)
+        root.put("datastore", dsObj)
+
+        val sp = context.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE).all
+        val spOmniPrefs = JSONObject()
+
+        for ((key, v) in sp) {
+            if (v == null) continue
+            val entry = JSONObject()
+            when (v) {
+                is Boolean -> {
+                    entry.put("type", "bool")
+                    entry.put("value", v)
+                }
+                is Int -> {
+                    entry.put("type", "int")
+                    entry.put("value", v)
+                }
+                is Float -> {
+                    entry.put("type", "float")
+                    entry.put("value", v.toDouble())
+                }
+                is Long -> {
+                    entry.put("type", "long")
+                    entry.put("value", v)
+                }
+                is Double -> {
+                    entry.put("type", "double")
+                    entry.put("value", v)
+                }
+                is String -> {
+                    entry.put("type", "string")
+                    entry.put("value", v)
+                }
+                is Set<*> -> {
+                    entry.put("type", "string_set")
+                    val arr = JSONArray()
+                    for (item in v) {
+                        if (item != null) arr.put(item.toString())
+                    }
+                    entry.put("value", arr)
+                }
+                else -> {
+                    skippedCount++
+                    continue
+                }
+            }
+            spOmniPrefs.put(key, entry)
+        }
+
+        val spObj = JSONObject()
+        spObj.put("omni_prefs", spOmniPrefs)
+        root.put("shared_prefs", spObj)
+
+        if (skippedCount > 0) {
+            Log.w(TAG, "buildSettingsBackupJson: skipped $skippedCount entries with unknown types")
+        }
+
+        return root.toString(2)
+    }
+
+    suspend fun restoreSettingsFromJson(context: Context, jsonText: String): BackupImportResult {
+        val root = try {
+            JSONObject(jsonText)
+        } catch (e: Exception) {
+            return BackupImportResult.InvalidFile
+        }
+
+        val app = root.optString("app", "")
+        if (app.isNotEmpty() && app != "OmniBrowser") {
+            return BackupImportResult.InvalidFile
+        }
+
+        val schemaVersion = root.optInt("schema_version", 1)
+        if (schemaVersion > 1) {
+            return BackupImportResult.InvalidVersion
+        }
+
+        var restoredCount = 0
+        var skippedCount = 0
+
+        try {
+            val dsObj = root.optJSONObject("datastore")
+            val omniSettingsArray = dsObj?.optJSONArray("omni_settings")
+            if (omniSettingsArray != null) {
+                context.dataStore.edit { prefs ->
+                    for (i in 0 until omniSettingsArray.length()) {
+                        val item = omniSettingsArray.optJSONObject(i) ?: continue
+                        val name = item.optString("key", "")
+                        val type = item.optString("type", "")
+                        if (name.isEmpty()) {
+                            skippedCount++
+                            continue
+                        }
+                        val rawValue = item.opt("value")
+                        if (rawValue == null || rawValue == JSONObject.NULL) {
+                            skippedCount++
+                            continue
+                        }
+                        when (type) {
+                            "bool" -> {
+                                prefs[booleanPreferencesKey(name)] = rawValue as Boolean
+                                restoredCount++
+                            }
+                            "int" -> {
+                                prefs[intPreferencesKey(name)] = (rawValue as Number).toInt()
+                                restoredCount++
+                            }
+                            "float" -> {
+                                prefs[floatPreferencesKey(name)] = (rawValue as Number).toFloat()
+                                restoredCount++
+                            }
+                            "long" -> {
+                                prefs[longPreferencesKey(name)] = (rawValue as Number).toLong()
+                                restoredCount++
+                            }
+                            "double" -> {
+                                prefs[doublePreferencesKey(name)] = (rawValue as Number).toDouble()
+                                restoredCount++
+                            }
+                            "string" -> {
+                                prefs[stringPreferencesKey(name)] = rawValue as String
+                                restoredCount++
+                            }
+                            "string_set" -> {
+                                val arr = rawValue as JSONArray
+                                val set = mutableSetOf<String>()
+                                for (j in 0 until arr.length()) {
+                                    set.add(arr.getString(j))
+                                }
+                                prefs[stringSetPreferencesKey(name)] = set
+                                restoredCount++
+                            }
+                            else -> {
+                                skippedCount++
+                            }
+                        }
+                    }
+                }
+            }
+
+            val spObj = root.optJSONObject("shared_prefs")
+            val omniPrefsObj = spObj?.optJSONObject("omni_prefs")
+            if (omniPrefsObj != null) {
+                val sp = context.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+                val editor = sp.edit()
+                val keys = omniPrefsObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val entry = omniPrefsObj.optJSONObject(key) ?: continue
+                    val type = entry.optString("type", "")
+                    val rawValue = entry.opt("value")
+                    if (rawValue == null || rawValue == JSONObject.NULL) {
+                        skippedCount++
+                        continue
+                    }
+                    when (type) {
+                        "bool" -> {
+                            editor.putBoolean(key, rawValue as Boolean)
+                            restoredCount++
+                        }
+                        "int" -> {
+                            editor.putInt(key, (rawValue as Number).toInt())
+                            restoredCount++
+                        }
+                        "float" -> {
+                            editor.putFloat(key, (rawValue as Number).toFloat())
+                            restoredCount++
+                        }
+                        "long" -> {
+                            editor.putLong(key, (rawValue as Number).toLong())
+                            restoredCount++
+                        }
+                        "double" -> {
+                            editor.putLong(key, java.lang.Double.doubleToRawLongBits((rawValue as Number).toDouble()))
+                            restoredCount++
+                        }
+                        "string" -> {
+                            editor.putString(key, rawValue as String)
+                            restoredCount++
+                        }
+                        "string_set" -> {
+                            val arr = rawValue as JSONArray
+                            val set = mutableSetOf<String>()
+                            for (j in 0 until arr.length()) {
+                                set.add(arr.getString(j))
+                            }
+                            editor.putStringSet(key, set)
+                            restoredCount++
+                        }
+                        else -> {
+                            skippedCount++
+                        }
+                    }
+                }
+                editor.apply()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "restoreSettingsFromJson failed", e)
+            return BackupImportResult.InvalidFile
+        }
+
+        return BackupImportResult.Success(restoredCount, skippedCount)
+    }
+
+    suspend fun reloadSettingsAfterImport(context: Context) {
+        loadPlayerSettings(context)
+
+        val prefs = context.dataStore.data.first()
+        cookieBehavior = prefs[COOKIE_BEHAVIOR_KEY] ?: 3
+        doNotTrack = prefs[DO_NOT_TRACK_KEY] ?: true
+        safeBrowsingLevel = prefs[SAFE_BROWSING_LEVEL_KEY] ?: 1
+        preloadPages = prefs[PRELOAD_PAGES_KEY] ?: 1
+        lockIncognito = prefs[LOCK_INCOGNITO_KEY] ?: false
+        compromisedPasswordWarning = prefs[COMPROMISED_PASSWORD_WARNING_KEY] ?: true
+        httpsOnlyMode = prefs[HTTPS_ONLY_MODE_KEY] ?: false
+
+        tabLayoutMode = prefs[TAB_LAYOUT_MODE_KEY] ?: "Grid"
+        autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
+        openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
+        accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
+        accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
+        accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
+
+        defaultGeolocation = prefs[DEFAULT_GEOLOCATION_KEY] ?: "ask"
+        defaultCamera = prefs[DEFAULT_CAMERA_KEY] ?: "ask"
+        defaultMicrophone = prefs[DEFAULT_MICROPHONE_KEY] ?: "ask"
+        defaultNotifications = prefs[DEFAULT_NOTIFICATIONS_KEY] ?: "ask"
+        defaultJavascriptAllowed = prefs[DEFAULT_JAVASCRIPT_KEY] ?: true
+        defaultAutoplayAllowed = prefs[DEFAULT_AUTOPLAY_KEY] ?: true
+
+        val sp = context.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+        val savedLang = sp.getString("selected_language", null)
+        if (!savedLang.isNullOrEmpty()) {
+            selectedLanguageCode = savedLang
+        }
+        siteStyleFontSize = sp.getInt("site_style_font_size", 100)
+        siteStyleTheme = sp.getString("site_style_theme", "DEFAULT") ?: "DEFAULT"
+        siteStyleLineSpacing = sp.getFloat("site_style_line_spacing", 1.4f)
+        siteStyleLetterSpacing = sp.getFloat("site_style_letter_spacing", 0f)
+        siteStyleFontFamily = sp.getString("site_style_font_family", "inherit") ?: "inherit"
+        siteStyleAppliedGlobally = sp.getBoolean("site_style_applied_globally", false)
+        siteStyleHideImages = sp.getBoolean("site_style_hide_images", false)
+        siteStyleGrayscale = sp.getBoolean("site_style_grayscale", false)
+        siteStyleWarmFilter = sp.getBoolean("site_style_warm_filter", false)
     }
 
     override fun onCleared() {

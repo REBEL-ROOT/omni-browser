@@ -599,4 +599,18 @@
     <string name="video_player_aspect_fit">アスペクト比: 画面に合わせる</string>
     <string name="video_player_aspect_fill">アスペクト比: 画面いっぱいに表示</string>
     <string name="video_player_aspect_stretch">アスペクト比: 引き伸ばし</string>
+    <string name="settings_backup_section">データとバックアップ</string>
+    <string name="settings_backup_export_title">設定のエクスポート</string>
+    <string name="settings_backup_export_desc">すべてのブラウザ設定をJSONファイルに保存</string>
+    <string name="settings_backup_export_success">設定が正常にエクスポートされました</string>
+    <string name="settings_backup_export_failed">エクスポートに失敗しました: %1$s</string>
+    <string name="settings_backup_import_title_row">設定のインポート</string>
+    <string name="settings_backup_import_desc">JSONバックアップファイルから設定を復元</string>
+    <string name="settings_backup_import_title">設定をインポートしますか？</string>
+    <string name="settings_backup_import_confirm_msg">現在の設定がバックアップの %1$d 件の設定で上書きされます。続行しますか？</string>
+    <string name="settings_backup_import_confirm_btn">インポート</string>
+    <string name="settings_backup_import_success">%1$d 件の設定をインポートしました%2$s</string>
+    <string name="settings_backup_import_invalid">無効なバックアップファイル: %1$s</string>
+    <string name="settings_backup_import_bad_version">このバックアップは新しいバージョンで作成されたためインポートできません。</string>
+    <string name="settings_backup_skipped">%1$d 件の未対応項目をスキップしました</string>
 </resources>

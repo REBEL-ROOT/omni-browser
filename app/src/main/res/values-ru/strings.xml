@@ -599,4 +599,18 @@
     <string name="video_player_aspect_fit">Соотношение сторон: Вписать в экран</string>
     <string name="video_player_aspect_fill">Соотношение сторон: Заполнить экран</string>
     <string name="video_player_aspect_stretch">Соотношение сторон: Растянуть</string>
+    <string name="settings_backup_section">Данные и резервное копирование</string>
+    <string name="settings_backup_export_title">Экспорт настроек</string>
+    <string name="settings_backup_export_desc">Сохранить все настройки браузера в файл JSON</string>
+    <string name="settings_backup_export_success">Настройки успешно экспортированы</string>
+    <string name="settings_backup_export_failed">Ошибка экспорта: %1$s</string>
+    <string name="settings_backup_import_title_row">Импорт настроек</string>
+    <string name="settings_backup_import_desc">Восстановить настройки из файла резервной копии JSON</string>
+    <string name="settings_backup_import_title">Импортировать настройки?</string>
+    <string name="settings_backup_import_confirm_msg">Это перезапишет ваши текущие настройки на %1$d настр.(настройки) из резервной копии. Продолжить?</string>
+    <string name="settings_backup_import_confirm_btn">Импорт</string>
+    <string name="settings_backup_import_success">Импортировано %1$d настр.%2$s</string>
+    <string name="settings_backup_import_invalid">Недействительный файл резервной копии: %1$s</string>
+    <string name="settings_backup_import_bad_version">Эта резервная копия была создана более новой версией и не может быть импортирована.</string>
+    <string name="settings_backup_skipped">Пропущено неподдерживаемых: %1$d</string>
 </resources>

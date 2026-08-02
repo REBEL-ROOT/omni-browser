@@ -599,4 +599,18 @@ Navegador predeterminado</string>
     <string name="video_player_aspect_fit">Relación de aspecto: Ajustar a la pantalla</string>
     <string name="video_player_aspect_fill">Relación de aspecto: Llenar pantalla</string>
     <string name="video_player_aspect_stretch">Relación de aspecto: Estirar</string>
+    <string name="settings_backup_section">Datos y copia de seguridad</string>
+    <string name="settings_backup_export_title">Exportar configuración</string>
+    <string name="settings_backup_export_desc">Guardar toda la configuración del navegador en un archivo JSON</string>
+    <string name="settings_backup_export_success">Configuración exportada con éxito</string>
+    <string name="settings_backup_export_failed">Error al exportar: %1$s</string>
+    <string name="settings_backup_import_title_row">Importar configuración</string>
+    <string name="settings_backup_import_desc">Restaurar la configuración desde un archivo de copia de seguridad JSON</string>
+    <string name="settings_backup_import_title">¿Importar configuración?</string>
+    <string name="settings_backup_import_confirm_msg">Esto sobrescribirá su configuración actual con %1$d ajuste(s) de la copia de seguridad. ¿Continuar?</string>
+    <string name="settings_backup_import_confirm_btn">Importar</string>
+    <string name="settings_backup_import_success">Se importó %1$d ajuste(s)%2$s</string>
+    <string name="settings_backup_import_invalid">Archivo de copia de seguridad no válido: %1$s</string>
+    <string name="settings_backup_import_bad_version">Esta copia de seguridad fue realizada por una versión más reciente y no se puede importar.</string>
+    <string name="settings_backup_skipped">%1$d no admitido(s) omitidos</string>
 </resources>

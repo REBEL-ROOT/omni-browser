@@ -3849,7 +3849,7 @@ fun BrowserScreen(
                                         .weight(1f)
                                         .fillMaxHeight()
                                         .clip(RoundedCornerShape(18.dp))
-                                        .background(if (!viewModel.isIncognitoMode && !showOnlyGroups) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                        .background(if (!viewModel.isIncognitoMode && !showOnlyGroups) (if (viewModel.isDarkThemeEnabled) Color(0xFF2C3E50) else Color(0xFF334155)) else Color.Transparent)
                                         .clickable {
                                             showOnlyGroups = false
                                             if (viewModel.isIncognitoMode) {
@@ -3872,7 +3872,7 @@ fun BrowserScreen(
                                         .weight(1f)
                                         .fillMaxHeight()
                                         .clip(RoundedCornerShape(18.dp))
-                                        .background(if (showOnlyGroups) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                        .background(if (showOnlyGroups) (if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF2C3E50) else Color(0xFF334155)) else Color.Transparent)
                                         .clickable {
                                             showOnlyGroups = true
                                         },
@@ -3980,7 +3980,7 @@ fun BrowserScreen(
                                     .border(
                                         BorderStroke(
                                             if (isActive) 1.5.dp else 0.5.dp,
-                                            if (isActive) MaterialTheme.colorScheme.primary
+                                            if (isActive) (if (viewModel.isDarkThemeEnabled) Color(0xFF385270) else Color(0xFF64748B))
                                             else groupColor?.copy(alpha = 0.5f)
                                                 ?: (if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                                         ),
@@ -4146,7 +4146,7 @@ fun BrowserScreen(
                                     .border(
                                         BorderStroke(
                                             if (isActive) 1.5.dp else 0.5.dp,
-                                            if (isActive) MaterialTheme.colorScheme.primary
+                                            if (isActive) (if (viewModel.isDarkThemeEnabled) Color(0xFF385270) else Color(0xFF64748B))
                                             else groupColor?.copy(alpha = 0.6f)
                                                 ?: (if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                                         ),
@@ -4191,7 +4191,7 @@ fun BrowserScreen(
                                                 Icon(
                                                     imageVector = Icons.Rounded.Language,
                                                     contentDescription = null,
-                                                    tint = if (isActive) MaterialTheme.colorScheme.primary else (if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
+                                                    tint = if (isActive) (if (viewModel.isDarkThemeEnabled) Color(0xFF7CA7D8) else Color(0xFF475569)) else (if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant),
                                                     modifier = Modifier.size(12.dp)
                                                 )
                                             }
@@ -4597,7 +4597,7 @@ fun BrowserScreen(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
+                                    .background(if (viewModel.isDarkThemeEnabled || viewModel.isIncognitoMode) Color(0xFF2C3E50) else Color(0xFF334155))
                                     .clickable {
                                         showTabGroupsSheet = false
                                         viewModel.createNewTab(context, "about:blank")

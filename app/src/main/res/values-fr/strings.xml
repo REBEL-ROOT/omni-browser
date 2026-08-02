@@ -598,5 +598,19 @@ Navigateur par défaut</string>
     <string name="exit_cancel">Annuler</string>
     <string name="video_player_aspect_fit">Rapport d\'aspect : Ajuster à l\'écran</string>
     <string name="video_player_aspect_fill">Rapport d\'aspect : Remplir l\'écran</string>
-    <string name="video_player_aspect_stretch">Rapport d\'aspect : Étirer</string>
+    <string name="video_player_aspect_stretch">Format d\'image : Étirer</string>
+    <string name="settings_backup_section">Données et sauvegarde</string>
+    <string name="settings_backup_export_title">Exporter les paramètres</string>
+    <string name="settings_backup_export_desc">Enregistrer tous les paramètres du navigateur dans un fichier JSON</string>
+    <string name="settings_backup_export_success">Paramètres exportés avec succès</string>
+    <string name="settings_backup_export_failed">Échec de l\'exportation : %1$s</string>
+    <string name="settings_backup_import_title_row">Importer les paramètres</string>
+    <string name="settings_backup_import_desc">Restaurer les paramètres à partir d\'un fichier de sauvegarde JSON</string>
+    <string name="settings_backup_import_title">Importer les paramètres ?</string>
+    <string name="settings_backup_import_confirm_msg">Cela remplacera vos paramètres actuels par %1$d paramètre(s) de la sauvegarde. Continuer ?</string>
+    <string name="settings_backup_import_confirm_btn">Importer</string>
+    <string name="settings_backup_import_success">%1$d paramètre(s) importé(s)%2$s</string>
+    <string name="settings_backup_import_invalid">Fichier de sauvegarde non valide : %1$s</string>
+    <string name="settings_backup_import_bad_version">Cette sauvegarde a été effectuée par une version plus récente et ne peut pas être importée.</string>
+    <string name="settings_backup_skipped">%1$d non pris en charge ignoré(s)</string>
 </resources>

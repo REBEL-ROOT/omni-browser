@@ -599,4 +599,18 @@ Navegador padrão</string>
     <string name="video_player_aspect_fit">Proporção de tela: Ajustar à tela</string>
     <string name="video_player_aspect_fill">Proporção de tela: Preencher a tela</string>
     <string name="video_player_aspect_stretch">Proporção de tela: Esticar</string>
+    <string name="settings_backup_section">Dados e backup</string>
+    <string name="settings_backup_export_title">Exportar configurações</string>
+    <string name="settings_backup_export_desc">Salvar todas as configurações do navegador em um arquivo JSON</string>
+    <string name="settings_backup_export_success">Configurações exportadas com sucesso</string>
+    <string name="settings_backup_export_failed">Falha na exportação: %1$s</string>
+    <string name="settings_backup_import_title_row">Importar configurações</string>
+    <string name="settings_backup_import_desc">Restaurar configurações a partir de um arquivo de backup JSON</string>
+    <string name="settings_backup_import_title">Importar configurações?</string>
+    <string name="settings_backup_import_confirm_msg">Isso substituirá suas configurações atuais por %1$d configuração(ões) do backup. Continuar?</string>
+    <string name="settings_backup_import_confirm_btn">Importar</string>
+    <string name="settings_backup_import_success">%1$d configuração(ões) importada(s)%2$s</string>
+    <string name="settings_backup_import_invalid">Arquivo de backup inválido: %1$s</string>
+    <string name="settings_backup_import_bad_version">Este backup foi feito por uma versão mais recente e não pode ser importado.</string>
+    <string name="settings_backup_skipped">%1$d não suportado(s) ignorado(s)</string>
 </resources>

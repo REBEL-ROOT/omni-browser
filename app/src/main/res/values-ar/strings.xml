@@ -599,4 +599,18 @@
     <string name="video_player_aspect_fit">نسبة العرض إلى الارتفاع: الاحتواء في الشاشة</string>
     <string name="video_player_aspect_fill">نسبة العرض إلى الارتفاع: ملء الشاشة</string>
     <string name="video_player_aspect_stretch">نسبة العرض إلى الارتفاع: تمديد</string>
+    <string name="settings_backup_section">البيانات والنسخ الاحتياطي</string>
+    <string name="settings_backup_export_title">تصدير الإعدادات</string>
+    <string name="settings_backup_export_desc">حفظ جميع إعدادات المتصفح في ملف JSON</string>
+    <string name="settings_backup_export_success">تم تصدير الإعدادات بنجاح</string>
+    <string name="settings_backup_export_failed">فشل التصدير: %1$s</string>
+    <string name="settings_backup_import_title_row">استيراد الإعدادات</string>
+    <string name="settings_backup_import_desc">استعادة الإعدادات من ملف نسخ احتياطي JSON</string>
+    <string name="settings_backup_import_title">استيراد الإعدادات؟</string>
+    <string name="settings_backup_import_confirm_msg">سيؤدي هذا إلى استبدال إعداداتك الحالية بـ %1$d من الإعدادات من النسخة الاحتياطية. المتابعة؟</string>
+    <string name="settings_backup_import_confirm_btn">استيراد</string>
+    <string name="settings_backup_import_success">تم استيراد %1$d من الإعدادات%2$s</string>
+    <string name="settings_backup_import_invalid">ملف نسخة احتياطية غير صالح: %1$s</string>
+    <string name="settings_backup_import_bad_version">تم إنشاء هذه النسخة الاحتياطية بواسطة إصدار أحدث ولا يمكن استيرادها.</string>
+    <string name="settings_backup_skipped">تم تخطي %1$d غير مدعوم</string>
 </resources>

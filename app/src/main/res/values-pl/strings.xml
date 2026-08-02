@@ -599,4 +599,18 @@ Domyślną przeglądarkę</string>
     <string name="video_player_aspect_fit">Proporcje ekranu: Dopasuj do ekranu</string>
     <string name="video_player_aspect_fill">Proporcje ekranu: Wypełnij ekran</string>
     <string name="video_player_aspect_stretch">Proporcje ekranu: Rozciągnij</string>
+    <string name="settings_backup_section">Dane i kopia zapasowa</string>
+    <string name="settings_backup_export_title">Eksportuj ustawienia</string>
+    <string name="settings_backup_export_desc">Zapisz wszystkie ustawienia przeglądarki w pliku JSON</string>
+    <string name="settings_backup_export_success">Ustawienia zostały pomyślnie wyeksportowane</string>
+    <string name="settings_backup_export_failed">Eksport nie powiódł się: %1$s</string>
+    <string name="settings_backup_import_title_row">Importuj ustawienia</string>
+    <string name="settings_backup_import_desc">Przywróć ustawienia z pliku kopii zapasowej JSON</string>
+    <string name="settings_backup_import_title">Importować ustawienia?</string>
+    <string name="settings_backup_import_confirm_msg">Spowoduje to zastąpienie bieżących ustawień %1$d ustawieniem(ami) z kopii zapasowej. Kontynuować?</string>
+    <string name="settings_backup_import_confirm_btn">Importuj</string>
+    <string name="settings_backup_import_success">Zaimportowano %1$d ustawień%2$s</string>
+    <string name="settings_backup_import_invalid">Nieprawidłowy plik kopii zapasowej: %1$s</string>
+    <string name="settings_backup_import_bad_version">Ta kopia zapasowa została wykonana przez nowszą wersję i nie można jej zaimportować.</string>
+    <string name="settings_backup_skipped">Pominięto %1$d nieobsługiwanych</string>
 </resources>

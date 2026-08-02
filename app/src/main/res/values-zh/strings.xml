@@ -599,4 +599,18 @@
     <string name="video_player_aspect_fit">宽高比：适应屏幕</string>
     <string name="video_player_aspect_fill">宽高比：填满屏幕</string>
     <string name="video_player_aspect_stretch">宽高比：拉伸</string>
+    <string name="settings_backup_section">数据与备份</string>
+    <string name="settings_backup_export_title">导出设置</string>
+    <string name="settings_backup_export_desc">将所有浏览器设置保存到 JSON 文件</string>
+    <string name="settings_backup_export_success">设置导出成功</string>
+    <string name="settings_backup_export_failed">导出失败：%1$s</string>
+    <string name="settings_backup_import_title_row">导入设置</string>
+    <string name="settings_backup_import_desc">从 JSON 备份文件恢复设置</string>
+    <string name="settings_backup_import_title">导入设置？</string>
+    <string name="settings_backup_import_confirm_msg">这会将当前设置覆盖为备份中的 %1$d 项设置。是否继续？</string>
+    <string name="settings_backup_import_confirm_btn">导入</string>
+    <string name="settings_backup_import_success">已导入 %1$d 项设置%2$s</string>
+    <string name="settings_backup_import_invalid">无效的备份文件：%1$s</string>
+    <string name="settings_backup_import_bad_version">该备份由更新的版本创建，无法导入。</string>
+    <string name="settings_backup_skipped">已跳过 %1$d 项不支持的设置</string>
 </resources>

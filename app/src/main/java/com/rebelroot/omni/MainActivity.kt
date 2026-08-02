@@ -476,6 +476,9 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onOpenSiteSettings = {
                                     navController.navigate("settings_site")
+                                },
+                                onSettingsImported = {
+                                    this@MainActivity.recreate()
                                 }
                             )
                         }

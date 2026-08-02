@@ -53,7 +53,10 @@ import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.ui.theme.AccentThemesLight
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
+import com.rebelroot.omni.browser.BackupImportResult
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private data class SettingSearchResult(
     val title: String,
@@ -77,7 +80,8 @@ fun SettingsScreen(
     onOpenPrivacyHub: () -> Unit = {},
     onOpenTabs: () -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
-    onOpenSiteSettings: () -> Unit = {}
+    onOpenSiteSettings: () -> Unit = {},
+    onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -123,6 +127,46 @@ fun SettingsScreen(
             Toast.makeText(context, "Notifications enabled successfully!", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, "Notification permission denied.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    var pendingImport by remember { mutableStateOf<String?>(null) }
+    var importSummary by remember { mutableStateOf("") }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) coroutineScope.launch(Dispatchers.IO) {
+            runCatching {
+                val json = viewModel.buildSettingsBackupJson(context)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+            }.fold(
+                onSuccess = { withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.settings_backup_export_success), Toast.LENGTH_SHORT).show() } },
+                onFailure = { e -> withContext(Dispatchers.Main) { Toast.makeText(context, context.getString(R.string.settings_backup_export_failed, e.message ?: ""), Toast.LENGTH_LONG).show() } }
+            )
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) coroutineScope.launch(Dispatchers.IO) {
+            runCatching {
+                val text = context.contentResolver.openInputStream(uri)!!.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val obj = org.json.JSONObject(text)
+                val app = obj.optString("app", "")
+                val ver = obj.optInt("schema_version", 1)
+                val n = obj.optJSONObject("datastore")?.optJSONArray("omni_settings")?.length() ?: 0
+                if (app.isNotEmpty() && app != "OmniBrowser") throw IllegalArgumentException("Not an Omni Browser backup")
+                if (ver > 1) throw IllegalArgumentException("Unsupported backup version")
+                withContext(Dispatchers.Main) {
+                    importSummary = context.getString(R.string.settings_backup_import_confirm_msg, n)
+                    pendingImport = text
+                }
+            }.onFailure { e ->
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, context.getString(R.string.settings_backup_import_invalid, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -311,6 +355,39 @@ fun SettingsScreen(
                 )
             }
 
+            if (pendingImport != null) {
+                AlertDialog(
+                    onDismissRequest = { pendingImport = null },
+                    title = { Text(stringResource(R.string.settings_backup_import_title), color = textPrimaryColor, fontWeight = FontWeight.Bold) },
+                    text = { Text(importSummary, color = textPrimaryColor) },
+                    containerColor = cardColor,
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val text = pendingImport!!; pendingImport = null
+                            coroutineScope.launch(Dispatchers.IO) {
+                                when (val r = viewModel.restoreSettingsFromJson(context, text)) {
+                                    is BackupImportResult.Success -> {
+                                        viewModel.reloadSettingsAfterImport(context)
+                                        withContext(Dispatchers.Main) {
+                                            val skippedSuffix = if (r.skipped > 0) " (" + context.getString(R.string.settings_backup_skipped, r.skipped) + ")" else ""
+                                            Toast.makeText(context, context.getString(R.string.settings_backup_import_success, r.restored, skippedSuffix), Toast.LENGTH_SHORT).show()
+                                            onSettingsImported()
+                                        }
+                                    }
+                                    BackupImportResult.InvalidVersion -> withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, context.getString(R.string.settings_backup_import_bad_version), Toast.LENGTH_LONG).show()
+                                    }
+                                    BackupImportResult.InvalidFile -> withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, context.getString(R.string.settings_backup_import_invalid, ""), Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        }) { Text(stringResource(R.string.settings_backup_import_confirm_btn), color = Color(0xFFFF4444)) }
+                    },
+                    dismissButton = { TextButton(onClick = { pendingImport = null }) { Text(stringResource(R.string.cancel_text), color = textSecondaryColor) } }
+                )
+            }
+
             // ── Helper composable ─────────────────────────────────────────────────
             @Composable
             fun SectionHeader(title: String) {
@@ -422,7 +499,9 @@ fun SettingsScreen(
                         SettingSearchResult(context.getString(R.string.privacy_hub_title), "Network routing, proxy, VPN, DNS, and identity controls", "PROXY HUB", Icons.Rounded.VpnLock, onOpenPrivacyHub),
                         SettingSearchResult(context.getString(R.string.native_player_title), "Custom floating video player with gesture controls", "MEDIA", Icons.Rounded.PlayCircle, { viewModel.toggleNativePlayer(context) }),
                         SettingSearchResult(context.getString(R.string.ai_blocker_title), "Filter AI generated search results and web bloat", "MEDIA", Icons.Rounded.Block, { viewModel.toggleAiBlocker(context) }),
-                        SettingSearchResult(context.getString(R.string.search_engine_title), "Select default search provider (Google, DuckDuckGo, Bing, Brave, Custom)", "SEARCH", Icons.Rounded.Search, {})
+                        SettingSearchResult(context.getString(R.string.search_engine_title), "Select default search provider (Google, DuckDuckGo, Bing, Brave, Custom)", "SEARCH", Icons.Rounded.Search, {}),
+                        SettingSearchResult(context.getString(R.string.settings_backup_export_title), context.getString(R.string.settings_backup_export_desc), "DATA & BACKUP", Icons.Rounded.UploadFile, { exportLauncher.launch("omni-browser-settings.json") }),
+                        SettingSearchResult(context.getString(R.string.settings_backup_import_title_row), context.getString(R.string.settings_backup_import_desc), "DATA & BACKUP", Icons.Rounded.DownloadForOffline, { importLauncher.launch(arrayOf("application/json","text/*","*/*")) })
                     )
                 }
 
@@ -929,6 +1008,24 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.Shield, stringResource(id = R.string.privacy_policy_title), stringResource(id = R.string.privacy_policy_desc), onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser/privacy-policy") })
                 }
+            }
+
+            // ── 7. DATA & BACKUP ───────────────────────────────────────────────────
+            SectionHeader(stringResource(R.string.settings_backup_section))
+            SettingsCard {
+                NavRow(
+                    Icons.Rounded.UploadFile,
+                    stringResource(R.string.settings_backup_export_title),
+                    stringResource(R.string.settings_backup_export_desc),
+                    onClick = { exportLauncher.launch("omni-browser-settings-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())}.json") }
+                )
+                HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                NavRow(
+                    Icons.Rounded.DownloadForOffline,
+                    stringResource(R.string.settings_backup_import_title_row),
+                    stringResource(R.string.settings_backup_import_desc),
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) }
+                )
             }
             }
         }

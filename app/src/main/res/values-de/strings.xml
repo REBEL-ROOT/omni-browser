@@ -599,4 +599,18 @@ Festlegen</string>
     <string name="video_player_aspect_fit">Seitenverhältnis: An Bildschirm anpassen</string>
     <string name="video_player_aspect_fill">Seitenverhältnis: Bildschirm ausfüllen</string>
     <string name="video_player_aspect_stretch">Seitenverhältnis: Strecken</string>
+    <string name="settings_backup_section">Daten &amp; Sicherung</string>
+    <string name="settings_backup_export_title">Einstellungen exportieren</string>
+    <string name="settings_backup_export_desc">Alle Browsereinstellungen in einer JSON-Datei speichern</string>
+    <string name="settings_backup_export_success">Einstellungen erfolgreich exportiert</string>
+    <string name="settings_backup_export_failed">Export fehlgeschlagen: %1$s</string>
+    <string name="settings_backup_import_title_row">Einstellungen importieren</string>
+    <string name="settings_backup_import_desc">Einstellungen aus einer JSON-Sicherungsdatei wiederherstellen</string>
+    <string name="settings_backup_import_title">Einstellungen importieren?</string>
+    <string name="settings_backup_import_confirm_msg">Dadurch werden Ihre aktuellen Einstellungen durch %1$d Einstellung(en) aus dem Backup überschrieben. Fortfahren?</string>
+    <string name="settings_backup_import_confirm_btn">Importieren</string>
+    <string name="settings_backup_import_success">%1$d Einstellung(en) importiert%2$s</string>
+    <string name="settings_backup_import_invalid">Ungültige Sicherungsdatei: %1$s</string>
+    <string name="settings_backup_import_bad_version">Diese Sicherung wurde von einer neueren Version erstellt und kann nicht importiert werden.</string>
+    <string name="settings_backup_skipped">%1$d nicht unterstützt übersprungen</string>
 </resources>

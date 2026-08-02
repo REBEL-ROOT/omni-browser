@@ -599,4 +599,18 @@ Default Browser</string>
     <string name="video_player_aspect_fit">Aspect Ratio: Fit to Screen</string>
     <string name="video_player_aspect_fill">Aspect Ratio: Fill Screen</string>
     <string name="video_player_aspect_stretch">Aspect Ratio: Stretch</string>
+    <string name="settings_backup_section">Data &amp; Backup</string>
+    <string name="settings_backup_export_title">Export Settings</string>
+    <string name="settings_backup_export_desc">Save all browser settings to a JSON file</string>
+    <string name="settings_backup_export_success">Settings exported successfully</string>
+    <string name="settings_backup_export_failed">Export failed: %1$s</string>
+    <string name="settings_backup_import_title_row">Import Settings</string>
+    <string name="settings_backup_import_desc">Restore settings from a backup JSON file</string>
+    <string name="settings_backup_import_title">Import Settings?</string>
+    <string name="settings_backup_import_confirm_msg">This will overwrite your current settings with %1$d setting(s) from the backup. Continue?</string>
+    <string name="settings_backup_import_confirm_btn">Import</string>
+    <string name="settings_backup_import_success">Imported %1$d setting(s)%2$s</string>
+    <string name="settings_backup_import_invalid">Invalid backup file: %1$s</string>
+    <string name="settings_backup_import_bad_version">This backup was made by a newer version and cannot be imported.</string>
+    <string name="settings_backup_skipped">%1$d unsupported skipped</string>
 </resources>
