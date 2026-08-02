@@ -4167,6 +4167,7 @@ class BrowserViewModel : ViewModel() {
                     if (context is android.app.Activity) {
                         context.finishAffinity()
                     }
+                    kotlinx.coroutines.delay(150)
                     Runtime.getRuntime().exit(0)
                     return@launch
                 }
