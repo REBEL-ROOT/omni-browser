@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,68 +94,68 @@ fun OnboardingScreen(
     var isDarkTheme by remember { mutableStateOf(viewModel.isDarkThemeEnabled) }
     var isCreamyTheme by remember { mutableStateOf(viewModel.isCreamyMode) }
 
-    val pages = remember {
+    val pages = remember(context) {
         listOf(
             OnboardingPage(
                 id = "browse",
                 imageRes = R.drawable.ob_secure_browser,
-                title = "Browse Freely,\nBrowse Privately",
+                title = context.getString(R.string.onboarding_title_browse),
                 accentColor = Color(0xFF0284C7), // Soothing Ocean Blue
-                tagline = "Zero Trackers · Fully On-Device · Hyper-Fast",
+                tagline = context.getString(R.string.onboarding_tagline_browse),
                 features = listOf(
-                    FeatureItem(Icons.Rounded.Search,          "Smart Address Bar",    "Voice, text, and camera search integrated right in omnibox"),
-                    FeatureItem(Icons.Rounded.Newspaper,       "Discover Feed",        "Latest news headlines by category — zero account required"),
-                    FeatureItem(Icons.Rounded.VisibilityOff,   "Incognito Mode",       "No history, no cookies, no tracking — 1-tap instant switch"),
-                    FeatureItem(Icons.Rounded.ContentCopy,     "Universal Copy",       "Bypass copy protection to select and copy text from any webpage")
+                    FeatureItem(Icons.Rounded.Search,          context.getString(R.string.onboarding_feature_smart_bar_title),    context.getString(R.string.onboarding_feature_smart_bar_desc)),
+                    FeatureItem(Icons.Rounded.Newspaper,       context.getString(R.string.onboarding_feature_discover_title),     context.getString(R.string.onboarding_feature_discover_desc)),
+                    FeatureItem(Icons.Rounded.VisibilityOff,   context.getString(R.string.onboarding_feature_incognito_title),    context.getString(R.string.onboarding_feature_incognito_desc)),
+                    FeatureItem(Icons.Rounded.ContentCopy,     context.getString(R.string.onboarding_feature_copy_title),         context.getString(R.string.onboarding_feature_copy_desc))
                 )
             ),
             OnboardingPage(
                 id = "theme_setup",
                 imageRes = R.drawable.ob_quick_tools,
-                title = "Personalize Your\nVisual Experience",
+                title = context.getString(R.string.onboarding_title_theme),
                 accentColor = Color(0xFF818CF8), // Soothing Soft Indigo
-                tagline = "Dark Mode · AMOLED Black · Creamy Light",
+                tagline = context.getString(R.string.onboarding_tagline_theme),
                 features = emptyList()
             ),
             OnboardingPage(
                 id = "extensions",
                 imageRes = R.drawable.ob_extensions_vault,
-                title = "Real Extensions,\nReal Protection",
+                title = context.getString(R.string.onboarding_title_extensions),
                 accentColor = Color(0xFFE11D48), // Soothing Firefox Rose
-                tagline = "uBlock Origin · Firefox Add-ons · Safe Locker",
+                tagline = context.getString(R.string.onboarding_tagline_extensions),
                 features = listOf(
-                    FeatureItem(Icons.Rounded.Shield,          "uBlock Origin Native", "Official Firefox desktop ad blocker — block ads and trackers automatically"),
-                    FeatureItem(Icons.Rounded.AddCircleOutline,"Curated Extension Store", "Install Dark Reader, SponsorBlock, TWP Translate in 1-tap"),
-                    FeatureItem(Icons.Rounded.Block,           "AI Overview Blocker",  "Hide forced AI summaries on Google & Bing search results"),
-                    FeatureItem(Icons.Rounded.Lock,            "Biometric Safe Vault", "Encrypted vault for downloads, images, and documents")
+                    FeatureItem(Icons.Rounded.Shield,          context.getString(R.string.onboarding_feature_ublock_title),      context.getString(R.string.onboarding_feature_ublock_desc)),
+                    FeatureItem(Icons.Rounded.AddCircleOutline,context.getString(R.string.onboarding_feature_store_title),       context.getString(R.string.onboarding_feature_store_desc)),
+                    FeatureItem(Icons.Rounded.Block,           context.getString(R.string.onboarding_feature_ai_blocker_title),  context.getString(R.string.onboarding_feature_ai_blocker_desc)),
+                    FeatureItem(Icons.Rounded.Lock,            context.getString(R.string.onboarding_feature_vault_title),       context.getString(R.string.onboarding_feature_vault_desc))
                 )
             ),
             OnboardingPage(
                 id = "search_setup",
                 imageRes = R.drawable.ob_search_selector,
-                title = "Choose Your Preferred\nSearch Engine",
+                title = context.getString(R.string.onboarding_title_search),
                 accentColor = Color(0xFF10B981), // Soothing Emerald
-                tagline = "Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant",
+                tagline = context.getString(R.string.onboarding_tagline_search),
                 features = emptyList()
             ),
             OnboardingPage(
                 id = "navbar_position",
                 imageRes = R.drawable.ob_nav_split,
-                title = "Choose Your\nNavigation Layout",
+                title = context.getString(R.string.onboarding_title_navbar),
                 accentColor = Color(0xFF6366F1), // Soothing Indigo
-                tagline = "1st Split · 2nd Top · 3rd Bottom",
+                tagline = context.getString(R.string.onboarding_tagline_navbar),
                 features = emptyList()
             ),
             OnboardingPage(
                 id = "default_browser",
                 imageRes = R.drawable.ob_secure_browser,
-                title = "Set Omni as Your\nDefault Browser",
+                title = context.getString(R.string.onboarding_title_default_browser),
                 accentColor = Color(0xFF2563EB), // Royal Blue
-                tagline = "Fast · Private · Secure Every Day",
+                tagline = context.getString(R.string.onboarding_tagline_default_browser),
                 features = listOf(
-                    FeatureItem(Icons.Rounded.Shield,          "Automatic Protection", "Block tracking scripts, popups, and harmful ads on every link"),
-                    FeatureItem(Icons.Rounded.Bolt,            "Lightning Fast Load",  "Instant page rendering without background telemetry slowdowns"),
-                    FeatureItem(Icons.Rounded.Lock,            "Encrypted & Safe",     "Biometric protection and automatic HTTPS encryption for all sites")
+                    FeatureItem(Icons.Rounded.Shield,          context.getString(R.string.onboarding_feature_auto_protection_title), context.getString(R.string.onboarding_feature_auto_protection_desc)),
+                    FeatureItem(Icons.Rounded.Bolt,            context.getString(R.string.onboarding_feature_lightning_title),       context.getString(R.string.onboarding_feature_lightning_desc)),
+                    FeatureItem(Icons.Rounded.Lock,            context.getString(R.string.onboarding_feature_encrypted_title),       context.getString(R.string.onboarding_feature_encrypted_desc))
                 )
             )
         )
@@ -207,7 +208,7 @@ fun OnboardingScreen(
                 border = BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else CardBorderColor)
             ) {
                 Text(
-                    text = "STEP ${pagerState.currentPage + 1} OF ${pages.size}",
+                    text = stringResource(R.string.onboarding_step, pagerState.currentPage + 1, pages.size),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = currentPage.accentColor,
@@ -218,7 +219,7 @@ fun OnboardingScreen(
             // Skip Button
             if (!isLastPage) {
                 Text(
-                    text = "Skip",
+                    text = stringResource(R.string.onboarding_skip),
                     color = if (isDarkTheme) Color(0xFF94A3B8) else SubtextColor,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -312,9 +313,9 @@ fun OnboardingScreen(
                     ) {
                         Text(
                             text = when (pageData.id) {
-                                "navbar_position" -> "Active: $selectedNavbarPos Layout"
-                                "search_setup"    -> "Selected: $selectedSearchEngine"
-                                "theme_setup"     -> if (isDarkTheme) "Dark Theme Active" else (if (isCreamyTheme) "Creamy Light Active" else "Pure Light Active")
+                                "navbar_position" -> stringResource(R.string.onboarding_active_layout, selectedNavbarPos)
+                                "search_setup"    -> stringResource(R.string.onboarding_selected_search, selectedSearchEngine)
+                                "theme_setup"     -> if (isDarkTheme) stringResource(R.string.onboarding_tagline_dark_active) else (if (isCreamyTheme) stringResource(R.string.onboarding_tagline_creamy_active) else stringResource(R.string.onboarding_tagline_pure_active))
                                 else              -> pageData.tagline
                             },
                             color = pageData.accentColor,
@@ -342,7 +343,7 @@ fun OnboardingScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "Select Preferred Theme Mode",
+                                    text = stringResource(R.string.onboarding_theme_selection_title),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.5.sp,
                                     color = if (isDarkTheme) Color.White else TitleTextColor
@@ -354,10 +355,10 @@ fun OnboardingScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    listOf(
-                                        Triple("Dark Slate", true, false),
-                                        Triple("Creamy Light", false, true),
-                                        Triple("Pure Light", false, false)
+                                    listOf<Triple<String, Boolean, Boolean>>(
+                                        Triple(stringResource(R.string.onboarding_theme_dark_slate), true, false),
+                                        Triple(stringResource(R.string.onboarding_theme_creamy_light), false, true),
+                                        Triple(stringResource(R.string.onboarding_theme_pure_light), false, false)
                                     ).forEach { (label, darkVal, creamyVal) ->
                                         val isSelected = (isDarkTheme == darkVal && isCreamyTheme == creamyVal)
                                         Surface(
@@ -425,7 +426,7 @@ fun OnboardingScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "Select Default Search Engine",
+                                    text = stringResource(R.string.onboarding_search_selection_title),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.5.sp,
                                     color = if (isDarkTheme) Color.White else TitleTextColor
@@ -501,7 +502,7 @@ fun OnboardingScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "Select Preferred Layout",
+                                    text = stringResource(R.string.onboarding_navbar_selection_title),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.5.sp,
                                     color = if (isDarkTheme) Color.White else TitleTextColor
@@ -520,7 +521,7 @@ fun OnboardingScreen(
                                                 autoCycleNavbar = false
                                                 selectedNavbarPos = pos
                                                 viewModel.saveAddressBarPosition(context, pos)
-                                                Toast.makeText(context, "Layout set to $pos", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.onboarding_layout_toast, pos), Toast.LENGTH_SHORT).show()
                                             },
                                             shape = RoundedCornerShape(10.dp),
                                             color = if (isSelected) Color(0xFF6366F1) else (if (isDarkTheme) Color(0xFF0F172A) else CreamyLightBackground),
@@ -535,9 +536,9 @@ fun OnboardingScreen(
                                             ) {
                                                 Text(
                                                     text = when(pos) {
-                                                        "Split" -> "1st Split"
-                                                        "Top" -> "2nd Top"
-                                                        else -> "3rd Bottom"
+                                                        "Split" -> stringResource(R.string.onboarding_nav_split)
+                                                        "Top" -> stringResource(R.string.onboarding_nav_top)
+                                                        else -> stringResource(R.string.onboarding_nav_bottom)
                                                     },
                                                     fontSize = 12.sp,
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
@@ -581,13 +582,13 @@ fun OnboardingScreen(
                                     )
                                     Column {
                                         Text(
-                                            text = "Install uBlock Origin",
+                                            text = stringResource(R.string.onboarding_install_ublock_title),
                                             color = if (isDarkTheme) Color.White else TitleTextColor,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "1-Tap automatic background install",
+                                            text = stringResource(R.string.onboarding_install_ublock_desc),
                                             color = if (isDarkTheme) Color(0xFF94A3B8) else SubtextColor,
                                             fontSize = 11.sp
                                         )
@@ -608,7 +609,7 @@ fun OnboardingScreen(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(Icons.Rounded.Download, null, modifier = Modifier.size(14.dp), tint = Color.White)
-                                        Text("Install", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                        Text(stringResource(R.string.onboarding_install_button), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
                                     }
                                 }
                             }
@@ -630,14 +631,14 @@ fun OnboardingScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "Make Omni Browser Your Default",
+                                    text = stringResource(R.string.onboarding_default_card_title),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = if (isDarkTheme) Color.White else TitleTextColor
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Open system settings to select Omni Browser as your default browser",
+                                    text = stringResource(R.string.onboarding_default_card_desc),
                                     fontSize = 11.5.sp,
                                     color = if (isDarkTheme) Color(0xFF94A3B8) else SubtextColor,
                                     textAlign = TextAlign.Center
@@ -658,7 +659,7 @@ fun OnboardingScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(Icons.Rounded.Settings, null, modifier = Modifier.size(16.dp), tint = Color.White)
-                                        Text("Set as Default Browser", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                                        Text(stringResource(R.string.onboarding_set_default_button), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                                     }
                                 }
                             }
@@ -746,7 +747,7 @@ fun OnboardingScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = if (isLastPage) "Start Browsing" else "Next",
+                        text = if (isLastPage) stringResource(R.string.onboarding_start_browsing) else stringResource(R.string.onboarding_next),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni 浏览器</string>
     <string name="settings_title">设置</string>
@@ -242,7 +242,6 @@
     <string name="vpn_not_available_hint">此版本尚不支持 VPN 隧道。配置可保存但无法连接。</string>
     <string name="dns_disabled">已禁用</string>
     <string name="dot_system_hint">打开 Android 私人 DNS 设置</string>
-
     <string name="proxy_provider_wireguard_unavailable">WireGuard（暂不可用）</string>
     <string name="proxy_provider_tor_over_vpn_unavailable">Tor over VPN（需要 VPN）</string>
     <string name="tor_connecting_waiting">正在等待 Orbot 启动…</string>
@@ -303,16 +302,12 @@
     <string name="menu_new_tab">新建标签页</string>
     <string name="menu_new_incognito_tab">新建无痕标签页</string>
     <string name="menu_close_all_tabs">关闭所有标签页</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">个性化</string>
     <string name="settings_section_browsing">浏览</string>
     <string name="settings_section_privacy_security">隐私与安全</string>
     <string name="settings_section_media">媒体</string>
     <string name="settings_section_general">通用</string>
     <string name="settings_section_custom_search">自定义搜索引擎</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">外观</string>
     <string name="appearance_desc">主题模式、主题颜色、布局和 UI 缩放</string>
     <string name="wallpapers_title">壁纸</string>
@@ -344,8 +339,6 @@
     <string name="support_github_desc">查看源代码并提交问题</string>
     <string name="website_omnibrowser_desc">访问 Omni Browser 官方网站</string>
     <string name="privacy_policy_desc">阅读我们的隐私政策</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">地址栏</string>
     <string name="appearance_top">顶部</string>
     <string name="appearance_bottom">底部</string>
@@ -358,8 +351,6 @@
     <string name="appearance_force_dark_websites">强制网站使用深色主题</string>
     <string name="appearance_force_dark_websites_desc">强制网站（如 Google、维基百科）进入深色模式</string>
     <string name="appearance_theme">主题</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">搜索设置…</string>
     <string name="custom_search_engines">自定义搜索引擎</string>
     <string name="add_new_engine">添加新引擎</string>
@@ -476,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">第 %1$d 步，共 %2$d 步</string>
+    <string name="onboarding_skip">跳过</string>
+    <string name="onboarding_next">下一步</string>
+    <string name="onboarding_start_browsing">开始浏览</string>
+    <string name="onboarding_title_browse">自由浏览，
+私密浏览</string>
+    <string name="onboarding_tagline_browse">零追踪器 · 完全本地处理 · 极速</string>
+    <string name="onboarding_feature_smart_bar_title">智能地址栏</string>
+    <string name="onboarding_feature_smart_bar_desc">语音、文本和相机搜索集成在地址栏中</string>
+    <string name="onboarding_feature_discover_title">探索新闻流</string>
+    <string name="onboarding_feature_discover_desc">按分类查看最新新闻 — 无需注册账号</string>
+    <string name="onboarding_feature_incognito_title">无痕模式</string>
+    <string name="onboarding_feature_incognito_desc">无历史记录、无 Cookie — 1 次点击即刻切换</string>
+    <string name="onboarding_feature_copy_title">通用复制</string>
+    <string name="onboarding_feature_copy_desc">绕过复制保护，随意选择并复制网页文本</string>
+    <string name="onboarding_title_theme">个性化您的
+视觉体验</string>
+    <string name="onboarding_tagline_theme">暗黑模式 · AMOLED 纯黑 · 奶油白</string>
+    <string name="onboarding_theme_selection_title">选择首选主题模式</string>
+    <string name="onboarding_theme_dark_slate">深邃暗黑</string>
+    <string name="onboarding_theme_creamy_light">奶油暖白</string>
+    <string name="onboarding_theme_pure_light">纯净亮白</string>
+    <string name="onboarding_tagline_dark_active">深色主题已启用</string>
+    <string name="onboarding_tagline_creamy_active">奶油暖白已启用</string>
+    <string name="onboarding_tagline_pure_active">纯净亮白已启用</string>
+    <string name="onboarding_title_extensions">真实扩展，
+真实保护</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · Firefox 插件 · 安全保险箱</string>
+    <string name="onboarding_feature_ublock_title">原生 uBlock Origin</string>
+    <string name="onboarding_feature_ublock_desc">官方桌面级广告拦截器 — 自动拦截广告与追踪</string>
+    <string name="onboarding_feature_store_title">精选扩展商店</string>
+    <string name="onboarding_feature_store_desc">一键安装 Dark Reader、SponsorBlock、TWP 翻译</string>
+    <string name="onboarding_feature_ai_blocker_title">AI 概述拦截器</string>
+    <string name="onboarding_feature_ai_blocker_desc">隐藏 Google 和 Bing 搜索结果中的强制 AI 摘要</string>
+    <string name="onboarding_feature_vault_title">生物识别安全保险箱</string>
+    <string name="onboarding_feature_vault_desc">加密保管下载文件、图片和文档</string>
+    <string name="onboarding_install_ublock_title">安装 uBlock Origin</string>
+    <string name="onboarding_install_ublock_desc">1 次点击后台自动安装</string>
+    <string name="onboarding_install_button">安装</string>
+    <string name="onboarding_title_search">选择您首选的
+搜索引擎</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">选择默认搜索引擎</string>
+    <string name="onboarding_selected_search">已选择: %1$s</string>
+    <string name="onboarding_title_navbar">选择您的
+导航栏布局</string>
+    <string name="onboarding_tagline_navbar">1. 分裂式 · 2. 顶部 · 3. 底部</string>
+    <string name="onboarding_navbar_selection_title">选择首选布局</string>
+    <string name="onboarding_nav_split">1. 分裂式</string>
+    <string name="onboarding_nav_top">2. 顶部</string>
+    <string name="onboarding_nav_bottom">3. 底部</string>
+    <string name="onboarding_active_layout">当前: %1$s 布局</string>
+    <string name="onboarding_layout_toast">布局已设置为 %1$s</string>
+    <string name="onboarding_title_default_browser">将 Omni 设置为
+默认浏览器</string>
+    <string name="onboarding_tagline_default_browser">每天保持快速、私密与安全</string>
+    <string name="onboarding_feature_auto_protection_title">自动保护</string>
+    <string name="onboarding_feature_auto_protection_desc">在所有链接上拦截追踪脚本、弹窗和有害广告</string>
+    <string name="onboarding_feature_lightning_title">极速加载</string>
+    <string name="onboarding_feature_lightning_desc">即时页面渲染，无后台遥测减速</string>
+    <string name="onboarding_feature_encrypted_title">加密与安全</string>
+    <string name="onboarding_feature_encrypted_desc">生物识别保护与全站自动 HTTPS 加密</string>
+    <string name="onboarding_default_card_title">将 Omni 设为默认浏览器</string>
+    <string name="onboarding_default_card_desc">打开系统设置选择 Omni 作为默认浏览器</string>
+    <string name="onboarding_set_default_button">设置为默认浏览器</string>
 </resources>

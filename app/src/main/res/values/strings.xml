@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni Browser</string>
     <string name="settings_title">Settings</string>
@@ -245,14 +245,10 @@
     <string name="vpn_not_available_hint">Import or add a WireGuard configuration to enable the VPN tunnel.</string>
     <string name="dns_disabled">Disabled</string>
     <string name="dot_system_hint">Opens Android Private DNS settings</string>
-
-    <!-- Proxy Hub: provider availability -->
     <string name="proxy_provider_wireguard_unavailable">WireGuard VPN</string>
     <string name="proxy_provider_tor_over_vpn_unavailable">Tor over VPN</string>
     <string name="vpn_connecting_toast">Connecting to VPN…</string>
     <string name="vpn_disconnected_toast">VPN disconnected</string>
-
-    <!-- Proxy Hub: Tor status -->
     <string name="tor_connecting_waiting">Waiting for Orbot to start…</string>
     <string name="tor_connecting_builtin">Connecting to the Tor network…</string>
     <string name="tor_connected_restart_hint">Connected — restart to route traffic through Tor</string>
@@ -262,15 +258,11 @@
     <string name="tor_connecting_toast">Connecting to Tor…</string>
     <string name="tor_disconnected_toast">Tor disconnected</string>
     <string name="tor_bridges_restart_hint">Takes effect after restart</string>
-
-    <!-- Proxy Hub: custom proxy dialog -->
     <string name="custom_proxy_host_label">Host</string>
     <string name="custom_proxy_port_label">Port</string>
     <string name="custom_proxy_host_empty">Enter a proxy host</string>
     <string name="custom_proxy_port_invalid">Port must be 1–65535</string>
     <string name="custom_proxy_saved_restart">Custom proxy saved — restart to apply</string>
-
-    <!-- Proxy Hub: WireGuard -->
     <string name="wg_config_title">WireGuard Configuration</string>
     <string name="wg_config_hint">Paste your WireGuard (.conf) configuration below.</string>
     <string name="wg_config_saved">Config saved</string>
@@ -281,27 +273,15 @@
     <string name="wg_not_configured">Not configured</string>
     <string name="wg_socks5_proxy">SOCKS5 Proxy</string>
     <string name="wg_edit">Edit</string>
-
-    <!-- Proxy Hub: direct connection -->
     <string name="direct_connection">Direct Connection</string>
     <string name="direct_connection_desc">All traffic routes directly without proxy or VPN</string>
-
-    <!-- Proxy Hub: Tor over VPN -->
     <string name="tor_over_vpn_needs_vpn">Tor over VPN needs an active VPN tunnel first.</string>
-
-    <!-- Proxy Hub: DoH -->
     <string name="doh_custom_endpoint">Custom DoH endpoint</string>
     <string name="doh_url_invalid">DoH URL must start with https://</string>
     <string name="dns_leak_warning">DoH bypasses Tor\'s DNS — disable DoH to avoid DNS leaks while using Tor.</string>
-
-    <!-- Proxy Hub: DoT -->
     <string name="dot_open_settings">Set Private DNS in Android network settings</string>
     <string name="dot_open_settings_failed">Could not open network settings</string>
-
-    <!-- Proxy Hub: VPN first toast -->
     <string name="vpn_first_toast">Connect a VPN first, then select Tor over VPN.</string>
-
-    <!-- Menu, Home &amp; Channel Strings -->
     <string name="menu_burn_data">Burn Data</string>
     <string name="home_recently_visited">Recently Visited</string>
     <string name="home_see_all">See All</string>
@@ -322,16 +302,12 @@
     <string name="menu_new_tab">New Tab</string>
     <string name="menu_new_incognito_tab">New Incognito Tab</string>
     <string name="menu_close_all_tabs">Close All Tabs</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">PERSONALIZATION</string>
     <string name="settings_section_browsing">BROWSING</string>
     <string name="settings_section_privacy_security">PRIVACY &amp; SECURITY</string>
     <string name="settings_section_media">MEDIA</string>
     <string name="settings_section_general">GENERAL</string>
     <string name="settings_section_custom_search">CUSTOM SEARCH ENGINES</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">Appearance</string>
     <string name="appearance_desc">Theme mode, accent colors, layout, and UI scale</string>
     <string name="wallpapers_title">Wallpapers</string>
@@ -363,8 +339,6 @@
     <string name="support_github_desc">View source code and file issues</string>
     <string name="website_omnibrowser_desc">Visit the official Omni Browser website</string>
     <string name="privacy_policy_desc">Read our privacy policy</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">Address Bar</string>
     <string name="appearance_top">Top</string>
     <string name="appearance_bottom">Bottom</string>
@@ -377,14 +351,10 @@
     <string name="appearance_force_dark_websites">Force Websites to Use Dark Theme</string>
     <string name="appearance_force_dark_websites_desc">Forces websites (like Google, Wikipedia) into dark mode</string>
     <string name="appearance_theme">Theme</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">Search settings...</string>
     <string name="custom_search_engines">Custom Search Engines</string>
     <string name="add_new_engine">Add New</string>
     <string name="no_custom_search_engines">No custom search engines added yet.</string>
-
-    <!-- Appearance Sub-Screen Details -->
     <string name="theme_mode">Theme Mode</string>
     <string name="theme_light">Light</string>
     <string name="theme_creamy">Creamy</string>
@@ -419,8 +389,6 @@
     <string name="new_tab_page">New Tab Page</string>
     <string name="show_logo">Show Logo</string>
     <string name="show_shortcuts">Show Shortcuts</string>
-
-    <!-- Wallpaper Sub-Screen -->
     <string name="wallpaper_custom_url_title">Custom Video or GIF URL</string>
     <string name="wallpaper_custom_url_desc">Enter a direct HTTP/HTTPS URL for any online GIF or MP4/WebM video:</string>
     <string name="wallpaper_custom_url_placeholder">https://example.com/wallpaper.mp4</string>
@@ -436,8 +404,6 @@
     <string name="wallpaper_live_section">Live Animated Wallpapers (GIF &amp; Video)</string>
     <string name="wallpaper_static_section">Static Wallpapers</string>
     <string name="wallpaper_none">None</string>
-
-    <!-- Accessibility Sub-Screen -->
     <string name="acc_text_and_zoom">Text and Zoom</string>
     <string name="acc_text_scaling">Text scaling</string>
     <string name="acc_text_scaling_desc">Adjust website text size</string>
@@ -449,8 +415,6 @@
     <string name="acc_system_preferences">System Preferences</string>
     <string name="acc_system_accessibility">System accessibility</string>
     <string name="acc_system_accessibility_desc">Open Android accessibility options</string>
-
-    <!-- Tabs Sub-Screen -->
     <string name="tabs_management">Tab Management</string>
     <string name="tab_layout_title">Tab Layout</string>
     <string name="tab_layout_grid">Grid</string>
@@ -462,8 +426,6 @@
     <string name="auto_close_1_day">Close after 1 day</string>
     <string name="auto_close_1_week">Close after 1 week</string>
     <string name="auto_close_1_month">Close after 1 month</string>
-
-    <!-- Site Settings Sub-Screen -->
     <string name="site_settings_all_sites">All Sites</string>
     <string name="site_settings_default_permissions">Default Permissions</string>
     <string name="perm_location">Location</string>
@@ -475,8 +437,6 @@
     <string name="perm_popups">Pop-ups and redirects</string>
     <string name="perm_allowed">Allowed</string>
     <string name="perm_blocked">Blocked</string>
-
-    <!-- Privacy &amp; Security Sub-Screen -->
     <string name="privacy_title">Privacy</string>
     <string name="adblock_filter_providers">AdBlock &amp; Custom Filter Providers</string>
     <string name="adblock_filter_providers_desc">Configure built-in &amp; custom blocklist URLs</string>
@@ -495,8 +455,6 @@
     <string name="lock_incognito_desc">Authenticate to access your private tabs</string>
     <string name="security_title">Security</string>
     <string name="safe_browsing_title">Safe Browsing</string>
-
-    <!-- AdBlock Settings Sub-Screen -->
     <string name="adblock_screen_title">AdBlock &amp; Filter Providers</string>
     <string name="adblock_master_title">Ad &amp; Tracker Blocker</string>
     <string name="adblock_active">Blocking active</string>
@@ -509,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">STEP %1$d OF %2$d</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_start_browsing">Start Browsing</string>
+    <string name="onboarding_title_browse">Browse Freely,
+Browse Privately</string>
+    <string name="onboarding_tagline_browse">Zero Trackers · Fully On-Device · Hyper-Fast</string>
+    <string name="onboarding_feature_smart_bar_title">Smart Address Bar</string>
+    <string name="onboarding_feature_smart_bar_desc">Voice, text, and camera search integrated right in omnibox</string>
+    <string name="onboarding_feature_discover_title">Discover Feed</string>
+    <string name="onboarding_feature_discover_desc">Latest news headlines by category — zero account required</string>
+    <string name="onboarding_feature_incognito_title">Incognito Mode</string>
+    <string name="onboarding_feature_incognito_desc">No history, no cookies, no tracking — 1-tap instant switch</string>
+    <string name="onboarding_feature_copy_title">Universal Copy</string>
+    <string name="onboarding_feature_copy_desc">Bypass copy protection to select and copy text from any webpage</string>
+    <string name="onboarding_title_theme">Personalize Your
+Visual Experience</string>
+    <string name="onboarding_tagline_theme">Dark Mode · AMOLED Black · Creamy Light</string>
+    <string name="onboarding_theme_selection_title">Select Preferred Theme Mode</string>
+    <string name="onboarding_theme_dark_slate">Dark Slate</string>
+    <string name="onboarding_theme_creamy_light">Creamy Light</string>
+    <string name="onboarding_theme_pure_light">Pure Light</string>
+    <string name="onboarding_tagline_dark_active">Dark Theme Active</string>
+    <string name="onboarding_tagline_creamy_active">Creamy Light Active</string>
+    <string name="onboarding_tagline_pure_active">Pure Light Active</string>
+    <string name="onboarding_title_extensions">Real Extensions,
+Real Protection</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · Firefox Add-ons · Safe Locker</string>
+    <string name="onboarding_feature_ublock_title">uBlock Origin Native</string>
+    <string name="onboarding_feature_ublock_desc">Official Firefox desktop ad blocker — block ads and trackers automatically</string>
+    <string name="onboarding_feature_store_title">Curated Extension Store</string>
+    <string name="onboarding_feature_store_desc">Install Dark Reader, SponsorBlock, TWP Translate in 1-tap</string>
+    <string name="onboarding_feature_ai_blocker_title">AI Overview Blocker</string>
+    <string name="onboarding_feature_ai_blocker_desc">Hide forced AI summaries on Google &amp; Bing search results</string>
+    <string name="onboarding_feature_vault_title">Biometric Safe Vault</string>
+    <string name="onboarding_feature_vault_desc">Encrypted vault for downloads, images, and documents</string>
+    <string name="onboarding_install_ublock_title">Install uBlock Origin</string>
+    <string name="onboarding_install_ublock_desc">1-Tap automatic background install</string>
+    <string name="onboarding_install_button">Install</string>
+    <string name="onboarding_title_search">Choose Your Preferred
+Search Engine</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">Select Default Search Engine</string>
+    <string name="onboarding_selected_search">Selected: %1$s</string>
+    <string name="onboarding_title_navbar">Choose Your
+Navigation Layout</string>
+    <string name="onboarding_tagline_navbar">1st Split · 2nd Top · 3rd Bottom</string>
+    <string name="onboarding_navbar_selection_title">Select Preferred Layout</string>
+    <string name="onboarding_nav_split">1st Split</string>
+    <string name="onboarding_nav_top">2nd Top</string>
+    <string name="onboarding_nav_bottom">3rd Bottom</string>
+    <string name="onboarding_active_layout">Active: %1$s Layout</string>
+    <string name="onboarding_layout_toast">Layout set to %1$s</string>
+    <string name="onboarding_title_default_browser">Set Omni as Your
+Default Browser</string>
+    <string name="onboarding_tagline_default_browser">Fast · Private · Secure Every Day</string>
+    <string name="onboarding_feature_auto_protection_title">Automatic Protection</string>
+    <string name="onboarding_feature_auto_protection_desc">Block tracking scripts, popups, and harmful ads on every link</string>
+    <string name="onboarding_feature_lightning_title">Lightning Fast Load</string>
+    <string name="onboarding_feature_lightning_desc">Instant page rendering without background telemetry slowdowns</string>
+    <string name="onboarding_feature_encrypted_title">Encrypted &amp; Safe</string>
+    <string name="onboarding_feature_encrypted_desc">Biometric protection and automatic HTTPS encryption for all sites</string>
+    <string name="onboarding_default_card_title">Make Omni Browser Your Default</string>
+    <string name="onboarding_default_card_desc">Open system settings to select Omni Browser as your default browser</string>
+    <string name="onboarding_set_default_button">Set as Default Browser</string>
 </resources>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni Browser</string>
     <string name="settings_title">Paramètres</string>
@@ -242,7 +242,6 @@
     <string name="vpn_not_available_hint">Le tunnel VPN n\'est pas encore disponible dans cette version. Les configurations peuvent être enregistrées mais pas connectées.</string>
     <string name="dns_disabled">Désactivé</string>
     <string name="dot_system_hint">Ouvre les paramètres DNS privé d\'Android</string>
-
     <string name="proxy_provider_wireguard_unavailable">WireGuard (pas encore disponible)</string>
     <string name="proxy_provider_tor_over_vpn_unavailable">Tor sur VPN (nécessite un VPN)</string>
     <string name="tor_connecting_waiting">En attente du démarrage d\'Orbot…</string>
@@ -303,16 +302,12 @@
     <string name="menu_new_tab">Nouvel onglet</string>
     <string name="menu_new_incognito_tab">Nouvel onglet privé</string>
     <string name="menu_close_all_tabs">Fermer tous les onglets</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">PERSONNALISATION</string>
     <string name="settings_section_browsing">NAVIGATION</string>
     <string name="settings_section_privacy_security">CONFIDENTIALITÉ ET SÉCURITÉ</string>
     <string name="settings_section_media">MÉDIAS</string>
     <string name="settings_section_general">GÉNÉRAL</string>
     <string name="settings_section_custom_search">MOTEURS DE RECHERCHE PERSONNALISÉS</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">Apparence</string>
     <string name="appearance_desc">Mode de thème, couleurs d\'accentuation, disposition et échelle de l\'interface</string>
     <string name="wallpapers_title">Fonds d\'écran</string>
@@ -344,8 +339,6 @@
     <string name="support_github_desc">Voir le code source et signaler des problèmes</string>
     <string name="website_omnibrowser_desc">Visiter le site officiel d\'Omni Browser</string>
     <string name="privacy_policy_desc">Lire notre politique de confidentialité</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">Barre d\'adresse</string>
     <string name="appearance_top">Haut</string>
     <string name="appearance_bottom">Bas</string>
@@ -358,8 +351,6 @@
     <string name="appearance_force_dark_websites">Forcer le thème sombre sur les sites web</string>
     <string name="appearance_force_dark_websites_desc">Force le mode sombre sur les sites (comme Google, Wikipedia)</string>
     <string name="appearance_theme">Thème</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">Rechercher des paramètres…</string>
     <string name="custom_search_engines">Moteurs de recherche personnalisés</string>
     <string name="add_new_engine">Nouveau moteur</string>
@@ -476,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">ÉTAPE %1$d SUR %2$d</string>
+    <string name="onboarding_skip">Passer</string>
+    <string name="onboarding_next">Suivant</string>
+    <string name="onboarding_start_browsing">Commencer à naviguer</string>
+    <string name="onboarding_title_browse">Naviguez librement,
+Naviguez en privé</string>
+    <string name="onboarding_tagline_browse">Zéro traqueur · 100% sur l'appareil · Ultra-rapide</string>
+    <string name="onboarding_feature_smart_bar_title">Barre d'adresse intelligente</string>
+    <string name="onboarding_feature_smart_bar_desc">Recherche vocale, texte et caméra intégrée dans la barre</string>
+    <string name="onboarding_feature_discover_title">Flux Découvrir</string>
+    <string name="onboarding_feature_discover_desc">Dernières actualités par catégorie — aucun compte requis</string>
+    <string name="onboarding_feature_incognito_title">Mode Navigation privée</string>
+    <string name="onboarding_feature_incognito_desc">Pas d'historique, pas de cookies, pas de suivi — bascule en 1 geste</string>
+    <string name="onboarding_feature_copy_title">Copie universelle</string>
+    <string name="onboarding_feature_copy_desc">Contourne la protection de copie pour sélectionner le texte</string>
+    <string name="onboarding_title_theme">Personnalisez votre
+Expérience visuelle</string>
+    <string name="onboarding_tagline_theme">Mode sombre · Noir AMOLED · Lumière crémeuse</string>
+    <string name="onboarding_theme_selection_title">Sélectionnez le mode de thème préféré</string>
+    <string name="onboarding_theme_dark_slate">Ardoise sombre</string>
+    <string name="onboarding_theme_creamy_light">Lumière crémeuse</string>
+    <string name="onboarding_theme_pure_light">Lumière pure</string>
+    <string name="onboarding_tagline_dark_active">Thème sombre actif</string>
+    <string name="onboarding_tagline_creamy_active">Lumière crémeuse active</string>
+    <string name="onboarding_tagline_pure_active">Lumière pure active</string>
+    <string name="onboarding_title_extensions">Vraies extensions,
+Vraie protection</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · Modules Firefox · Coffre sécurisé</string>
+    <string name="onboarding_feature_ublock_title">uBlock Origin natif</string>
+    <string name="onboarding_feature_ublock_desc">Bloqueur officiel Firefox — bloque publicités et traqueurs</string>
+    <string name="onboarding_feature_store_title">Magasin d'extensions sélectionnées</string>
+    <string name="onboarding_feature_store_desc">Installez Dark Reader, SponsorBlock, TWP Translate en 1 clic</string>
+    <string name="onboarding_feature_ai_blocker_title">Bloqueur d'aperçus IA</string>
+    <string name="onboarding_feature_ai_blocker_desc">Masque les résumés IA forcés sur Google et Bing</string>
+    <string name="onboarding_feature_vault_title">Coffre-fort biométrique</string>
+    <string name="onboarding_feature_vault_desc">Coffre chiffré pour téléchargements, images et documents</string>
+    <string name="onboarding_install_ublock_title">Installer uBlock Origin</string>
+    <string name="onboarding_install_ublock_desc">Installation automatique en arrière-plan en 1 clic</string>
+    <string name="onboarding_install_button">Installer</string>
+    <string name="onboarding_title_search">Choisissez votre moteur
+De recherche préféré</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">Sélectionnez le moteur par défaut</string>
+    <string name="onboarding_selected_search">Sélectionné: %1$s</string>
+    <string name="onboarding_title_navbar">Choisissez votre disposition
+De navigation</string>
+    <string name="onboarding_tagline_navbar">1er Divisé · 2e Haut · 3e Bas</string>
+    <string name="onboarding_navbar_selection_title">Sélectionnez la disposition préférée</string>
+    <string name="onboarding_nav_split">1er Divisé</string>
+    <string name="onboarding_nav_top">2e Haut</string>
+    <string name="onboarding_nav_bottom">3e Bas</string>
+    <string name="onboarding_active_layout">Actif: Disposition %1$s</string>
+    <string name="onboarding_layout_toast">Disposition réglée sur %1$s</string>
+    <string name="onboarding_title_default_browser">Définissez Omni comme votre
+Navigateur par défaut</string>
+    <string name="onboarding_tagline_default_browser">Rapide · Privé · Sécurisé chaque jour</string>
+    <string name="onboarding_feature_auto_protection_title">Protection automatique</string>
+    <string name="onboarding_feature_auto_protection_desc">Bloque les scripts de suivi, popups et pubs nocives</string>
+    <string name="onboarding_feature_lightning_title">Chargement ultra-rapide</string>
+    <string name="onboarding_feature_lightning_desc">Rendu instantané sans ralentissements télémétriques</string>
+    <string name="onboarding_feature_encrypted_title">Chiffré et sécurisé</string>
+    <string name="onboarding_feature_encrypted_desc">Protection biométrique et chiffrement HTTPS automatique</string>
+    <string name="onboarding_default_card_title">Faites d'Omni votre navigateur par défaut</string>
+    <string name="onboarding_default_card_desc">Ouvrez les paramètres système pour choisir Omni par défaut</string>
+    <string name="onboarding_set_default_button">Définir comme navigateur par défaut</string>
 </resources>

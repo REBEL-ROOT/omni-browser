@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni Browser</string>
     <string name="settings_title">الإعدادات</string>
@@ -302,16 +302,12 @@
     <string name="menu_new_tab">تبويب جديد</string>
     <string name="menu_new_incognito_tab">تبويب مخفي جديد</string>
     <string name="menu_close_all_tabs">إغلاق جميع علامات التبويب</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">التخصيص</string>
     <string name="settings_section_browsing">التصفح</string>
     <string name="settings_section_privacy_security">الخصوصية والأمان</string>
     <string name="settings_section_media">الوسائط</string>
     <string name="settings_section_general">عام</string>
     <string name="settings_section_custom_search">محركات البحث المخصصة</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">المظهر</string>
     <string name="appearance_desc">وضع المظهر، ألوان التمييز، التخطيط ومقياس الواجهة</string>
     <string name="wallpapers_title">خلفيات الشاشة</string>
@@ -343,8 +339,6 @@
     <string name="support_github_desc">عرض الشفرة المصدرية والإبلاغ عن المشكلات</string>
     <string name="website_omnibrowser_desc">زيارة الموقع الرسمي لمتصفح Omni Browser</string>
     <string name="privacy_policy_desc">قراءة سياسة الخصوصية الخاصة بنا</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">شريط العنوان</string>
     <string name="appearance_top">أعلى</string>
     <string name="appearance_bottom">أسفل</string>
@@ -357,8 +351,6 @@
     <string name="appearance_force_dark_websites">فرض الوضع الداكن على المواقع</string>
     <string name="appearance_force_dark_websites_desc">يفرض الوضع الداكن على المواقع (مثل Google وWikipedia)</string>
     <string name="appearance_theme">المظهر</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">البحث في الإعدادات…</string>
     <string name="custom_search_engines">محركات البحث المخصصة</string>
     <string name="add_new_engine">إضافة جديد</string>
@@ -475,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">الخطوة %1$d من %2$d</string>
+    <string name="onboarding_skip">تخطي</string>
+    <string name="onboarding_next">التالي</string>
+    <string name="onboarding_start_browsing">بدء التصفح</string>
+    <string name="onboarding_title_browse">تصفح بحرية،
+تصفح بخصوصية</string>
+    <string name="onboarding_tagline_browse">صفر متتبعات · محلي بالكامل · سريع للغاية</string>
+    <string name="onboarding_feature_smart_bar_title">شريط العناوين الذكي</string>
+    <string name="onboarding_feature_smart_bar_desc">البحث الصوتي، النصي، والكاميرا مدمج في شريط العناوين</string>
+    <string name="onboarding_feature_discover_title">خلاصة الاكتشاف</string>
+    <string name="onboarding_feature_discover_desc">أحدث عناوين الأخبار حسب الفئة — دون الحاجة لحساب</string>
+    <string name="onboarding_feature_incognito_title">وضع التصفح الخفي</string>
+    <string name="onboarding_feature_incognito_desc">لا سجل، لا ملفات تعريف ارتباط — تبديل بنقرة واحدة</string>
+    <string name="onboarding_feature_copy_title">النسخ الشامل</string>
+    <string name="onboarding_feature_copy_desc">تجاوز حماية النسخ لتحديد ونخ النصوص من أي صفحة</string>
+    <string name="onboarding_title_theme">خصص تجربتك
+البصرية</string>
+    <string name="onboarding_tagline_theme">الوضع الداكن · أسود AMOLED · فاتح كريمي</string>
+    <string name="onboarding_theme_selection_title">اختر وضع المظهر المفضل</string>
+    <string name="onboarding_theme_dark_slate">داكن داكن</string>
+    <string name="onboarding_theme_creamy_light">فاتح كريمي</string>
+    <string name="onboarding_theme_pure_light">فاتح نقي</string>
+    <string name="onboarding_tagline_dark_active">الوضع الداكن نشط</string>
+    <string name="onboarding_tagline_creamy_active">الوضع الكريمي نشط</string>
+    <string name="onboarding_tagline_pure_active">الوضع النقائ نشط</string>
+    <string name="onboarding_title_extensions">إضافات حقيقية،
+حماية حقيقية</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · إضافات Firefox · الخزنة الآمنة</string>
+    <string name="onboarding_feature_ublock_title">uBlock Origin أصلي</string>
+    <string name="onboarding_feature_ublock_desc">مانع الإعلانات الرسمي — حظر الإعلانات والمتتبعات تلقائيًا</string>
+    <string name="onboarding_feature_store_title">متجر الإضافات المنسق</string>
+    <string name="onboarding_feature_store_desc">تثبيت Dark Reader وSponsorBlock وTWP Translate بنقرة واحدة</string>
+    <string name="onboarding_feature_ai_blocker_title">مانع ملخصات الذكاء الاصطناعي</string>
+    <string name="onboarding_feature_ai_blocker_desc">إخفاء ملخصات الذكاء الاصطناعي على نتائج Google وBing</string>
+    <string name="onboarding_feature_vault_title">الخزنة الآمنة البيومترية</string>
+    <string name="onboarding_feature_vault_desc">خزنة مشفرة للتنزيلات والصور والمستندات</string>
+    <string name="onboarding_install_ublock_title">تثبيت uBlock Origin</string>
+    <string name="onboarding_install_ublock_desc">تثبيت تلقائي في الخلفية بنقرة واحدة</string>
+    <string name="onboarding_install_button">تثبيت</string>
+    <string name="onboarding_title_search">اختر محرك
+البحث المفضل</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">حدد محرك البحث الافتراضي</string>
+    <string name="onboarding_selected_search">المحدد: %1$s</string>
+    <string name="onboarding_title_navbar">اختر تخطيط
+التنقل الخاص بك</string>
+    <string name="onboarding_tagline_navbar">1. مقسم · 2. علوي · 3. سفلي</string>
+    <string name="onboarding_navbar_selection_title">حدد التخطيط المفضل</string>
+    <string name="onboarding_nav_split">1. مقسم</string>
+    <string name="onboarding_nav_top">2. علوي</string>
+    <string name="onboarding_nav_bottom">3. سفلي</string>
+    <string name="onboarding_active_layout">النشط: تخطيط %1$s</string>
+    <string name="onboarding_layout_toast">تم ضبط التخطيط على %1$s</string>
+    <string name="onboarding_title_default_browser">اجعل Omni متصفحك
+الافتراضي</string>
+    <string name="onboarding_tagline_default_browser">سريع · خاص · آمن كل يوم</string>
+    <string name="onboarding_feature_auto_protection_title">حماية تلقائية</string>
+    <string name="onboarding_feature_auto_protection_desc">حظر نص التتبع والإعلانات الضارة في كل رابط</string>
+    <string name="onboarding_feature_lightning_title">تحميل سريع للغاية</string>
+    <string name="onboarding_feature_lightning_desc">عرض فوري للصفحة دون تباطؤ في القياس عن بُعد</string>
+    <string name="onboarding_feature_encrypted_title">مشفر وآمن</string>
+    <string name="onboarding_feature_encrypted_desc">حماية بيومترية وتشفير HTTPS تلقائي لجميع المواقع</string>
+    <string name="onboarding_default_card_title">اجعل Omni متصفحك الافتراضي</string>
+    <string name="onboarding_default_card_desc">افتح إعدادات النظام لاختيار Omni كمتصفح افتراضي</string>
+    <string name="onboarding_set_default_button">تعيين كمتصفح افتراضي</string>
 </resources>

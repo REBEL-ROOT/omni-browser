@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni Browser</string>
     <string name="settings_title">सेटिंग्स</string>
@@ -242,7 +242,6 @@
     <string name="vpn_not_available_hint">VPN टनलिंग इस बिल्ड में अभी उपलब्ध नहीं है। कॉन्फ़िगरेशन सहेजे जा सकते हैं लेकिन कनेक्ट नहीं होते।</string>
     <string name="dns_disabled">अक्षम</string>
     <string name="dot_system_hint">Android Private DNS सेटिंग्स खोलता है</string>
-
     <string name="proxy_provider_wireguard_unavailable">WireGuard (अभी उपलब्ध नहीं)</string>
     <string name="proxy_provider_tor_over_vpn_unavailable">Tor over VPN (VPN आवश्यक)</string>
     <string name="tor_connecting_waiting">Orbot शुरू होने की प्रतीक्षा…</string>
@@ -303,16 +302,12 @@
     <string name="menu_new_tab">नया टैब</string>
     <string name="menu_new_incognito_tab">नया इनकॉग्निटो टैब</string>
     <string name="menu_close_all_tabs">सभी टैब बंद करें</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">वैयक्तिकरण</string>
     <string name="settings_section_browsing">ब्राउज़िंग</string>
     <string name="settings_section_privacy_security">गोपनीयता और सुरक्षा</string>
     <string name="settings_section_media">मीडिया</string>
     <string name="settings_section_general">सामान्य</string>
     <string name="settings_section_custom_search">कस्टम खोज इंजन</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">उपस्थिति</string>
     <string name="appearance_desc">थीम मोड, एक्सेंट रंग, लेआउट और UI स्केल</string>
     <string name="wallpapers_title">वॉलपेपर</string>
@@ -344,8 +339,6 @@
     <string name="support_github_desc">स्रोत कोड देखें और समस्याएं दर्ज करें</string>
     <string name="website_omnibrowser_desc">आधिकारिक ओम्नी ब्राउज़र वेबसाइट पर जाएं</string>
     <string name="privacy_policy_desc">हमारी गोपनीयता नीति पढ़ें</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">एड्रेस बार</string>
     <string name="appearance_top">ऊपर</string>
     <string name="appearance_bottom">नीचे</string>
@@ -358,8 +351,6 @@
     <string name="appearance_force_dark_websites">वेबसाइटों को डार्क थीम का उपयोग करने के लिए बाध्य करें</string>
     <string name="appearance_force_dark_websites_desc">वेबसाइटों (जैसे गूगल, विकिपीडिया) को डार्क मोड में बदलता है</string>
     <string name="appearance_theme">थीम</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">सेटिंग्स खोजें…</string>
     <string name="custom_search_engines">कस्टम खोज इंजन</string>
     <string name="add_new_engine">नया जोड़ें</string>
@@ -476,4 +467,69 @@
     <string name="adblock_add_custom_url">कस्टम URL जोड़ें</string>
     <string name="adblock_no_custom">कोई कस्टम प्रदाता नहीं जोड़ा गया</string>
     <string name="adblock_no_custom_desc">अपनी स्वयं की ब्लॉकलिस्ट URL जोड़ने के लिए ऊपर \'कस्टम URL जोड़ें\' पर टैप करें।</string>
+    <string name="onboarding_step">चरण %1$d / %2$d</string>
+    <string name="onboarding_skip">छोड़ें</string>
+    <string name="onboarding_next">आगे बढ़ें</string>
+    <string name="onboarding_start_browsing">ब्राउज़िंग शुरू करें</string>
+    <string name="onboarding_title_browse">स्वतंत्रता से ब्राउज़ करें,
+निजी रूप से ब्राउज़ करें</string>
+    <string name="onboarding_tagline_browse">शून्य ट्रैकर्स · पूर्णतः डिवाइस पर · अति-तीव्र</string>
+    <string name="onboarding_feature_smart_bar_title">स्मार्ट एड्रेस बार</string>
+    <string name="onboarding_feature_smart_bar_desc">ध्वनि, टेक्स्ट और कैमरा खोज सीधे एड्रेस बार में एकीकृत</string>
+    <string name="onboarding_feature_discover_title">डिस्कवर फ़ीड</string>
+    <string name="onboarding_feature_discover_desc">श्रेणी के अनुसार नवीनतम समाचार — किसी खाते की आवश्यकता नहीं</string>
+    <string name="onboarding_feature_incognito_title">इन्कॉग्निटो मोड</string>
+    <string name="onboarding_feature_incognito_desc">कोई इतिहास नहीं, कोई कुकीज़ नहीं — 1-टैप में तुरंत स्विच</string>
+    <string name="onboarding_feature_copy_title">यूनिवर्सल कॉपी</string>
+    <string name="onboarding_feature_copy_desc">किसी भी वेबपेज से टेक्स्ट चुनने और कॉपी करने के लिए सुरक्षा पास करें</string>
+    <string name="onboarding_title_theme">अपने दृश्य अनुभव को
+व्यक्तिगत बनाएं</string>
+    <string name="onboarding_tagline_theme">डार्क मोड · एमोलेड ब्लैक · क्रीमी लाइट</string>
+    <string name="onboarding_theme_selection_title">पसंदीदा थीम मोड चुनें</string>
+    <string name="onboarding_theme_dark_slate">डार्क स्लेट</string>
+    <string name="onboarding_theme_creamy_light">क्रीमी लाइट</string>
+    <string name="onboarding_theme_pure_light">प्योर लाइट</string>
+    <string name="onboarding_tagline_dark_active">डार्क थीम सक्रिय</string>
+    <string name="onboarding_tagline_creamy_active">क्रीमी लाइट सक्रिय</string>
+    <string name="onboarding_tagline_pure_active">प्योर लाइट सक्रिय</string>
+    <string name="onboarding_title_extensions">असली एक्सटेंशन,
+असली सुरक्षा</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · फ़ायरफ़ॉक्स ऐड-ऑन्स · सेफ़ वॉल्ट</string>
+    <string name="onboarding_feature_ublock_title">नेटिव uBlock Origin</string>
+    <string name="onboarding_feature_ublock_desc">आधिकारिक विज्ञापन अवरोधक — विज्ञापनों और ट्रैकर्स को स्वचालित रूप से ब्लॉक करें</string>
+    <string name="onboarding_feature_store_title">क्यूरेटेड एक्सटेंशन स्टोर</string>
+    <string name="onboarding_feature_store_desc">Dark Reader, SponsorBlock, TWP Translate को 1-टैप में इंस्टॉल करें</string>
+    <string name="onboarding_feature_ai_blocker_title">एआई ओवरव्यू ब्लॉकर</string>
+    <string name="onboarding_feature_ai_blocker_desc">गूगल और बिंग खोज परिणामों पर बाध्यकारी एआई सारांश छिपाएं</string>
+    <string name="onboarding_feature_vault_title">बायोमेट्रिक सेफ़ वॉल्ट</string>
+    <string name="onboarding_feature_vault_desc">डाउनलोड, छवियों और दस्तावेज़ों के लिए एन्क्रिप्टेड वॉल्ट</string>
+    <string name="onboarding_install_ublock_title">uBlock Origin इंस्टॉल करें</string>
+    <string name="onboarding_install_ublock_desc">1-टैप स्वचालित बैकग्राउंड इंस्टॉल</string>
+    <string name="onboarding_install_button">इंस्टॉल करें</string>
+    <string name="onboarding_title_search">अपना पसंदीदा
+सर्च इंजन चुनें</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">डिफ़ॉल्ट सर्च इंजन चुनें</string>
+    <string name="onboarding_selected_search">चयनित: %1$s</string>
+    <string name="onboarding_title_navbar">अपना नेविगेशन
+लेआउट चुनें</string>
+    <string name="onboarding_tagline_navbar">1. स्पिलिट · 2. शीर्ष · 3. निचला</string>
+    <string name="onboarding_navbar_selection_title">पसंदीदा लेआउट चुनें</string>
+    <string name="onboarding_nav_split">1. स्प्लिट</string>
+    <string name="onboarding_nav_top">2. शीर्ष</string>
+    <string name="onboarding_nav_bottom">3. निचला</string>
+    <string name="onboarding_active_layout">सक्रिय: %1$s लेआउट</string>
+    <string name="onboarding_layout_toast">लेआउट %1$s पर सेट किया गया</string>
+    <string name="onboarding_title_default_browser">ऑम्नि को अपना
+डिफ़ॉल्ट ब्राउज़र बनाएं</string>
+    <string name="onboarding_tagline_default_browser">तेज़ · निजी · हर दिन सुरक्षित</string>
+    <string name="onboarding_feature_auto_protection_title">स्वचालित सुरक्षा</string>
+    <string name="onboarding_feature_auto_protection_desc">हर लिंक पर ट्रैकिंग स्क्रिप्ट, पॉपअप और हानिकारक विज्ञापनों को ब्लॉक करें</string>
+    <string name="onboarding_feature_lightning_title">अति-तीव्र लोड</string>
+    <string name="onboarding_feature_lightning_desc">बैकग्राउंड टेलीमेट्री धीमेपन के बिना तुरंत पेज रेंडरिंग</string>
+    <string name="onboarding_feature_encrypted_title">एन्क्रिप्टेड और सुरक्षित</string>
+    <string name="onboarding_feature_encrypted_desc">सभी साइटों के लिए बायोमेट्रिक सुरक्षा और स्वचालित HTTPS एन्क्रिप्शन</string>
+    <string name="onboarding_default_card_title">ऑम्नि ब्राउज़र को डिफ़ॉल्ट बनाएं</string>
+    <string name="onboarding_default_card_desc">ऑम्नि को डिफ़ॉल्ट ब्राउज़र के रूप में चुनने के लिए सिस्टम सेटिंग्स खोलें</string>
+    <string name="onboarding_set_default_button">डिफ़ॉल्ट ब्राउज़र के रूप में सेट करें</string>
 </resources>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni Browser</string>
     <string name="settings_title">Ustawienia</string>
@@ -302,16 +302,12 @@
     <string name="menu_new_tab">Nowa karta</string>
     <string name="menu_new_incognito_tab">Nowa karta anonimowa</string>
     <string name="menu_close_all_tabs">Zamknij wszystkie karty</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">PERSONALIZACJA</string>
     <string name="settings_section_browsing">PRZEGLĄDANIE</string>
     <string name="settings_section_privacy_security">PRYWATNOŚĆ I BEZPIECZEŃSTWO</string>
     <string name="settings_section_media">MEDIA</string>
     <string name="settings_section_general">OGÓLNE</string>
     <string name="settings_section_custom_search">WŁASNE WYSZUKIWARKI</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">Wygląd</string>
     <string name="appearance_desc">Tryb motywu, kolory akcentów, układ i skalowanie UI</string>
     <string name="wallpapers_title">Tapety</string>
@@ -343,8 +339,6 @@
     <string name="support_github_desc">Wyświetl kod źródłowy i zgłaszaj problemy</string>
     <string name="website_omnibrowser_desc">Odwiedź oficjalną stronę Omni Browser</string>
     <string name="privacy_policy_desc">Przeczytaj naszą politykę prywatności</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">Pasek adresu</string>
     <string name="appearance_top">Góra</string>
     <string name="appearance_bottom">Dół</string>
@@ -357,8 +351,6 @@
     <string name="appearance_force_dark_websites">Wymuś ciemny motyw na stronach</string>
     <string name="appearance_force_dark_websites_desc">Wymusza tryb ciemny na stronach (np. Google, Wikipedia)</string>
     <string name="appearance_theme">Motyw</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">Szukaj w ustawieniach…</string>
     <string name="custom_search_engines">Własne wyszukiwarki</string>
     <string name="add_new_engine">Dodaj nową</string>
@@ -475,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">KROK %1$d Z %2$d</string>
+    <string name="onboarding_skip">Pomiń</string>
+    <string name="onboarding_next">Dalej</string>
+    <string name="onboarding_start_browsing">Rozpocznij przeglądanie</string>
+    <string name="onboarding_title_browse">Przeglądaj swobodnie,
+Przeglądaj prywatnie</string>
+    <string name="onboarding_tagline_browse">Zero śledzenia · W 100% na urządzeniu · Superszybko</string>
+    <string name="onboarding_feature_smart_bar_title">Inteligentny pasek adresu</string>
+    <string name="onboarding_feature_smart_bar_desc">Wyszukiwanie głosowe, tekstowe i aparatem zintegrowane w pasku</string>
+    <string name="onboarding_feature_discover_title">Kanał Odkrywaj</string>
+    <string name="onboarding_feature_discover_desc">Najnowsze wiadomości według kategorii — bez konieczności konta</string>
+    <string name="onboarding_feature_incognito_title">Tryb incognito</string>
+    <string name="onboarding_feature_incognito_desc">Brak historii, plików cookie i śledzenia — przełączenie 1 dotknięciem</string>
+    <string name="onboarding_feature_copy_title">Uniwersalne kopiowanie</string>
+    <string name="onboarding_feature_copy_desc">Omiń ochronę przed kopiowaniem, aby zaznaczyć i skopiować tekst</string>
+    <string name="onboarding_title_theme">Spersonalizuj swoje
+Wrażenia wizualne</string>
+    <string name="onboarding_tagline_theme">Tryb ciemny · AMOLED Black · Kremowe światło</string>
+    <string name="onboarding_theme_selection_title">Wybierz preferowany motyw</string>
+    <string name="onboarding_theme_dark_slate">Ciemny łupek</string>
+    <string name="onboarding_theme_creamy_light">Kremowe światło</string>
+    <string name="onboarding_theme_pure_light">Czyste światło</string>
+    <string name="onboarding_tagline_dark_active">Ciemny motyw aktywny</string>
+    <string name="onboarding_tagline_creamy_active">Kremowe światło aktywne</string>
+    <string name="onboarding_tagline_pure_active">Czyste światło aktywne</string>
+    <string name="onboarding_title_extensions">Prawdziwe rozszerzenia,
+Prawdziwa ochrona</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · Dodatki Firefox · Bezpieczny sejf</string>
+    <string name="onboarding_feature_ublock_title">Natywny uBlock Origin</string>
+    <string name="onboarding_feature_ublock_desc">Oficjalny bloker reklam — automatycznie blokuje reklamy i skrypty</string>
+    <string name="onboarding_feature_store_title">Sklep z rozszerzeniami</string>
+    <string name="onboarding_feature_store_desc">Zainstaluj Dark Reader, SponsorBlock, TWP Translate 1 dotknięciem</string>
+    <string name="onboarding_feature_ai_blocker_title">Bloker podsumowań AI</string>
+    <string name="onboarding_feature_ai_blocker_desc">Ukryj wymuszone podsumowania AI w wynikach Google i Bing</string>
+    <string name="onboarding_feature_vault_title">Biometryczny sejf</string>
+    <string name="onboarding_feature_vault_desc">Szyfrowany sejf na pobrane pliki, obrazy i dokumenty</string>
+    <string name="onboarding_install_ublock_title">Zainstaluj uBlock Origin</string>
+    <string name="onboarding_install_ublock_desc">Automatyczna instalacja w tle 1 dotknięciem</string>
+    <string name="onboarding_install_button">Zainstaluj</string>
+    <string name="onboarding_title_search">Wybierz preferowaną
+Wyszukiwarkę</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">Wybierz domyślną wyszukiwarkę</string>
+    <string name="onboarding_selected_search">Wybrano: %1$s</string>
+    <string name="onboarding_title_navbar">Wybierz układ
+Nawigacji</string>
+    <string name="onboarding_tagline_navbar">1. Podzielony · 2. Góra · 3. Dół</string>
+    <string name="onboarding_navbar_selection_title">Wybierz preferowany układ</string>
+    <string name="onboarding_nav_split">1. Podzielony</string>
+    <string name="onboarding_nav_top">2. Góra</string>
+    <string name="onboarding_nav_bottom">3. Dół</string>
+    <string name="onboarding_active_layout">Aktywny: Układ %1$s</string>
+    <string name="onboarding_layout_toast">Ustawiono układ %1$s</string>
+    <string name="onboarding_title_default_browser">Ustaw Omni jako
+Domyślną przeglądarkę</string>
+    <string name="onboarding_tagline_default_browser">Szybko · Prywatnie · Bezpiecznie każdego dnia</string>
+    <string name="onboarding_feature_auto_protection_title">Automatyczna ochrona</string>
+    <string name="onboarding_feature_auto_protection_desc">Blokuj skrypty śledzące, wyskakujące okienka i szkodliwe reklamy</string>
+    <string name="onboarding_feature_lightning_title">Błyskawiczne ładowanie</string>
+    <string name="onboarding_feature_lightning_desc">Natychmiastowe renderowanie stron bez spowalniania telemetrią</string>
+    <string name="onboarding_feature_encrypted_title">Szyfrowane i bezpieczne</string>
+    <string name="onboarding_feature_encrypted_desc">Ochrona biometryczna i automatyczne szyfrowanie HTTPS</string>
+    <string name="onboarding_default_card_title">Ustaw Omni jako domyślną przeglądarkę</string>
+    <string name="onboarding_default_card_desc">Otwórz ustawienia systemowe, aby wybrać Omni jako domyślną</string>
+    <string name="onboarding_set_default_button">Ustaw jako domyślną przeglądarkę</string>
 </resources>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni Browser</string>
     <string name="settings_title">Настройки</string>
@@ -242,7 +242,6 @@
     <string name="vpn_not_available_hint">VPN-туннель в этой сборке пока недоступен. Конфигурации можно сохранить, но подключить нельзя.</string>
     <string name="dns_disabled">Отключено</string>
     <string name="dot_system_hint">Открывает настройки приватного DNS Android</string>
-
     <string name="proxy_provider_wireguard_unavailable">WireGuard (пока недоступно)</string>
     <string name="proxy_provider_tor_over_vpn_unavailable">Tor через VPN (требуется VPN)</string>
     <string name="tor_connecting_waiting">Ожидание запуска Orbot…</string>
@@ -303,16 +302,12 @@
     <string name="menu_new_tab">Новая вкладка</string>
     <string name="menu_new_incognito_tab">Новая вкладка инкогнито</string>
     <string name="menu_close_all_tabs">Закрыть все вкладки</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">ПЕРСОНАЛИЗАЦИЯ</string>
     <string name="settings_section_browsing">НАВИГАЦИЯ</string>
     <string name="settings_section_privacy_security">КОНФИДЕНЦИАЛЬНОСТЬ И БЕЗОПАСНОСТЬ</string>
     <string name="settings_section_media">МЕДИА</string>
     <string name="settings_section_general">ОБЩИЕ</string>
     <string name="settings_section_custom_search">ПОЛЬЗОВАТЕЛЬСКИЕ ПОИСКОВЫЕ СИСТЕМЫ</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">Внешний вид</string>
     <string name="appearance_desc">Режим темы, акцентные цвета, макет и масштаб интерфейса</string>
     <string name="wallpapers_title">Обои</string>
@@ -344,8 +339,6 @@
     <string name="support_github_desc">Просмотреть исходный код и сообщить о проблемах</string>
     <string name="website_omnibrowser_desc">Посетить официальный сайт Omni Browser</string>
     <string name="privacy_policy_desc">Прочитать нашу политику конфиденциальности</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">Адресная строка</string>
     <string name="appearance_top">Вверху</string>
     <string name="appearance_bottom">Внизу</string>
@@ -358,8 +351,6 @@
     <string name="appearance_force_dark_websites">Принудительная темная тема для сайтов</string>
     <string name="appearance_force_dark_websites_desc">Включает темный режим на сайтах (Google, Википедия и др.)</string>
     <string name="appearance_theme">Тема</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">Поиск настроек…</string>
     <string name="custom_search_engines">Поисковые системы</string>
     <string name="add_new_engine">Добавить новую</string>
@@ -476,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">ШАГ %1$d ИЗ %2$d</string>
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_start_browsing">Начать просмотр</string>
+    <string name="onboarding_title_browse">Свободный просмотр,
+Конфиденциальный просмотр</string>
+    <string name="onboarding_tagline_browse">Ноль трекеров · 100% на устройстве · Сверхбыстро</string>
+    <string name="onboarding_feature_smart_bar_title">Умная адресная строка</string>
+    <string name="onboarding_feature_smart_bar_desc">Голосовой, текстовый и поиск по камере прямо в адресной строке</string>
+    <string name="onboarding_feature_discover_title">Лента новостей</string>
+    <string name="onboarding_feature_discover_desc">Свежие новости по категориям — без регистрации аккаунта</string>
+    <string name="onboarding_feature_incognito_title">Режим инкогнито</string>
+    <string name="onboarding_feature_incognito_desc">Без истории и куки — мгновенное переключение в 1 касание</string>
+    <string name="onboarding_feature_copy_title">Универсальное копирование</string>
+    <string name="onboarding_feature_copy_desc">Обход защиты от копирования для выделения текста</string>
+    <string name="onboarding_title_theme">Настройте ваш
+Визуальный стиль</string>
+    <string name="onboarding_tagline_theme">Тёмный режим · AMOLED Чёрный · Кремовый светлый</string>
+    <string name="onboarding_theme_selection_title">Выберите режим темы</string>
+    <string name="onboarding_theme_dark_slate">Тёмный сланец</string>
+    <string name="onboarding_theme_creamy_light">Кремовый светлый</string>
+    <string name="onboarding_theme_pure_light">Чистый светлый</string>
+    <string name="onboarding_tagline_dark_active">Тёмная тема активна</string>
+    <string name="onboarding_tagline_creamy_active">Кремовый светлый активен</string>
+    <string name="onboarding_tagline_pure_active">Чистый светлый активен</string>
+    <string name="onboarding_title_extensions">Настоящие расширения,
+Настоящая защита</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · Дополнения Firefox · Сейф</string>
+    <string name="onboarding_feature_ublock_title">Встроенный uBlock Origin</string>
+    <string name="onboarding_feature_ublock_desc">Официальный блокировщик — автоблокировка рекламы и трекеров</string>
+    <string name="onboarding_feature_store_title">Каталог расширений</string>
+    <string name="onboarding_feature_store_desc">Установка Dark Reader, SponsorBlock, TWP Translate в 1 клик</string>
+    <string name="onboarding_feature_ai_blocker_title">Блокировщик ИИ-обзоров</string>
+    <string name="onboarding_feature_ai_blocker_desc">Скрытие навязанных ИИ-блоков в Google и Bing</string>
+    <string name="onboarding_feature_vault_title">Биометрический сейф</string>
+    <string name="onboarding_feature_vault_desc">Зашифрованное хранилище для загрузок, фото и документов</string>
+    <string name="onboarding_install_ublock_title">Установить uBlock Origin</string>
+    <string name="onboarding_install_ublock_desc">Автоматическая фоновая установка в 1 клик</string>
+    <string name="onboarding_install_button">Установить</string>
+    <string name="onboarding_title_search">Выберите поисковую
+Систему</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">Выберите поисковик по умолчанию</string>
+    <string name="onboarding_selected_search">Выбрано: %1$s</string>
+    <string name="onboarding_title_navbar">Выберите макет
+Навигации</string>
+    <string name="onboarding_tagline_navbar">1. Раздельный · 2. Сверху · 3. Снизу</string>
+    <string name="onboarding_navbar_selection_title">Выберите предпочитаемый макет</string>
+    <string name="onboarding_nav_split">1. Раздельный</string>
+    <string name="onboarding_nav_top">2. Сверху</string>
+    <string name="onboarding_nav_bottom">3. Снизу</string>
+    <string name="onboarding_active_layout">Активен: Макет %1$s</string>
+    <string name="onboarding_layout_toast">Установлен макет %1$s</string>
+    <string name="onboarding_title_default_browser">Сделайте Omni вашим
+Браузером по умолчанию</string>
+    <string name="onboarding_tagline_default_browser">Быстро · Конфиденциально · Безопасно каждый день</string>
+    <string name="onboarding_feature_auto_protection_title">Автоматическая защита</string>
+    <string name="onboarding_feature_auto_protection_desc">Блокировка трекеров, всплывающих окон и вредной рекламы</string>
+    <string name="onboarding_feature_lightning_title">Молниеносная загрузка</string>
+    <string name="onboarding_feature_lightning_desc">Мгновенный рендеринг без замедления телеметрией</string>
+    <string name="onboarding_feature_encrypted_title">Зашифровано и безопасно</string>
+    <string name="onboarding_feature_encrypted_desc">Биометрическая защита и автоматическое HTTPS-шифрование</string>
+    <string name="onboarding_default_card_title">Сделать Omni браузером по умолчанию</string>
+    <string name="onboarding_default_card_desc">Откройте системные настройки, чтобы выбрать Omni по умолчанию</string>
+    <string name="onboarding_set_default_button">Сделать браузером по умолчанию</string>
 </resources>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">Omni ブラウザ</string>
     <string name="settings_title">設定</string>
@@ -242,7 +242,6 @@
     <string name="vpn_not_available_hint">VPN トンネルはこのビルドではまだ利用できません。設定は保存できますが接続はできません。</string>
     <string name="dns_disabled">無効</string>
     <string name="dot_system_hint">Android プライベート DNS 設定を開く</string>
-
     <string name="proxy_provider_wireguard_unavailable">WireGuard（未対応）</string>
     <string name="proxy_provider_tor_over_vpn_unavailable">Tor over VPN（VPNが必要）</string>
     <string name="tor_connecting_waiting">Orbotの起動を待っています…</string>
@@ -303,16 +302,12 @@
     <string name="menu_new_tab">新しいタブ</string>
     <string name="menu_new_incognito_tab">新しいシークレットタブ</string>
     <string name="menu_close_all_tabs">すべてのタブを閉じる</string>
-
-    <!-- Settings Sections -->
     <string name="settings_section_personalization">カスタマイズ</string>
     <string name="settings_section_browsing">ブラウジング</string>
     <string name="settings_section_privacy_security">プライバシーとセキュリティ</string>
     <string name="settings_section_media">メディア</string>
     <string name="settings_section_general">一般</string>
     <string name="settings_section_custom_search">カスタム検索エンジン</string>
-
-    <!-- Settings Main Items -->
     <string name="appearance_title">外観</string>
     <string name="appearance_desc">テーマモード、アクセントカラー、レイアウト、UIスケール</string>
     <string name="wallpapers_title">壁紙</string>
@@ -344,8 +339,6 @@
     <string name="support_github_desc">ソースコードを表示して問題を報告</string>
     <string name="website_omnibrowser_desc">Omni Browser公式サイトにアクセス</string>
     <string name="privacy_policy_desc">プライバシーポリシーを読む</string>
-
-    <!-- Appearance Sub-Screen -->
     <string name="appearance_address_bar">アドレスバー</string>
     <string name="appearance_top">上部</string>
     <string name="appearance_bottom">下部</string>
@@ -358,8 +351,6 @@
     <string name="appearance_force_dark_websites">ウェブサイトのダークモード強制</string>
     <string name="appearance_force_dark_websites_desc">ウェブサイト（Google、Wikipediaなど）をダークモードにします</string>
     <string name="appearance_theme">テーマ</string>
-
-    <!-- Custom Search &amp; Search Bar -->
     <string name="search_settings_placeholder">設定を検索…</string>
     <string name="custom_search_engines">カスタム検索エンジン</string>
     <string name="add_new_engine">新規追加</string>
@@ -476,4 +467,69 @@
     <string name="adblock_add_custom_url">Add Custom URL</string>
     <string name="adblock_no_custom">No Custom Providers Added</string>
     <string name="adblock_no_custom_desc">Tap \'Add Custom URL\' above to add your own AdBlock or EasyList format blocklist URL.</string>
+    <string name="onboarding_step">ステップ %1$d / %2$d</string>
+    <string name="onboarding_skip">スキップ</string>
+    <string name="onboarding_next">次へ</string>
+    <string name="onboarding_start_browsing">ブラウジングを開始</string>
+    <string name="onboarding_title_browse">自由に、
+プライベートに閲覧</string>
+    <string name="onboarding_tagline_browse">トラッカーゼロ · 完全オンデバイス · 超高速</string>
+    <string name="onboarding_feature_smart_bar_title">スマートアドレスバー</string>
+    <string name="onboarding_feature_smart_bar_desc">音声、テキスト、カメラ検索を検索バーに統合</string>
+    <string name="onboarding_feature_discover_title">ニュースフィード</string>
+    <string name="onboarding_feature_discover_desc">カテゴリ別の最新ニュース — アカウント不要</string>
+    <string name="onboarding_feature_incognito_title">シークレットモード</string>
+    <string name="onboarding_feature_incognito_desc">履歴・クッキー・追跡なし — 1タップ切り替え</string>
+    <string name="onboarding_feature_copy_title">ユニバーサルコピー</string>
+    <string name="onboarding_feature_copy_desc">コピー保護を回避して任意のWebページからテキストをコピー</string>
+    <string name="onboarding_title_theme">ビジュアル体験を
+カスタマイズ</string>
+    <string name="onboarding_tagline_theme">ダークモード · AMOLEDブラック · クリーミーライト</string>
+    <string name="onboarding_theme_selection_title">テーマモードを選択</string>
+    <string name="onboarding_theme_dark_slate">ダークスレート</string>
+    <string name="onboarding_theme_creamy_light">クリーミーライト</string>
+    <string name="onboarding_theme_pure_light">ピュアライト</string>
+    <string name="onboarding_tagline_dark_active">ダークテーマ有効</string>
+    <string name="onboarding_tagline_creamy_active">クリーミーライト有効</string>
+    <string name="onboarding_tagline_pure_active">ピュアライト有効</string>
+    <string name="onboarding_title_extensions">本物の拡張機能、
+本物の保護</string>
+    <string name="onboarding_tagline_extensions">uBlock Origin · Firefoxアドオン · 安全な金庫</string>
+    <string name="onboarding_feature_ublock_title">ネイティブuBlock Origin</string>
+    <string name="onboarding_feature_ublock_desc">公式デスクトップ広告ブロッカー — 広告とトラッカーを自動ブロック</string>
+    <string name="onboarding_feature_store_title">厳選拡張機能ストア</string>
+    <string name="onboarding_feature_store_desc">Dark Reader、SponsorBlock、TWP Translateを1タップでインストール</string>
+    <string name="onboarding_feature_ai_blocker_title">AI概要ブロッカー</string>
+    <string name="onboarding_feature_ai_blocker_desc">検索結果の強制AI要約を非表示</string>
+    <string name="onboarding_feature_vault_title">生体認証セキュリティ金庫</string>
+    <string name="onboarding_feature_vault_desc">ダウンロード、画像、文書の暗号化保管庫</string>
+    <string name="onboarding_install_ublock_title">uBlock Originをインストール</string>
+    <string name="onboarding_install_ublock_desc">1タップでバックグラウンド自動インストール</string>
+    <string name="onboarding_install_button">インストール</string>
+    <string name="onboarding_title_search">お気に入りの
+検索エンジンを選択</string>
+    <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
+    <string name="onboarding_search_selection_title">デフォルト検索エンジンを選択</string>
+    <string name="onboarding_selected_search">選択中: %1$s</string>
+    <string name="onboarding_title_navbar">ナビゲーションの
+レイアウトを選択</string>
+    <string name="onboarding_tagline_navbar">1. 分割 · 2. 上部 · 3. 下部</string>
+    <string name="onboarding_navbar_selection_title">優先レイアウトを選択</string>
+    <string name="onboarding_nav_split">1. 分割</string>
+    <string name="onboarding_nav_top">2. 上部</string>
+    <string name="onboarding_nav_bottom">3. 下部</string>
+    <string name="onboarding_active_layout">有効: %1$s レイアウト</string>
+    <string name="onboarding_layout_toast">レイアウトを%1$sに設定しました</string>
+    <string name="onboarding_title_default_browser">Omniをデフォルトの
+ブラウザに設定</string>
+    <string name="onboarding_tagline_default_browser">高速 · プライベート · 毎日安全</string>
+    <string name="onboarding_feature_auto_protection_title">自動保護</string>
+    <string name="onboarding_feature_auto_protection_desc">追跡スクリプト、ポップアップ、有害広告をブロック</string>
+    <string name="onboarding_feature_lightning_title">超高速ロード</string>
+    <string name="onboarding_feature_lightning_desc">テレメトリ遅延なしで瞬時にページをレンダリング</string>
+    <string name="onboarding_feature_encrypted_title">暗号化＆安全</string>
+    <string name="onboarding_feature_encrypted_desc">生体認証保護と自動HTTPS暗号化</string>
+    <string name="onboarding_default_card_title">Omniをデフォルトブラウザに設定</string>
+    <string name="onboarding_default_card_desc">システム設定を開いてOmniをデフォルトとして選択します</string>
+    <string name="onboarding_set_default_button">デフォルトブラウザに設定</string>
 </resources>
