@@ -1566,7 +1566,7 @@ fun BrowserScreen(
                             // Menu
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                 IconButton(
-                                    onClick = { showMenu = true },
+                                    onClick = { showAllInOneMenuSheet = true },
                                     modifier = Modifier.size(config.barIconSize + 4.dp)
                                 ) {
                                     Icon(
@@ -5319,182 +5319,11 @@ fun BrowserScreen(
                 )
             }
 
-            // ── Menu Bottom Sheet (Edge-style, classic mode only) ──────────────────
-            if (showMenu && !viewModel.chromeNavBarEnabled) {
-                val isDark = viewModel.isDarkThemeEnabled
-                val inactiveIconBg = if (viewModel.isAmoledMode) Color(0xFF121212) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF1F3F4)
-                val inactiveIconTint = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
-                val activeIconTint = MaterialTheme.colorScheme.primary
-                val activeIconBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-
-                ModalBottomSheet(
-                    onDismissRequest = { showMenu = false },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
-                    dragHandle = {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 8.dp, bottom = 6.dp)
-                                .width(36.dp)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (viewModel.isAmoledMode) Color(0xFF222222) else if (isDark) Color(0xFF3A3A3C) else Color(0xFFC7C7CC))
-                        )
-                    }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // ── Row 1: Primary actions ──
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            MenuGridCell(
-                                icon = Icons.Rounded.Bookmark,
-                                label = "Bookmarks",
-                                iconTint = activeIconTint,
-                                iconBg = activeIconBg,
-                                onClick = { showMenu = false; onOpenBookmarks() }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.History,
-                                label = "History",
-                                iconTint = activeIconTint,
-                                iconBg = activeIconBg,
-                                onClick = { showMenu = false; onOpenHistory() }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.Download,
-                                label = "Downloads",
-                                iconTint = activeIconTint,
-                                iconBg = activeIconBg,
-                                onClick = { showMenu = false; onOpenDownloads() }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.Settings,
-                                label = "Settings",
-                                iconTint = activeIconTint,
-                                iconBg = activeIconBg,
-                                onClick = { showMenu = false; onOpenSettings() }
-                            )
-                        }
-
-                        // ── Row 2: Secondary actions ──
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            MenuGridCell(
-                                icon = if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                label = "Incognito",
-                                iconTint = if (viewModel.isIncognitoMode) activeIconTint else inactiveIconTint,
-                                iconBg = if (viewModel.isIncognitoMode) activeIconBg else inactiveIconBg,
-                                onClick = { viewModel.toggleIncognitoMode(context) }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.PlayCircle,
-                                label = "Player\nSettings",
-                                iconTint = inactiveIconTint,
-                                iconBg = inactiveIconBg,
-                                onClick = { showMenu = false; showPlayerSettingsDialog = true }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.Computer,
-                                label = "Desktop\nSite",
-                                iconTint = if (viewModel.isDesktopMode) activeIconTint else inactiveIconTint,
-                                iconBg = if (viewModel.isDesktopMode) activeIconBg else inactiveIconBg,
-                                onClick = { viewModel.toggleDesktopMode(context) }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.OpenInFull,
-                                label = if (isNavHideEnabled) "Nav\nHide On" else "Nav\nHide Off",
-                                iconTint = if (isNavHideEnabled) activeIconTint else inactiveIconTint,
-                                iconBg = if (isNavHideEnabled) activeIconBg else inactiveIconBg,
-                                onClick = {
-                                    showMenu = false
-                                    val nextEnabled = !isNavHideEnabled
-                                    isNavHideEnabled = nextEnabled
-                                    isScrollNavBarVisible = true
-                                    Toast.makeText(context, if (nextEnabled) "Nav hide enabled" else "Nav hide disabled", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // ── Row 3: Power tools ──
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            MenuGridCell(
-                                icon = Icons.Rounded.Search,
-                                label = "Find in\nPage",
-                                iconTint = inactiveIconTint,
-                                iconBg = inactiveIconBg,
-                                onClick = {
-                                    showMenu = false
-                                    if (!showHomeScreen && activeTab != null) {
-                                        viewModel.openFindInPage()
-                                    } else {
-                                        Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.LocalFireDepartment,
-                                label = "Burn\nData",
-                                iconTint = Color(0xFFFF4444),
-                                iconBg = Color(0xFFFF4444).copy(alpha = 0.12f),
-                                onClick = {
-                                    showMenu = false
-                                    coroutineScope.launch {
-                                        val runtime = viewModel.getGeckoRuntime(context)
-                                        FireButton(runtime, context).burn()
-                                        viewModel.burnAllData(context)
-                                        Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.Add,
-                                label = "Add to\nShortcuts",
-                                iconTint = inactiveIconTint,
-                                iconBg = inactiveIconBg,
-                                onClick = {
-                                    showMenu = false
-                                    if (showHomeScreen || activeTab == null) {
-                                        Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        val currentUrl = viewModel.currentUrl
-                                        val currentTitle = activeTab.title ?: "Webpage"
-                                        viewModel.addShortcut(currentTitle, currentUrl)
-                                    }
-                                }
-                            )
-                            MenuGridCell(
-                                icon = Icons.Rounded.Extension,
-                                label = "Extensions",
-                                iconTint = inactiveIconTint,
-                                iconBg = inactiveIconBg,
-                                onClick = {
-                                    showMenu = false
-                                    if (!viewModel.hasSeenExtensionsOverview) {
-                                        pendingExtensionsAction = { showExtensionsSheet = true }
-                                        showExtensionsOverviewDialog = true
-                                    } else {
-                                        showExtensionsSheet = true
-                                    }
-                                }
-                            )
-                        }
-                    }
+            // ── Menu Bottom Sheet (Unified with All-In-One Menu Sheet) ──────────────────
+            LaunchedEffect(showMenu) {
+                if (showMenu) {
+                    showMenu = false
+                    showAllInOneMenuSheet = true
                 }
             }
 
