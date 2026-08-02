@@ -1454,7 +1454,7 @@ fun BrowserScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 IconButton(
-                                    onClick = { showToolsSheet = true },
+                                    onClick = { showAllInOneMenuSheet = true },
                                     modifier = Modifier.size(44.dp)
                                 ) {
                                     Icon(
@@ -6589,164 +6589,11 @@ fun BrowserScreen(
             }
 
 
-            // 5. Grid Menu Bottom Sheet (Replaces Quick Tools)
-            if (showToolsSheet) {
-                val isMenuDark = viewModel.isAmoledMode || viewModel.isDarkThemeEnabled
-                val menuContainerColor = when {
-                    viewModel.isAmoledMode -> Color(0xFF000000)
-                    viewModel.isDarkThemeEnabled -> Color(0xFF141416)
-                    viewModel.isCreamyMode -> Color(0xFFF5F2EE)
-                    else -> Color(0xFFF2F2F7)
-                }
-                val menuDividerColor = if (isMenuDark) Color(0xFF2C2C2E) else Color(0xFFD8D8DE)
-                ModalBottomSheet(
-                    onDismissRequest = { showToolsSheet = false },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = menuContainerColor
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 24.dp, top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp)
-                    ) {
-                        // Row 1: Bookmarks, History, Downloads, Settings
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            GridMenuTile(
-                                title = "Bookmarks",
-                                icon = Icons.Rounded.Bookmark,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; onOpenBookmarks() }
-                            )
-                            GridMenuTile(
-                                title = "History",
-                                icon = Icons.Rounded.History,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; onOpenHistory() }
-                            )
-                            GridMenuTile(
-                                title = "Downloads",
-                                icon = Icons.Rounded.Download,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; onOpenDownloads() }
-                            )
-                            GridMenuTile(
-                                title = "Settings",
-                                icon = Icons.Rounded.Settings,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; onOpenSettings() }
-                            )
-                        }
-
-                        HorizontalDivider(
-                            color = menuDividerColor,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-
-                        // Row 2: Incognito, Player Settings, Desktop Site, Nav Hide On/Off
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            GridMenuTile(
-                                title = "Incognito",
-                                icon = Icons.Rounded.Visibility,
-                                isDark = isMenuDark,
-                                onClick = {
-                                    showToolsSheet = false
-                                    if (!viewModel.isIncognitoMode) {
-                                        viewModel.toggleIncognitoMode(context)
-                                    }
-                                    viewModel.createNewTab(context, "about:blank")
-                                }
-                            )
-                            GridMenuTile(
-                                title = "Player\nSettings",
-                                icon = Icons.Rounded.PlayCircle,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; showPlayerSettingsDialog = true }
-                            )
-                            GridMenuTile(
-                                title = "Desktop\nSite",
-                                icon = Icons.Rounded.DesktopWindows,
-                                isDark = isMenuDark,
-                                onClick = {
-                                    showToolsSheet = false
-                                    if (!showHomeScreen && activeTab != null) {
-                                        viewModel.toggleDesktopMode(context)
-                                    } else {
-                                        Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                            GridMenuTile(
-                                title = if (viewModel.navBarHideBottom) "Nav\nHide On" else "Nav\nHide Off",
-                                icon = Icons.Rounded.OpenInFull,
-                                isDark = isMenuDark,
-                                onClick = {
-                                    showToolsSheet = false
-                                    viewModel.saveNavBarHideBottom(context, !viewModel.navBarHideBottom)
-                                }
-                            )
-                        }
-
-                        // Row 3: Find in Page, Burn Data, Add to Shortcuts, Extensions
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            GridMenuTile(
-                                title = "Find in\nPage",
-                                icon = Icons.Rounded.Search,
-                                isDark = isMenuDark,
-                                onClick = {
-                                    showToolsSheet = false
-                                    if (!showHomeScreen && activeTab != null) viewModel.openFindInPage()
-                                    else Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                            GridMenuTile(
-                                title = "Burn\nData",
-                                icon = Icons.Rounded.Whatshot,
-                                isBurnData = true,
-                                isDark = isMenuDark,
-                                onClick = {
-                                    showToolsSheet = false
-                                    coroutineScope.launch {
-                                        val runtime = viewModel.getGeckoRuntime(context)
-                                        FireButton(runtime, context).burn()
-                                        viewModel.burnAllData(context)
-                                        Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                            GridMenuTile(
-                                title = "Add to\nShortcuts",
-                                icon = Icons.Rounded.Add,
-                                isDark = isMenuDark,
-                                onClick = {
-                                    showToolsSheet = false
-                                    if (!showHomeScreen && activeTab != null) {
-                                        viewModel.addShortcut(activeTab.title, activeTab.url)
-                                        Toast.makeText(context, "Added to shortcuts", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "Open a webpage first", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                            GridMenuTile(
-                                title = "Extensions",
-                                icon = Icons.Rounded.Extension,
-                                isDark = isMenuDark,
-                                onClick = { showToolsSheet = false; showExtensionsSheet = true }
-                            )
-                        }
-                    }
+            // 5. Grid Menu Bottom Sheet (Unified with All-In-One Menu Sheet)
+            LaunchedEffect(showToolsSheet) {
+                if (showToolsSheet) {
+                    showToolsSheet = false
+                    showAllInOneMenuSheet = true
                 }
             }
             
