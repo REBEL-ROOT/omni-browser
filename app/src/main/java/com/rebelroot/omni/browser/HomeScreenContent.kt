@@ -993,7 +993,7 @@ fun HomeScreenContent(
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = "Omni Shield Active",
+                                text = stringResource(R.string.home_shield_active),
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (hasWallpaper) Color.White.copy(alpha = 0.90f) else (if (isDark) Color(0xFF8E8E93) else Color(0xFF555555))
@@ -1004,7 +1004,7 @@ fun HomeScreenContent(
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                text = "View Report",
+                                text = stringResource(R.string.home_view_report_short),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary
@@ -1044,7 +1044,7 @@ fun HomeScreenContent(
                                     color = valueColor
                                 )
                                 Text(
-                                    text = "Trackers Blocked",
+                                    text = stringResource(R.string.home_trackers_blocked),
                                     fontSize = 10.sp,
                                     color = labelColor,
                                     fontWeight = FontWeight.Medium
@@ -1083,7 +1083,7 @@ fun HomeScreenContent(
                                     color = valueColor
                                 )
                                 Text(
-                                    text = "Data Saved",
+                                    text = stringResource(R.string.home_data_saved),
                                     fontSize = 10.sp,
                                     color = labelColor,
                                     fontWeight = FontWeight.Medium
@@ -1450,7 +1450,7 @@ fun HomeScreenContent(
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "Privacy Report",
+                            text = stringResource(R.string.privacy_report_title),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-0.3).sp,
@@ -1467,7 +1467,7 @@ fun HomeScreenContent(
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = "All shields active",
+                                text = stringResource(R.string.privacy_report_all_shields_active),
                                 fontSize = 12.sp,
                                 color = subCol
                             )
@@ -1504,7 +1504,7 @@ fun HomeScreenContent(
                             color = titleCol
                         )
                         Text(
-                            text = "Trackers\nBlocked",
+                            text = stringResource(R.string.home_trackers_blocked),
                             fontSize = 11.sp,
                             lineHeight = 15.sp,
                             color = labelCol
@@ -1534,7 +1534,7 @@ fun HomeScreenContent(
                             color = titleCol
                         )
                         Text(
-                            text = "Bandwidth\nSaved",
+                            text = stringResource(R.string.privacy_report_bandwidth_saved),
                             fontSize = 11.sp,
                             lineHeight = 15.sp,
                             color = labelCol
@@ -1545,7 +1545,7 @@ fun HomeScreenContent(
                 // ── Active Shields Section ──────────────────────────────
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "ACTIVE SHIELDS",
+                        text = stringResource(R.string.privacy_report_active_shields),
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp,
@@ -1559,10 +1559,10 @@ fun HomeScreenContent(
                             .border(0.5.dp, borderCol, RoundedCornerShape(14.dp))
                     ) {
                         val shields = listOf(
-                            Triple(Icons.Rounded.Block, "Ad & Tracker Blocking", "Blocked ${viewModel.trackersBlockedCount} tracking requests"),
-                            Triple(Icons.Rounded.Lock, "HTTPS Enforcement", "Upgraded connections to secure HTTPS"),
-                            Triple(Icons.Rounded.Fingerprint, "Fingerprint Shield", "Canvas & font signatures randomised"),
-                            Triple(Icons.Rounded.Cookie, "Cookie Isolation", "Third-party cookies isolated")
+                            Triple(Icons.Rounded.Block, stringResource(R.string.privacy_shield_ad_tracker_blocking), stringResource(R.string.privacy_shield_ad_tracker_desc, viewModel.trackersBlockedCount)),
+                            Triple(Icons.Rounded.Lock, stringResource(R.string.privacy_shield_https_enforcement), stringResource(R.string.privacy_shield_https_desc)),
+                            Triple(Icons.Rounded.Fingerprint, stringResource(R.string.privacy_shield_fingerprint), stringResource(R.string.privacy_shield_fingerprint_desc)),
+                            Triple(Icons.Rounded.Cookie, stringResource(R.string.privacy_shield_cookie_isolation), stringResource(R.string.privacy_shield_cookie_desc))
                         )
                         shields.forEachIndexed { index, (icon, title, subtitle) ->
                             Row(
@@ -1594,7 +1594,7 @@ fun HomeScreenContent(
                                 }
                                 Icon(
                                     imageVector = Icons.Rounded.Check,
-                                    contentDescription = "Active",
+                                    contentDescription = stringResource(R.string.privacy_report_active),
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -1615,7 +1615,7 @@ fun HomeScreenContent(
                 // ── Recently Blocked Trackers ────────────────────────────
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "RECENTLY BLOCKED",
+                        text = stringResource(R.string.privacy_report_recently_blocked),
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.sp,
@@ -1629,11 +1629,11 @@ fun HomeScreenContent(
                             .border(0.5.dp, borderCol, RoundedCornerShape(14.dp))
                     ) {
                         val trackers = listOf(
-                            Triple("google-analytics.com", "Analytics & Tracking", 14),
-                            Triple("doubleclick.net", "Advertising & Marketing", 9),
-                            Triple("connect.facebook.net", "Social Graphing", 6),
-                            Triple("amazon-adsystem.com", "Advertising & Retargeting", 4),
-                            Triple("scorecardresearch.com", "Market Research & Analytics", 2)
+                            Triple("google-analytics.com", stringResource(R.string.privacy_cat_analytics), 14),
+                            Triple("doubleclick.net", stringResource(R.string.privacy_cat_advertising), 9),
+                            Triple("connect.facebook.net", stringResource(R.string.privacy_cat_social), 6),
+                            Triple("amazon-adsystem.com", stringResource(R.string.privacy_cat_retargeting), 4),
+                            Triple("scorecardresearch.com", stringResource(R.string.privacy_cat_market_research), 2)
                         )
                         trackers.forEachIndexed { idx, (domain, category, count) ->
                             Row(

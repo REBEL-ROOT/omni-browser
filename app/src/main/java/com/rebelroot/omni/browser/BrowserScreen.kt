@@ -210,6 +210,7 @@ fun BrowserScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showCustomizationSheet by remember { mutableStateOf(false) }
     var showSiteInfoSheet by remember { mutableStateOf(false) }
+    var showPrivacyReportSheet by remember { mutableStateOf(false) }
     var inputUrl by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)) }
     var isInputFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -5229,7 +5230,7 @@ fun BrowserScreen(
                                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
                                 )
                                 Text(
-                                    text = if (isHttps) "Secure connection" else "Insecure connection",
+                                    text = if (isHttps) stringResource(R.string.site_info_secure_connection) else stringResource(R.string.site_info_insecure_connection),
                                     fontSize = 11.sp,
                                     color = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500)
                                 )
@@ -5245,22 +5246,22 @@ fun BrowserScreen(
                         ) {
                             Icon(
                                 imageVector = if (isHttps) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                                contentDescription = "Connection status",
+                                contentDescription = stringResource(R.string.site_info_conn_status_desc),
                                 tint = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500),
                                 modifier = Modifier.size(24.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (isHttps) "Connection is secure" else "Connection is not secure",
+                                    text = if (isHttps) stringResource(R.string.site_info_conn_is_secure) else stringResource(R.string.site_info_conn_not_secure),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
                                 )
                                 Text(
                                     text = if (isHttps)
-                                        "Your information (for example, passwords or credit card numbers) is private when it is sent to this site."
+                                        stringResource(R.string.site_info_conn_secure_desc)
                                     else
-                                        "Your connection to this site is not secure. You should not enter any sensitive information (like passwords or cards).",
+                                        stringResource(R.string.site_info_conn_insecure_desc),
                                     fontSize = 12.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
                                     lineHeight = 16.sp
@@ -5275,19 +5276,19 @@ fun BrowserScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Folder,
-                                contentDescription = "Cookies and Site Data",
+                                contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Cookies & site data",
+                                    text = stringResource(R.string.site_info_cookies_title),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
                                 )
                                 Text(
-                                    text = "Cookies are used to keep you signed in, remember your preferences, and provide localized content.",
+                                    text = stringResource(R.string.site_info_cookies_desc),
                                     fontSize = 12.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
                                     lineHeight = 16.sp
@@ -5299,40 +5300,58 @@ fun BrowserScreen(
                                     showSiteInfoSheet = false
                                 }
                             ) {
-                                Text("Clear", color = Color(0xFFFF4444), fontSize = 13.sp)
+                                Text(stringResource(R.string.site_info_clear), color = Color(0xFFFF4444), fontSize = 13.sp)
                             }
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showSiteInfoSheet = false
+                                    showPrivacyReportSheet = true
+                                },
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Shield,
-                                contentDescription = "Privacy settings",
+                                contentDescription = stringResource(R.string.site_info_privacy_settings_aria),
                                 tint = Color(0xFF30D158),
                                 modifier = Modifier.size(24.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Privacy & Site Settings",
+                                    text = stringResource(R.string.site_info_privacy_title),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
                                 )
                                 Text(
-                                    text = "JavaScript is active. Built-in Tracking Blockers are actively filtering ads and analytics for optimal speed.",
+                                    text = stringResource(R.string.site_info_privacy_desc),
                                     fontSize = 12.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
                                     lineHeight = 16.sp
                                 )
                             }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = stringResource(R.string.site_info_view_full_report),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
+            }
+
+            if (showPrivacyReportSheet) {
+                PrivacyReportSheet(
+                    onDismissRequest = { showPrivacyReportSheet = false },
+                    viewModel = viewModel
+                )
             }
 
             if (extensionToDelete != null) {

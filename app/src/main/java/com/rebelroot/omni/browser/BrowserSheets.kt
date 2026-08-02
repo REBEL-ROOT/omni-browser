@@ -1551,13 +1551,13 @@ fun PrivacyReportSheet(
                     }
                     Column {
                         Text(
-                            text = "Privacy Report",
+                            text = stringResource(R.string.privacy_report_title),
                             fontWeight = FontWeight.Bold,
                             fontSize = 17.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Intelligent Tracking Prevention",
+                            text = stringResource(R.string.privacy_report_intelligent_tracking),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
@@ -1572,7 +1572,7 @@ fun PrivacyReportSheet(
                 border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
             ) {
                 Text(
-                    text = "Omni Smart Tracking Protection prevents trackers from profiling your web activity and collecting data across websites.",
+                    text = stringResource(R.string.privacy_report_banner_desc),
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1609,7 +1609,7 @@ fun PrivacyReportSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Trackers Prevented",
+                            text = stringResource(R.string.privacy_report_trackers_prevented),
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1641,7 +1641,7 @@ fun PrivacyReportSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Est. Data Saved",
+                            text = stringResource(R.string.privacy_report_est_data_saved),
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1678,7 +1678,7 @@ fun PrivacyReportSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Faster Page Load",
+                            text = stringResource(R.string.privacy_report_faster_page_load),
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1710,7 +1710,7 @@ fun PrivacyReportSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "On-Device Privacy",
+                            text = stringResource(R.string.privacy_report_on_device_privacy),
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1731,14 +1731,14 @@ fun PrivacyReportSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Most Frequent Trackers Blocked",
+                    text = stringResource(R.string.privacy_report_most_frequent),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 TextButton(onClick = { showTrackersList = !showTrackersList }) {
                     Text(
-                        text = if (showTrackersList) "Hide" else "Show",
+                        text = if (showTrackersList) stringResource(R.string.privacy_report_hide) else stringResource(R.string.privacy_report_show),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -1747,11 +1747,11 @@ fun PrivacyReportSheet(
 
             if (showTrackersList) {
                 val trackerDomains = listOf(
-                    Triple("google-analytics.com", "Analytics & Telemetry", "High"),
-                    Triple("facebook.net", "Social Tracking & Pixel", "High"),
-                    Triple("doubleclick.net", "Ad Network Telemetry", "Medium"),
-                    Triple("scorecardresearch.com", "Audience Measurement", "Medium"),
-                    Triple("criteo.com", "Retargeting Ad Tracker", "Low")
+                    Triple("google-analytics.com", stringResource(R.string.privacy_cat_analytics_telemetry), "High"),
+                    Triple("facebook.net", stringResource(R.string.privacy_cat_social_tracking), "High"),
+                    Triple("doubleclick.net", stringResource(R.string.privacy_cat_ad_telemetry), "Medium"),
+                    Triple("scorecardresearch.com", stringResource(R.string.privacy_cat_audience_measurement), "Medium"),
+                    Triple("criteo.com", stringResource(R.string.privacy_cat_retargeting_tracker), "Low")
                 )
 
                 Column(
@@ -1806,7 +1806,7 @@ fun PrivacyReportSheet(
                                     color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     Text(
-                                        text = "Blocked",
+                                        text = stringResource(R.string.privacy_report_blocked_status),
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
