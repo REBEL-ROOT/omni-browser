@@ -473,13 +473,13 @@
     <string name="onboarding_start_browsing">Commencer à naviguer</string>
     <string name="onboarding_title_browse">Naviguez librement,
 Naviguez en privé</string>
-    <string name="onboarding_tagline_browse">Zéro traqueur · 100% sur l'appareil · Ultra-rapide</string>
-    <string name="onboarding_feature_smart_bar_title">Barre d'adresse intelligente</string>
+    <string name="onboarding_tagline_browse">Zéro traqueur · 100% sur l\'appareil · Ultra-rapide</string>
+    <string name="onboarding_feature_smart_bar_title">Barre d\'adresse intelligente</string>
     <string name="onboarding_feature_smart_bar_desc">Recherche vocale, texte et caméra intégrée dans la barre</string>
     <string name="onboarding_feature_discover_title">Flux Découvrir</string>
     <string name="onboarding_feature_discover_desc">Dernières actualités par catégorie — aucun compte requis</string>
     <string name="onboarding_feature_incognito_title">Mode Navigation privée</string>
-    <string name="onboarding_feature_incognito_desc">Pas d'historique, pas de cookies, pas de suivi — bascule en 1 geste</string>
+    <string name="onboarding_feature_incognito_desc">Pas d\'historique, pas de cookies, pas de suivi — bascule en 1 geste</string>
     <string name="onboarding_feature_copy_title">Copie universelle</string>
     <string name="onboarding_feature_copy_desc">Contourne la protection de copie pour sélectionner le texte</string>
     <string name="onboarding_title_theme">Personnalisez votre
@@ -497,9 +497,9 @@ Vraie protection</string>
     <string name="onboarding_tagline_extensions">uBlock Origin · Modules Firefox · Coffre sécurisé</string>
     <string name="onboarding_feature_ublock_title">uBlock Origin natif</string>
     <string name="onboarding_feature_ublock_desc">Bloqueur officiel Firefox — bloque publicités et traqueurs</string>
-    <string name="onboarding_feature_store_title">Magasin d'extensions sélectionnées</string>
+    <string name="onboarding_feature_store_title">Magasin d\'extensions sélectionnées</string>
     <string name="onboarding_feature_store_desc">Installez Dark Reader, SponsorBlock, TWP Translate en 1 clic</string>
-    <string name="onboarding_feature_ai_blocker_title">Bloqueur d'aperçus IA</string>
+    <string name="onboarding_feature_ai_blocker_title">Bloqueur d\'aperçus IA</string>
     <string name="onboarding_feature_ai_blocker_desc">Masque les résumés IA forcés sur Google et Bing</string>
     <string name="onboarding_feature_vault_title">Coffre-fort biométrique</string>
     <string name="onboarding_feature_vault_desc">Coffre chiffré pour téléchargements, images et documents</string>
@@ -529,7 +529,7 @@ Navigateur par défaut</string>
     <string name="onboarding_feature_lightning_desc">Rendu instantané sans ralentissements télémétriques</string>
     <string name="onboarding_feature_encrypted_title">Chiffré et sécurisé</string>
     <string name="onboarding_feature_encrypted_desc">Protection biométrique et chiffrement HTTPS automatique</string>
-    <string name="onboarding_default_card_title">Faites d'Omni votre navigateur par défaut</string>
+    <string name="onboarding_default_card_title">Faites d\'Omni votre navigateur par défaut</string>
     <string name="onboarding_default_card_desc">Ouvrez les paramètres système pour choisir Omni par défaut</string>
     <string name="onboarding_set_default_button">Définir comme navigateur par défaut</string>
     <string name="menu_incognito">Privé</string>
@@ -548,8 +548,8 @@ Navigateur par défaut</string>
     <string name="menu_refresh">Actualiser</string>
     <string name="on">Activé</string>
     <string name="off">Désactivé</string>
-    <string name="menu_move_address_bar_top">Placer la barre d'adresse en haut</string>
-    <string name="menu_move_address_bar_bottom">Placer la barre d'adresse en bas</string>
-    <string name="toast_open_webpage_first">Ouvrez d'abord une page web</string>
+    <string name="menu_move_address_bar_top">Placer la barre d\'adresse en haut</string>
+    <string name="menu_move_address_bar_bottom">Placer la barre d\'adresse en bas</string>
+    <string name="toast_open_webpage_first">Ouvrez d\'abord une page web</string>
     <string name="toast_added_to_shortcuts">Ajouté aux raccourcis</string>
 </resources>
