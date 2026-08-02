@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.browser.SitePermission
 import androidx.compose.ui.platform.LocalContext
@@ -72,17 +74,17 @@ fun SiteSettingsScreen(
                 title = {
                     Text(
                         text = when (currentSubView) {
-                            SiteSettingsSubView.HOME -> "Site Settings"
-                            SiteSettingsSubView.ALL_SITES -> "All Sites"
+                            SiteSettingsSubView.HOME -> stringResource(id = R.string.site_settings_title)
+                            SiteSettingsSubView.ALL_SITES -> stringResource(id = R.string.site_settings_all_sites)
                             SiteSettingsSubView.PERMISSION_DETAIL -> when (selectedPermissionType) {
-                                "location" -> "Location Permission"
-                                "camera" -> "Camera Permission"
-                                "microphone" -> "Microphone Permission"
-                                "notifications" -> "Notifications Permission"
-                                "javascript" -> "JavaScript"
-                                "autoplay" -> "Autoplay"
-                                "popups" -> "Pop-ups & Redirects"
-                                else -> "Permission"
+                                "location" -> stringResource(id = R.string.perm_location)
+                                "camera" -> stringResource(id = R.string.perm_camera)
+                                "microphone" -> stringResource(id = R.string.perm_microphone)
+                                "notifications" -> stringResource(id = R.string.perm_notifications)
+                                "javascript" -> stringResource(id = R.string.perm_javascript)
+                                "autoplay" -> stringResource(id = R.string.perm_autoplay)
+                                "popups" -> stringResource(id = R.string.perm_popups)
+                                else -> stringResource(id = R.string.site_settings_title)
                             }
                         },
                         fontWeight = FontWeight.Bold,
@@ -102,7 +104,7 @@ fun SiteSettingsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
                     }
@@ -157,9 +159,9 @@ fun SiteSettingsScreen(
                                     Icon(Icons.Rounded.Web, null, tint = accentColor, modifier = Modifier.size(20.dp))
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("All Sites", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(stringResource(id = R.string.site_settings_all_sites), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                     Text(
-                                        text = "${viewModel.sitePermissions.size} site${if (viewModel.sitePermissions.size != 1) "s" else ""} with custom settings",
+                                        text = "${viewModel.sitePermissions.size} sites",
                                         color = textSecondaryColor,
                                         fontSize = 11.sp
                                     )
@@ -170,7 +172,7 @@ fun SiteSettingsScreen(
 
                         // Section 2: Permissions Header
                         Text(
-                            "Default Permissions",
+                            stringResource(id = R.string.site_settings_default_permissions),
                             color = accentColor,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
@@ -186,25 +188,21 @@ fun SiteSettingsScreen(
                         ) {
                             Column {
                                 val permissionsList = listOf(
-                                    Triple("location", "Location", Icons.Rounded.LocationOn),
-                                    Triple("camera", "Camera", Icons.Rounded.CameraAlt),
-                                    Triple("microphone", "Microphone", Icons.Rounded.Mic),
-                                    Triple("notifications", "Notifications", Icons.Rounded.Notifications),
-                                    Triple("javascript", "JavaScript", Icons.Rounded.Code),
-                                    Triple("autoplay", "Autoplay", Icons.Rounded.PlayCircle),
-                                    Triple("popups", "Pop-ups and redirects", Icons.Rounded.OpenInNew)
+                                    Triple("location", stringResource(id = R.string.perm_location), Icons.Rounded.LocationOn),
+                                    Triple("camera", stringResource(id = R.string.perm_camera), Icons.Rounded.CameraAlt),
+                                    Triple("microphone", stringResource(id = R.string.perm_microphone), Icons.Rounded.Mic),
+                                    Triple("notifications", stringResource(id = R.string.perm_notifications), Icons.Rounded.Notifications),
+                                    Triple("javascript", stringResource(id = R.string.perm_javascript), Icons.Rounded.Code),
+                                    Triple("autoplay", stringResource(id = R.string.perm_autoplay), Icons.Rounded.PlayCircle),
+                                    Triple("popups", stringResource(id = R.string.perm_popups), Icons.Rounded.OpenInNew)
                                 )
 
                                 permissionsList.forEachIndexed { index, (type, label, icon) ->
                                     val subtitle = when (type) {
-                                        "location" -> "Default: ${viewModel.defaultGeolocation.replaceFirstChar { it.uppercase() }}"
-                                        "camera" -> "Default: ${viewModel.defaultCamera.replaceFirstChar { it.uppercase() }}"
-                                        "microphone" -> "Default: ${viewModel.defaultMicrophone.replaceFirstChar { it.uppercase() }}"
-                                        "notifications" -> "Default: ${viewModel.defaultNotifications.replaceFirstChar { it.uppercase() }}"
-                                        "javascript" -> if (viewModel.defaultJavascriptAllowed) "Allowed" else "Blocked"
-                                        "autoplay" -> if (viewModel.defaultAutoplayAllowed) "Allowed" else "Blocked"
-                                        "popups" -> if (viewModel.isPopupBlockerEnabled) "Blocked (Recommended)" else "Allowed"
-                                        else -> ""
+                                        "javascript" -> if (viewModel.defaultJavascriptAllowed) stringResource(id = R.string.perm_allowed) else stringResource(id = R.string.perm_blocked)
+                                        "autoplay" -> if (viewModel.defaultAutoplayAllowed) stringResource(id = R.string.perm_allowed) else stringResource(id = R.string.perm_blocked)
+                                        "popups" -> if (viewModel.isPopupBlockerEnabled) stringResource(id = R.string.perm_blocked) else stringResource(id = R.string.perm_allowed)
+                                        else -> stringResource(id = R.string.perm_allowed)
                                     }
 
                                     Row(

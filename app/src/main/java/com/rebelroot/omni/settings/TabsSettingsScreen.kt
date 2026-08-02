@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,12 +58,12 @@ fun TabsSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tabs", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.tabs_settings_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
                     }
@@ -81,7 +83,7 @@ fun TabsSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Tab Management", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.tabs_management), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -90,10 +92,11 @@ fun TabsSettingsScreen(
                         .border(0.5.dp, cardBorderColor, RoundedCornerShape(16.dp))
                 ) {
                     // Layout selection
+                    val currentLayoutLabel = if (viewModel.tabLayoutMode == "Grid") stringResource(id = R.string.tab_layout_grid) else stringResource(id = R.string.tab_layout_list)
                     SettingsRow(
                         icon = Icons.Rounded.GridView,
-                        title = "Tab Layout",
-                        subtitle = "${viewModel.tabLayoutMode} Layout",
+                        title = stringResource(id = R.string.tab_layout_title),
+                        subtitle = currentLayoutLabel,
                         onClick = { showLayoutDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -104,8 +107,8 @@ fun TabsSettingsScreen(
                     // Open tabs in background
                     SettingsSwitchRow(
                         icon = Icons.Rounded.TabUnselected,
-                        title = "Open tabs in background",
-                        subtitle = "Links will open in a new tab without switching immediately",
+                        title = stringResource(id = R.string.open_tabs_in_background),
+                        subtitle = stringResource(id = R.string.open_tabs_in_background_desc),
                         checked = viewModel.openTabsInBackground,
                         onCheckedChange = { viewModel.saveOpenTabsInBackground(context, it) },
                         textPrimaryColor = textPrimaryColor,
@@ -116,14 +119,14 @@ fun TabsSettingsScreen(
 
                     // Auto-close threshold selection
                     val autoCloseSubtitle = when (viewModel.autoCloseTabsDays) {
-                        1 -> "Close after 1 day"
-                        7 -> "Close after 1 week"
-                        30 -> "Close after 1 month"
-                        else -> "Never auto-close (Recommended)"
+                        1 -> stringResource(id = R.string.auto_close_1_day)
+                        7 -> stringResource(id = R.string.auto_close_1_week)
+                        30 -> stringResource(id = R.string.auto_close_1_month)
+                        else -> stringResource(id = R.string.auto_close_never)
                     }
                     SettingsRow(
                         icon = Icons.Rounded.AccessTime,
-                        title = "Auto-close tabs",
+                        title = stringResource(id = R.string.auto_close_tabs),
                         subtitle = autoCloseSubtitle,
                         onClick = { showAutoCloseDialog = true },
                         textPrimaryColor = textPrimaryColor,
@@ -137,31 +140,34 @@ fun TabsSettingsScreen(
 
     // Tab Layout Selection Dialog
     if (showLayoutDialog) {
-        val layouts = listOf("Grid", "List")
+        val layouts = listOf(
+            "Grid" to stringResource(id = R.string.tab_layout_grid),
+            "List" to stringResource(id = R.string.tab_layout_list)
+        )
         AlertDialog(
             onDismissRequest = { showLayoutDialog = false },
-            title = { Text("Tab Layout", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(id = R.string.tab_layout_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    layouts.forEach { layout ->
+                    layouts.forEach { (modeKey, label) ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    viewModel.saveTabLayoutMode(context, layout)
+                                    viewModel.saveTabLayoutMode(context, modeKey)
                                     showLayoutDialog = false
                                 }
                                 .padding(vertical = 8.dp)
                         ) {
                             RadioButton(
-                                selected = viewModel.tabLayoutMode == layout,
+                                selected = viewModel.tabLayoutMode == modeKey,
                                 onClick = {
-                                    viewModel.saveTabLayoutMode(context, layout)
+                                    viewModel.saveTabLayoutMode(context, modeKey)
                                     showLayoutDialog = false
                                 }
                             )
-                            Text(layout, modifier = Modifier.padding(start = 8.dp))
+                            Text(label, modifier = Modifier.padding(start = 8.dp))
                         }
                     }
                 }
@@ -173,14 +179,14 @@ fun TabsSettingsScreen(
     // Auto-Close Selector Dialog
     if (showAutoCloseDialog) {
         val options = listOf(
-            0 to "Never auto-close (Recommended)",
-            1 to "Close after 1 day",
-            7 to "Close after 1 week",
-            30 to "Close after 1 month"
+            0 to stringResource(id = R.string.auto_close_never),
+            1 to stringResource(id = R.string.auto_close_1_day),
+            7 to stringResource(id = R.string.auto_close_1_week),
+            30 to stringResource(id = R.string.auto_close_1_month)
         )
         AlertDialog(
             onDismissRequest = { showAutoCloseDialog = false },
-            title = { Text("Auto-close tabs", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(id = R.string.auto_close_tabs), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     options.forEach { (value, label) ->

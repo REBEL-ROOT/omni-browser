@@ -42,13 +42,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.os.Build
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
+
+private data class AppIconPreset(val key: String, val label: String, val resId: Int, val colors: Pair<Color, Color>)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,12 +78,12 @@ fun AppearanceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Appearance", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.appearance_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
                     }
@@ -101,7 +104,7 @@ fun AppearanceScreen(
         ) {
             // Address Bar position (Moved to top)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Address Bar", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.appearance_address_bar), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -116,7 +119,7 @@ fun AppearanceScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Top", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.appearance_top), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         if (viewModel.addressBarPosition == "Top") {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
@@ -129,7 +132,7 @@ fun AppearanceScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Bottom", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.appearance_bottom), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         if (viewModel.addressBarPosition == "Bottom") {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
@@ -142,7 +145,7 @@ fun AppearanceScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Split", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.appearance_split), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         if (viewModel.addressBarPosition == "Split") {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
@@ -152,7 +155,7 @@ fun AppearanceScreen(
 
             // Navigation Visibility Toggles (Moved to top)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Navigation", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.appearance_navigation), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -169,8 +172,8 @@ fun AppearanceScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("All-in-One Menu Bar", color = textPrimaryColor, fontSize = 16.sp)
-                            Text("Chrome-style single top bar (hides bottom nav)", color = textSecondaryColor, fontSize = 12.sp)
+                            Text(stringResource(id = R.string.appearance_all_in_one), color = textPrimaryColor, fontSize = 16.sp)
+                            Text(stringResource(id = R.string.appearance_all_in_one_desc), color = textSecondaryColor, fontSize = 12.sp)
                         }
                         Switch(
                             checked = viewModel.chromeNavBarEnabled && isAllInOneEnabled,
@@ -246,7 +249,7 @@ fun AppearanceScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Hide Upper Navigation Bar", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.appearance_hide_upper_nav), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = viewModel.navBarHideTop,
                             onCheckedChange = { viewModel.saveNavBarHideTop(context, it) },
@@ -260,7 +263,7 @@ fun AppearanceScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Hide Bottom Navigation Bar", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.appearance_hide_bottom_nav), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = viewModel.navBarHideBottom,
                             onCheckedChange = { viewModel.saveNavBarHideBottom(context, it) },
@@ -285,8 +288,8 @@ fun AppearanceScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Force Websites to Use Dark Theme", color = textPrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Forces websites (like Google, Wikipedia) into dark mode", color = textSecondaryColor, fontSize = 12.sp)
+                        Text(stringResource(id = R.string.appearance_force_dark_websites), color = textPrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(id = R.string.appearance_force_dark_websites_desc), color = textSecondaryColor, fontSize = 12.sp)
                     }
                     Switch(
                         checked = viewModel.forceDarkWebsites,
@@ -297,7 +300,7 @@ fun AppearanceScreen(
             }
             // ── THEME SECTION ─────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Theme", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.appearance_theme), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -309,7 +312,7 @@ fun AppearanceScreen(
                 ) {
                     // Theme Mode: Light | Dark | AMOLED
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Theme Mode", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(id = R.string.theme_mode), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         val themeMode = when {
                             viewModel.isAmoledMode -> 3
                             viewModel.isDarkThemeEnabled -> 2
@@ -317,7 +320,12 @@ fun AppearanceScreen(
                             else -> 0
                         }
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            val options = listOf("Light", "Creamy", "Dark", "AMOLED")
+                            val options = listOf(
+                                stringResource(id = R.string.theme_light),
+                                stringResource(id = R.string.theme_creamy),
+                                stringResource(id = R.string.theme_dark),
+                                stringResource(id = R.string.theme_amoled)
+                            )
                             options.forEachIndexed { index, label ->
                                 SegmentedButton(
                                     shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
@@ -370,7 +378,7 @@ fun AppearanceScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("App Nav Scaler", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.app_nav_scaler), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text(
                                 text = "${(viewModel.uiScale * 100).toInt()}%",
                                 color = accentColor,
@@ -396,20 +404,18 @@ fun AppearanceScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Smaller", color = textSecondaryColor, fontSize = 11.sp)
-                            Text("Default", color = textSecondaryColor, fontSize = 11.sp)
-                            Text("Larger", color = textSecondaryColor, fontSize = 11.sp)
+                            Text(stringResource(id = R.string.scale_smaller), color = textSecondaryColor, fontSize = 11.sp)
+                            Text(stringResource(id = R.string.scale_default), color = textSecondaryColor, fontSize = 11.sp)
+                            Text(stringResource(id = R.string.scale_larger), color = textSecondaryColor, fontSize = 11.sp)
                         }
                     }
 
                     HorizontalDivider(color = dividerColor)
 
-
-
                     // Accent Color selector
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            "Accent Color",
+                            stringResource(id = R.string.accent_color),
                             color = textPrimaryColor,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -465,7 +471,7 @@ fun AppearanceScreen(
 
                         // ── UI SCALERS & LAYOUT ───────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("UI Scalers & Layout", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.ui_scalers_layout), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -482,7 +488,7 @@ fun AppearanceScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Home Screen UI Scale", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.home_screen_ui_scale), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text("${(viewModel.homeUiScale * 100).toInt()}%", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                         Slider(
@@ -506,7 +512,7 @@ fun AppearanceScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Bottom Navigation Scale", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.bottom_nav_scale), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             Text("${(viewModel.bottomNavScale * 100).toInt()}%", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                         Slider(
@@ -525,7 +531,7 @@ fun AppearanceScreen(
 
             // ── HOME SHORTCUT TILE STYLE ─────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Home Shortcuts", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.home_shortcuts), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -535,12 +541,18 @@ fun AppearanceScreen(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Shortcut Tile Style", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(id = R.string.shortcut_tile_style), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("Circle", "Squircle", "Square", "Glass").forEach { style ->
+                        val styleOptions = listOf(
+                            "Circle" to stringResource(id = R.string.style_circle),
+                            "Squircle" to stringResource(id = R.string.style_squircle),
+                            "Square" to stringResource(id = R.string.style_square),
+                            "Glass" to stringResource(id = R.string.style_glass)
+                        )
+                        styleOptions.forEach { (style, label) ->
                             val isSelected = viewModel.shortcutTileStyle == style
                             Box(
                                 modifier = Modifier
@@ -557,7 +569,7 @@ fun AppearanceScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = style,
+                                    text = label,
                                     fontSize = 12.sp,
                                     maxLines = 1,
                                     softWrap = false,
@@ -571,10 +583,6 @@ fun AppearanceScreen(
                 }
             }
 
-
-
-
-
             // App Icon selection
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
@@ -582,14 +590,14 @@ fun AppearanceScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    Text("App Icon", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(stringResource(id = R.string.app_icon), color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
 
                 val presets = listOf(
-                    Triple("Default",    com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
-                    Triple("Dark",       com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified),
-                    Triple("Aura Dark",  com.rebelroot.omni.R.drawable.ic_omni_ring_dark, Color.Unspecified to Color.Unspecified),
-                    Triple("Aura Light", com.rebelroot.omni.R.drawable.ic_omni_ring_light, Color.Unspecified to Color.Unspecified)
+                    AppIconPreset("Default", stringResource(id = R.string.icon_preset_default), com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
+                    AppIconPreset("Dark", stringResource(id = R.string.icon_preset_dark), com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified),
+                    AppIconPreset("Aura Dark", stringResource(id = R.string.icon_preset_aura_dark), com.rebelroot.omni.R.drawable.ic_omni_ring_dark, Color.Unspecified to Color.Unspecified),
+                    AppIconPreset("Aura Light", stringResource(id = R.string.icon_preset_aura_light), com.rebelroot.omni.R.drawable.ic_omni_ring_light, Color.Unspecified to Color.Unspecified)
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -598,12 +606,12 @@ fun AppearanceScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            row.forEach { (label, resId, colors) ->
+                            row.forEach { (key, label, resId, colors) ->
                                 val (bgCol, iconCol) = colors
-                                val isSelected = viewModel.appIconState == label && viewModel.customIconPath == null
+                                val isSelected = viewModel.appIconState == key && viewModel.customIconPath == null
                                 Card(
                                     onClick = {
-                                        viewModel.saveAppIconState(context, label)
+                                        viewModel.saveAppIconState(context, key)
                                         viewModel.saveCustomIconPath(context, null)
                                     },
                                     shape = RoundedCornerShape(18.dp),
@@ -632,18 +640,17 @@ fun AppearanceScreen(
                                                 )
                                                 .border(
                                                     1.dp,
-                                                    if (label == "Default") Color.LightGray.copy(alpha = 0.4f)
+                                                    if (key == "Default") Color.LightGray.copy(alpha = 0.4f)
                                                     else Color.Transparent,
                                                     RoundedCornerShape(14.dp)
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             if (bgCol == Color.Unspecified) {
-                                                // Full-bleed icon art (Aura presets)
-                                                androidx.compose.foundation.Image(
+                                                Image(
                                                     painter = androidx.compose.ui.res.painterResource(id = resId),
                                                     contentDescription = null,
-                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                    contentScale = ContentScale.Crop,
                                                     modifier = Modifier.size(60.dp)
                                                 )
                                             } else {
@@ -677,7 +684,6 @@ fun AppearanceScreen(
                                     }
                                 }
                             }
-                            // Fill last row if odd number
                             if (row.size < 2) Spacer(Modifier.weight(1f))
                         }
                     }
@@ -685,7 +691,7 @@ fun AppearanceScreen(
 
                 // Info note
                 Text(
-                    "⚠️  Changing the app icon may briefly remove it from your home screen. It reappears in a few seconds.",
+                    stringResource(id = R.string.app_icon_warning),
                     color = textSecondaryColor,
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
@@ -693,10 +699,9 @@ fun AppearanceScreen(
                 )
             }
 
-
             // New Tab Page Customization Section
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("New Tab Page", color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+                Text(stringResource(id = R.string.new_tab_page), color = textPrimaryColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -710,7 +715,7 @@ fun AppearanceScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Show Logo", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.show_logo), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = viewModel.showHomeLogo,
                             onCheckedChange = { viewModel.saveShowHomeLogo(context, it) },
@@ -724,7 +729,7 @@ fun AppearanceScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Show Shortcuts", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.show_shortcuts), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = viewModel.showHomeShortcuts,
                             onCheckedChange = { viewModel.saveShowHomeShortcuts(context, it) },
@@ -738,7 +743,7 @@ fun AppearanceScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Show Discover Feed", color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(stringResource(id = R.string.discover_feed_title), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = viewModel.showDiscoverFeed,
                             onCheckedChange = { viewModel.saveShowDiscoverFeed(context, it) },

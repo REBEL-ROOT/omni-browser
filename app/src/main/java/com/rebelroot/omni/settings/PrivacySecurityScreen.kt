@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,12 +71,12 @@ fun PrivacySecurityScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Privacy and security", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.privacy_security_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
                     }
@@ -95,7 +97,7 @@ fun PrivacySecurityScreen(
         ) {
             // ── PRIVACY CATEGORY ───────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Privacy", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.privacy_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -106,8 +108,8 @@ fun PrivacySecurityScreen(
                     // Item 0: AdBlock & Custom Filter List Providers
                     SettingsRow(
                         icon = Icons.Rounded.Shield,
-                        title = "AdBlock & Custom Filter Providers",
-                        subtitle = "Configure built-in & custom blocklist URLs",
+                        title = stringResource(id = R.string.adblock_filter_providers),
+                        subtitle = stringResource(id = R.string.adblock_filter_providers_desc),
                         onClick = onOpenAdBlockConfig,
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -118,9 +120,9 @@ fun PrivacySecurityScreen(
                     // Item 0.5: Proxy & VPN
                     SettingsRow(
                         icon = Icons.Rounded.VpnLock,
-                        title = "Proxy & VPN",
-                        subtitle = "Route traffic through WireGuard or Tor",
-                        onClick = { Toast.makeText(context, "Configure Proxy & VPN in the main Settings screen", Toast.LENGTH_SHORT).show() },
+                        title = stringResource(id = R.string.proxy_vpn_title),
+                        subtitle = stringResource(id = R.string.proxy_vpn_desc),
+                        onClick = { Toast.makeText(context, "Configure Proxy & VPN in Privacy Hub", Toast.LENGTH_SHORT).show() },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor
@@ -130,8 +132,8 @@ fun PrivacySecurityScreen(
                     // Item 1: Delete browsing data
                     SettingsRow(
                         icon = Icons.Rounded.DeleteOutline,
-                        title = "Delete browsing data",
-                        subtitle = "Delete history, cookies, site data, cache...",
+                        title = stringResource(id = R.string.delete_browsing_data_title),
+                        subtitle = stringResource(id = R.string.delete_browsing_data_desc),
                         onClick = { showClearDataDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -142,8 +144,8 @@ fun PrivacySecurityScreen(
                     // Item 2: Privacy Guide
                     SettingsRow(
                         icon = Icons.Rounded.VerifiedUser,
-                        title = "Privacy Guide",
-                        subtitle = "Review key privacy and security controls",
+                        title = stringResource(id = R.string.privacy_guide_title),
+                        subtitle = stringResource(id = R.string.privacy_guide_desc),
                         onClick = { showPrivacyGuideDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -152,16 +154,10 @@ fun PrivacySecurityScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // Item 3: Third-party cookies
-                    val cookieSubtitle = when (viewModel.cookieBehavior) {
-                        0 -> "Third-party cookies are allowed"
-                        1 -> "All cookies are blocked"
-                        2 -> "Third-party cookies are blocked"
-                        else -> "Third-party tracking cookies are blocked (Recommended)"
-                    }
                     SettingsRow(
                         icon = Icons.Rounded.Cookie,
-                        title = "Third-party cookies",
-                        subtitle = cookieSubtitle,
+                        title = stringResource(id = R.string.third_party_cookies_title),
+                        subtitle = stringResource(id = R.string.third_party_cookies_title),
                         onClick = { showCookieBehaviorDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -172,8 +168,8 @@ fun PrivacySecurityScreen(
                     // Item 4: Ad privacy
                     SettingsRow(
                         icon = Icons.Rounded.FeaturedPlayList,
-                        title = "Ad privacy",
-                        subtitle = "Customize the info used by sites to show you ads",
+                        title = stringResource(id = R.string.ad_privacy_title),
+                        subtitle = stringResource(id = R.string.ad_privacy_desc),
                         onClick = { showAdPrivacyDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -184,7 +180,7 @@ fun PrivacySecurityScreen(
                     // Item 5: Do Not Track
                     SettingsSwitchRow(
                         icon = Icons.Rounded.RemoveRedEye,
-                        title = "Send a \"Do Not Track\" request",
+                        title = stringResource(id = R.string.do_not_track_title),
                         subtitle = if (viewModel.doNotTrack) "On" else "Off",
                         checked = viewModel.doNotTrack,
                         onCheckedChange = { viewModel.saveDoNotTrack(context, it) },
@@ -195,14 +191,10 @@ fun PrivacySecurityScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // Item 6: Preload pages
-                    val preloadSubtitle = when (viewModel.preloadPages) {
-                        0 -> "No preloading"
-                        else -> "Standard preloading"
-                    }
                     SettingsRow(
                         icon = Icons.Rounded.NetworkWifi,
-                        title = "Preload pages",
-                        subtitle = preloadSubtitle,
+                        title = stringResource(id = R.string.preload_pages_title),
+                        subtitle = stringResource(id = R.string.preload_pages_title),
                         onClick = { showPreloadPagesDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
@@ -213,8 +205,8 @@ fun PrivacySecurityScreen(
                     // Item 7: Lock Incognito tabs
                     SettingsSwitchRow(
                         icon = Icons.Rounded.Lock,
-                        title = "Lock Incognito tabs when you leave",
-                        subtitle = "Authenticate to access your private tabs",
+                        title = stringResource(id = R.string.lock_incognito_title),
+                        subtitle = stringResource(id = R.string.lock_incognito_desc),
                         checked = viewModel.lockIncognito,
                         onCheckedChange = { viewModel.saveLockIncognito(context, it) },
                         textPrimaryColor = textPrimaryColor,
@@ -226,7 +218,7 @@ fun PrivacySecurityScreen(
 
             // ── SECURITY CATEGORY ──────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Security", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.security_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -235,15 +227,10 @@ fun PrivacySecurityScreen(
                         .border(0.5.dp, cardBorderColor, RoundedCornerShape(16.dp))
                 ) {
                     // Item 8: Safe Browsing
-                    val sbSubtitle = when (viewModel.safeBrowsingLevel) {
-                        0 -> "No protection (warnings disabled)"
-                        2 -> "Enhanced protection is on"
-                        else -> "Standard protection is on (Recommended)"
-                    }
                     SettingsRow(
                         icon = Icons.Rounded.Shield,
-                        title = "Safe Browsing",
-                        subtitle = sbSubtitle,
+                        title = stringResource(id = R.string.safe_browsing_title),
+                        subtitle = stringResource(id = R.string.safe_browsing_title),
                         onClick = { showSafeBrowsingDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,

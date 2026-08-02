@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.browser.adblock.AdBlockProvider
 import java.text.SimpleDateFormat
@@ -69,12 +71,12 @@ fun AdBlockSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AdBlock & Filter Providers", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.adblock_screen_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
                     }
@@ -131,8 +133,8 @@ fun AdBlockSettingsScreen(
                                 Icon(Icons.Rounded.Shield, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
                             }
                             Column {
-                                Text("Ad & Tracker Blocker", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = textPrimaryColor)
-                                Text(if (isMasterEnabled) "Blocking active" else "Disabled", fontSize = 12.sp, color = textSecondaryColor)
+                                Text(stringResource(id = R.string.adblock_master_title), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = textPrimaryColor)
+                                Text(if (isMasterEnabled) stringResource(id = R.string.adblock_active) else stringResource(id = R.string.adblock_disabled), fontSize = 12.sp, color = textSecondaryColor)
                             }
                         }
 
@@ -154,12 +156,12 @@ fun AdBlockSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("${adBlockManager.totalBlockedCount} Total Blocked", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = textPrimaryColor)
-                            Text("Ads, scripts & trackers blocked across sessions", fontSize = 11.sp, color = textSecondaryColor)
+                            Text("${adBlockManager.totalBlockedCount} ${stringResource(id = R.string.adblock_total_blocked)}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = textPrimaryColor)
+                            Text(stringResource(id = R.string.adblock_total_blocked_desc), fontSize = 11.sp, color = textSecondaryColor)
                         }
 
                         TextButton(onClick = { adBlockManager.clearBlockedStats() }) {
-                            Text("Clear Stats", fontSize = 11.sp, color = textSecondaryColor)
+                            Text(stringResource(id = R.string.adblock_clear_stats), fontSize = 11.sp, color = textSecondaryColor)
                         }
                     }
                 }
@@ -167,7 +169,7 @@ fun AdBlockSettingsScreen(
 
             // ── PRESET FILTER LIST PROVIDERS ──────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Built-in Filter Providers", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.adblock_builtin_providers), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
 
                 Column(
                     modifier = Modifier
@@ -205,11 +207,11 @@ fun AdBlockSettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Custom Filter Providers", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                    Text(stringResource(id = R.string.adblock_custom_providers), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
                     TextButton(onClick = { showAddCustomDialog = true }) {
                         Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = accentColor)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add Custom URL", fontSize = 12.sp, color = accentColor, fontWeight = FontWeight.Bold)
+                        Text(stringResource(id = R.string.adblock_add_custom_url), fontSize = 12.sp, color = accentColor, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -227,8 +229,8 @@ fun AdBlockSettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(Icons.Rounded.FilterList, contentDescription = null, tint = textSecondaryColor.copy(alpha = 0.5f), modifier = Modifier.size(32.dp))
-                            Text("No Custom Providers Added", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimaryColor)
-                            Text("Tap 'Add Custom URL' above to add your own AdBlock or EasyList format blocklist URL.", fontSize = 12.sp, color = textSecondaryColor)
+                            Text(stringResource(id = R.string.adblock_no_custom), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimaryColor)
+                            Text(stringResource(id = R.string.adblock_no_custom_desc), fontSize = 12.sp, color = textSecondaryColor)
                         }
                     }
                 } else {

@@ -213,7 +213,7 @@ fun SettingsScreen(
                                     ) {
                                         if (searchQuery.isEmpty()) {
                                             Text(
-                                                text = "Search settings...",
+                                                text = stringResource(id = R.string.search_settings_placeholder),
                                                 color = textSecondaryColor,
                                                 fontSize = 15.sp
                                             )
@@ -470,23 +470,23 @@ fun SettingsScreen(
             } else {
                 // ── 1. PERSONALIZATION ────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionHeader("PERSONALIZATION")
+                SectionHeader(stringResource(id = R.string.settings_section_personalization))
                 SettingsCard {
-                    NavRow(Icons.Rounded.Palette, "Appearance", "Theme mode, accent colors, layout, and UI scale", onOpenAppearance)
+                    NavRow(Icons.Rounded.Palette, stringResource(id = R.string.appearance_title), stringResource(id = R.string.appearance_desc), onOpenAppearance)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Wallpaper, "Wallpapers", "Browser background, dynamic wallpaper blur/dim", onOpenWallpapers, badge = "Experimental")
+                    NavRow(Icons.Rounded.Wallpaper, stringResource(id = R.string.wallpapers_title), stringResource(id = R.string.wallpapers_desc), onOpenWallpapers, badge = "Experimental")
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.AccessibilityNew, "Accessibility", "Text scaling, force enable zoom, and high contrast mode", onOpenAccessibility)
+                    NavRow(Icons.Rounded.AccessibilityNew, stringResource(id = R.string.accessibility_title), stringResource(id = R.string.accessibility_desc), onOpenAccessibility)
                 }
             }
 
             // ── 2. BROWSING ───────────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionHeader("BROWSING")
+                SectionHeader(stringResource(id = R.string.settings_section_browsing))
                 SettingsCard {
-                    NavRow(Icons.Rounded.Tab, "Tabs", "Tab layouts, background tabs, and auto-closing settings", onOpenTabs)
+                    NavRow(Icons.Rounded.Tab, stringResource(id = R.string.tabs_settings_title), stringResource(id = R.string.tabs_settings_desc), onOpenTabs)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Language, "Site Settings", "Manage site permissions, javascript, autoplay, and popups", onOpenSiteSettings)
+                    NavRow(Icons.Rounded.Language, stringResource(id = R.string.site_settings_title), stringResource(id = R.string.site_settings_desc), onOpenSiteSettings)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // Default Browser
@@ -551,9 +551,9 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                    SwitchRow(Icons.Rounded.Newspaper, "Discover Feed", "Show news recommendations on the home page", viewModel.showDiscoverFeed) { viewModel.saveShowDiscoverFeed(context, it) }
+                    SwitchRow(Icons.Rounded.Newspaper, stringResource(id = R.string.discover_feed_title), stringResource(id = R.string.discover_feed_desc), viewModel.showDiscoverFeed) { viewModel.saveShowDiscoverFeed(context, it) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.ViewAgenda, "Bottom Navigation Bar", "Show bottom toolbar with main navigation buttons", viewModel.showBottomNavBar) { viewModel.saveShowBottomNavBar(context, it) }
+                    SwitchRow(Icons.Rounded.ViewAgenda, stringResource(id = R.string.bottom_nav_title), stringResource(id = R.string.bottom_nav_desc), viewModel.showBottomNavBar) { viewModel.saveShowBottomNavBar(context, it) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // PDF Export Theme
@@ -574,7 +574,7 @@ fun SettingsScreen(
                         var pdfExpanded by remember { mutableStateOf(false) }
                         val pdfThemes = listOf("default" to stringResource(id = R.string.system_default), "dark" to stringResource(id = R.string.dark_theme), "light" to stringResource(id = R.string.light_theme))
                         val currentPdfThemeVal = viewModel.pdfExportTheme
-                        val currentPdfThemeLabel = pdfThemes.find { it.first == currentPdfThemeVal }?.second ?: "System Default"
+                        val currentPdfThemeLabel = pdfThemes.find { it.first == currentPdfThemeVal }?.second ?: stringResource(id = R.string.system_default)
                         Box {
                             Row(
                                 modifier = Modifier
@@ -607,11 +607,11 @@ fun SettingsScreen(
 
             // ── 3. PRIVACY & SECURITY ─────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionHeader("PRIVACY & SECURITY")
+                SectionHeader(stringResource(id = R.string.settings_section_privacy_security))
                 SettingsCard {
-                    NavRow(Icons.Rounded.Security, "Privacy and Security", "Clear browsing data, cookies, Safe Browsing, and device lock", onOpenPrivacySecurity)
+                    NavRow(Icons.Rounded.Security, stringResource(id = R.string.privacy_security_title), stringResource(id = R.string.privacy_security_desc), onOpenPrivacySecurity)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.VisibilityOff, "Private Browsing", stringResource(id = R.string.private_browsing_desc), viewModel.isIncognitoMode) { viewModel.toggleIncognitoMode(context) }
+                    SwitchRow(Icons.Rounded.VisibilityOff, stringResource(id = R.string.private_browsing_mode), stringResource(id = R.string.private_browsing_mode_desc), viewModel.isIncognitoMode) { viewModel.toggleIncognitoMode(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     // Notifications
                     Row(
@@ -633,7 +633,7 @@ fun SettingsScreen(
                                     } else { isNotificationsEnabled = true }
                                 } else {
                                     isNotificationsEnabled = false
-                                    Toast.makeText(context, "Notifications disabled. Revoke system permission in settings if desired.", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Notifications disabled.", Toast.LENGTH_LONG).show()
                                 }
                             },
                             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)
@@ -650,8 +650,8 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Rounded.DeleteSweep, contentDescription = null, tint = Color(0xFFFF4444), modifier = Modifier.size(22.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Clear Cache & Site Data", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Removes cookies, offline data, and frees storage", color = textSecondaryColor, fontSize = 11.sp)
+                            Text(stringResource(id = R.string.clear_cache_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.clear_cache_desc), color = textSecondaryColor, fontSize = 11.sp)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
                     }
@@ -667,13 +667,13 @@ fun SettingsScreen(
 
             // ── 4. MEDIA ──────────────────────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionHeader("MEDIA")
+                SectionHeader(stringResource(id = R.string.settings_section_media))
                 SettingsCard {
                     SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.native_player_title), stringResource(id = R.string.native_player_desc), viewModel.isNativePlayerEnabled) { viewModel.toggleNativePlayer(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.VideoLibrary, "Media Sniffer / Fetcher", "Detect web page videos and display sniffer banner at top of site", viewModel.isMediaGrabberEnabled) { viewModel.toggleMediaGrabber(context) }
+                    SwitchRow(Icons.Rounded.VideoLibrary, stringResource(id = R.string.media_sniffer_title), stringResource(id = R.string.media_sniffer_desc), viewModel.isMediaGrabberEnabled) { viewModel.toggleMediaGrabber(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.Download, "External Download Manager", "Send downloads to ADM, 1DM, or other installed download manager instead of the built-in one", viewModel.isExternalDownloadManagerEnabled) { viewModel.toggleExternalDownloadManager(context) }
+                    SwitchRow(Icons.Rounded.Download, stringResource(id = R.string.external_download_manager_title), stringResource(id = R.string.external_download_manager_desc), viewModel.isExternalDownloadManagerEnabled) { viewModel.toggleExternalDownloadManager(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
                 }
@@ -766,15 +766,15 @@ fun SettingsScreen(
                         }
                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Custom Search Engines", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.custom_search_engines), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             TextButton(onClick = { showAddSearchEngineDialog = true }) {
                                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Add New", color = accentColor)
+                                Text(stringResource(id = R.string.add_new_engine), color = accentColor)
                             }
                         }
                         if (viewModel.customSearchEngines.isEmpty()) {
-                            Text("No custom search engines added yet.", color = textSecondaryColor, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text(stringResource(id = R.string.no_custom_search_engines), color = textSecondaryColor, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                         } else {
                             viewModel.customSearchEngines.forEach { engine ->
                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -919,15 +919,15 @@ fun SettingsScreen(
                     }
 
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.AutoMirrored.Rounded.Help, "Help & Support", "Get help, FAQs, and contact us", onClick = { onOpenUrl("https://rebelroot.xyz/support") })
+                    NavRow(Icons.AutoMirrored.Rounded.Help, stringResource(id = R.string.help_support_title), stringResource(id = R.string.help_support_desc), onClick = { onOpenUrl("https://rebelroot.xyz/support") })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Feedback, "Send Direct Feedback", "Report bugs, suggest features, share thoughts", onClick = { showFeedbackDialog = true })
+                    NavRow(Icons.Rounded.Feedback, stringResource(id = R.string.send_feedback_title), stringResource(id = R.string.send_feedback_desc), onClick = { showFeedbackDialog = true })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Code, stringResource(id = R.string.support_github), "View source code and file issues", onClick = { onOpenUrl("https://github.com/rebelroot") })
+                    NavRow(Icons.Rounded.Code, stringResource(id = R.string.support_github), stringResource(id = R.string.support_github_desc), onClick = { onOpenUrl("https://github.com/rebelroot") })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Public, stringResource(id = R.string.website_omnibrowser), "Visit the official Omni Browser website", onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser") })
+                    NavRow(Icons.Rounded.Public, stringResource(id = R.string.website_omnibrowser), stringResource(id = R.string.website_omnibrowser_desc), onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser") })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Shield, stringResource(id = R.string.privacy_policy_title), "Read our privacy policy", onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser/privacy-policy") })
+                    NavRow(Icons.Rounded.Shield, stringResource(id = R.string.privacy_policy_title), stringResource(id = R.string.privacy_policy_desc), onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser/privacy-policy") })
                 }
             }
             }

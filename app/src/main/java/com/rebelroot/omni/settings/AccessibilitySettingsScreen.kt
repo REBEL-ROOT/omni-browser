@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,12 +57,12 @@ fun AccessibilitySettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Accessibility", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.accessibility_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(id = R.string.back_desc),
                             tint = textPrimaryColor
                         )
                     }
@@ -81,7 +83,7 @@ fun AccessibilitySettingsScreen(
         ) {
             // Text Scaling Card
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Text and Zoom", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.acc_text_and_zoom), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -97,8 +99,8 @@ fun AccessibilitySettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Text scaling", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Adjust website text size", color = textSecondaryColor, fontSize = 11.sp)
+                            Text(stringResource(id = R.string.acc_text_scaling), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(id = R.string.acc_text_scaling_desc), color = textSecondaryColor, fontSize = 11.sp)
                         }
                         Text(
                             text = "${(viewModel.accessibilityTextScale * 100).toInt()}%",
@@ -122,7 +124,7 @@ fun AccessibilitySettingsScreen(
 
             // Other settings Card
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Page Accessibility", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.acc_page_accessibility), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -133,8 +135,8 @@ fun AccessibilitySettingsScreen(
                     // Force Enable Zoom Switch
                     SettingsSwitchRow(
                         icon = Icons.Rounded.ZoomIn,
-                        title = "Force enable zoom",
-                        subtitle = "Override a website's request to prevent zooming",
+                        title = stringResource(id = R.string.acc_force_zoom),
+                        subtitle = stringResource(id = R.string.acc_force_zoom_desc),
                         checked = viewModel.accessibilityForceZoom,
                         onCheckedChange = { viewModel.saveAccessibilityForceZoom(context, it) },
                         textPrimaryColor = textPrimaryColor,
@@ -146,8 +148,8 @@ fun AccessibilitySettingsScreen(
                     // High Contrast Mode Switch
                     SettingsSwitchRow(
                         icon = Icons.Rounded.Contrast,
-                        title = "High contrast mode",
-                        subtitle = "Increase screen readability (requires app restart)",
+                        title = stringResource(id = R.string.acc_high_contrast),
+                        subtitle = stringResource(id = R.string.acc_high_contrast_desc),
                         checked = viewModel.accessibilityHighContrast,
                         onCheckedChange = { viewModel.saveAccessibilityHighContrast(context, it) },
                         textPrimaryColor = textPrimaryColor,
@@ -159,7 +161,7 @@ fun AccessibilitySettingsScreen(
 
             // System Accessibility Link Card
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("System Preferences", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(id = R.string.acc_system_preferences), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -169,8 +171,8 @@ fun AccessibilitySettingsScreen(
                 ) {
                     SettingsRow(
                         icon = Icons.Rounded.AccessibilityNew,
-                        title = "System accessibility",
-                        subtitle = "Open Android accessibility options",
+                        title = stringResource(id = R.string.acc_system_accessibility),
+                        subtitle = stringResource(id = R.string.acc_system_accessibility_desc),
                         onClick = {
                             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

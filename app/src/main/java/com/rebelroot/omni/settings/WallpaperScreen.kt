@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -260,14 +262,14 @@ private fun WallpaperHome(
     if (showCustomUrlDialog) {
         AlertDialog(
             onDismissRequest = { showCustomUrlDialog = false },
-            title = { Text("Custom Video or GIF URL", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(id = R.string.wallpaper_custom_url_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter a direct HTTP/HTTPS URL for any online GIF or MP4/WebM video:", fontSize = 13.sp, color = textSecondary)
+                    Text(stringResource(id = R.string.wallpaper_custom_url_desc), fontSize = 13.sp, color = textSecondary)
                     OutlinedTextField(
                         value = customUrlText,
                         onValueChange = { customUrlText = it },
-                        placeholder = { Text("https://example.com/wallpaper.mp4") },
+                        placeholder = { Text(stringResource(id = R.string.wallpaper_custom_url_placeholder)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -285,12 +287,12 @@ private fun WallpaperHome(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = accent)
                 ) {
-                    Text("Apply Wallpaper")
+                    Text(stringResource(id = R.string.wallpaper_apply))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCustomUrlDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(id = R.string.cancel_text))
                 }
             }
         )
@@ -299,10 +301,10 @@ private fun WallpaperHome(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Wallpapers", fontWeight = FontWeight.Bold, color = textPrimary) },
+                title = { Text(stringResource(id = R.string.wallpapers_title), fontWeight = FontWeight.Bold, color = textPrimary) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = textPrimary)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(id = R.string.back_desc), tint = textPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = bgColor),
@@ -335,7 +337,7 @@ private fun WallpaperHome(
                         ) {
                             Icon(Icons.Rounded.FolderOpen, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Local File", fontSize = 13.sp)
+                            Text(stringResource(id = R.string.wallpaper_local_file), fontSize = 13.sp)
                         }
                         // Custom Direct URL
                         OutlinedButton(
@@ -346,7 +348,7 @@ private fun WallpaperHome(
                         ) {
                             Icon(Icons.Rounded.Link, null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("Paste URL", fontSize = 13.sp)
+                            Text(stringResource(id = R.string.wallpaper_paste_url), fontSize = 13.sp)
                         }
                     }
                     // Online gallery — main CTA
@@ -358,7 +360,7 @@ private fun WallpaperHome(
                     ) {
                         Icon(Icons.Rounded.CloudDownload, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Online Image Gallery", fontSize = 13.sp)
+                        Text(stringResource(id = R.string.wallpaper_online_gallery), fontSize = 13.sp)
                     }
                 }
             }
@@ -375,8 +377,8 @@ private fun WallpaperHome(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Change wallpaper daily", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                            Text("Auto-rotate from your collection", color = textSecondary, fontSize = 12.sp)
+                            Text(stringResource(id = R.string.wallpaper_daily_title), color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(id = R.string.wallpaper_daily_desc), color = textSecondary, fontSize = 12.sp)
                         }
                         Switch(
                             checked = viewModel.changeWallpaperDaily,
@@ -402,12 +404,12 @@ private fun WallpaperHome(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.Tune, null, tint = accent, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Wallpaper Customization", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(stringResource(id = R.string.wallpaper_customization), color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             }
                             val dimVal = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else (if (isDark) 0.5f else 0.65f)
-                            SliderRow("Blur", "${viewModel.wallpaperBlur.toInt()} dp", viewModel.wallpaperBlur, 0f..25f, accent, textPrimary, textSecondary) { viewModel.saveWallpaperBlur(context, it) }
+                            SliderRow(stringResource(id = R.string.wallpaper_blur), "${viewModel.wallpaperBlur.toInt()} dp", viewModel.wallpaperBlur, 0f..25f, accent, textPrimary, textSecondary) { viewModel.saveWallpaperBlur(context, it) }
                             HorizontalDivider(color = cardBorder.copy(alpha = 0.4f))
-                            SliderRow("Dim", "${(dimVal * 100).toInt()}%", dimVal, 0f..0.9f, accent, textPrimary, textSecondary) { viewModel.saveWallpaperDim(context, it) }
+                            SliderRow(stringResource(id = R.string.wallpaper_dim), "${(dimVal * 100).toInt()}%", dimVal, 0f..0.9f, accent, textPrimary, textSecondary) { viewModel.saveWallpaperDim(context, it) }
                         }
                     }
                 }
@@ -419,7 +421,7 @@ private fun WallpaperHome(
                     Icon(Icons.Rounded.Videocam, null, tint = accent, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "Live Animated Wallpapers (GIF & Video)",
+                        stringResource(id = R.string.wallpaper_live_section),
                         color = textPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -469,7 +471,7 @@ private fun WallpaperHome(
 
             // ── Static Wallpaper Library ─────────────────────────────────────
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("Static Wallpapers", color = textPrimary, fontWeight = FontWeight.SemiBold,
+                Text(stringResource(id = R.string.wallpaper_static_section), color = textPrimary, fontWeight = FontWeight.SemiBold,
                     fontSize = 17.sp, modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 2.dp))
             }
 
@@ -483,7 +485,7 @@ private fun WallpaperHome(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Rounded.HideImage, null, tint = textSecondary, modifier = Modifier.size(28.dp))
-                            Text("None", color = textSecondary, fontSize = 12.sp)
+                            Text(stringResource(id = R.string.wallpaper_none), color = textSecondary, fontSize = 12.sp)
                         }
                     }
                 }
