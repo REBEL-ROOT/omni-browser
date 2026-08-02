@@ -671,6 +671,8 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.VideoLibrary, "Media Sniffer / Fetcher", "Detect web page videos and display sniffer banner at top of site", viewModel.isMediaGrabberEnabled) { viewModel.toggleMediaGrabber(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.Download, "External Download Manager", "Send downloads to ADM, 1DM, or other installed download manager instead of the built-in one", viewModel.isExternalDownloadManagerEnabled) { viewModel.toggleExternalDownloadManager(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
                 }
             }

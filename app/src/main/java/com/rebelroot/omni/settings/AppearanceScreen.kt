@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.os.Build
@@ -285,7 +286,7 @@ fun AppearanceScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Force Websites to Use Dark Theme", color = textPrimaryColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Requires app restart", color = textSecondaryColor, fontSize = 12.sp)
+                        Text("Forces websites (like Google, Wikipedia) into dark mode", color = textSecondaryColor, fontSize = 12.sp)
                     }
                     Switch(
                         checked = viewModel.forceDarkWebsites,
@@ -317,12 +318,6 @@ fun AppearanceScreen(
                         }
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                             val options = listOf("Light", "Creamy", "Dark", "AMOLED")
-                            val icons = listOf(
-                                Icons.Rounded.LightMode,
-                                Icons.Rounded.Palette,
-                                Icons.Rounded.DarkMode,
-                                Icons.Rounded.Brightness1
-                            )
                             options.forEachIndexed { index, label ->
                                 SegmentedButton(
                                     shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
@@ -351,13 +346,16 @@ fun AppearanceScreen(
                                         }
                                     },
                                     selected = themeMode == index,
-                                    icon = {
-                                        SegmentedButtonDefaults.Icon(active = themeMode == index) {
-                                            Icon(imageVector = icons[index], contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                                        }
-                                    }
+                                    icon = {}
                                 ) {
-                                    Text(label, fontSize = 13.sp)
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (themeMode == index) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
@@ -560,8 +558,11 @@ fun AppearanceScreen(
                             ) {
                                 Text(
                                     text = style,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSelected) Color.White else textPrimaryColor
                                 )
                             }

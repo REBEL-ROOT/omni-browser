@@ -259,20 +259,119 @@ class StreamDownloadEngine(
     }
 
     fun cancelDownload(jobId: String) {
+        deleteDownload(jobId, deleteFileFromDisk = false)
+    }
+
+    fun deleteDownload(jobId: String, deleteFileFromDisk: Boolean = true) {
         runningJobs[jobId]?.cancel()
         runningJobs.remove(jobId)
+
         val job = _jobs.value.find { it.id == jobId }
-        if (job != null) {
-            (job.progress as? MutableStateFlow)?.value = DownloadProgress.Error("Download cancelled")
+        if (job != null && deleteFileFromDisk) {
+            val progress = job.progress.value
+            if (progress is DownloadProgress.Complete) {
+                val file = progress.file
+                val openUri = progress.openUri
+
+                if (openUri != null) {
+                    try {
+                        context.contentResolver.delete(openUri, null, null)
+                    } catch (e: Exception) {
+                        Log.e("DownloadEngine", "Failed MediaStore URI deletion for $openUri", e)
+                    }
+                }
+
+                try {
+                    if (file.exists()) {
+                        val deleted = file.delete()
+                        Log.i("DownloadEngine", "Physical file delete (${file.absolutePath}): $deleted")
+                    }
+                } catch (e: Exception) {
+                    Log.e("DownloadEngine", "Failed physical file delete: ${file.absolutePath}", e)
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+                        val args = arrayOf(job.filename)
+                        context.contentResolver.delete(collection, selection, args)
+                    } catch (e: Exception) {
+                        Log.e("DownloadEngine", "Failed MediaStore query delete for ${job.filename}", e)
+                    }
+                }
+
+                if (job.saveToLocker) {
+                    try {
+                        val secureId = file.name
+                        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                            try {
+                                privateLockerManager.deleteFile(secureId)
+                            } catch (e: Exception) {
+                                if (file.exists()) file.delete()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("DownloadEngine", "Failed to delete locker file: ${job.filename}", e)
+                    }
+                }
+            }
         }
-        _jobs.update { list ->
-            list.filter { it.id != jobId }
-        }
+
+        _jobs.update { list -> list.filter { it.id != jobId } }
         val notificationId = jobNotificationIds.remove(jobId)
         if (notificationId != null) {
             notificationManager.cancel(notificationId)
         }
         saveDownloadHistory()
+    }
+
+    fun renameDownload(jobId: String, newName: String): Boolean {
+        val job = _jobs.value.find { it.id == jobId } ?: return false
+        val progress = job.progress.value
+        if (progress !is DownloadProgress.Complete) return false
+
+        val oldFile = progress.file
+        val extension = oldFile.extension
+        val finalName = if (newName.endsWith(".$extension", ignoreCase = true) || extension.isEmpty()) {
+            newName.trim()
+        } else {
+            "${newName.trim()}.$extension"
+        }
+
+        val parentDir = oldFile.parentFile
+        val newFile = if (parentDir != null && !job.saveToLocker) File(parentDir, finalName) else oldFile
+
+        val renamed = if (job.saveToLocker) {
+            val secureId = oldFile.name
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                privateLockerManager.renameFile(secureId, finalName)
+            }
+            true
+        } else {
+            try {
+                if (oldFile.exists()) {
+                    oldFile.renameTo(newFile)
+                } else {
+                    true
+                }
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Failed to rename file from ${oldFile.absolutePath} to ${newFile.absolutePath}", e)
+                false
+            }
+        }
+
+        if (renamed) {
+            val updatedProgress = DownloadProgress.Complete(newFile, progress.sizeBytes, progress.openUri)
+            val updatedJob = job.copy(filename = finalName, progress = MutableStateFlow(updatedProgress))
+
+            _jobs.update { list ->
+                list.map { if (it.id == jobId) updatedJob else it }
+            }
+            saveDownloadHistory()
+            return true
+        }
+        return false
     }
 
     suspend fun startDownload(
@@ -1629,6 +1728,7 @@ class StreamDownloadEngine(
                             put("status", "complete")
                             put("filePath", progressVal.file.absolutePath)
                             put("bytes", progressVal.sizeBytes)
+                            progressVal.openUri?.let { put("openUri", it.toString()) }
                         }
                         is DownloadProgress.Error -> {
                             put("status", "error")
@@ -1663,7 +1763,9 @@ class StreamDownloadEngine(
                     "complete" -> {
                         val filePath = obj.getString("filePath")
                         val bytes = obj.optLong("bytes", 0L)
-                        MutableStateFlow<DownloadProgress>(DownloadProgress.Complete(File(filePath), bytes))
+                        val openUriStr = if (obj.has("openUri")) obj.getString("openUri") else null
+                        val openUri = if (!openUriStr.isNullOrEmpty()) Uri.parse(openUriStr) else null
+                        MutableStateFlow<DownloadProgress>(DownloadProgress.Complete(File(filePath), bytes, openUri))
                     }
                     "error" -> {
                         val message = obj.optString("message", "Unknown error")

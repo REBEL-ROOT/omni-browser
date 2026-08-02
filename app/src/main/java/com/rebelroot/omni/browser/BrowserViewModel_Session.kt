@@ -852,7 +852,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     session = newSession,
                     title = "New Tab",
                     url = uri,
-                    isIncognito = isIncognitoMode
+                    isIncognito = isIncognitoMode,
+                    settingsVersion = currentSettingsVersion
                 )
 
                 setupTabSessionListeners(newTab, context)
@@ -881,6 +882,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (idx != -1) {
                 tabs[idx] = tabs[idx].copy(loadError = null)
             }
+            if (forceDarkWebsites || isDarkThemeEnabled) {
+                injectForceDarkCssIfNeeded(tab)
+            }
         }
 
         override fun onPageStop(session: GeckoSession, success: Boolean) {
@@ -892,6 +896,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 }, 300)
             }
             if (success) {
+                if (forceDarkWebsites || isDarkThemeEnabled) {
+                    injectForceDarkCssIfNeeded(tab)
+                }
                 if (tab.id == activeTabId) {
                     if (accessibilityForceZoom) {
                         injectZoomEnabler()

@@ -1,0 +1,35 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Omni Glitch-Free Smart Dark Engine
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+:root, html {
+    color-scheme: dark !important;
+}
+
+html {
+    background-color: #121214 !important;
+    color: #e8eaed !important;
+}
+
+body {
+    background-color: #121214 !important;
+    color: #e8eaed !important;
+}
+
+a:not([class*="button"]):not([class*="btn"]):not([role="button"]) {
+    color: #8ab4f8 !important;
+}
+
+img, video, canvas, svg, iframe, embed, object {
+    background-color: transparent !important;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background-color: #121214;
+}
+::-webkit-scrollbar-thumb {
+    background-color: #2e2e38;
+    border-radius: 4px;
+}

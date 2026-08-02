@@ -216,6 +216,22 @@ class PrivateLockerManager(private val context: Context) {
     }
 
     /**
+     * Renames a secure file record's display name.
+     */
+    suspend fun renameFile(secureId: String, newDisplayName: String): Boolean {
+        return try {
+            val fileRecord = database.fileDao().getFileById(secureId) ?: return false
+            val updatedRecord = fileRecord.copy(displayName = newDisplayName)
+            database.fileDao().insert(updatedRecord)
+            Log.i(TAG, "Secure file $secureId renamed to $newDisplayName")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to rename secure file $secureId", e)
+            false
+        }
+    }
+
+    /**
      * Deletes all decrypted cache files that were temporarily created to open secure files.
      */
     suspend fun clearDecryptedCache() {

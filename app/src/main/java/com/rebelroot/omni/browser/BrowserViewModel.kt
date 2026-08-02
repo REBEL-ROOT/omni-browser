@@ -18,9 +18,12 @@
 
 package com.rebelroot.omni.browser
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.Keep
@@ -73,7 +76,6 @@ import org.mozilla.geckoview.WebExtension
 import com.rebelroot.omni.tools.qrcode.QrCodeDecoder
 import java.lang.ref.WeakReference
 import java.io.File
-import android.content.Intent
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -143,6 +145,11 @@ class BrowserViewModel : ViewModel() {
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
         val YOUTUBE_ENABLED_KEY = booleanPreferencesKey("youtube_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
+        val EXTERNAL_DOWNLOAD_MANAGER_KEY = booleanPreferencesKey("external_download_manager_enabled")
+        // Chrome-on-Android UA shared by the download hand-off (matches the one used by
+        // StreamDownloadEngine so external managers see the same identity as the browser).
+        const val CHROME_UA =
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
         val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
         val PROXY_PROVIDER_KEY = stringPreferencesKey("proxy_provider")
         val TOR_USE_BRIDGES_KEY = booleanPreferencesKey("tor_use_bridges")
@@ -179,6 +186,7 @@ class BrowserViewModel : ViewModel() {
         val EDIT_PAGE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("edit_page_overview_seen")
         val CONSOLE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("console_overview_seen")
         val FORCE_DARK_WEBSITES_KEY = booleanPreferencesKey("force_dark_websites")
+        private const val FORCE_DARK_EXTENSION_ID = "omni-force-dark@omnibrowser.app"
         val SHOW_SCROLL_BUTTONS_KEY = booleanPreferencesKey("show_scroll_buttons")
         val NAV_BAR_HIDE_TOP_KEY = booleanPreferencesKey("nav_bar_hide_top")
         val NAV_BAR_HIDE_BOTTOM_KEY = booleanPreferencesKey("nav_bar_hide_bottom")
@@ -282,6 +290,7 @@ class BrowserViewModel : ViewModel() {
     val tabs = mutableStateListOf<TabState>()
     var activeTabId by mutableStateOf<String?>(null)
         private set
+    val activeTab: TabState? get() = tabs.find { it.id == activeTabId }
     var activeNormalTabId by mutableStateOf<String?>(null)
         private set
     var activeIncognitoTabId by mutableStateOf<String?>(null)
@@ -317,6 +326,7 @@ class BrowserViewModel : ViewModel() {
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     internal var copyManager: UniversalCopyManager? = null
     internal var aiBlockerManager: BuiltInExtensionManager? = null
+    internal var forceDarkManager: BuiltInExtensionManager? = null
     internal var appContext: Context? = null
 
     // GeckoView Reference for capturePixels
@@ -364,6 +374,8 @@ class BrowserViewModel : ViewModel() {
     var isUniversalCopyEnabled by mutableStateOf(false)
     var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
+    /** When true, downloads are handed off to an external download manager (ADM / 1DM / …) via a chooser. Default OFF. */
+    var isExternalDownloadManagerEnabled by mutableStateOf(false)
     var isNativePlayerEnabled by mutableStateOf(true)
     var isYouTubeEnabled by mutableStateOf(false)
     var pendingVideoUrl: String? = null
@@ -450,7 +462,7 @@ class BrowserViewModel : ViewModel() {
     var isOnboardingCompleted by mutableStateOf(false)
     var selectedAccentTheme by mutableStateOf("Ocean Blue")
     var forceDarkWebsites by mutableStateOf(false)
-    var showScrollButtons by mutableStateOf(false)
+    var showScrollButtons by mutableStateOf(true)
     var currentScrollRange by mutableStateOf(0)
     var currentScrollExtent by mutableStateOf(0)
     var currentScrollOffset by mutableStateOf(0)
@@ -672,8 +684,20 @@ class BrowserViewModel : ViewModel() {
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
 
-    fun startGenericDownload(download: PendingGenericDownload, saveToLocker: Boolean) {
+    fun startGenericDownload(download: PendingGenericDownload, saveToLocker: Boolean, context: Context) {
         pendingGenericDownload = null
+        // "Save to Private Vault" never hands off: external apps cannot write into Omni's
+        // encrypted locker, so the file must come through the internal engine.
+        if (!saveToLocker && isExternalDownloadManagerEnabled) {
+            val handedOff = handOffToExternalDownloadManager(
+                context = context,
+                url = download.url,
+                filename = download.filename,
+                contentType = download.contentType
+            )
+            if (handedOff) return
+            // No external handler installed — fall through to the internal engine.
+        }
         streamDownloadEngine.startGenericFileDownload(
             url = download.url,
             filename = download.filename,
@@ -682,6 +706,63 @@ class BrowserViewModel : ViewModel() {
             cookies = activeVideoCookies,
             referrerUrl = currentUrl
         )
+    }
+
+    /**
+     * Hands a download URL to an external download manager (ADM, 1DM, …) via the system
+     * chooser. Cookies, Referer and a Chrome User-Agent are passed through
+     * [Intent.EXTRA_HEADERS] so downloads behind logins or Referer/UA checks still
+     * succeed with managers that honour them (ADM and 1DM both do).
+     *
+     * @return true if the chooser was launched, false if [url] was not an http(s) URL
+     *         or no app could handle the intent.
+     */
+    fun handOffToExternalDownloadManager(
+        context: Context,
+        url: String,
+        filename: String? = null,
+        contentType: String? = null,
+        referrerUrl: String? = currentUrl,
+        cookies: String? = activeVideoCookies
+    ): Boolean {
+        val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        val scheme = parsed.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return false
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(parsed, contentType?.takeIf { it.isNotBlank() } ?: "*/*")
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val headers = Bundle().apply {
+                referrerUrl?.takeIf { it.isNotBlank() }?.let { putString("Referer", it) }
+                cookies?.takeIf { it.isNotBlank() }?.let { putString("Cookie", it) }
+                putString("User-Agent", CHROME_UA)
+            }
+            putExtra(android.provider.Browser.EXTRA_HEADERS, headers)
+            filename?.takeIf { it.isNotBlank() }?.let { putExtra("title", it) }
+        }
+
+        val chooser = Intent.createChooser(intent, "Download with…").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            context.startActivity(chooser)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    /**
+     * Whether a detected media item can realistically be fetched by an external download
+     * manager. Direct MP4/WEBM/audio URLs are fine; HLS/DASH manifests and YouTube split
+     * streams (separate [audioUrl]) need FFmpeg muxing that only the internal engine does.
+     */
+    fun canHandOffMedia(type: MediaInterceptor.MediaType, audioUrl: String?): Boolean {
+        if (type == MediaInterceptor.MediaType.HLS ||
+            type == MediaInterceptor.MediaType.DASH) return false
+        if (audioUrl != null) return false
+        return true
     }
 
     internal fun handleExternalDownloadResponse(response: org.mozilla.geckoview.WebResponse, context: Context) {
@@ -1428,7 +1509,8 @@ class BrowserViewModel : ViewModel() {
                             url = url,
                             isIncognito = isIncognito,
                             isUriLoaded = shouldLoadNow,
-                            lastActiveTime = lastActiveTime
+                            lastActiveTime = lastActiveTime,
+                            settingsVersion = currentSettingsVersion
                         )
                         setupTabSessionListeners(tab, context)
                         tabs.add(tab)
@@ -1500,7 +1582,8 @@ class BrowserViewModel : ViewModel() {
             session = session,
             title = "New Tab",
             url = url,
-            isIncognito = isIncognitoMode
+            isIncognito = isIncognitoMode,
+            settingsVersion = currentSettingsVersion
         )
         
         setupTabSessionListeners(newTab, context)
@@ -2160,6 +2243,12 @@ class BrowserViewModel : ViewModel() {
                 extensionId = AI_BLOCKER_ID,
                 label = "AI Blocker"
             )
+            forceDarkManager = BuiltInExtensionManager(
+                runtime = geckoRuntime!!,
+                assetPath = "web_extensions/force_dark/",
+                extensionId = FORCE_DARK_EXTENSION_ID,
+                label = "Force Dark Theme"
+            )
             
             // Sync user extensions on start
             syncUserExtensions()
@@ -2244,11 +2333,7 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 val darkThemePref = getDarkThemePreference(appCtx).first()
                 isDarkThemeEnabled = darkThemePref
-                geckoRuntime?.settings?.preferredColorScheme = if (darkThemePref) {
-                    GeckoRuntimeSettings.COLOR_SCHEME_DARK
-                } else {
-                    GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
-                }
+                updateGeckoColorScheme()
             }
 
             viewModelScope.launch {
@@ -2351,7 +2436,8 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 appCtx.dataStore.data.first().let { prefs ->
                     forceDarkWebsites = prefs[FORCE_DARK_WEBSITES_KEY] ?: false
-                    showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: false
+                    updateGeckoColorScheme()
+                    showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: true
                     navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
                     navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
                     addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Split"
@@ -2422,6 +2508,10 @@ class BrowserViewModel : ViewModel() {
             
             isAiBlockerEnabled = getAiBlockerPreference(context).first()
             aiBlockerManager?.installAndSync(isAiBlockerEnabled, onComplete = null)
+
+            forceDarkManager?.installAndSync(forceDarkWebsites || isDarkThemeEnabled, onComplete = null)
+
+            isExternalDownloadManagerEnabled = getExternalDownloadManagerPreference(context).first()
         }
     }
 
@@ -2856,6 +2946,12 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    private fun getExternalDownloadManagerPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[EXTERNAL_DOWNLOAD_MANAGER_KEY] ?: false // Default OFF
+        }
+    }
+
     private fun getYouTubePreference(context: Context): Flow<Boolean> {
         return context.dataStore.data.map { preferences ->
             preferences[YOUTUBE_ENABLED_KEY] ?: false // Default OFF
@@ -3004,11 +3100,9 @@ class BrowserViewModel : ViewModel() {
                 preferences[DARK_THEME_ENABLED_KEY] = enabled
             }
             isDarkThemeEnabled = enabled
-            
-            geckoRuntime?.settings?.preferredColorScheme = if (enabled) {
-                GeckoRuntimeSettings.COLOR_SCHEME_DARK
-            } else {
-                GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
+            updateGeckoColorScheme()
+            if (enabled || forceDarkWebsites) {
+                injectForceDarkCssIfNeeded()
             }
         }
     }
@@ -3086,10 +3180,50 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun updateGeckoColorScheme() {
+        val isDark = isDarkThemeEnabled || forceDarkWebsites || isAmoledMode
+        geckoRuntime?.settings?.preferredColorScheme = if (isDark) {
+            GeckoRuntimeSettings.COLOR_SCHEME_DARK
+        } else {
+            GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
+        }
+        forceDarkManager?.setEnabled(forceDarkWebsites || isDarkThemeEnabled)
+    }
+
+    fun injectForceDarkCssIfNeeded(targetTab: TabState? = activeTab) {
+        val tab = targetTab ?: activeTab ?: return
+        if (!forceDarkWebsites && !isDarkThemeEnabled) return
+        val script = "(function(){try{" +
+            "var docEl=document.documentElement||document.getElementsByTagName('html')[0];" +
+            "if(docEl)docEl.style.setProperty('color-scheme','dark','important');" +
+            "if(location.hostname.indexOf('google.')!==-1){try{" +
+            "var host=location.hostname;var domain=host.substring(host.indexOf('google.'));" +
+            "document.cookie='PREF=f6=400; path=/; domain='+domain;" +
+            "}catch(e){}}" +
+            "if(!document.getElementById('omni-force-dark-style')){" +
+            "var style=document.createElement('style');" +
+            "style.id='omni-force-dark-style';" +
+            "style.textContent=':root,html{color-scheme:dark!important;}html,body{background-color:#121214!important;color:#e8eaed!important;}a:not([class*=\"button\"]):not([class*=\"btn\"]):not([role=\"button\"]){color:#8ab4f8!important;}img,video,canvas,svg,iframe,embed,object{background-color:transparent!important;}';" +
+            "(document.head||docEl).appendChild(style);" +
+            "}" +
+            "}catch(e){}})();"
+        try {
+            tab.session.loadUri("javascript:$script")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in injectForceDarkCssIfNeeded", e)
+        }
+    }
+
     fun saveForceDarkWebsites(context: Context, forceDark: Boolean) {
         viewModelScope.launch {
             context.dataStore.edit { it[FORCE_DARK_WEBSITES_KEY] = forceDark }
             forceDarkWebsites = forceDark
+            updateGeckoColorScheme()
+            if (forceDark) {
+                injectForceDarkCssIfNeeded()
+            } else if (!isDarkThemeEnabled) {
+                activeTab?.session?.reload()
+            }
         }
     }
 
@@ -3551,6 +3685,16 @@ class BrowserViewModel : ViewModel() {
                 preferences[MEDIA_GRABBER_ENABLED_KEY] = newState
             }
             syncMediaGrabberState(shouldReload = true)
+        }
+    }
+
+    fun toggleExternalDownloadManager(context: Context) {
+        viewModelScope.launch {
+            val newState = !isExternalDownloadManagerEnabled
+            isExternalDownloadManagerEnabled = newState
+            context.dataStore.edit { preferences ->
+                preferences[EXTERNAL_DOWNLOAD_MANAGER_KEY] = newState
+            }
         }
     }
 
@@ -5620,7 +5764,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     /** Extract a clean domain from the source URL attribute or fall back to a lookup table. */
-    private fun extractDomain(sourceUrl: String?, sourceName: String): String {
+    fun extractDomain(sourceUrl: String?, sourceName: String): String {
         if (!sourceUrl.isNullOrEmpty()) {
             try {
                 val host = Uri.parse(sourceUrl).host ?: ""
@@ -5630,94 +5774,19 @@ class BrowserViewModel : ViewModel() {
         return getDomainForSource(sourceName)
     }
 
-    private val topicHeadlinePhotos = mapOf(
-        "Technology" to listOf(
-            "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800",
-            "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=800",
-            "https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=800",
-            "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800",
-            "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800",
-            "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=800"
-        ),
-        "Sports" to listOf(
-            "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800",
-            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=800",
-            "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800",
-            "https://images.unsplash.com/photo-1530549387789-4c1017266635?q=80&w=800",
-            "https://images.unsplash.com/photo-1517649763962-0c623266010b?q=80&w=800"
-        ),
-        "Business" to listOf(
-            "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=800",
-            "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800",
-            "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=800",
-            "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=800",
-            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800"
-        ),
-        "World" to listOf(
-            "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=800",
-            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800",
-            "https://images.unsplash.com/photo-1508873696983-2df515122519?q=80&w=800",
-            "https://images.unsplash.com/photo-1477959858617-67f30ac4ce78?q=80&w=800"
-        ),
-        "Science" to listOf(
-            "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?q=80&w=800",
-            "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=800",
-            "https://images.unsplash.com/photo-1507668077129-56e32842fceb?q=80&w=800",
-            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800"
-        ),
-        "Entertainment" to listOf(
-            "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800",
-            "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=800",
-            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800",
-            "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800"
-        ),
-        "Health" to listOf(
-            "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=800",
-            "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800",
-            "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?q=80&w=800",
-            "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800"
-        ),
-        "Astrology" to listOf(
-            "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
-            "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
-            "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800"
-        ),
-        "Recipes" to listOf(
-            "https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=800",
-            "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800",
-            "https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?q=80&w=800"
-        )
-    )
-
     private fun resolveHeadlineImageUrl(
         xmlImage: String,
-        title: String,
+        cleanTitle: String,
         category: String
     ): String {
         if (xmlImage.isNotBlank() && !xmlImage.contains("favicons") && !xmlImage.contains("favicon.ico")) {
             return xmlImage
         }
-
-        val pool = topicHeadlinePhotos[category] ?: topicHeadlinePhotos["World"]!!
-        val index = Math.abs(title.hashCode()) % pool.size
-        return pool[index]
+        return ""
     }
 
     fun getFallbackCategoryPhoto(title: String, category: String): String {
-        val lowerTitle = title.lowercase()
-        val detectedCategory = when {
-            category.isNotBlank() && topicHeadlinePhotos.containsKey(category) -> category
-            lowerTitle.contains("ai") || lowerTitle.contains("tech") || lowerTitle.contains("phone") || lowerTitle.contains("app") || lowerTitle.contains("chip") || lowerTitle.contains("google") || lowerTitle.contains("apple") || lowerTitle.contains("nvidia") -> "Technology"
-            lowerTitle.contains("crypto") || lowerTitle.contains("bitcoin") || lowerTitle.contains("stock") || lowerTitle.contains("market") || lowerTitle.contains("bank") || lowerTitle.contains("economy") || lowerTitle.contains("trade") -> "Business"
-            lowerTitle.contains("match") || lowerTitle.contains("score") || lowerTitle.contains("football") || lowerTitle.contains("soccer") || lowerTitle.contains("cricket") || lowerTitle.contains("nba") || lowerTitle.contains("league") -> "Sports"
-            lowerTitle.contains("movie") || lowerTitle.contains("film") || lowerTitle.contains("actor") || lowerTitle.contains("music") || lowerTitle.contains("star") || lowerTitle.contains("show") || lowerTitle.contains("series") -> "Entertainment"
-            lowerTitle.contains("doctor") || lowerTitle.contains("hospital") || lowerTitle.contains("health") || lowerTitle.contains("virus") || lowerTitle.contains("medicine") || lowerTitle.contains("diet") -> "Health"
-            lowerTitle.contains("space") || lowerTitle.contains("nasa") || lowerTitle.contains("science") || lowerTitle.contains("planet") || lowerTitle.contains("astronomy") -> "Science"
-            else -> "World"
-        }
-        val pool = topicHeadlinePhotos[detectedCategory] ?: topicHeadlinePhotos["World"]!!
-        val index = Math.abs(title.hashCode()) % pool.size
-        return pool[index]
+        return ""
     }
 
     private fun enrichArticlesWithOriginalOgImages(articles: List<NewsArticle>, category: String) {
@@ -6135,32 +6204,72 @@ class BrowserViewModel : ViewModel() {
 
     fun checkAppUpdates(context: Context, onResult: (UpdateCheckResult) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
+            val pInfo = try { context.packageManager.getPackageInfo(context.packageName, 0) } catch (e: Exception) { null }
+            val currentVersionCode = if (pInfo != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                pInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo?.versionCode?.toLong() ?: 0L
+            }
+            val currentVersionName = pInfo?.versionName ?: "1.0.0"
+
+            // 1. Try checking raw GitHub version.json first
             try {
                 val url = java.net.URL("https://raw.githubusercontent.com/REBEL-ROOT/omni-browser/main/version.json")
                 val connection = url.openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "GET"
-                connection.connectTimeout = 8000
-                connection.readTimeout = 8000
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
                 connection.connect()
 
                 if (connection.responseCode == 200) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
                     val json = org.json.JSONObject(response)
                     val serverVersionName = json.getString("versionName")
-                    val serverVersionCode = json.optInt("versionCode", 0)
-                    val updateUrl = json.optString("updateUrl", "market://details?id=com.rebelroot.omni")
-
-                    val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                    val currentVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        pInfo.longVersionCode
-                    } else {
-                        @Suppress("DEPRECATION")
-                        pInfo.versionCode.toLong()
-                    }
+                    val serverVersionCode = json.optLong("versionCode", 0L)
+                    val updateUrl = json.optString("updateUrl", "https://github.com/REBEL-ROOT/omni-browser/releases/latest")
 
                     if (serverVersionCode > currentVersionCode) {
                         withContext(Dispatchers.Main) {
                             onResult(UpdateCheckResult.NewUpdateAvailable(serverVersionName, updateUrl))
+                        }
+                        return@launch
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            onResult(UpdateCheckResult.NoUpdateAvailable)
+                        }
+                        return@launch
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "version.json fetch failed, falling back directly to GitHub Releases API", e)
+            }
+
+            // 2. Direct GitHub Releases API Fallback
+            try {
+                val apiUrl = java.net.URL("https://api.github.com/repos/REBEL-ROOT/omni-browser/releases/latest")
+                val apiConn = apiUrl.openConnection() as java.net.HttpURLConnection
+                apiConn.requestMethod = "GET"
+                apiConn.setRequestProperty("Accept", "application/vnd.github+json")
+                apiConn.setRequestProperty("User-Agent", "OmniBrowser-OTA-Checker")
+                apiConn.connectTimeout = 8000
+                apiConn.readTimeout = 8000
+                apiConn.connect()
+
+                if (apiConn.responseCode == 200) {
+                    val apiResponse = apiConn.inputStream.bufferedReader().use { it.readText() }
+                    val json = org.json.JSONObject(apiResponse)
+                    val tagName = json.optString("tag_name", "").removePrefix("v").trim()
+                    val htmlUrl = json.optString("html_url", "https://github.com/REBEL-ROOT/omni-browser/releases/latest")
+
+                    var hasNewerVersion = false
+                    if (tagName.isNotEmpty() && tagName != currentVersionName) {
+                        hasNewerVersion = compareVersionNames(tagName, currentVersionName) > 0
+                    }
+
+                    if (hasNewerVersion) {
+                        withContext(Dispatchers.Main) {
+                            onResult(UpdateCheckResult.NewUpdateAvailable(tagName, htmlUrl))
                         }
                     } else {
                         withContext(Dispatchers.Main) {
@@ -6169,16 +6278,28 @@ class BrowserViewModel : ViewModel() {
                     }
                 } else {
                     withContext(Dispatchers.Main) {
-                        onResult(UpdateCheckResult.Error("Server returned HTTP ${connection.responseCode}"))
+                        onResult(UpdateCheckResult.Error("GitHub API returned HTTP ${apiConn.responseCode}"))
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to check for updates", e)
+                Log.e(TAG, "Failed to check GitHub releases for updates", e)
                 withContext(Dispatchers.Main) {
                     onResult(UpdateCheckResult.Error(e.localizedMessage ?: "Connection error"))
                 }
             }
         }
+    }
+
+    private fun compareVersionNames(v1: String, v2: String): Int {
+        val parts1 = v1.split('.').mapNotNull { it.toIntOrNull() }
+        val parts2 = v2.split('.').mapNotNull { it.toIntOrNull() }
+        val maxLength = maxOf(parts1.size, parts2.size)
+        for (i in 0 until maxLength) {
+            val p1 = parts1.getOrElse(i) { 0 }
+            val p2 = parts2.getOrElse(i) { 0 }
+            if (p1 != p2) return p1.compareTo(p2)
+        }
+        return 0
     }
 
     var isDownloadingUpdate by mutableStateOf(false)
@@ -6199,7 +6320,7 @@ class BrowserViewModel : ViewModel() {
                         val apiConnection = java.net.URL("https://api.github.com/repos/REBEL-ROOT/omni-browser/releases/latest").openConnection() as java.net.HttpURLConnection
                         apiConnection.requestMethod = "GET"
                         apiConnection.setRequestProperty("Accept", "application/vnd.github+json")
-                        apiConnection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                        apiConnection.setRequestProperty("User-Agent", "OmniBrowser-OTA-Installer")
                         apiConnection.connectTimeout = 8000
                         apiConnection.connect()
                         if (apiConnection.responseCode == 200) {
@@ -6207,13 +6328,20 @@ class BrowserViewModel : ViewModel() {
                             val apiJson = org.json.JSONObject(apiResponse)
                             val assets = apiJson.optJSONArray("assets")
                             if (assets != null) {
+                                var bestAssetUrl: String? = null
+                                val deviceAbi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: ""
                                 for (i in 0 until assets.length()) {
                                     val asset = assets.getJSONObject(i)
-                                    val name = asset.getString("name")
+                                    val name = asset.getString("name").lowercase()
                                     if (name.endsWith(".apk")) {
-                                        targetUrl = asset.getString("browser_download_url")
-                                        break
+                                        val assetDownloadUrl = asset.getString("browser_download_url")
+                                        if (bestAssetUrl == null || name.contains("universal") || (deviceAbi.isNotEmpty() && name.contains(deviceAbi.lowercase()))) {
+                                            bestAssetUrl = assetDownloadUrl
+                                        }
                                     }
+                                }
+                                if (bestAssetUrl != null) {
+                                    targetUrl = bestAssetUrl
                                 }
                             }
                         }

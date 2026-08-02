@@ -59,11 +59,32 @@
         <package android:name="in.amazon.mShop.android.shopping" />      <!-- Amazon Pay -->
         <package android:name="com.whatsapp" />                          <!-- WhatsApp -->
 
+        <!-- External download managers (ADM / 1DM) — for chooser visibility on Android 11+ -->
+        <package android:name="com.dv.adm" />                              <!-- ADM (legacy) -->
+        <package android:name="com.dv.get" />                              <!-- ADM (current) -->
+        <package android:name="idm.internet.download.manager" />           <!-- 1DM -->
+        <package android:name="idm.internet.download.manager.plus" />      <!-- 1DM+ -->
+        <package android:name="idm.internet.download.manager.adm.thirdparty" /> <!-- 1DM third-party -->
+        <package android:name="com.idm.internet.download.manager" />       <!-- 1DM (alt) -->
+
         <!-- For intent:// scheme links (payment gateways like Razorpay, PayU) -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="intent" />
+        </intent>
+
+        <!-- For opening any downloaded file (PDF, APK, Video, Audio, Image, Zip, Text) on Android 11+ -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.INSTALL_PACKAGE" />
         </intent>
 
         <!-- For market:// links (Play Store) -->

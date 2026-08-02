@@ -3503,17 +3503,13 @@ fun ThemeSheet(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Theme Mode", color = textColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         val themeMode = when {
-                            viewModel.isAmoledMode -> 2
-                            viewModel.isDarkThemeEnabled -> 1
+                            viewModel.isAmoledMode -> 3
+                            viewModel.isDarkThemeEnabled -> 2
+                            viewModel.isCreamyMode -> 1
                             else -> 0
                         }
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            val options = listOf("Light", "Dark", "AMOLED")
-                            val icons = listOf(
-                                Icons.Rounded.LightMode,
-                                Icons.Rounded.DarkMode,
-                                Icons.Rounded.Brightness1
-                            )
+                            val options = listOf("Light", "Creamy", "Dark", "AMOLED")
                             options.forEachIndexed { index, label ->
                                 SegmentedButton(
                                     shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
@@ -3522,25 +3518,36 @@ fun ThemeSheet(
                                             0 -> {
                                                 viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, false)
                                             }
                                             1 -> {
-                                                viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, true)
                                             }
                                             2 -> {
                                                 viewModel.saveDarkTheme(context, true)
+                                                viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, false)
+                                            }
+                                            3 -> {
+                                                viewModel.saveDarkTheme(context, true)
                                                 viewModel.saveAmoledMode(context, true)
+                                                viewModel.saveCreamyMode(context, false)
                                             }
                                         }
                                     },
                                     selected = themeMode == index,
-                                    icon = {
-                                        SegmentedButtonDefaults.Icon(active = themeMode == index) {
-                                            Icon(imageVector = icons[index], contentDescription = null, modifier = Modifier.size(SegmentedButtonDefaults.IconSize))
-                                        }
-                                    }
+                                    icon = {}
                                 ) {
-                                    Text(label, fontSize = 13.sp)
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (themeMode == index) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }

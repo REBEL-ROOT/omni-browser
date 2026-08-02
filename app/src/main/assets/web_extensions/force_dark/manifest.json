@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2,
+    "name": "Omni Force Dark Theme",
+    "version": "2.0.0",
+    "description": "Premium, intelligent dark theme engine with dynamic contrast inversion, OLED black tuning, and media protection.",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "omni-force-dark@omnibrowser.app"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "css": ["override.css"],
+            "js": ["override.js"],
+            "run_at": "document_start",
+            "all_frames": true,
+            "match_about_blank": true
+        }
+    ]
+}

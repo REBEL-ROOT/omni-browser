@@ -164,10 +164,45 @@ fun PhoneAddressBar(
 
     var showAddressBarContextMenu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
+    var dragAmountAccumulated by remember { mutableFloatStateOf(0f) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (!isInputFocused) {
+                    Modifier.pointerInput(viewModel.activeTabId, viewModel.isIncognitoMode) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                val threshold = 100f
+                                if (dragAmountAccumulated > threshold) {
+                                    val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                                    val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                    if (currentIndex > 0) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        viewModel.selectTab(currentModeTabs[currentIndex - 1].id)
+                                    }
+                                } else if (dragAmountAccumulated < -threshold) {
+                                    val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+                                    val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
+                                    if (currentIndex != -1 && currentIndex < currentModeTabs.size - 1) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        viewModel.selectTab(currentModeTabs[currentIndex + 1].id)
+                                    }
+                                }
+                                dragAmountAccumulated = 0f
+                            },
+                            onDragCancel = {
+                                dragAmountAccumulated = 0f
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                dragAmountAccumulated += dragAmount
+                            }
+                        )
+                    }
+                } else Modifier
+            )
             .padding(horizontal = config.paddingHorizontal, vertical = config.paddingVertical),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -388,7 +423,7 @@ fun PhoneAddressBar(
                         onValueChange = onInputUrlChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(scrollState)
+                            .horizontalScroll(scrollState, enabled = isInputFocused)
                             .focusRequester(focusRequester)
                             .onFocusChanged { onInputFocusedChange(it.isFocused) },
                         onTextLayout = { textLayoutResult = it },

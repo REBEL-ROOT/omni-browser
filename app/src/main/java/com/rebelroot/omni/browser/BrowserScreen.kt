@@ -35,6 +35,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
@@ -120,6 +121,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.Channel
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import kotlin.math.abs
  import androidx.compose.foundation.gestures.rememberTransformableState
  import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -199,6 +201,7 @@ fun BrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     val config = getUiSizeConfig(viewModel.uiScale, configuration.screenWidthDp)
     var dragAmountAccumulated by remember { mutableStateOf(0f) }
+    val haptic = LocalHapticFeedback.current
 
     val showHomeScreen = viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
@@ -1469,19 +1472,21 @@ fun BrowserScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height((52 * viewModel.bottomNavScale).dp)
-                                .pointerInput(Unit) {
+                                .pointerInput(viewModel.activeTabId, viewModel.isIncognitoMode) {
                                     detectHorizontalDragGestures(
                                         onDragEnd = {
                                             if (dragAmountAccumulated > 100f) {
                                                 val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
                                                 val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
                                                 if (currentIndex > 0) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                     viewModel.selectTab(currentModeTabs[currentIndex - 1].id)
                                                 }
                                             } else if (dragAmountAccumulated < -100f) {
                                                 val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
                                                 val currentIndex = currentModeTabs.indexOfFirst { it.id == viewModel.activeTabId }
                                                 if (currentIndex != -1 && currentIndex < currentModeTabs.size - 1) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                     viewModel.selectTab(currentModeTabs[currentIndex + 1].id)
                                                 }
                                             }
@@ -3224,16 +3229,34 @@ fun BrowserScreen(
                                                         } else "Video"
                                                         val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
 
-                                                        viewModel.streamDownloadEngine.startDownload(
-                                                            url = item.url,
-                                                            suggestedName = suggestedName,
-                                                            type = item.type,
-                                                            saveToLocker = false,
-                                                            referrerUrl = viewModel.currentUrl,
-                                                            cookies = viewModel.activeVideoCookies,
-                                                            audioUrl = audioUrl
-                                                        )
-                                                        Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
+                                                        if (viewModel.isExternalDownloadManagerEnabled && viewModel.canHandOffMedia(item.type, audioUrl)) {
+                                                            viewModel.handOffToExternalDownloadManager(
+                                                                context = context,
+                                                                url = item.url,
+                                                                filename = suggestedName,
+                                                                contentType = when (item.type) {
+                                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO -> "audio/*"
+                                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> "video/webm"
+                                                                    else -> "video/mp4"
+                                                                }
+                                                            )
+                                                            Toast.makeText(context, "Opening external download manager…", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            if (viewModel.isExternalDownloadManagerEnabled) {
+                                                                Toast.makeText(context, "This media needs Omni's built-in downloader — handing off isn't supported", Toast.LENGTH_LONG).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                            viewModel.streamDownloadEngine.startDownload(
+                                                                url = item.url,
+                                                                suggestedName = suggestedName,
+                                                                type = item.type,
+                                                                saveToLocker = false,
+                                                                referrerUrl = viewModel.currentUrl,
+                                                                cookies = viewModel.activeVideoCookies,
+                                                                audioUrl = audioUrl
+                                                            )
+                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f),
@@ -3303,15 +3326,29 @@ fun BrowserScreen(
                                                         } else "Audio"
                                                         val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
 
-                                                        viewModel.streamDownloadEngine.startDownload(
-                                                            url = mp3Url,
-                                                            suggestedName = suggestedName,
-                                                            type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
-                                                            saveToLocker = false,
-                                                            referrerUrl = viewModel.currentUrl,
-                                                            cookies = viewModel.activeVideoCookies
-                                                        )
-                                                        Toast.makeText(context, "Downloading as MP3...", Toast.LENGTH_SHORT).show()
+                                                        if (viewModel.isExternalDownloadManagerEnabled && !isYouTubeUrl) {
+                                                            viewModel.handOffToExternalDownloadManager(
+                                                                context = context,
+                                                                url = mp3Url,
+                                                                filename = suggestedName,
+                                                                contentType = "audio/mpeg"
+                                                            )
+                                                            Toast.makeText(context, "Opening external download manager…", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            if (viewModel.isExternalDownloadManagerEnabled) {
+                                                                Toast.makeText(context, "MP3 extraction needs Omni's built-in downloader — handing off isn't supported", Toast.LENGTH_LONG).show()
+                                                            } else {
+                                                                Toast.makeText(context, "Downloading as MP3...", Toast.LENGTH_SHORT).show()
+                                                            }
+                                                            viewModel.streamDownloadEngine.startDownload(
+                                                                url = mp3Url,
+                                                                suggestedName = suggestedName,
+                                                                type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
+                                                                saveToLocker = false,
+                                                                referrerUrl = viewModel.currentUrl,
+                                                                cookies = viewModel.activeVideoCookies
+                                                            )
+                                                        }
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f),
@@ -6909,36 +6946,89 @@ fun BrowserScreen(
                     label = "capsuleWidth"
                 )
 
-                // Touch target is always present on right edge
+                // Touch strip width: thin (14.dp) when idle so it hugs the screen edge
+                // and does NOT overlap right-edge buttons (download FAB at end=20.dp,
+                // search, reader card, etc.). Expands to 44.dp while actively dragging
+                // to give a comfortable grab area — "extend" behavior on grab only.
+                val touchStripWidth by animateDpAsState(
+                    targetValue = if (isDragging) 44.dp else 14.dp,
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
+                    label = "touchStripWidth"
+                )
+
+                // Touch target is present on the right edge ONLY as a thin strip.
+                // The outer fillMaxSize Box is NOT a pointer target — it only positions
+                // the strip — so taps on right-edge buttons are never stolen.
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
-                            .width(44.dp)
+                            .width(touchStripWidth)
                             .align(Alignment.CenterEnd)
                             .pointerInput(Unit) {
-                                detectVerticalDragGestures(
-                                    onDragStart = {
-                                        isDragging = true
-                                        haptic.performHapticFeedback(
-                                            androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
-                                        )
-                                        activeTab.session.loadUri(
-                                            "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
-                                        )
-                                    },
-                                    onDragEnd = { isDragging = false },
-                                    onDragCancel = { isDragging = false },
-                                    onVerticalDrag = { change, _ ->
-                                        val h = size.height.toFloat()
-                                        if (h > 0f) {
-                                            val frac = (change.position.y / h).coerceIn(0f, 1f)
-                                            activeTab.session.loadUri(
-                                                "javascript:void(window.scrollTo(0,$frac*(document.documentElement.scrollHeight-window.innerHeight)))"
-                                            )
+                                // Custom gesture handling so the strip intercepts ONLY
+                                // deliberate vertical drags, never taps. This lets taps
+                                // fall through to underlying right-edge buttons (search,
+                                // media fetcher download FAB, reader card, etc.).
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        // Wait for the first finger down on the strip.
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val downPos = down.position
+                                        var dragStarted = false
+                                        var pointerReleased = false
+
+                                        while (!pointerReleased) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull() { it.id == down.id }
+                                                ?: break
+                                            if (!change.pressed) {
+                                                // Finger lifted — if we never started a drag,
+                                                // this was a tap: do nothing so underlying
+                                                // buttons (if any under the thin idle strip)
+                                                // are unaffected. We never consumed the event.
+                                                pointerReleased = true
+                                                if (dragStarted) isDragging = false
+                                                continue
+                                            }
+
+                                            val dy = change.position.y - downPos.y
+                                            val dx = change.position.x - downPos.x
+
+                                            // Begin scrolling only after deliberate vertical
+                                            // movement clearly exceeding slop, and only when
+                                            // the motion is more vertical than horizontal
+                                            // (so horizontal swipes on the edge stay page swipes).
+                                            if (!dragStarted &&
+                                                abs(dy) > viewConfiguration.touchSlop &&
+                                                abs(dy) > abs(dx) * 1.5f
+                                            ) {
+                                                dragStarted = true
+                                                isDragging = true
+                                                haptic.performHapticFeedback(
+                                                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                                )
+                                                activeTab.session.loadUri(
+                                                    "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
+                                                )
+                                            }
+
+                                            if (dragStarted) {
+                                                val h = size.height.toFloat()
+                                                if (h > 0f) {
+                                                    val frac = (change.position.y / h).coerceIn(0f, 1f)
+                                                    activeTab.session.loadUri(
+                                                        "javascript:void(window.scrollTo(0,$frac*(document.documentElement.scrollHeight-window.innerHeight)))"
+                                                    )
+                                                }
+                                                change.consume()
+                                            }
+                                            // While not yet dragging, we intentionally do NOT
+                                            // consume — so a plain tap (no movement) reaches
+                                            // anything underneath and registers as a click.
                                         }
                                     }
-                                )
+                                }
                             }
                     ) {
                         // iOS capsule thumb — no track, just the pill
@@ -7266,7 +7356,7 @@ fun BrowserScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                         Button(
-                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = false) },
+                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = false, context) },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(32.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -7277,7 +7367,7 @@ fun BrowserScreen(
                         }
 
                         OutlinedButton(
-                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = true) },
+                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = true, context) },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(32.dp),
                             border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))

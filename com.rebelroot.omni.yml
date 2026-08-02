@@ -1,30 +1,31 @@
 Categories:
   - Internet
 License: GPL-3.0-or-later
-SourceCode: https://github.com/rebelroot/omni-browser
-IssueTracker: https://github.com/rebelroot/omni-browser/issues
+SourceCode: https://github.com/RebelRoot/omni-browser
+IssueTracker: https://github.com/RebelRoot/omni-browser/issues
+Changelog: https://github.com/RebelRoot/omni-browser/releases
 
 Name: Omni Browser
-Summary: Premium, private-first mobile web browser powered by GeckoView
+Summary: Omni Browser — Private, Fast & Powerful
 Description: |-
-  Omni Browser is a premium, privacy-first mobile web browser for Android built
-  with Jetpack Compose and the Mozilla GeckoView engine.
+  Omni Browser is a privacy-first, feature-rich Android web browser built on Mozilla's GeckoView engine.
 
-  Features:
-  * Built-in uBlock Origin content blocker for rapid and ad-free loading
-  * Universal Text Copy to force-enable text selection on restricted pages
-  * QR Code decoder and generator using 100% open-source ZXing libraries
-  * Highly customizable settings: toggle bottom navigation bar, reader mode,
-    preset Unsplash wallpapers, accent themes, and news feed
-  * Secure and sandboxed storage with encrypted SQLCipher database
+  Privacy & Security:
+  * Built-in uBlock-style content blocker
+  * Popup & ad-tab blocker
+  * Smart Force Dark Theme built-in WebExtension engine
+  * Built-in WebExtensions (Universal Copy, AI Blocker, Force Dark)
+  * Chrome/Brave-style Downloads section with storage metrics and file management
+  * Vault — encrypted SQLCipher local storage for private downloads
+  * 100% Free and Open Source (No tracking, no telemetry, no Google Play Services)
 
 RepoType: git
-Repo: https://github.com/rebelroot/omni-browser
+Repo: https://github.com/RebelRoot/omni-browser
 
 Builds:
-  - versionName: 1.2.4
-    versionCode: 23
-    commit: v1.2.4-stable
+  - versionName: 1.2.6.7
+    versionCode: 2033
+    commit: v1.2.6.7
     subdir: app
     gradle:
       - yes
@@ -32,5 +33,5 @@ Builds:
 AutoName: Omni Browser
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags
-CurrentVersion: 1.2.4
-CurrentVersionCode: 23
+CurrentVersion: 1.2.6.7
+CurrentVersionCode: 2033

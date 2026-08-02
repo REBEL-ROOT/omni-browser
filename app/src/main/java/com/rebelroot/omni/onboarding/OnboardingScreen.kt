@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.R
@@ -395,7 +396,10 @@ fun OnboardingScreen(
                                                         text = label,
                                                         fontSize = 11.sp,
                                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                                        color = if (isSelected) Color.White else (if (isDarkTheme) Color.White else TitleTextColor)
+                                                        color = if (isSelected) Color.White else (if (isDarkTheme) Color.White else TitleTextColor),
+                                                        maxLines = 1,
+                                                        softWrap = false,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                             }
