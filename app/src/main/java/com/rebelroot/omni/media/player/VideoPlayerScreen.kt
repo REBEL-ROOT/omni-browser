@@ -79,6 +79,14 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
 
+private enum class AspectMode { FIT, FILL, STRETCH }
+
+private fun AspectMode.toResizeMode(): Int = when (this) {
+    AspectMode.FIT     -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+    AspectMode.FILL    -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    AspectMode.STRETCH -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+}
+
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
@@ -168,8 +176,18 @@ fun VideoPlayerScreen(
     var isSeeking by remember { mutableStateOf(false) }
     var seekTargetPosition by remember { mutableLongStateOf(0L) }
 
-    // Aspect ratio mode: fit (letterbox) vs fill (crop to screen)
-    var isFillMode by remember { mutableStateOf(false) }
+    // Aspect ratio mode: FIT (letterbox), FILL (crop), STRETCH (distort to fill)
+    var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
+
+    val aspectFitText = stringResource(R.string.video_player_aspect_fit)
+    val aspectFillText = stringResource(R.string.video_player_aspect_fill)
+    val aspectStretchText = stringResource(R.string.video_player_aspect_stretch)
+
+    val aspectLabel = when (aspectMode) {
+        AspectMode.FIT -> aspectFitText
+        AspectMode.FILL -> aspectFillText
+        AspectMode.STRETCH -> aspectStretchText
+    }
 
     // Downloader Quality Selector States
     var isFetchingQualities by remember { mutableStateOf(false) }
@@ -666,7 +684,7 @@ fun VideoPlayerScreen(
                         // all touch handling is done by the Compose overlay layer.
                         isClickable = false
                         isFocusable = false
-                        resizeMode = if (isFillMode) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        resizeMode = aspectMode.toResizeMode()
                         layoutParams = FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -675,7 +693,7 @@ fun VideoPlayerScreen(
                 },
                 update = { playerView ->
                     playerView.player = exoPlayerInstance
-                    playerView.resizeMode = if (isFillMode) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    playerView.resizeMode = aspectMode.toResizeMode()
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -1026,11 +1044,21 @@ fun VideoPlayerScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // Aspect Ratio (Fit / Fill) Button
+                        // Aspect Ratio (Fit / Fill / Stretch) Button
                         IconButton(
                             onClick = {
-                                isFillMode = !isFillMode
-                                gestureIndicatorText = if (isFillMode) "Aspect Ratio: Fill Screen" else "Aspect Ratio: Fit to Screen"
+                                val nextMode = when (aspectMode) {
+                                    AspectMode.FIT -> AspectMode.FILL
+                                    AspectMode.FILL -> AspectMode.STRETCH
+                                    AspectMode.STRETCH -> AspectMode.FIT
+                                }
+                                aspectMode = nextMode
+                                val newLabel = when (nextMode) {
+                                    AspectMode.FIT -> aspectFitText
+                                    AspectMode.FILL -> aspectFillText
+                                    AspectMode.STRETCH -> aspectStretchText
+                                }
+                                gestureIndicatorText = newLabel
                                 showGestureIndicator = true
                                 coroutineScope.launch {
                                     delay(1500)
@@ -1038,13 +1066,13 @@ fun VideoPlayerScreen(
                                 }
                             },
                             colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = if (isFillMode) accentColor.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f)
+                                containerColor = if (aspectMode != AspectMode.FIT) accentColor.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f)
                             ),
                             modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.AspectRatio,
-                                contentDescription = "Aspect Ratio",
+                                contentDescription = aspectLabel,
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
                             )

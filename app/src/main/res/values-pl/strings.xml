@@ -596,4 +596,7 @@ Domyślną przeglądarkę</string>
     <string name="exit_quit_burn_all">Wyjść i usuń wszystko</string>
     <string name="exit_quit_burn_all_desc">Zamknij i usuń karty, historię i pamięć podręczną</string>
     <string name="exit_cancel">Anuluj</string>
+    <string name="video_player_aspect_fit">Proporcje ekranu: Dopasuj do ekranu</string>
+    <string name="video_player_aspect_fill">Proporcje ekranu: Wypełnij ekran</string>
+    <string name="video_player_aspect_stretch">Proporcje ekranu: Rozciągnij</string>
 </resources>

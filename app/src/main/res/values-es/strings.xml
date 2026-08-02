@@ -596,4 +596,7 @@ Navegador predeterminado</string>
     <string name="exit_quit_burn_all">Salir y quemar todo</string>
     <string name="exit_quit_burn_all_desc">Cerrar y eliminar pestañas, historial y caché</string>
     <string name="exit_cancel">Cancelar</string>
+    <string name="video_player_aspect_fit">Relación de aspecto: Ajustar a la pantalla</string>
+    <string name="video_player_aspect_fill">Relación de aspecto: Llenar pantalla</string>
+    <string name="video_player_aspect_stretch">Relación de aspecto: Estirar</string>
 </resources>

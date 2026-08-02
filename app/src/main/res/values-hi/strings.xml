@@ -596,4 +596,7 @@
     <string name="exit_quit_burn_all">बंद करें और सब इतिहास आदि साफ करें</string>
     <string name="exit_quit_burn_all_desc">सभी टैब, इतिहास और कैश मिटाएं</string>
     <string name="exit_cancel">रद्द करें</string>
+    <string name="video_player_aspect_fit">पहलू अनुपात: स्क्रीन में फ़िट करें</string>
+    <string name="video_player_aspect_fill">पहलू अनुपात: स्क्रीन भरें</string>
+    <string name="video_player_aspect_stretch">पहलू अनुपात: खिंचाव</string>
 </resources>

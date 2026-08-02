@@ -596,4 +596,7 @@ Navigateur par défaut</string>
     <string name="exit_quit_burn_all">Quitter et tout brûler</string>
     <string name="exit_quit_burn_all_desc">Fermer et supprimer tous les onglets, l\'historique et le cache</string>
     <string name="exit_cancel">Annuler</string>
+    <string name="video_player_aspect_fit">Rapport d\'aspect : Ajuster à l\'écran</string>
+    <string name="video_player_aspect_fill">Rapport d\'aspect : Remplir l\'écran</string>
+    <string name="video_player_aspect_stretch">Rapport d\'aspect : Étirer</string>
 </resources>

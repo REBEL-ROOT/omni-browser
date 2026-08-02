@@ -596,4 +596,7 @@
     <string name="exit_quit_burn_all">終了して全て削除</string>
     <string name="exit_quit_burn_all_desc">全タブ、履歴、キャッシュを削除する</string>
     <string name="exit_cancel">キャンセル</string>
+    <string name="video_player_aspect_fit">アスペクト比: 画面に合わせる</string>
+    <string name="video_player_aspect_fill">アスペクト比: 画面いっぱいに表示</string>
+    <string name="video_player_aspect_stretch">アスペクト比: 引き伸ばし</string>
 </resources>
