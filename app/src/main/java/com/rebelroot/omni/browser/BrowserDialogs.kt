@@ -865,14 +865,14 @@ fun QrScanResultComposer(
                         }
                         Column {
                             Text(
-                                text = "QR Code Detected",
+                                text = stringResource(R.string.qr_detected),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             if (results.size > 1) {
                                 Text(
-                                    text = "Found ${results.size} codes (${currentIndex + 1}/${results.size})",
+                                    text = stringResource(R.string.qr_found_codes, results.size, currentIndex + 1, results.size),
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -957,7 +957,7 @@ fun QrScanResultComposer(
                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText("Scanned Text", currentResult)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.qr_copied_clipboard), Toast.LENGTH_SHORT).show()
                         },
                         shape = RoundedCornerShape(24.dp),
                         modifier = Modifier.weight(1f),
@@ -969,7 +969,7 @@ fun QrScanResultComposer(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Copy", fontSize = 12.sp)
+                        Text(stringResource(R.string.qr_composer_copy), fontSize = 12.sp)
                     }
 
                     OutlinedButton(
@@ -993,7 +993,7 @@ fun QrScanResultComposer(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Share", fontSize = 12.sp)
+                        Text(stringResource(R.string.qr_composer_share), fontSize = 12.sp)
                     }
 
                     val isUrl = currentResult.startsWith("http://") || currentResult.startsWith("https://")
@@ -1020,7 +1020,7 @@ fun QrScanResultComposer(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isUrl) "Open Link" else "Search",
+                            text = if (isUrl) stringResource(R.string.qr_open_link) else stringResource(R.string.qr_search),
                             fontSize = 12.sp,
                             color = Color.White
                         )
@@ -1070,7 +1070,7 @@ fun QrGeneratorDialog(
         ) {
             // Title
             Text(
-                text = "Share via QR Code",
+                text = stringResource(R.string.qr_gen_title),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -1111,7 +1111,7 @@ fun QrGeneratorDialog(
                                 modifier = Modifier.size(48.dp)
                             )
                             Text(
-                                text = "Enter URL to generate",
+                                text = stringResource(R.string.qr_gen_enter_url),
                                 fontSize = 12.sp,
                                 color = Color.Gray
                             )
@@ -1124,7 +1124,7 @@ fun QrGeneratorDialog(
             OutlinedTextField(
                 value = urlText,
                 onValueChange = { urlText = it },
-                label = { Text("URL / Text") },
+                label = { Text(stringResource(R.string.qr_gen_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -1169,7 +1169,7 @@ fun QrGeneratorDialog(
                                 }
                                 context.startActivity(chooser)
                             } catch (e: java.lang.Exception) {
-                                Toast.makeText(context, "Share failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.qr_gen_share_failed, e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -1184,7 +1184,7 @@ fun QrGeneratorDialog(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Share")
+                    Text(stringResource(R.string.qr_gen_share))
                 }
 
                 // Save
@@ -1194,12 +1194,12 @@ fun QrGeneratorDialog(
                             try {
                                 val saved = saveBitmapToGallery(context, bitmap, "Omni_QR_${System.currentTimeMillis()}.png")
                                 if (saved) {
-                                    Toast.makeText(context, "QR saved to gallery", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.qr_gen_saved), Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "Failed to save QR", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.qr_gen_save_failed), Toast.LENGTH_SHORT).show()
                                 }
                             } catch (e: java.lang.Exception) {
-                                Toast.makeText(context, "Save failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.qr_gen_save_err, e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -1217,7 +1217,7 @@ fun QrGeneratorDialog(
                         tint = Color.White
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Save", color = Color.White)
+                    Text(stringResource(R.string.save_text), color = Color.White)
                 }
             }
 
@@ -1333,7 +1333,7 @@ fun FeatureOverviewDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Got it",
+                        text = stringResource(R.string.overview_got_it),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         modifier = Modifier.padding(vertical = 4.dp)

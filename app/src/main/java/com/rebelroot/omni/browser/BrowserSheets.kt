@@ -211,7 +211,7 @@ fun DevNotesSheetContent(
     val handleSave: () -> Unit = {
         if (noteTitle.isNotBlank() || noteContent.text.isNotBlank()) {
             val currentNote = selectedNoteForEdit
-            val finalTitle = if (noteTitle.isBlank()) "Untitled Note" else noteTitle
+            val finalTitle = if (noteTitle.isBlank()) context.getString(R.string.devnotes_untitled) else noteTitle
             if (currentNote == null) {
                 viewModel.addDevNote(finalTitle, noteContent.text, noteType)
             } else {
@@ -336,7 +336,7 @@ fun DevNotesSheetContent(
                                 handleSave()
                                 isEditorOpen = false
                             }) {
-                                Text("Done", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(stringResource(id = R.string.devnotes_done), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -361,7 +361,7 @@ fun DevNotesSheetContent(
                             decorationBox = { innerTextField ->
                                 if (noteTitle.isEmpty()) {
                                     Text(
-                                        text = "Title...",
+                                        text = stringResource(id = R.string.devnotes_title_placeholder),
                                         color = Color.Gray,
                                         fontSize = 24.sp,
                                         fontWeight = FontWeight.Bold
@@ -394,7 +394,7 @@ fun DevNotesSheetContent(
                                 decorationBox = { innerTextField ->
                                     if (noteContent.text.isEmpty()) {
                                         Text(
-                                            text = "Write your notes here...",
+                                            text = stringResource(id = R.string.devnotes_body_placeholder),
                                             color = Color.Gray,
                                             fontSize = 16.sp
                                         )
@@ -434,7 +434,7 @@ fun DevNotesSheetContent(
                                         )
                                     }
                                 },
-                                label = { Text("Paste") },
+                                label = { Text(stringResource(id = R.string.devnotes_paste)) },
                                 leadingIcon = { Icon(Icons.Rounded.ContentPaste, null, modifier = Modifier.size(14.dp)) }
                             )
                         }
@@ -452,7 +452,7 @@ fun DevNotesSheetContent(
                                             selection = androidx.compose.ui.text.TextRange(start + generatedPass.length)
                                         )
                                     },
-                                    label = { Text("Generate Password") },
+                                    label = { Text(stringResource(id = R.string.devnotes_gen_password)) },
                                     leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(14.dp)) }
                                 )
                             }
@@ -471,7 +471,7 @@ fun DevNotesSheetContent(
                                             selection = androidx.compose.ui.text.TextRange(start + generatedKey.length)
                                         )
                                     },
-                                    label = { Text("Gen UUID") },
+                                    label = { Text(stringResource(id = R.string.devnotes_gen_uuid)) },
                                     leadingIcon = { Icon(Icons.Rounded.VpnKey, null, modifier = Modifier.size(14.dp)) }
                                 )
                             }
@@ -518,7 +518,7 @@ fun DevNotesSheetContent(
                         }
 
                         Text(
-                            text = "Notepad & Vault",
+                            text = stringResource(id = R.string.devnotes_header),
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                             color = if (isDark) Color.White else Color.Black
@@ -554,7 +554,7 @@ fun DevNotesSheetContent(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search your notes & vault...", color = Color.Gray, fontSize = 14.sp) },
+                            placeholder = { Text(stringResource(id = R.string.devnotes_search_placeholder), color = Color.Gray, fontSize = 14.sp) },
                             leadingIcon = {
                                 Icon(Icons.Rounded.Search, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
                             },
@@ -597,12 +597,12 @@ fun DevNotesSheetContent(
                     )
 
                     val filterItems = listOf(
-                        "All" to "All (${counts["All"]})",
-                        "NOTE" to "Notes (${counts["NOTE"]})",
-                        "CODE" to "Codes (${counts["CODE"]})",
-                        "KEY" to "Keys (${counts["KEY"]})",
-                        "PASSWORD" to "Passwords (${counts["PASSWORD"]})",
-                        "URL" to "URLs (${counts["URL"]})"
+                        "All" to stringResource(id = R.string.devnotes_filter_all, counts["All"] ?: 0),
+                        "NOTE" to stringResource(id = R.string.devnotes_filter_notes, counts["NOTE"] ?: 0),
+                        "CODE" to stringResource(id = R.string.devnotes_filter_codes, counts["CODE"] ?: 0),
+                        "KEY" to stringResource(id = R.string.devnotes_filter_keys, counts["KEY"] ?: 0),
+                        "PASSWORD" to stringResource(id = R.string.devnotes_filter_passwords, counts["PASSWORD"] ?: 0),
+                        "URL" to stringResource(id = R.string.devnotes_filter_urls, counts["URL"] ?: 0)
                     )
 
                     androidx.compose.foundation.lazy.LazyRow(
@@ -658,7 +658,7 @@ fun DevNotesSheetContent(
                                 modifier = Modifier.size(56.dp)
                             )
                             Spacer(Modifier.height(8.dp))
-                            Text("No vault items found", color = Color.Gray, fontSize = 15.sp)
+                            Text(stringResource(id = R.string.devnotes_empty), color = Color.Gray, fontSize = 15.sp)
                         }
                     } else {
                         androidx.compose.foundation.lazy.LazyColumn(
@@ -796,7 +796,7 @@ fun DevNotesSheetContent(
                                                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                                             val clip = android.content.ClipData.newPlainText("Copied Note", note.content)
                                                             clipboard.setPrimaryClip(clip)
-                                                            Toast.makeText(context, "Copied content", Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, context.getString(R.string.devnotes_copied), Toast.LENGTH_SHORT).show()
                                                         },
                                                         modifier = Modifier.size(28.dp)
                                                     ) {
@@ -810,7 +810,7 @@ fun DevNotesSheetContent(
                                                     IconButton(
                                                         onClick = {
                                                             viewModel.deleteDevNote(note.id)
-                                                            Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, context.getString(R.string.devnotes_deleted), Toast.LENGTH_SHORT).show()
                                                         },
                                                         modifier = Modifier.size(28.dp)
                                                     ) {
@@ -858,9 +858,9 @@ fun DevNotesSheetContent(
                                     if (activeTab != null && activeTab.url != "about:blank") {
                                         val textToAppend = "${activeTab.title}: ${activeTab.url}"
                                         quickNoteText = if (quickNoteText.isEmpty()) textToAppend else "$quickNoteText $textToAppend"
-                                        Toast.makeText(context, "Attached URL from active tab", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.devnotes_url_attached), Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(context, "No active webpage tab to attach", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.devnotes_no_tab_attach), Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 modifier = Modifier.size(36.dp)
@@ -884,7 +884,7 @@ fun DevNotesSheetContent(
                                 cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
                                 decorationBox = { innerTextField ->
                                     if (quickNoteText.isEmpty()) {
-                                        Text("Create quick note...", color = Color.Gray, fontSize = 14.sp)
+                                        Text(stringResource(id = R.string.devnotes_quick_placeholder), color = Color.Gray, fontSize = 14.sp)
                                     }
                                     innerTextField()
                                 },
@@ -902,7 +902,7 @@ fun DevNotesSheetContent(
                                             }
                                             speechRecognizerLauncher.launch(intent)
                                         } catch (e: Exception) {
-                                            Toast.makeText(context, "Speech recognizer not available", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.devnotes_no_speech), Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     modifier = Modifier.size(36.dp)
@@ -924,7 +924,7 @@ fun DevNotesSheetContent(
                                     val parsed = parseQuickNote(quickNoteText)
                                     viewModel.addDevNote(parsed.title, parsed.content, parsed.type)
                                     quickNoteText = ""
-                                    Toast.makeText(context, "Added to vault", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.devnotes_added), Toast.LENGTH_SHORT).show()
                                 }
                             },
                             colors = IconButtonDefaults.iconButtonColors(
@@ -968,13 +968,14 @@ fun SiteStyleCustomizerSheetContent(
     var hideImages by remember { mutableStateOf(viewModel.siteStyleHideImages) }
     var grayscale by remember { mutableStateOf(viewModel.siteStyleGrayscale) }
     var warmFilter by remember { mutableStateOf(viewModel.siteStyleWarmFilter) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val presets = listOf(
-        "DEFAULT" to ("Original" to Color.Gray),
-        "DARK" to ("Dark Blue" to Color(0xFF0B131E)),
-        "SEPIA" to ("Sepia" to Color(0xFFF4ECD8)),
-        "OLED" to ("OLED Black" to Color(0xFF000000)),
-        "FOREST" to ("Forest" to Color(0xFFE6F0E6))
+        Triple("DEFAULT", R.string.site_style_preset_original, Color.Gray),
+        Triple("DARK", R.string.site_style_preset_dark, Color(0xFF0B131E)),
+        Triple("SEPIA", R.string.site_style_preset_sepia, Color(0xFFF4ECD8)),
+        Triple("OLED", R.string.site_style_preset_oled, Color(0xFF000000)),
+        Triple("FOREST", R.string.site_style_preset_forest, Color(0xFFE6F0E6))
     )
 
     val isDark = viewModel.isDarkThemeEnabled
@@ -1024,7 +1025,7 @@ fun SiteStyleCustomizerSheetContent(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "Customize Site Style",
+                        text = stringResource(id = R.string.site_style_title),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = textPrimary
@@ -1045,7 +1046,7 @@ fun SiteStyleCustomizerSheetContent(
                     }
                 ) {
                     Text(
-                        text = "Reset All",
+                        text = stringResource(id = R.string.site_style_reset_all),
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 13.sp
@@ -1067,7 +1068,7 @@ fun SiteStyleCustomizerSheetContent(
                     // Presets
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = "Theme Presets",
+                            text = stringResource(id = R.string.site_style_theme_presets),
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             color = textSecondary
@@ -1076,8 +1077,7 @@ fun SiteStyleCustomizerSheetContent(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            presets.forEach { (code, labelInfo) ->
-                                val (label, color) = labelInfo
+                            presets.forEach { (code, labelRes, color) ->
                                 val isSelected = themePreset == code
                                 Box(
                                     modifier = Modifier
@@ -1101,7 +1101,7 @@ fun SiteStyleCustomizerSheetContent(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = label.split(" ").firstOrNull() ?: label,
+                                        text = context.getString(labelRes),
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (code == "SEPIA" || code == "FOREST" || (code == "DEFAULT" && !isDark)) Color.Black else Color.White
@@ -1116,7 +1116,7 @@ fun SiteStyleCustomizerSheetContent(
                     // Fonts
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = "Font Family",
+                            text = stringResource(id = R.string.site_style_font_family),
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
                             color = textSecondary
@@ -1126,11 +1126,11 @@ fun SiteStyleCustomizerSheetContent(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
-                                "inherit" to "Default",
-                                "sans-serif" to "Sans",
-                                "serif" to "Serif",
-                                "monospace" to "Mono"
-                            ).forEach { (code, label) ->
+                                Triple("inherit", R.string.site_style_font_default, androidx.compose.ui.text.font.FontFamily.SansSerif),
+                                Triple("sans-serif", R.string.site_style_font_sans, androidx.compose.ui.text.font.FontFamily.SansSerif),
+                                Triple("serif", R.string.site_style_font_serif, androidx.compose.ui.text.font.FontFamily.Serif),
+                                Triple("monospace", R.string.site_style_font_mono, androidx.compose.ui.text.font.FontFamily.Monospace)
+                            ).forEach { (code, labelRes, ff) ->
                                 val isSelected = fontFamily == code
                                 Box(
                                     modifier = Modifier
@@ -1152,13 +1152,9 @@ fun SiteStyleCustomizerSheetContent(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = label,
+                                        text = stringResource(id = labelRes),
                                         fontSize = 11.sp,
-                                        fontFamily = when (code) {
-                                            "serif" -> androidx.compose.ui.text.font.FontFamily.Serif
-                                            "monospace" -> androidx.compose.ui.text.font.FontFamily.Monospace
-                                            else -> androidx.compose.ui.text.font.FontFamily.SansSerif
-                                        },
+                                        fontFamily = ff,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary
                                     )
@@ -1185,7 +1181,7 @@ fun SiteStyleCustomizerSheetContent(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Icon(Icons.Rounded.FormatSize, null, tint = textSecondary, modifier = Modifier.size(16.dp))
-                                Text("Font Size", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_font_size), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
                             }
                             Text("${fontSize}%", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         }
@@ -1210,7 +1206,7 @@ fun SiteStyleCustomizerSheetContent(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Icon(Icons.Rounded.FormatLineSpacing, null, tint = textSecondary, modifier = Modifier.size(16.dp))
-                                Text("Line Spacing", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_line_spacing), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
                             }
                             Text(String.format("%.2fx", lineSpacing), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         }
@@ -1235,7 +1231,7 @@ fun SiteStyleCustomizerSheetContent(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Icon(Icons.Rounded.TextFields, null, tint = textSecondary, modifier = Modifier.size(16.dp))
-                                Text("Letter Spacing", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_letter_spacing), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = textPrimary)
                             }
                             Text(String.format("%.2fpx", letterSpacing), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                         }
@@ -1284,8 +1280,8 @@ fun SiteStyleCustomizerSheetContent(
                                 modifier = Modifier.size(18.dp)
                             )
                             Column {
-                                Text("Hide Images", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
-                                Text("Do not load images for data-saving", fontSize = 10.sp, color = textSecondary)
+                                Text(stringResource(id = R.string.site_style_hide_images), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_hide_images_desc), fontSize = 10.sp, color = textSecondary)
                             }
                         }
                         Switch(
@@ -1318,8 +1314,8 @@ fun SiteStyleCustomizerSheetContent(
                                 modifier = Modifier.size(18.dp)
                             )
                             Column {
-                                Text("Grayscale Mode", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
-                                Text("Desaturate colors for comfortable reading", fontSize = 10.sp, color = textSecondary)
+                                Text(stringResource(id = R.string.site_style_grayscale), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_grayscale_desc), fontSize = 10.sp, color = textSecondary)
                             }
                         }
                         Switch(
@@ -1352,8 +1348,8 @@ fun SiteStyleCustomizerSheetContent(
                                 modifier = Modifier.size(18.dp)
                             )
                             Column {
-                                Text("Night Light", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
-                                Text("Apply warm amber tint for eye care", fontSize = 10.sp, color = textSecondary)
+                                Text(stringResource(id = R.string.site_style_night_light), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_night_light_desc), fontSize = 10.sp, color = textSecondary)
                             }
                         }
                         Switch(
@@ -1370,7 +1366,6 @@ fun SiteStyleCustomizerSheetContent(
 
                     // Row 4: Scroll Buttons
                     var showScrollButtons by remember { mutableStateOf(viewModel.showScrollButtons) }
-                    val context = androidx.compose.ui.platform.LocalContext.current
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1388,8 +1383,8 @@ fun SiteStyleCustomizerSheetContent(
                                 modifier = Modifier.size(18.dp)
                             )
                             Column {
-                                Text("Scroll Buttons", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
-                                Text("Show buttons to scroll quickly to top or bottom", fontSize = 10.sp, color = textSecondary)
+                                Text(stringResource(id = R.string.site_style_scroll_buttons), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                                Text(stringResource(id = R.string.site_style_scroll_buttons_desc), fontSize = 10.sp, color = textSecondary)
                             }
                         }
                         Switch(
@@ -1419,8 +1414,8 @@ fun SiteStyleCustomizerSheetContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Apply to all sites", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
-                        Text("Automatically load styles on every site.", fontSize = 11.sp, color = textSecondary)
+                        Text(stringResource(id = R.string.site_style_apply_all), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = textPrimary)
+                        Text(stringResource(id = R.string.site_style_apply_all_desc), fontSize = 11.sp, color = textSecondary)
                     }
                     Switch(
                         checked = appliedGlobally,
@@ -1885,13 +1880,13 @@ fun ImageGrabberSheetContent(
                     }
                     Column {
                         Text(
-                            text = if (asPdf) "Download Manga PDF" else "Download Manga Images",
+                            text = if (asPdf) stringResource(id = R.string.img_grab_dl_pdf_title) else stringResource(id = R.string.img_grab_dl_images_title),
                             fontWeight = FontWeight.Bold,
                             fontSize = 17.sp,
                             color = textColor
                         )
                         Text(
-                            text = "${localImages.size} pages ready for download",
+                            text = stringResource(id = R.string.img_grab_pages_ready, localImages.size),
                             fontSize = 13.sp,
                             color = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
                         )
@@ -1912,7 +1907,7 @@ fun ImageGrabberSheetContent(
                 ) {
                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Download Locally", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(stringResource(id = R.string.img_grab_download_locally), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
 
                 OutlinedButton(
@@ -1927,7 +1922,7 @@ fun ImageGrabberSheetContent(
                 ) {
                     Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Save to Private Vault 🔒", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(id = R.string.img_grab_save_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1974,13 +1969,13 @@ fun ImageGrabberSheetContent(
                     )
                     Column {
                         Text(
-                            text = if (isMangaMode) "Manga Reader Mode" else "Image Grabber",
+                            text = if (isMangaMode) stringResource(id = R.string.img_grab_manga_mode) else stringResource(id = R.string.img_grab_title),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = textColor
                         )
                         Text(
-                            text = "${localImages.size} pages extracted",
+                            text = stringResource(id = R.string.img_grab_pages_extracted, localImages.size),
                             fontSize = 12.sp,
                             color = if (isDark) Color(0xFF8E8E93) else Color(0xFF8E8E93)
                         )
@@ -2003,7 +1998,7 @@ fun ImageGrabberSheetContent(
                     FilterChip(
                         selected = isMangaMode,
                         onClick = { isMangaMode = !isMangaMode },
-                        label = { Text(if (isMangaMode) "🖼️ Grid View" else "📖 Manga View", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                        label = { Text(if (isMangaMode) stringResource(id = R.string.img_grab_grid_view) else stringResource(id = R.string.img_grab_manga_view), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                     )
 
                     IconButton(onClick = onDismissRequest) {
@@ -2022,7 +2017,7 @@ fun ImageGrabberSheetContent(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text("Extracting full-resolution images...", color = textColor, fontSize = 13.sp)
+                        Text(stringResource(id = R.string.img_grab_extracting), color = textColor, fontSize = 13.sp)
                     }
                 }
             } else if (localImages.isEmpty()) {
@@ -2033,7 +2028,7 @@ fun ImageGrabberSheetContent(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Rounded.ImageNotSupported, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("No images available", color = textColor, fontSize = 14.sp)
+                        Text(stringResource(id = R.string.img_grab_no_images), color = textColor, fontSize = 14.sp)
                     }
                 }
             } else if (isMangaMode) {
@@ -2083,7 +2078,7 @@ fun ImageGrabberSheetContent(
                         color = Color.Black.copy(alpha = 0.85f)
                     ) {
                         Text(
-                            text = "Page ${firstVisible.value} / ${localImages.size}",
+                            text = stringResource(id = R.string.img_grab_page_indicator, firstVisible.value, localImages.size),
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
@@ -2172,7 +2167,7 @@ fun ImageGrabberSheetContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${localImages.size} pages remaining",
+                                text = stringResource(id = R.string.img_grab_pages_remaining, localImages.size),
                                 color = textColor,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
@@ -2186,7 +2181,7 @@ fun ImageGrabberSheetContent(
                                 ) {
                                     Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Images (${localImages.size})", fontSize = 12.sp)
+                                    Text(stringResource(id = R.string.img_grab_images_count, localImages.size), fontSize = 12.sp)
                                 }
                                 Button(
                                     onClick = {
@@ -2196,7 +2191,7 @@ fun ImageGrabberSheetContent(
                                 ) {
                                     Icon(Icons.Rounded.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("As PDF", fontSize = 12.sp)
+                                    Text(stringResource(id = R.string.img_grab_as_pdf), fontSize = 12.sp)
                                 }
                             }
                         }
@@ -2259,7 +2254,7 @@ fun PageInspectorSheetContent(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "DevTools Inspector",
+                        text = stringResource(id = R.string.inspector_title),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = textColor
@@ -2279,19 +2274,19 @@ fun PageInspectorSheetContent(
                 divider = { HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)) }
             ) {
                 Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                    Text("📊 Overview", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                    Text(stringResource(id = R.string.inspector_tab_overview), modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 0) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
                 }
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                    Text("🌐 Elements", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 1) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                    Text(stringResource(id = R.string.inspector_tab_elements), modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 1) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
                 }
                 Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
-                    Text("⚡ Network (${stats?.resources?.size ?: 0})", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 2) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                    Text(stringResource(id = R.string.inspector_tab_network, stats?.resources?.size ?: 0), modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 2) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
                 }
                 Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
-                    Text("💻 Console", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 3) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                    Text(stringResource(id = R.string.inspector_tab_console), modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 3) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
                 }
-                Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }) {
-                    Text("🔒 Storage", modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 4) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
+                Tab(selected = selectedTab == 4, onClick = { selectedTab == 4 }) {
+                    Text(stringResource(id = R.string.inspector_tab_storage), modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp), fontSize = 12.sp, fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal, color = if (selectedTab == 4) MaterialTheme.colorScheme.primary else textColor.copy(alpha = 0.7f))
                 }
             }
 
@@ -2333,7 +2328,7 @@ private fun DevToolsOverviewTab(
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Icon(if (isHttps) Icons.Rounded.CheckCircle else Icons.Rounded.Warning, contentDescription = null, tint = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500), modifier = Modifier.size(16.dp))
-                        Text(if (isHttps) "HTTPS Secure Connection" else "HTTP Unsecured Connection", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500))
+                        Text(if (isHttps) stringResource(id = R.string.inspector_https_secure) else stringResource(id = R.string.inspector_http_unsecure), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500))
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(stats.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = textColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -2347,23 +2342,23 @@ private fun DevToolsOverviewTab(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = cardBg) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Reading", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        Text("${stats.readTimeMinutes} min", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
-                        Text("${stats.wordCount} words", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                        Text(stringResource(id = R.string.inspector_stat_reading), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text(stringResource(id = R.string.inspector_stat_min, stats.readTimeMinutes), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                        Text(stringResource(id = R.string.inspector_stat_words, stats.wordCount), fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
                     }
                 }
                 Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = cardBg) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Elements", fontSize = 10.sp, color = Color(0xFF34C759), fontWeight = FontWeight.Bold)
-                        Text("${stats.imageCount} imgs", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
-                        Text("${stats.linkCount} links", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                        Text(stringResource(id = R.string.inspector_stat_elements), fontSize = 10.sp, color = Color(0xFF34C759), fontWeight = FontWeight.Bold)
+                        Text(stringResource(id = R.string.inspector_stat_imgs, stats.imageCount), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                        Text(stringResource(id = R.string.inspector_stat_links, stats.linkCount), fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
                     }
                 }
                 Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), color = cardBg) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Assets", fontSize = 10.sp, color = Color(0xFFAF52DE), fontWeight = FontWeight.Bold)
-                        Text("${stats.scriptCount} scripts", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
-                        Text("${stats.cssCount} styles", fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
+                        Text(stringResource(id = R.string.inspector_stat_assets), fontSize = 10.sp, color = Color(0xFFAF52DE), fontWeight = FontWeight.Bold)
+                        Text(stringResource(id = R.string.inspector_stat_scripts, stats.scriptCount), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                        Text(stringResource(id = R.string.inspector_stat_styles, stats.cssCount), fontSize = 11.sp, color = textColor.copy(alpha = 0.6f))
                     }
                 }
             }
@@ -2371,7 +2366,7 @@ private fun DevToolsOverviewTab(
 
         if (stats.metaTags.isNotEmpty()) {
             item {
-                Text("SEO & Meta Tags (${stats.metaTags.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+                Text(stringResource(id = R.string.inspector_seo_meta, stats.metaTags.size), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
             }
             items(stats.metaTags.size) { idx ->
                 val meta = stats.metaTags[idx]
@@ -2396,7 +2391,7 @@ private fun DevToolsElementsTab(
 ) {
     if (stats.domNodes.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No DOM nodes extracted", color = textColor.copy(alpha = 0.6f), fontSize = 13.sp)
+            Text(stringResource(id = R.string.inspector_no_dom), color = textColor.copy(alpha = 0.6f), fontSize = 13.sp)
         }
     } else {
         androidx.compose.foundation.lazy.LazyColumn(
@@ -2406,7 +2401,7 @@ private fun DevToolsElementsTab(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                Text("Page DOM Structure Inspector (${stats.domNodes.size} key elements)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor.copy(alpha = 0.7f))
+                Text(stringResource(id = R.string.inspector_dom_header, stats.domNodes.size), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor.copy(alpha = 0.7f))
             }
             items(stats.domNodes.size) { idx ->
                 val node = stats.domNodes[idx]
@@ -2448,14 +2443,14 @@ private fun DevToolsNetworkTab(
     val totalBytes = stats.resources.sumOf { it.sizeBytes }
     if (stats.resources.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No network activity captured yet", color = textColor.copy(alpha = 0.6f), fontSize = 13.sp)
+            Text(stringResource(id = R.string.inspector_no_network), color = textColor.copy(alpha = 0.6f), fontSize = 13.sp)
         }
     } else {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("${stats.resources.size} Network Requests", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+                Text(stringResource(id = R.string.inspector_network_requests, stats.resources.size), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)) {
-                    Text("${totalBytes / 1024} KB transferred", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                    Text(stringResource(id = R.string.inspector_kb_transferred, totalBytes / 1024), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -2501,32 +2496,32 @@ private fun DevToolsConsoleTab(
     textColor: Color
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Quick DevTools Commands", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor.copy(alpha = 0.7f))
+        Text(stringResource(id = R.string.inspector_console_cmds), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor.copy(alpha = 0.7f))
         
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = { viewModel.executeConsoleJs("document.querySelectorAll('a').forEach(a => a.style.outline = '2px solid gold')") },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text("🔗 Highlight Links", fontSize = 11.sp)
+                Text(stringResource(id = R.string.inspector_cmd_links), fontSize = 11.sp)
             }
             OutlinedButton(
                 onClick = { viewModel.executeConsoleJs("document.querySelectorAll('*').forEach(e => e.style.outline = '1px solid red')") },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text("🔳 Outline Layout", fontSize = 11.sp)
+                Text(stringResource(id = R.string.inspector_cmd_outline), fontSize = 11.sp)
             }
             OutlinedButton(
                 onClick = { viewModel.executeConsoleJs("document.querySelectorAll('input[type=\"hidden\"]').forEach(i => i.type = 'text')") },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text("👁️ Show Hidden Inputs", fontSize = 11.sp)
+                Text(stringResource(id = R.string.inspector_cmd_hidden), fontSize = 11.sp)
             }
             OutlinedButton(
                 onClick = { viewModel.executeConsoleJs("document.body.contentEditable = (document.body.contentEditable !== 'true')") },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text("✏️ Toggle Edit Page", fontSize = 11.sp)
+                Text(stringResource(id = R.string.inspector_cmd_edit), fontSize = 11.sp)
             }
         }
 
@@ -2548,7 +2543,7 @@ private fun DevToolsConsoleTab(
                     }
                 }
             ) {
-                Text("Run")
+                Text(stringResource(id = R.string.action_run))
             }
         }
 
@@ -2561,7 +2556,7 @@ private fun DevToolsConsoleTab(
                 color = if (isError) Color(0xFF3C1414) else if (isDark) Color(0xFF0F1B12) else Color(0xFFE8F5E9)
             ) {
                 Column(modifier = Modifier.padding(12.dp).verticalScroll(rememberScrollState())) {
-                    Text(if (isError) "Console Error" else "Console Output", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isError) Color(0xFFFF453A) else Color(0xFF34C759))
+                    Text(if (isError) stringResource(id = R.string.inspector_console_error) else stringResource(id = R.string.inspector_console_output), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isError) Color(0xFFFF453A) else Color(0xFF34C759))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(result, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = if (isError) Color(0xFFFF453A) else if (isDark) Color(0xFF34C759) else Color(0xFF1B5E20))
                 }
@@ -2582,11 +2577,11 @@ private fun DevToolsStorageTab(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("Cookies (${stats.cookies.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+            Text(stringResource(id = R.string.inspector_cookies, stats.cookies.size), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
         }
         if (stats.cookies.isEmpty()) {
             item {
-                Text("No cookies set for this domain", fontSize = 12.sp, color = textColor.copy(alpha = 0.6f))
+                Text(stringResource(id = R.string.inspector_no_cookies), fontSize = 12.sp, color = textColor.copy(alpha = 0.6f))
             }
         } else {
             items(stats.cookies.size) { idx ->
@@ -2602,11 +2597,11 @@ private fun DevToolsStorageTab(
 
         item {
             Spacer(modifier = Modifier.height(8.dp))
-            Text("LocalStorage (${stats.localStorageItems.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
+            Text(stringResource(id = R.string.inspector_localstorage, stats.localStorageItems.size), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textColor)
         }
         if (stats.localStorageItems.isEmpty()) {
             item {
-                Text("No LocalStorage items found", fontSize = 12.sp, color = textColor.copy(alpha = 0.6f))
+                Text(stringResource(id = R.string.inspector_no_localstorage), fontSize = 12.sp, color = textColor.copy(alpha = 0.6f))
             }
         } else {
             items(stats.localStorageItems.size) { idx ->
@@ -3241,7 +3236,7 @@ fun AllInOneMenuSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Extension,
-                            contentDescription = "Extensions",
+                            contentDescription = stringResource(id = R.string.ext_menu_cd),
                             tint = textColor,
                             modifier = Modifier.size(20.dp)
                         )

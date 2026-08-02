@@ -189,7 +189,7 @@ fun ExtensionItemCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "by $author",
+                        text = stringResource(R.string.ext_by_author, author),
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
@@ -215,7 +215,7 @@ fun ExtensionItemCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.MoreVert,
-                                    contentDescription = "Options",
+                                    contentDescription = stringResource(R.string.ext_options),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -226,7 +226,7 @@ fun ExtensionItemCard(
                             ) {
                                 if (onOpenClick != null) {
                                     DropdownMenuItem(
-                                        text = { Text("Open settings", fontSize = 12.sp) },
+                                        text = { Text(stringResource(R.string.ext_open_settings), fontSize = 12.sp) },
                                         onClick = {
                                             showMenu = false
                                             onOpenClick()
@@ -242,7 +242,7 @@ fun ExtensionItemCard(
                                 }
                                 if (onUninstallClick != null) {
                                     DropdownMenuItem(
-                                        text = { Text("Delete / Uninstall", fontSize = 12.sp) },
+                                        text = { Text(stringResource(R.string.ext_delete_uninstall), fontSize = 12.sp) },
                                         onClick = {
                                             showMenu = false
                                             onUninstallClick()
@@ -330,7 +330,7 @@ fun UserExtensionItemCard(
                 // Drag handle icon for reordering
                 Icon(
                     imageVector = Icons.Rounded.Reorder,
-                    contentDescription = "Drag to reorder",
+                    contentDescription = stringResource(R.string.ext_drag_to_reorder),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                     modifier = Modifier.size(16.dp)
                 )
@@ -387,7 +387,7 @@ fun UserExtensionItemCard(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
-                                    text = "SYNCING",
+                                    text = stringResource(R.string.ext_syncing),
                                     fontSize = 7.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
@@ -432,7 +432,7 @@ fun UserExtensionItemCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Settings,
-                                contentDescription = "Open Dashboard / Settings",
+                                contentDescription = stringResource(R.string.ext_open_dashboard),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -453,7 +453,7 @@ fun UserExtensionItemCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
-                                contentDescription = "Options",
+                                contentDescription = stringResource(R.string.ext_options),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 modifier = Modifier.size(16.dp)
                             )
@@ -464,7 +464,7 @@ fun UserExtensionItemCard(
                         ) {
                             if (onOpenAction != null) {
                                 DropdownMenuItem(
-                                    text = { Text("Open settings", fontSize = 12.sp) },
+                                    text = { Text(stringResource(R.string.ext_open_settings), fontSize = 12.sp) },
                                     onClick = {
                                         showMenu = false
                                         onOpenAction()
@@ -479,7 +479,7 @@ fun UserExtensionItemCard(
                                 )
                             }
                             DropdownMenuItem(
-                                text = { Text("Delete / Uninstall", fontSize = 12.sp) },
+                                text = { Text(stringResource(R.string.ext_delete_uninstall), fontSize = 12.sp) },
                                 onClick = {
                                     showMenu = false
                                     onUninstall()
@@ -574,7 +574,7 @@ fun ExtensionGridCard(
                         }
                         if (onUninstallClick != null) {
                             DropdownMenuItem(
-                                text = { Text("Delete / Uninstall", fontSize = 12.sp) },
+                                text = { Text(stringResource(R.string.ext_delete_uninstall), fontSize = 12.sp) },
                                 onClick = {
                                     showMenu = false
                                     onUninstallClick()
@@ -687,7 +687,7 @@ fun UserExtensionGridCard(
             // Drag indicator (small icon at top-left)
             Icon(
                 imageVector = Icons.Rounded.Reorder,
-                contentDescription = "Drag handle",
+                contentDescription = stringResource(R.string.ext_drag_handle),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
                 modifier = Modifier
                     .size(12.dp)
@@ -728,7 +728,7 @@ fun UserExtensionGridCard(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("Delete / Uninstall", fontSize = 12.sp) },
+                        text = { Text(stringResource(R.string.ext_delete_uninstall), fontSize = 12.sp) },
                         onClick = {
                             showMenu = false
                             onUninstall()
@@ -873,7 +873,7 @@ fun CuratedExtensionCard(
                         )
                     }
                     Text(
-                        text = "by ${extension.author} · ★ ${extension.rating}",
+                        text = stringResource(R.string.ext_curated_meta, extension.author, extension.rating),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -891,7 +891,7 @@ fun CuratedExtensionCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-                            Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.ext_installed_badge), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 } else {
@@ -907,7 +907,7 @@ fun CuratedExtensionCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(Icons.Rounded.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                            Text("Install", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(stringResource(R.string.ext_install_button), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }

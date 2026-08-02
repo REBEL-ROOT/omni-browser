@@ -85,20 +85,38 @@ data class OnlineWallpaper(
 
 // ─── Category definitions ───────────────────────────────────────────────────
 val WALLPAPER_CATEGORIES = listOf(
-    "Live Wallpapers" to "live_wallpapers",
-    "Featured"   to "featured",
-    "Nature"     to "nature",
-    "Space"      to "space",
-    "Abstract"   to "abstract",
-    "City"       to "city",
-    "Ocean"      to "ocean",
-    "Minimal"    to "minimal",
-    "Dark"       to "dark",
-    "Neon"       to "neon",
-    "Mountains"  to "mountain",
-    "Flowers"    to "flowers",
-    "Technology" to "technology"
+    "live_wallpapers",
+    "featured",
+    "nature",
+    "space",
+    "abstract",
+    "city",
+    "ocean",
+    "minimal",
+    "dark",
+    "neon",
+    "mountain",
+    "flowers",
+    "technology"
 )
+
+@Composable
+private fun wallpaperCategoryLabel(key: String): String = when (key) {
+    "live_wallpapers" -> stringResource(R.string.wallpaper_cat_live)
+    "featured"        -> stringResource(R.string.wallpaper_cat_featured)
+    "nature"          -> stringResource(R.string.wallpaper_cat_nature)
+    "space"           -> stringResource(R.string.wallpaper_cat_space)
+    "abstract"        -> stringResource(R.string.wallpaper_cat_abstract)
+    "city"            -> stringResource(R.string.wallpaper_cat_city)
+    "ocean"           -> stringResource(R.string.wallpaper_cat_ocean)
+    "minimal"         -> stringResource(R.string.wallpaper_cat_minimal)
+    "dark"            -> stringResource(R.string.wallpaper_cat_dark)
+    "neon"            -> stringResource(R.string.wallpaper_cat_neon)
+    "mountain"        -> stringResource(R.string.wallpaper_cat_mountains)
+    "flowers"         -> stringResource(R.string.wallpaper_cat_flowers)
+    "technology"      -> stringResource(R.string.wallpaper_cat_technology)
+    else              -> key.replaceFirstChar { it.uppercaseChar() }
+}
 
 // ─── Picsum Photos URL builder (free, no API key, always works) ───────────────
 // https://picsum.photos — uses seeded random for consistency
@@ -587,7 +605,7 @@ fun OnlineWallpaperGallery(
         if (activeSearch.isNotBlank()) {
             generateCategoryWallpapers(activeSearch, 60)
         } else {
-            generateCategoryWallpapers(WALLPAPER_CATEGORIES[selectedCategoryIndex].second, 60)
+            generateCategoryWallpapers(WALLPAPER_CATEGORIES[selectedCategoryIndex], 60)
         }
     }
 
@@ -602,7 +620,7 @@ fun OnlineWallpaperGallery(
                     .background(bgColor)
             ) {
                 TopAppBar(
-                    title = { Text("Wallpaper Gallery", fontWeight = FontWeight.Bold) },
+                    title = { Text(stringResource(R.string.wallpaper_gallery_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
@@ -615,7 +633,7 @@ fun OnlineWallpaperGallery(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search wallpapers…", fontSize = 14.sp) },
+                    placeholder = { Text(stringResource(R.string.wallpaper_search_hint), fontSize = 14.sp) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null, modifier = Modifier.size(20.dp)) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -641,7 +659,7 @@ fun OnlineWallpaperGallery(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    itemsIndexed(WALLPAPER_CATEGORIES) { index, (label, _) ->
+                    itemsIndexed(WALLPAPER_CATEGORIES) { index, key ->
                         val isSelected = selectedCategoryIndex == index && activeSearch.isEmpty()
                         Surface(
                             shape = CircleShape,
@@ -657,7 +675,7 @@ fun OnlineWallpaperGallery(
                             }
                         ) {
                             Text(
-                                label,
+                                wallpaperCategoryLabel(key),
                                 color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
@@ -672,6 +690,7 @@ fun OnlineWallpaperGallery(
         },
         containerColor = bgColor
     ) { pv ->
+        val downloadFailedText = stringResource(R.string.wallpaper_download_failed)
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 80.dp),
@@ -697,7 +716,7 @@ fun OnlineWallpaperGallery(
                             if (localUri != null) {
                                 onEditWallpaper(localUri)
                             } else {
-                                Toast.makeText(context, "Download failed. Check connection.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, downloadFailedText, Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -775,7 +794,7 @@ private fun OnlineWallpaperTile(
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
-                        text = if (isVid) "LIVE" else "GIF",
+                        text = if (isVid) stringResource(R.string.wallpaper_badge_live) else stringResource(R.string.wallpaper_badge_gif),
                         color = Color.White,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
@@ -796,7 +815,7 @@ private fun OnlineWallpaperTile(
         ) {
             Column {
                 Text(wallpaper.description, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                Text("Tap • Long-press to edit", color = Color.White.copy(0.55f), fontSize = 9.sp)
+                Text(stringResource(R.string.wallpaper_tile_hint), color = Color.White.copy(0.55f), fontSize = 9.sp)
             }
         }
 
@@ -825,7 +844,7 @@ private fun OnlineWallpaperTile(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
-                    Text("Downloading…", color = Color.White, fontSize = 11.sp)
+                    Text(stringResource(R.string.wallpaper_downloading), color = Color.White, fontSize = 11.sp)
                 }
             }
         }
@@ -928,15 +947,15 @@ fun WallpaperEditorView(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Customize Wallpaper", fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(R.string.wallpaper_customize_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, "Close", tint = textPrimaryColor)
+                        Icon(Icons.Rounded.Close, stringResource(R.string.wallpaper_close_cd), tint = textPrimaryColor)
                     }
                 },
                 actions = {
                     TextButton(onClick = { onApply(uri, tempScale, tempOffsetX, tempOffsetY, tempDim, tempBlur) }) {
-                        Text("Apply", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(stringResource(R.string.wallpaper_editor_apply), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = bgColor),
@@ -973,7 +992,7 @@ fun WallpaperEditorView(
                     Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
                         .background(Color.Black.copy(0.5f), RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Text("Drag to reposition", color = Color.White.copy(0.9f), fontSize = 9.sp)
+                        Text(stringResource(R.string.wallpaper_drag_reposition), color = Color.White.copy(0.9f), fontSize = 9.sp)
                     }
                 }
             }
@@ -981,17 +1000,17 @@ fun WallpaperEditorView(
             // Controls
             Surface(color = cardColor, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, cardBorderColor), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SliderRow("Zoom / Scale", String.format("%.1fx", tempScale), tempScale, 1f..3f, accentColor, textPrimaryColor, textSecondaryColor) { tempScale = it }
-                    SliderRow("Blur amount", "${tempBlur.toInt()} dp", tempBlur, 0f..25f, accentColor, textPrimaryColor, textSecondaryColor) { tempBlur = it }
-                    SliderRow("Dim opacity", "${(tempDim * 100).toInt()}%", tempDim, 0f..0.9f, accentColor, textPrimaryColor, textSecondaryColor) { tempDim = it }
+                    SliderRow(stringResource(R.string.wallpaper_zoom_scale), String.format("%.1fx", tempScale), tempScale, 1f..3f, accentColor, textPrimaryColor, textSecondaryColor) { tempScale = it }
+                    SliderRow(stringResource(R.string.wallpaper_blur_amount), "${tempBlur.toInt()} dp", tempBlur, 0f..25f, accentColor, textPrimaryColor, textSecondaryColor) { tempBlur = it }
+                    SliderRow(stringResource(R.string.wallpaper_dim_opacity), "${(tempDim * 100).toInt()}%", tempDim, 0f..0.9f, accentColor, textPrimaryColor, textSecondaryColor) { tempDim = it }
                     Button(
                         onClick = { tempScale = 1f; tempOffsetX = 0f; tempOffsetY = 0f },
                         colors = ButtonDefaults.buttonColors(containerColor = cardBorderColor),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Rounded.Refresh, "Reset", tint = textPrimaryColor)
+                        Icon(Icons.Rounded.Refresh, stringResource(R.string.wallpaper_reset_cd), tint = textPrimaryColor)
                         Spacer(Modifier.width(8.dp))
-                        Text("Reset Position", color = textPrimaryColor)
+                        Text(stringResource(R.string.wallpaper_reset_position), color = textPrimaryColor)
                     }
                 }
             }

@@ -175,6 +175,8 @@ fun VideoPlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var isSeeking by remember { mutableStateOf(false) }
     var seekTargetPosition by remember { mutableLongStateOf(0L) }
+    var sliderStartPos by remember { mutableLongStateOf(0L) }
+    var isSliderScrubbing by remember { mutableStateOf(false) }
 
     // Aspect ratio mode: FIT (letterbox), FILL (crop), STRETCH (distort to fill)
     var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
@@ -726,41 +728,118 @@ fun VideoPlayerScreen(
                 }
             } else {
 
-        // Volume and Brightness Drag Interceptors — always visible, handles both tap and drag
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Left Half: Brightness control
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .pointerInput(viewModel?.isPlayerBrightnessGestureEnabled) {
-                        val brightnessEnabled = viewModel?.isPlayerBrightnessGestureEnabled != false
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            var isDragging = false
-                            var totalDrag = 0f
+        // Full-screen Gesture Interceptor: Handles horizontal video scrubbing, vertical brightness & volume drag, single tap & double tap
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(viewModel?.isPlayerBrightnessGestureEnabled, viewModel?.isPlayerVolumeGestureEnabled, duration) {
+                    val brightnessEnabled = viewModel?.isPlayerBrightnessGestureEnabled != false
+                    val volumeEnabled = viewModel?.isPlayerVolumeGestureEnabled != false
 
-                            do {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull() ?: break
-                                val dy = change.position.y - change.previousPosition.y
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startPos = down.position
+                        val isLeftHalf = startPos.x < (size.width / 2f)
+                        val containerWidth = size.width.toFloat().coerceAtLeast(1f)
 
-                                if (kotlin.math.abs(dy) > 2f) {
-                                    isDragging = true
+                        var totalDx = 0f
+                        var totalDy = 0f
+                        var gestureMode = 0 // 0: Undetermined, 1: Horizontal Scrubbing, 2: Vertical Brightness, 3: Vertical Volume
+
+                        val initialPosition = exoPlayerInstance?.currentPosition ?: playbackPosition
+                        var wasPlayingBeforeScrub = isPlaying
+
+                        do {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            val dx = change.position.x - change.previousPosition.x
+                            val dy = change.position.y - change.previousPosition.y
+
+                            totalDx += dx
+                            totalDy += dy
+
+                            if (gestureMode == 0) {
+                                if (kotlin.math.abs(totalDx) > 8f && kotlin.math.abs(totalDx) > kotlin.math.abs(totalDy)) {
+                                    if (duration > 0) {
+                                        gestureMode = 1
+                                        wasPlayingBeforeScrub = isPlaying
+                                        exoPlayerInstance?.playWhenReady = false
+                                        isSeeking = true
+                                    }
+                                } else if (kotlin.math.abs(totalDy) > 8f && kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)) {
+                                    if (isLeftHalf && brightnessEnabled) {
+                                        gestureMode = 2
+                                    } else if (!isLeftHalf && volumeEnabled) {
+                                        gestureMode = 3
+                                    }
                                 }
+                            }
 
-                                if (isDragging && brightnessEnabled) {
-                                    totalDrag += dy
+                            when (gestureMode) {
+                                1 -> {
+                                    // Horizontal Video Scrubbing
+                                    val sensitivity = duration.coerceAtMost(180_000L).coerceAtLeast(60_000L)
+                                    val deltaMs = ((totalDx / containerWidth) * sensitivity).toLong()
+                                    val targetPos = (initialPosition + deltaMs).coerceIn(0L, duration)
+
+                                    seekTargetPosition = targetPos
+                                    playbackPosition = targetPos
+                                    exoPlayerInstance?.seekTo(targetPos)
+
+                                    val deltaSec = (targetPos - initialPosition) / 1000L
+                                    val deltaSign = if (deltaSec >= 0) "+" else "-"
+                                    val absDeltaSec = kotlin.math.abs(deltaSec)
+                                    val deltaFormatted = "$deltaSign${formatDuration(absDeltaSec * 1000L)}"
+                                    val icon = if (deltaSec >= 0) "⏩" else "⏪"
+
+                                    gestureIndicatorText = "$icon ${formatDuration(targetPos)} / ${formatDuration(duration)} ($deltaFormatted)"
+                                    showGestureIndicator = true
+                                    change.consume()
+                                }
+                                2 -> {
+                                    // Vertical Brightness Adjustment
                                     brightness = (brightness - dy / 600f).coerceIn(0.01f, 1f)
                                     setWindowBrightness(brightness)
                                     gestureIndicatorText = "🔆 ${(brightness * 100).toInt()}%"
                                     showGestureIndicator = true
                                     change.consume()
                                 }
-                            } while (event.changes.any { it.pressed })
+                                3 -> {
+                                    // Vertical Volume Adjustment
+                                    val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    volume = (volume - dy / 600f).coerceIn(0f, 1f)
+                                    audioManager.setStreamVolume(
+                                        AudioManager.STREAM_MUSIC,
+                                        (volume * maxVol).toInt(),
+                                        0
+                                    )
+                                    gestureIndicatorText = "🔊 ${(volume * 100).toInt()}%"
+                                    showGestureIndicator = true
+                                    change.consume()
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
 
-                            if (!isDragging) {
-                                val currentTime = System.currentTimeMillis()
+                        if (gestureMode == 1) {
+                            // Finish scrubbing gesture
+                            exoPlayerInstance?.let { player ->
+                                player.seekTo(seekTargetPosition)
+                                if (wasPlayingBeforeScrub) {
+                                    player.playWhenReady = true
+                                }
+                            }
+                            isSeeking = false
+                            gestureIndicatorJob?.cancel()
+                            gestureIndicatorJob = coroutineScope.launch {
+                                delay(500)
+                                showGestureIndicator = false
+                            }
+                        } else if (gestureMode == 2 || gestureMode == 3) {
+                            showGestureIndicator = false
+                        } else if (gestureMode == 0) {
+                            // Tap handling (single tap toggles controls, double tap jumps ±10s)
+                            val currentTime = System.currentTimeMillis()
+                            if (isLeftHalf) {
                                 if (currentTime - lastLeftTapTime < 300) {
                                     leftTapJob?.cancel()
                                     exoPlayerInstance?.let { player ->
@@ -782,50 +861,7 @@ fun VideoPlayerScreen(
                                     }
                                 }
                                 lastLeftTapTime = currentTime
-                            }
-                            if (isDragging) {
-                                showGestureIndicator = false
-                            }
-                        }
-                    }
-            )
-
-            // Right Half: Volume control
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .pointerInput(viewModel?.isPlayerVolumeGestureEnabled) {
-                        val volumeEnabled = viewModel?.isPlayerVolumeGestureEnabled != false
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            var isDragging = false
-
-                            do {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull() ?: break
-                                val dy = change.position.y - change.previousPosition.y
-
-                                if (kotlin.math.abs(dy) > 2f) {
-                                    isDragging = true
-                                }
-
-                                if (isDragging && volumeEnabled) {
-                                    val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                    volume = (volume - dy / 600f).coerceIn(0f, 1f)
-                                    audioManager.setStreamVolume(
-                                        AudioManager.STREAM_MUSIC,
-                                        (volume * maxVol).toInt(),
-                                        0
-                                    )
-                                    gestureIndicatorText = "🔊 ${(volume * 100).toInt()}%"
-                                    showGestureIndicator = true
-                                    change.consume()
-                                }
-                            } while (event.changes.any { it.pressed })
-
-                            if (!isDragging) {
-                                val currentTime = System.currentTimeMillis()
+                            } else {
                                 if (currentTime - lastRightTapTime < 300) {
                                     rightTapJob?.cancel()
                                     exoPlayerInstance?.let { player ->
@@ -848,13 +884,10 @@ fun VideoPlayerScreen(
                                 }
                                 lastRightTapTime = currentTime
                             }
-                            if (isDragging) {
-                                showGestureIndicator = false
-                            }
                         }
                     }
-            )
-        }
+                }
+        )
 
 
         // Swipe / Drag HUD indicator popup
@@ -1221,20 +1254,37 @@ fun VideoPlayerScreen(
                         Slider(
                             value = if (duration > 0) playbackPosition.toFloat() / duration else 0f,
                             onValueChange = { percent ->
-                                // Update slider position locally while dragging for smooth UI,
-                                // but don't flood ExoPlayer with seek calls yet
+                                if (!isSliderScrubbing) {
+                                    isSliderScrubbing = true
+                                    sliderStartPos = playbackPosition
+                                    exoPlayerInstance?.playWhenReady = false
+                                }
                                 isSeeking = true
-                                seekTargetPosition = (percent * duration).toLong()
+                                seekTargetPosition = (percent * duration).toLong().coerceIn(0L, duration)
                                 playbackPosition = seekTargetPosition
+                                exoPlayerInstance?.seekTo(seekTargetPosition)
+
+                                val deltaSec = (seekTargetPosition - sliderStartPos) / 1000L
+                                val deltaSign = if (deltaSec >= 0) "+" else "-"
+                                val absDeltaSec = kotlin.math.abs(deltaSec)
+                                val deltaFormatted = "$deltaSign${formatDuration(absDeltaSec * 1000L)}"
+                                val icon = if (deltaSec >= 0) "⏩" else "⏪"
+
+                                gestureIndicatorText = "$icon ${formatDuration(seekTargetPosition)} / ${formatDuration(duration)} ($deltaFormatted)"
+                                showGestureIndicator = true
                             },
                             onValueChangeFinished = {
-                                // Seek once when the user lifts their finger,
-                                // then explicitly resume playback so it never stays paused
                                 exoPlayerInstance?.let { player ->
                                     player.seekTo(seekTargetPosition)
                                     player.playWhenReady = true
                                 }
                                 isSeeking = false
+                                isSliderScrubbing = false
+                                gestureIndicatorJob?.cancel()
+                                gestureIndicatorJob = coroutineScope.launch {
+                                    delay(500)
+                                    showGestureIndicator = false
+                                }
                             },
                             colors = SliderDefaults.colors(
                                 activeTrackColor = accentColor,

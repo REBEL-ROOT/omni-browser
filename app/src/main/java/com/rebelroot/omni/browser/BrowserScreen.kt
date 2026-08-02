@@ -1116,7 +1116,7 @@ fun BrowserScreen(
                                         Box(contentAlignment = Alignment.TopEnd) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Extension,
-                                                contentDescription = "Extensions",
+                                                contentDescription = stringResource(R.string.ext_menu_cd),
                                                 tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -1360,13 +1360,13 @@ fun BrowserScreen(
                             .run {
                                 if (isBottomNavBarVisible) this else navigationBarsPadding()
                             }
-                            // When the URL field is focused the soft keyboard
-                            // opens. The navigation-bar inset then collapses to 0
-                            // while the IME inset appears; without consuming the
-                            // IME inset the bottom address bar stays pinned to the
-                            // bottom edge and is hidden behind the keyboard. Lift
-                            // it above the IME so it remains visible while typing.
-                            .then(if (isInputFocused) Modifier.imePadding() else Modifier),
+                            // When the URL field is focused, the soft keyboard opens.
+                            // The window automatically resizes to accommodate the IME,
+                            // which already lifts the Scaffold's bottom bar.
+                            // Applying Modifier.imePadding() here would add the IME
+                            // inset twice, pushing the edit bar to the top of the screen.
+                            // Thus, we apply no additional IME padding.
+                            ,
                         color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
                         shadowElevation = 12.dp,
                         tonalElevation = 2.dp
@@ -1482,7 +1482,7 @@ fun BrowserScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Palette,
-                                        contentDescription = "Customize Home",
+                                        contentDescription = stringResource(R.string.customize_home_cd),
                                         tint = navContent,
                                         modifier = Modifier.size(24.dp)
                                     )
@@ -2133,7 +2133,7 @@ fun BrowserScreen(
                                 )
                                 
                                 Text(
-                                    text = "Scroll ${autoScrollSpeed}x",
+                                    text = stringResource(R.string.autoscroll_speed, autoScrollSpeed),
                                     color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
@@ -3568,7 +3568,7 @@ fun BrowserScreen(
                     containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
                     title = {
                         Text(
-                            text = "🌐 Site & Text Translator",
+                            text = stringResource(R.string.translator_dialog_title),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -3597,7 +3597,7 @@ fun BrowserScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "Translate Webpage",
+                                        text = stringResource(R.string.translator_page_title),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
                                         color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
@@ -3605,7 +3605,7 @@ fun BrowserScreen(
                                     
                                     if (canTranslatePage) {
                                         Text(
-                                            text = "Translate the entire active webpage using Google Web Translation proxy.",
+                                            text = stringResource(R.string.translator_page_desc),
                                             fontSize = 11.sp,
                                             color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color(0xFF64748B)
                                         )
@@ -3616,13 +3616,13 @@ fun BrowserScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "Target Language:",
+                                                text = stringResource(R.string.translator_target_lang),
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
                                             )
                                             LanguageDropdownSelector(
-                                                label = "Target",
+                                                label = stringResource(R.string.translator_target),
                                                 selectedLanguageName = selectedPageTargetLang.first,
                                                 expanded = showPageTargetLangMenu,
                                                 onExpandedChange = { showPageTargetLangMenu = it },
@@ -3662,11 +3662,11 @@ fun BrowserScreen(
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text("Translate Entire Page", color = Color.White, fontWeight = FontWeight.Bold)
+                                            Text(stringResource(R.string.translator_translate_page), color = Color.White, fontWeight = FontWeight.Bold)
                                         }
                                     } else {
                                         Text(
-                                            text = "Open any webpage to enable whole-site translation.",
+                                            text = stringResource(R.string.translator_open_page),
                                             fontSize = 12.sp,
                                             color = Color.Red.copy(alpha = 0.8f),
                                             fontWeight = FontWeight.Medium
@@ -3687,7 +3687,7 @@ fun BrowserScreen(
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "Translate Custom Text",
+                                        text = stringResource(R.string.translator_text_title),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
                                         color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
@@ -3699,7 +3699,7 @@ fun BrowserScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         LanguageDropdownSelector(
-                                            label = "Source",
+                                            label = stringResource(R.string.translator_source),
                                             selectedLanguageName = selectedSourceLang.first,
                                             expanded = showSourceLangMenu,
                                             onExpandedChange = { showSourceLangMenu = it },
@@ -3714,7 +3714,7 @@ fun BrowserScreen(
                                             modifier = Modifier.padding(horizontal = 2.dp)
                                         )
                                         LanguageDropdownSelector(
-                                            label = "Target",
+                                            label = stringResource(R.string.translator_target),
                                             selectedLanguageName = selectedTargetLang.first,
                                             expanded = showTargetLangMenu,
                                             onExpandedChange = { showTargetLangMenu = it },
@@ -3726,7 +3726,7 @@ fun BrowserScreen(
                                     OutlinedTextField(
                                         value = translationSourceText,
                                         onValueChange = { translationSourceText = it },
-                                        placeholder = { Text("Type text to translate...", color = Color.Gray) },
+                                        placeholder = { Text(stringResource(R.string.translator_placeholder), color = Color.Gray) },
                                         textStyle = androidx.compose.ui.text.TextStyle(color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black),
                                         modifier = Modifier.fillMaxWidth().height(90.dp),
                                         shape = RoundedCornerShape(20.dp)
@@ -3740,7 +3740,7 @@ fun BrowserScreen(
                                         ) {
                                             CircularProgressIndicator(modifier = Modifier.size(16.dp))
                                             Text(
-                                                text = "Downloading offline model...",
+                                                text = stringResource(R.string.translator_downloading),
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -3774,7 +3774,7 @@ fun BrowserScreen(
                                                     try {
                                                         translationResultText = viewModel.translationManager.translateText(translationSourceText)
                                                     } catch (e: Exception) {
-                                                        translationResultText = "Translation failed: ${e.message}"
+                                                        translationResultText = context.getString(R.string.translator_failed, e.message ?: "")
                                                     } finally {
                                                         translationProgress = false
                                                     }
@@ -3785,7 +3785,7 @@ fun BrowserScreen(
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Translate Text", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text(stringResource(R.string.translator_translate_text), color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -3799,7 +3799,7 @@ fun BrowserScreen(
                                 viewModel.translationManager.close()
                             }
                         ) {
-                            Text("Close", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.close_text), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
                     }
                 )
@@ -4684,13 +4684,13 @@ fun BrowserScreen(
                                 }
                                 Column {
                                     Text(
-                                        text = "DevTools Console",
+                                        text = stringResource(R.string.console_title),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp,
                                         color = Color.White
                                     )
                                     Text(
-                                        text = "${allLogs.size} total log entries • Real-time Web Inspector",
+                                        text = stringResource(R.string.console_subtitle, allLogs.size),
                                         fontSize = 10.sp,
                                         color = Color(0xFF8B949E)
                                     )
@@ -4719,7 +4719,7 @@ fun BrowserScreen(
                                             "[$timeStr] [${log.level}] ${log.message}"
                                         }
                                         clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(formatted))
-                                        Toast.makeText(context, "Copied ${allLogs.size} logs to clipboard", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.console_copied_all, allLogs.size), Toast.LENGTH_SHORT).show()
                                     }
                                 ) {
                                     Icon(
@@ -4752,11 +4752,11 @@ fun BrowserScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val filterOptions = listOf(
-                                "ALL" to "All (${allLogs.size})",
-                                "ERRS" to "Errors (${errorLogs.size})",
-                                "WARNS" to "Warnings (${warnLogs.size})",
-                                "LOGS" to "Logs (${infoLogs.size})",
-                                "SYSTEM" to "Exec/System (${sysLogs.size})"
+                                "ALL" to stringResource(R.string.console_filter_all, allLogs.size),
+                                "ERRS" to stringResource(R.string.console_filter_errors, errorLogs.size),
+                                "WARNS" to stringResource(R.string.console_filter_warnings, warnLogs.size),
+                                "LOGS" to stringResource(R.string.console_filter_logs, infoLogs.size),
+                                "SYSTEM" to stringResource(R.string.console_filter_system, sysLogs.size)
                             )
 
                             filterOptions.forEach { (key, label) ->
@@ -4790,7 +4790,7 @@ fun BrowserScreen(
                         OutlinedTextField(
                             value = consoleSearchQuery,
                             onValueChange = { consoleSearchQuery = it },
-                            placeholder = { Text("Filter console output...", fontSize = 12.sp, color = Color(0xFF484F58)) },
+                            placeholder = { Text(stringResource(R.string.console_filter_placeholder), fontSize = 12.sp, color = Color(0xFF484F58)) },
                             modifier = Modifier.fillMaxWidth().height(44.dp),
                             textStyle = LocalTextStyle.current.copy(
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -4841,7 +4841,7 @@ fun BrowserScreen(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = if (consoleSearchQuery.isNotEmpty()) "No matching console logs" else "No console messages recorded",
+                                        text = if (consoleSearchQuery.isNotEmpty()) stringResource(R.string.console_no_match) else stringResource(R.string.console_no_logs),
                                         fontSize = 12.sp,
                                         color = Color(0xFF484F58),
                                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
@@ -4889,7 +4889,7 @@ fun BrowserScreen(
                                                 .fillMaxWidth()
                                                 .clickable {
                                                     clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(log.message))
-                                                    Toast.makeText(context, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, context.getString(R.string.console_log_copied), Toast.LENGTH_SHORT).show()
                                                 },
                                             shape = RoundedCornerShape(6.dp),
                                             color = rowBg
@@ -4982,7 +4982,7 @@ fun BrowserScreen(
                             OutlinedTextField(
                                 value = jsInputText,
                                 onValueChange = { jsInputText = it },
-                                placeholder = { Text("eval JS (e.g. console.log('hello'))", fontSize = 12.sp, color = Color(0xFF484F58)) },
+                                placeholder = { Text(stringResource(R.string.console_eval_placeholder), fontSize = 12.sp, color = Color(0xFF484F58)) },
                                 modifier = Modifier.weight(1f),
                                 textStyle = LocalTextStyle.current.copy(
                                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -5030,7 +5030,7 @@ fun BrowserScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                    Text("Run", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.action_run), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -5047,7 +5047,7 @@ fun BrowserScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Icon(Icons.Rounded.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Text("Load & Inject Script", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.console_load_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         },
                         text = {
@@ -5058,7 +5058,7 @@ fun BrowserScreen(
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 Text(
-                                    "Inject external JavaScript files, CDN libraries, or mobile developer tools into the active webpage.",
+                                    stringResource(R.string.console_load_desc),
                                     fontSize = 12.sp,
                                     color = Color(0xFF8B949E)
                                 )
@@ -5082,8 +5082,8 @@ fun BrowserScreen(
                                     ) {
                                         Icon(Icons.Rounded.UploadFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("Pick JS File from Device", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                            Text("Select a local .js or .txt file to run", fontSize = 11.sp, color = Color(0xFF8B949E))
+                                            Text(stringResource(R.string.console_load_pick), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text(stringResource(R.string.console_load_pick_desc), fontSize = 11.sp, color = Color(0xFF8B949E))
                                         }
                                         Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Color(0xFF8B949E), modifier = Modifier.size(16.dp))
                                     }
@@ -5092,7 +5092,7 @@ fun BrowserScreen(
                                 HorizontalDivider(color = Color(0xFF30363D))
 
                                 // 2. CDN URL Injector
-                                Text("Inject Script from CDN / Web URL", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.console_load_cdn), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 OutlinedTextField(
                                     value = cdnUrlInput,
                                     onValueChange = { cdnUrlInput = it },
@@ -5116,61 +5116,62 @@ fun BrowserScreen(
                                             viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> [Injected URL Script: $url]"))
                                             viewModel.pendingJsCommand = injectCode
                                             showLoadScriptDialog = false
-                                            Toast.makeText(context, "Injecting script from URL...", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.console_injecting), Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     enabled = cdnUrlInput.isNotBlank(),
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("Inject URL Script", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.console_inject_url), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 HorizontalDivider(color = Color(0xFF30363D))
 
                                 // 3. Preset Dev Tools Libraries
-                                Text("Preset Developer Suite & Libraries", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(stringResource(R.string.console_presets_title), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
 
                                 val presets = listOf(
                                     Triple(
-                                        "Eruda Mobile Inspector",
-                                        "Adds full DOM element inspector, network, & console overlay",
+                                        R.string.console_preset_eruda_title,
+                                        R.string.console_preset_eruda_desc,
                                         "(function () { var script = document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/eruda'; document.body.appendChild(script); script.onload = function () { eruda.init(); }; })();"
                                     ),
                                     Triple(
-                                        "vConsole Inspector",
-                                        "Tencent Mobile DevTools overlay for mobile web debugging",
+                                        R.string.console_preset_vconsole_title,
+                                        R.string.console_preset_vconsole_desc,
                                         "(function () { var script = document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/vconsole'; document.body.appendChild(script); script.onload = function () { new VConsole(); }; })();"
                                     ),
                                     Triple(
-                                        "jQuery 3.7.1",
-                                        "Load jQuery library for DOM manipulation in console",
+                                        R.string.console_preset_jquery_title,
+                                        R.string.console_preset_jquery_desc,
                                         "(function () { var script = document.createElement('script'); script.src='https://code.jquery.com/jquery-3.7.1.min.js'; document.body.appendChild(script); console.log('jQuery 3.7.1 loaded! Use $'); })();"
                                     ),
                                     Triple(
-                                        "Lodash 4.17.21",
-                                        "Load Lodash utility library for console data manipulation",
+                                        R.string.console_preset_lodash_title,
+                                        R.string.console_preset_lodash_desc,
                                         "(function () { var script = document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js'; document.body.appendChild(script); console.log('Lodash loaded! Use _'); })();"
                                     )
                                 )
 
-                                presets.forEach { (title, desc, code) ->
+                                presets.forEach { (titleRes, descRes, code) ->
+                                    val titleStr = context.getString(titleRes)
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> [Injected Preset: $title]"))
+                                                viewModel.consoleLogs.add(BrowserViewModel.ConsoleLogEntry("EVAL", "> [Injected Preset: $titleStr]"))
                                                 viewModel.pendingJsCommand = code
                                                 showLoadScriptDialog = false
-                                                Toast.makeText(context, "Injected $title!", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.console_injected, titleStr), Toast.LENGTH_SHORT).show()
                                             },
                                         shape = RoundedCornerShape(10.dp),
                                         color = Color(0xFF161B22),
                                         border = BorderStroke(0.5.dp, Color(0xFF30363D))
                                     ) {
                                         Column(modifier = Modifier.padding(10.dp)) {
-                                            Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                            Text(desc, fontSize = 10.sp, color = Color(0xFF8B949E))
+                                            Text(stringResource(titleRes), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            Text(stringResource(descRes), fontSize = 10.sp, color = Color(0xFF8B949E))
                                         }
                                     }
                                 }
@@ -5179,7 +5180,7 @@ fun BrowserScreen(
                         confirmButton = {},
                         dismissButton = {
                             TextButton(onClick = { showLoadScriptDialog = false }) {
-                                Text("Close", color = Color(0xFF8B949E))
+                                Text(stringResource(R.string.close_text), color = Color(0xFF8B949E))
                             }
                         },
                         containerColor = Color(0xFF161B22)
@@ -5344,8 +5345,8 @@ fun BrowserScreen(
                 }
                 AlertDialog(
                     onDismissRequest = { extensionToDelete = null },
-                    title = { Text("Delete Extension", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black) },
-                    text = { Text("Do you want to delete '$extDisplayName'?", color = if (viewModel.isDarkThemeEnabled) Color(0xFFC5D1DE) else Color.DarkGray) },
+                    title = { Text(stringResource(R.string.ext_delete_title), color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black) },
+                    text = { Text(stringResource(R.string.ext_delete_confirm_user, extDisplayName), color = if (viewModel.isDarkThemeEnabled) Color(0xFFC5D1DE) else Color.DarkGray) },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -5353,12 +5354,12 @@ fun BrowserScreen(
                                 extensionToDelete = null
                             }
                         ) {
-                            Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.ext_delete), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { extensionToDelete = null }) {
-                            Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray)
+                            Text(stringResource(R.string.ext_cancel), color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray)
                         }
                     },
                     containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
@@ -5370,8 +5371,8 @@ fun BrowserScreen(
                 val name = builtInExtensionToDelete!!
                 AlertDialog(
                     onDismissRequest = { builtInExtensionToDelete = null },
-                    title = { Text("Delete Extension", color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black) },
-                    text = { Text("Do you want to delete '$name'?", color = if (viewModel.isDarkThemeEnabled) Color(0xFFC5D1DE) else Color.DarkGray) },
+                    title = { Text(stringResource(R.string.ext_delete_title), color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black) },
+                    text = { Text(stringResource(R.string.ext_delete_confirm_builtin, name), color = if (viewModel.isDarkThemeEnabled) Color(0xFFC5D1DE) else Color.DarkGray) },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -5383,12 +5384,12 @@ fun BrowserScreen(
                                 builtInExtensionToDelete = null
                             }
                         ) {
-                            Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.ext_delete), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { builtInExtensionToDelete = null }) {
-                            Text("Cancel", color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray)
+                            Text(stringResource(R.string.ext_cancel), color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray)
                         }
                     },
                     containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
@@ -5446,15 +5447,15 @@ fun BrowserScreen(
                         ) {
                             Column {
                                 Text(
-                                    text = "Extensions",
+                                    text = stringResource(R.string.ext_sheet_title),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = if (totalInstalled > 0)
-                                        "$totalInstalled installed · $totalEnabled active"
-                                    else "Firefox Add-ons compatible",
+                                        stringResource(R.string.ext_subtitle_active, totalInstalled, totalEnabled)
+                                    else stringResource(R.string.ext_subtitle_empty),
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
@@ -5475,7 +5476,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.List,
-                                            contentDescription = "List View",
+                                            contentDescription = stringResource(R.string.ext_list_view),
                                             tint = if (viewModel.extensionViewMode == "List")
                                                 MaterialTheme.colorScheme.primary
                                             else
@@ -5489,7 +5490,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Apps,
-                                            contentDescription = "Grid View",
+                                            contentDescription = stringResource(R.string.ext_grid_view),
                                             tint = if (viewModel.extensionViewMode == "Grid")
                                                 MaterialTheme.colorScheme.primary
                                             else
@@ -5520,7 +5521,7 @@ fun BrowserScreen(
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
-                                            text = "Browse Store",
+                                            text = stringResource(R.string.ext_browse_store),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.primary
@@ -5539,19 +5540,22 @@ fun BrowserScreen(
                                 .padding(3.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            listOf("Installed", "Curated Store").forEach { tab ->
-                                val isSelected = selectedExtensionTab == tab
+                            listOf(
+                                "Installed" to stringResource(R.string.ext_installed_tab),
+                                "Curated Store" to stringResource(R.string.ext_curated_store_tab)
+                            ).forEach { (tabId, tabLabel) ->
+                                val isSelected = selectedExtensionTab == tabId
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(34.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                        .clickable { selectedExtensionTab = tab },
+                                        .clickable { selectedExtensionTab = tabId },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = if (tab == "Installed") "Installed ($totalInstalled)" else "Curated Store",
+                                        text = if (tabId == "Installed") stringResource(R.string.ext_installed_tab_count, totalInstalled) else tabLabel,
                                         fontSize = 12.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -5626,7 +5630,7 @@ fun BrowserScreen(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
-                                        text = "Installed Add-ons",
+                                        text = stringResource(R.string.ext_installed_addons),
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.primary
@@ -5795,36 +5799,52 @@ fun BrowserScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                             Text(
-                                text = "Built-in Extensions",
+                                text = stringResource(R.string.ext_built_in_title),
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
                         }
 
+                        val extTeamAuthor = stringResource(R.string.ext_team_author)
+                        val extPopupBlocker = stringResource(R.string.ext_builtin_popup_blocker)
+                        val extPopupBlockerDesc = stringResource(R.string.ext_builtin_popup_blocker_desc)
+                        val extUniversalCopy = stringResource(R.string.ext_builtin_universal_copy)
+                        val extUniversalCopyDesc = stringResource(R.string.ext_builtin_universal_copy_desc)
+                        val extMediaSniffer = stringResource(R.string.ext_builtin_media_sniffer)
+                        val extMediaSnifferDesc = stringResource(R.string.ext_builtin_media_sniffer_desc)
+                        val extAiBlocker = stringResource(R.string.ext_builtin_ai_blocker)
+                        val extAiBlockerDesc = stringResource(R.string.ext_builtin_ai_blocker_desc)
+                        val extForceDark = stringResource(R.string.appearance_force_dark_websites)
+                        val extForceDarkDesc = stringResource(R.string.appearance_force_dark_websites_desc)
                         val builtInExts = remember(
                             viewModel.isPopupBlockerEnabled,
                             viewModel.isUniversalCopyEnabled, viewModel.isUniversalCopyToggling,
                             viewModel.isMediaGrabberEnabled, viewModel.isMediaGrabberToggling,
-                            viewModel.isAiBlockerEnabled, viewModel.isAiBlockerToggling
+                            viewModel.isAiBlockerEnabled, viewModel.isAiBlockerToggling,
+                            viewModel.forceDarkWebsites
                         ) {
                             listOf(
-                                BuiltInExt(Icons.Rounded.Block, "Popup Blocker", "Omni Browser Team",
-                                    "Blocks auto-jumping ad tabs, pop-unders, and script-injected popups.",
+                                BuiltInExt(Icons.Rounded.Block, extPopupBlocker, extTeamAuthor,
+                                    extPopupBlockerDesc,
                                     viewModel.isPopupBlockerEnabled, true,
                                     { viewModel.togglePopupBlocker(context) }),
-                                BuiltInExt(Icons.Rounded.FileCopy, "Universal Copy", "Omni Browser Team",
-                                    "Bypass website restrictions to force-enable text selection and copying.",
+                                BuiltInExt(Icons.Rounded.FileCopy, extUniversalCopy, extTeamAuthor,
+                                    extUniversalCopyDesc,
                                     viewModel.isUniversalCopyEnabled, !viewModel.isUniversalCopyToggling,
                                     { viewModel.toggleUniversalCopy(context) }),
-                                BuiltInExt(Icons.Rounded.Download, "Media Sniffer", "Omni Browser Team",
-                                    "Sniff and capture offline dynamic HLS/DASH segments and streams.",
+                                BuiltInExt(Icons.Rounded.Download, extMediaSniffer, extTeamAuthor,
+                                    extMediaSnifferDesc,
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
                                     { viewModel.toggleMediaGrabber(context) }),
-                                BuiltInExt(Icons.Rounded.Block, "AI Blocker", "Omni Browser Team",
-                                    "Block AI Overview summaries and assistant panels on search engines.",
+                                BuiltInExt(Icons.Rounded.Block, extAiBlocker, extTeamAuthor,
+                                    extAiBlockerDesc,
                                     viewModel.isAiBlockerEnabled, !viewModel.isAiBlockerToggling,
-                                    { viewModel.toggleAiBlocker(context) })
+                                    { viewModel.toggleAiBlocker(context) }),
+                                BuiltInExt(Icons.Rounded.DarkMode, extForceDark, extTeamAuthor,
+                                    extForceDarkDesc,
+                                    viewModel.forceDarkWebsites, true,
+                                    { viewModel.saveForceDarkWebsites(context, !viewModel.forceDarkWebsites) })
                             )
                         }
 
@@ -5874,7 +5894,7 @@ fun BrowserScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Get More Firefox Add-ons",
+                                    text = stringResource(R.string.ext_get_more_addons),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary
@@ -5956,7 +5976,7 @@ fun BrowserScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "Extension",
+                                            text = stringResource(R.string.ext_popup_subtitle),
                                             fontSize = 10.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                                         )
@@ -5978,7 +5998,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.ZoomOut,
-                                            contentDescription = "Zoom Out",
+                                            contentDescription = stringResource(R.string.ext_zoom_out),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -6008,7 +6028,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.ZoomIn,
-                                            contentDescription = "Zoom In",
+                                            contentDescription = stringResource(R.string.ext_zoom_in),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -6021,7 +6041,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Close,
-                                            contentDescription = "Close",
+                                            contentDescription = stringResource(R.string.ext_close),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -6084,7 +6104,7 @@ fun BrowserScreen(
                                                 modifier = Modifier.size(36.dp)
                                             )
                                             Text(
-                                                text = "Loading extension…",
+                                                text = stringResource(R.string.ext_loading_extension),
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                             )
@@ -6891,9 +6911,9 @@ fun BrowserScreen(
             // QR Overview Dialog
             if (showQrOverviewDialog) {
                 FeatureOverviewDialog(
-                    title = "QR Scanner & Generator",
-                    subtitle = "Fully Local & Secure",
-                    description = "Omni Browser integrates local QR code utilities powered completely offline by Google ML Kit.\n\n• QR Scan Page: Automatically detects and decodes any QR codes visible on your current tab's screen.\n• QR Generator: Instantly converts your active webpage URL into a QR code for quick sharing. You can also customize the text/URL in real-time.",
+                    title = stringResource(R.string.overview_qr_title),
+                    subtitle = stringResource(R.string.overview_qr_subtitle),
+                    description = stringResource(R.string.overview_qr_desc),
                     icon = Icons.Rounded.QrCodeScanner,
                     accentColor = Color(0xFF00D2C4), // Cyan/Teal
                     isDarkTheme = viewModel.isDarkThemeEnabled,
@@ -6909,9 +6929,9 @@ fun BrowserScreen(
             // PDF Overview Dialog
             if (showPdfOverviewDialog) {
                 FeatureOverviewDialog(
-                    title = "Web Page to PDF",
-                    subtitle = "Clean offline saving",
-                    description = "Convert any webpage or web article into a clean, read-optimized PDF document locally on your device.\n\nGreat for saving news, documentation, or study materials for offline access without external trackers.",
+                    title = stringResource(R.string.overview_pdf_title),
+                    subtitle = stringResource(R.string.overview_pdf_subtitle),
+                    description = stringResource(R.string.overview_pdf_desc),
                     icon = Icons.Rounded.Print,
                     accentColor = Color(0xFF30D158), // Emerald Green
                     isDarkTheme = viewModel.isDarkThemeEnabled,
@@ -6945,9 +6965,9 @@ fun BrowserScreen(
             // Extensions Overview Dialog
             if (showExtensionsOverviewDialog) {
                 FeatureOverviewDialog(
-                    title = "Firefox Desktop Extensions",
-                    subtitle = "Ad-blockers & Developer tools",
-                    description = "Omni Browser supports desktop Firefox extensions. You can install tools like uBlock Origin directly from the extensions panel to block ads and trackers.\n\nAll extension processing runs entirely local to your device.",
+                    title = stringResource(R.string.ext_overview_title),
+                    subtitle = stringResource(R.string.ext_overview_subtitle),
+                    description = stringResource(R.string.ext_overview_desc),
                     icon = Icons.Rounded.Extension,
                     accentColor = Color(0xFFFF3B5C), // Crimson Red
                     isDarkTheme = viewModel.isDarkThemeEnabled,
@@ -6963,9 +6983,9 @@ fun BrowserScreen(
             // Edit Page Overview Dialog
             if (showEditPageOverviewDialog) {
                 FeatureOverviewDialog(
-                    title = "Web Page Editor",
-                    subtitle = "Live DOM Manipulation",
-                    description = "Omni Browser allows you to edit the text and elements of any webpage in real-time.\n\nSimply tap elements on the screen to modify text, delete components, or change layout. Tap the tool again to save your edits or exit edit mode.",
+                    title = stringResource(R.string.overview_edit_title),
+                    subtitle = stringResource(R.string.overview_edit_subtitle),
+                    description = stringResource(R.string.overview_edit_desc),
                     icon = Icons.Rounded.Edit,
                     accentColor = Color(0xFF5E5CE6), // Royal Purple
                     isDarkTheme = viewModel.isDarkThemeEnabled,
@@ -6981,9 +7001,9 @@ fun BrowserScreen(
             // Console Log Overview Dialog
             if (showConsoleOverviewDialog) {
                 FeatureOverviewDialog(
-                    title = "Developer Console",
-                    subtitle = "JS Logs & Diagnostics",
-                    description = "Inspect console messages, warnings, and errors printed by the active webpage.\n\nGreat for debugging scripts, tracking network requests, or analyzing webpage behavior in real-time.",
+                    title = stringResource(R.string.overview_console_title),
+                    subtitle = stringResource(R.string.overview_console_subtitle),
+                    description = stringResource(R.string.overview_console_desc),
                     icon = Icons.Rounded.Terminal,
                     accentColor = Color(0xFFF1C40F), // Glow Yellow/Amber
                     isDarkTheme = viewModel.isDarkThemeEnabled,
@@ -6999,9 +7019,9 @@ fun BrowserScreen(
             // Dev Notes Overview Dialog
             if (showDevNotesOverviewDialog) {
                 FeatureOverviewDialog(
-                    title = "Dev Notes & Vault",
-                    subtitle = "Secure Offline Credentials & Snippets",
-                    description = "Store passwords, API keys, code snippets, and urls 100% offline securely inside the app sandbox.\n\nIncludes an helper keyboard row for quick symbols insertion (`{}`, `[]`, `=>`, `;`), paste/copy clipboard operators, and direct URL navigation with automated password copying.",
+                    title = stringResource(R.string.overview_devnotes_title),
+                    subtitle = stringResource(R.string.overview_devnotes_subtitle),
+                    description = stringResource(R.string.overview_devnotes_desc),
                     icon = Icons.Rounded.Description,
                     accentColor = Color(0xFF9B59B6), // Purple
                     isDarkTheme = viewModel.isDarkThemeEnabled,

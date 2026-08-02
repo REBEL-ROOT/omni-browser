@@ -1714,7 +1714,7 @@ fun HomeScreenContent(
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 Text(
-                    text = "Customize Home Screen",
+                    text = stringResource(R.string.customize_home_title),
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
@@ -1727,7 +1727,7 @@ fun HomeScreenContent(
 
                 // ── SECTION 1: WALLPAPERS & BACKGROUND ──────────────────────────
                 Text(
-                    text = "WALLPAPERS & BACKGROUND",
+                    text = stringResource(R.string.palette_section_wallpapers),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -1772,13 +1772,13 @@ fun HomeScreenContent(
                             }
                             Column {
                                 Text(
-                                    text = "Wallpaper Store & Gallery",
+                                    text = stringResource(R.string.wallpaper_store_gallery),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
                                 )
                                 Text(
-                                    text = "Choose custom backgrounds and live daily wallpapers",
+                                    text = stringResource(R.string.wallpaper_store_gallery_desc),
                                     fontSize = 11.sp,
                                     color = Color(0xFF8E8E93)
                                 )
@@ -1802,7 +1802,7 @@ fun HomeScreenContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Wallpaper Dim",
+                                text = stringResource(R.string.wallpaper_dim_label),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
@@ -1834,7 +1834,7 @@ fun HomeScreenContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Wallpaper Blur",
+                                text = stringResource(R.string.wallpaper_blur_label),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
@@ -1863,7 +1863,7 @@ fun HomeScreenContent(
 
                 // ── SECTION 2: ACCENT THEME COLOR ────────────────────────────
                 Text(
-                    text = "ACCENT THEME COLOR",
+                    text = stringResource(R.string.palette_section_accent),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -1917,7 +1917,7 @@ fun HomeScreenContent(
 
                 // ── SECTION 3: SHORTCUT TILE STYLE ────────────────────────────
                 Text(
-                    text = "SHORTCUT TILE STYLE",
+                    text = stringResource(R.string.palette_section_shortcut),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -1933,7 +1933,7 @@ fun HomeScreenContent(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Choose the shape of your shortcut icons",
+                        text = stringResource(R.string.shortcut_shape_helper),
                         fontSize = 12.sp,
                         color = Color(0xFF8E8E93)
                     )
@@ -1941,7 +1941,12 @@ fun HomeScreenContent(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("Circle", "Squircle", "Square", "Glass").forEach { style ->
+                        listOf(
+                            "Circle" to stringResource(R.string.style_circle),
+                            "Squircle" to stringResource(R.string.style_squircle),
+                            "Square" to stringResource(R.string.style_square),
+                            "Glass" to stringResource(R.string.style_glass)
+                        ).forEach { (style, label) ->
                             val isSelected = viewModel.shortcutTileStyle == style
                             Box(
                                 modifier = Modifier
@@ -1956,7 +1961,7 @@ fun HomeScreenContent(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = style,
+                                    text = label,
                                     fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected) Color.White else if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
@@ -1970,7 +1975,7 @@ fun HomeScreenContent(
 
                 // ── SECTION 4: LAYOUT SCALERS ─────────────────────────────────
                 Text(
-                    text = "UI SCALERS",
+                    text = stringResource(R.string.palette_section_scalers),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -1993,7 +1998,7 @@ fun HomeScreenContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Home Screen UI Scale",
+                                text = stringResource(R.string.home_screen_ui_scale),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
@@ -2030,7 +2035,7 @@ fun HomeScreenContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "App Nav Scaler",
+                                text = stringResource(R.string.app_nav_scaler),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
@@ -2062,7 +2067,7 @@ fun HomeScreenContent(
 
                 // ── SECTION 5: VISIBILITY TOGGLES ─────────────────────────────
                 Text(
-                    text = "VISIBILITY TOGGLES",
+                    text = stringResource(R.string.palette_section_visibility),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -2085,13 +2090,13 @@ fun HomeScreenContent(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Show Logo",
+                                text = stringResource(R.string.show_logo),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
                             )
                             Text(
-                                text = "Display Omni brand logo at the top",
+                                text = stringResource(R.string.show_logo_desc),
                                 fontSize = 12.sp,
                                 color = Color(0xFF8E8E93)
                             )
@@ -2115,13 +2120,13 @@ fun HomeScreenContent(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Show Shortcuts",
+                                text = stringResource(R.string.show_shortcuts),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
                             )
                             Text(
-                                text = "Quick access site links and built-in shortcuts",
+                                text = stringResource(R.string.show_shortcuts_desc),
                                 fontSize = 12.sp,
                                 color = Color(0xFF8E8E93)
                             )
@@ -2145,13 +2150,13 @@ fun HomeScreenContent(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Privacy Stats Widget",
+                                text = stringResource(R.string.privacy_stats_widget),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
                             )
                             Text(
-                                text = "Show trackers blocked & data saved card",
+                                text = stringResource(R.string.privacy_stats_widget_desc),
                                 fontSize = 12.sp,
                                 color = Color(0xFF8E8E93)
                             )
@@ -2175,13 +2180,13 @@ fun HomeScreenContent(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Minimalist Focus Mode",
+                                text = stringResource(R.string.minimalist_focus_mode),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
                             )
                             Text(
-                                text = "Hide everything except the search bar",
+                                text = stringResource(R.string.minimalist_focus_mode_desc),
                                 fontSize = 12.sp,
                                 color = Color(0xFF8E8E93)
                             )

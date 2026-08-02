@@ -87,7 +87,7 @@ fun QrToolsScreen(
     ) { isGranted ->
         hasCameraPermission = isGranted
         if (!isGranted) {
-            Toast.makeText(context, "Camera permission is required to scan codes", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.qr_perm_required), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -106,10 +106,10 @@ fun QrToolsScreen(
                 if (result != null) {
                     scannedResult = result
                 } else {
-                    Toast.makeText(context, "No QR codes found in this image", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.qr_none_in_image), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Failed to load image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.qr_load_failed, e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -149,7 +149,7 @@ fun QrToolsScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "📷 QR Scanner",
+                                text = stringResource(R.string.qr_title),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 modifier = Modifier.weight(1f)
                             )
@@ -206,12 +206,12 @@ fun QrToolsScreen(
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Text(
-                                    text = "Camera Permission Required",
+                                    text = stringResource(R.string.qr_perm_title),
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
                                 Text(
-                                    text = "To scan QR codes with your camera, please grant camera permissions. Alternatively, you can scan an image from your gallery.",
+                                    text = stringResource(R.string.qr_perm_desc),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                     textAlign = TextAlign.Center
@@ -226,7 +226,7 @@ fun QrToolsScreen(
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("Grant Permission")
+                                        Text(stringResource(R.string.qr_grant))
                                     }
 
                                     OutlinedButton(
@@ -234,7 +234,7 @@ fun QrToolsScreen(
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("Gallery Image")
+                                        Text(stringResource(R.string.qr_gallery))
                                     }
                                 }
                             }
@@ -266,7 +266,7 @@ fun QrToolsScreen(
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Scan Result",
+                            text = stringResource(R.string.qr_scan_result),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                     }
@@ -363,7 +363,7 @@ fun QrToolsScreen(
                             ),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Scan Another Code")
+                            Text(stringResource(R.string.qr_scan_another))
                         }
                     }
                 }
@@ -511,7 +511,7 @@ fun CameraPreviewScanner(
             }
 
             Text(
-                text = "Scan code",
+                text = stringResource(R.string.qr_scan_code),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = Color.White
             )
@@ -548,7 +548,7 @@ fun CameraPreviewScanner(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "Secured by Omni QR Scanner",
+                text = stringResource(R.string.qr_secured_by),
                 color = Color.White.copy(alpha = 0.8f),
                 style = MaterialTheme.typography.bodySmall
             )

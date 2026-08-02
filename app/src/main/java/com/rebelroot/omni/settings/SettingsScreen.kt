@@ -617,20 +617,72 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // App Language
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showLanguageSelector = true }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Rounded.Translate, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(stringResource(id = R.string.app_language_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text(currentLangName, color = textSecondaryColor, fontSize = 11.sp)
+                    var showLanguageDropdown by remember { mutableStateOf(false) }
+                    androidx.compose.runtime.LaunchedEffect(showLanguageSelector) {
+                        if (showLanguageSelector) {
+                            showLanguageDropdown = true
+                            showLanguageSelector = false
                         }
-                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                    }
+
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showLanguageDropdown = true }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Translate, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(stringResource(id = R.string.app_language_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(currentLangName, color = textSecondaryColor, fontSize = 11.sp)
+                            }
+                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = textSecondaryColor)
+                        }
+
+                        DropdownMenu(
+                            expanded = showLanguageDropdown,
+                            onDismissRequest = { showLanguageDropdown = false },
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .background(cardColor)
+                                .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(12.dp))
+                        ) {
+                            languages.forEach { (code, name) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = name,
+                                            color = textPrimaryColor,
+                                            fontWeight = if (viewModel.selectedLanguageCode == code) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        showLanguageDropdown = false
+                                        coroutineScope.launch {
+                                            viewModel.saveLanguagePreference(context, code)
+                                            onLanguageChanged()
+                                        }
+                                    },
+                                    colors = MenuDefaults.itemColors(
+                                        textColor = textPrimaryColor,
+                                        trailingIconColor = accentColor
+                                    ),
+                                    trailingIcon = {
+                                        if (viewModel.selectedLanguageCode == code) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = "Selected",
+                                                tint = accentColor,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
                     }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
@@ -1035,65 +1087,6 @@ fun SettingsScreen(
         }
     }
 
-    if (showLanguageSelector) {
-        AlertDialog(
-            onDismissRequest = { showLanguageSelector = false },
-            title = {
-                Text(
-                    text = stringResource(id = R.string.app_language_title),
-                    color = textPrimaryColor,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            containerColor = cardColor,
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    languages.forEach { (code, name) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showLanguageSelector = false
-                                    coroutineScope.launch {
-                                        viewModel.saveLanguagePreference(context, code)
-                                        onLanguageChanged()
-                                    }
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = name,
-                                color = textPrimaryColor,
-                                fontSize = 14.sp,
-                                fontWeight = if (viewModel.selectedLanguageCode == code) FontWeight.Bold else FontWeight.Normal
-                            )
-                            if (viewModel.selectedLanguageCode == code) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Check,
-                                    contentDescription = "Selected",
-                                    tint = accentColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLanguageSelector = false }) {
-                    Text(
-                        text = stringResource(id = R.string.cancel_text),
-                        color = accentColor
-                    )
-                }
-            }
-        )
-    }
 
     if (showFeedbackDialog) {
         var name by remember { mutableStateOf("") }

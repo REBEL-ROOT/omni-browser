@@ -77,6 +77,7 @@ import org.mozilla.geckoview.StorageController
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebExtension
 import com.rebelroot.omni.tools.qrcode.QrCodeDecoder
+import com.rebelroot.omni.ThemeStateHolder
 import java.lang.ref.WeakReference
 import java.io.File
 import androidx.core.content.pm.ShortcutInfoCompat
@@ -233,6 +234,7 @@ class BrowserViewModel : ViewModel() {
         val PLAYER_RESUME_PLAYBACK_KEY = booleanPreferencesKey("player_resume_playback")
         val PLAYER_BACKGROUND_PLAYBACK_KEY = booleanPreferencesKey("player_background_playback")
         val EXTENSION_ORDER_KEY = stringPreferencesKey("extension_order")
+        val EXTENSION_DISABLED_IDS_KEY = stringPreferencesKey("extension_disabled_ids")
         val EXTENSION_VIEW_MODE_KEY = stringPreferencesKey("extension_view_mode")
         val CREAMY_MODE_KEY = booleanPreferencesKey("creamy_mode")
         
@@ -2359,15 +2361,20 @@ class BrowserViewModel : ViewModel() {
             viewModelScope.launch {
                 val darkThemePref = getDarkThemePreference(appCtx).first()
                 isDarkThemeEnabled = darkThemePref
+                ThemeStateHolder.darkThemeEnabled = darkThemePref
                 updateGeckoColorScheme()
             }
 
             viewModelScope.launch {
-                selectedAccentTheme = getAccentThemePreference(appCtx).first()
+                val accentPref = getAccentThemePreference(appCtx).first()
+                selectedAccentTheme = accentPref
+                ThemeStateHolder.accentTheme = accentPref
             }
 
             viewModelScope.launch {
-                isAmoledMode = getAmoledModePreference(appCtx).first()
+                val amoledPref = getAmoledModePreference(appCtx).first()
+                isAmoledMode = amoledPref
+                ThemeStateHolder.amoledMode = amoledPref
             }
 
             viewModelScope.launch {
@@ -2375,7 +2382,9 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
-                isDynamicColorEnabled = false
+                val dynamicPref = getDynamicColorPreference(appCtx).first()
+                isDynamicColorEnabled = dynamicPref
+                ThemeStateHolder.dynamicColorEnabled = dynamicPref
             }
 
             try {
@@ -2546,7 +2555,7 @@ class BrowserViewModel : ViewModel() {
             isAiBlockerEnabled = getAiBlockerPreference(context).first()
             aiBlockerManager?.installAndSync(isAiBlockerEnabled, onComplete = null)
 
-            forceDarkManager?.installAndSync(forceDarkWebsites || isDarkThemeEnabled, onComplete = null)
+            forceDarkManager?.installAndSync(forceDarkWebsites, onComplete = null)
 
             isExternalDownloadManagerEnabled = getExternalDownloadManagerPreference(context).first()
         }
@@ -3137,6 +3146,9 @@ class BrowserViewModel : ViewModel() {
                 preferences[DARK_THEME_ENABLED_KEY] = enabled
             }
             isDarkThemeEnabled = enabled
+            // Keep ThemeStateHolder in sync so recreate() (e.g. on language change)
+            // re-applies the current theme instead of the stale process-start value.
+            ThemeStateHolder.darkThemeEnabled = enabled
             updateGeckoColorScheme()
             if (enabled || forceDarkWebsites) {
                 injectForceDarkCssIfNeeded()
@@ -3155,6 +3167,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[AMOLED_MODE_KEY] = enabled }
             isAmoledMode = enabled
+            ThemeStateHolder.amoledMode = enabled
         }
     }
 
@@ -3182,7 +3195,8 @@ class BrowserViewModel : ViewModel() {
     fun saveDynamicColor(context: Context, enabled: Boolean) {
         viewModelScope.launch {
             context.dataStore.edit { it[DYNAMIC_COLOR_KEY] = enabled }
-            isDynamicColorEnabled = false
+            isDynamicColorEnabled = enabled
+            ThemeStateHolder.dynamicColorEnabled = enabled
         }
     }
 
@@ -3214,6 +3228,7 @@ class BrowserViewModel : ViewModel() {
                 preferences[ACCENT_THEME_KEY] = theme
             }
             selectedAccentTheme = theme
+            ThemeStateHolder.accentTheme = theme
         }
     }
 
@@ -3224,7 +3239,7 @@ class BrowserViewModel : ViewModel() {
         } else {
             GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
         }
-        forceDarkManager?.setEnabled(isDark)
+        forceDarkManager?.setEnabled(forceDarkWebsites)
     }
 
     fun injectForceDarkCssIfNeeded(targetTab: TabState? = activeTab) {
@@ -3849,7 +3864,28 @@ class BrowserViewModel : ViewModel() {
         }
         action.accept(
             {
-                syncUserExtensions()
+                if (extension.id == FORCE_DARK_EXTENSION_ID) {
+                    saveForceDarkWebsites(context, !currentlyEnabled)
+                }
+                viewModelScope.launch {
+                    try {
+                        context.dataStore.edit { preferences ->
+                            val currentDisabled = preferences[EXTENSION_DISABLED_IDS_KEY]
+                                ?.split(",")
+                                ?.filter { it.isNotBlank() }
+                                ?.toMutableSet() ?: mutableSetOf()
+                            if (currentlyEnabled) {
+                                currentDisabled.add(extension.id)
+                            } else {
+                                currentDisabled.remove(extension.id)
+                            }
+                            preferences[EXTENSION_DISABLED_IDS_KEY] = currentDisabled.joinToString(",")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to update disabled extensions preference", e)
+                    }
+                    syncUserExtensions()
+                }
                 currentSettingsVersion++
                 val activeId = activeTabId
                 if (activeId != null) {
@@ -5264,7 +5300,7 @@ class BrowserViewModel : ViewModel() {
         runtime.webExtensionController.list()
             .accept(
                 { list ->
-                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app", PROXY_ROUTER_ID)
+                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app", PROXY_ROUTER_ID, FORCE_DARK_EXTENSION_ID)
                     val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
                     val leftoverAgent = list?.find { it.id == "omni-agent@omnibrowser.app" }
                     if (leftoverAgent != null) {
@@ -5272,9 +5308,38 @@ class BrowserViewModel : ViewModel() {
                         runtime.webExtensionController.uninstall(leftoverAgent)
                     }
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        val context = appContext
+                        val (savedOrder, disabledIdsSet) = if (context != null) {
+                            runBlocking {
+                                try {
+                                    val prefs = context.dataStore.data.first()
+                                    val order = prefs[EXTENSION_ORDER_KEY]?.split(",") ?: emptyList()
+                                    val disabledStr = prefs[EXTENSION_DISABLED_IDS_KEY] ?: ""
+                                    val disabled = if (disabledStr.isBlank()) emptySet() else disabledStr.split(",").filter { it.isNotBlank() }.toSet()
+                                    Pair(order, disabled)
+                                } catch (e: Exception) {
+                                    Pair(emptyList<String>(), emptySet<String>())
+                                }
+                            }
+                        } else {
+                            Pair(emptyList<String>(), emptySet<String>())
+                        }
+
                         filtered.forEach { ext ->
                             runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
-                            runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                             if (ext.id == FORCE_DARK_EXTENSION_ID) {
+                                 if (forceDarkWebsites) {
+                                     runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                 } else {
+                                     runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                 }
+                             } else {
+                                 if (disabledIdsSet.contains(ext.id)) {
+                                     runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                 } else {
+                                     runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                 }
+                             }
                             ext.setTabDelegate(object : WebExtension.TabDelegate {
                                 override fun onNewTab(
                                     extension: WebExtension,
@@ -5360,20 +5425,6 @@ class BrowserViewModel : ViewModel() {
                                 }
                             })
                         }
-                        val context = appContext
-                        val savedOrder = if (context != null) {
-                            runBlocking {
-                                try {
-                                    val prefs = context.dataStore.data.first()
-                                    prefs[EXTENSION_ORDER_KEY]?.split(",") ?: emptyList()
-                                } catch (e: Exception) {
-                                    emptyList()
-                                }
-                            }
-                        } else {
-                            emptyList()
-                        }
-
                         val sorted = filtered.sortedWith(compareBy {
                             val idx = savedOrder.indexOf(it.id)
                             if (idx == -1) Int.MAX_VALUE else idx
