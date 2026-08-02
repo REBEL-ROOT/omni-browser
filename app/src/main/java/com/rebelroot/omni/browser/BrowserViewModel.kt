@@ -2131,20 +2131,31 @@ class BrowserViewModel : ViewModel() {
             try {
                 geckoRuntime = GeckoRuntime.create(appCtx, settings)
                 geckoRuntimeError = null   // clear any previous failure
-                // The config file set startup defaults, but apply the proxy prefs
-                // live too so the freshly-created engine immediately matches the
-                // persisted provider (covers a cold launch where provider was
-                // already tor_builtin from a prior session).
                 applyProxyPrefsLive()
             } catch (t: Throwable) {
-                // GeckoRuntime.create can fail when native .so loading fails at
-                // runtime (e.g. UnsatisfiedLinkError / dlopen on Android 15+ with
-                // unaligned libs). Log it, expose the error via state so the UI
-                // can render GeckoErrorScreen, and rethrow for the existing
-                // MainActivity catch block to also pick it up.
-                Log.e(TAG, "GeckoRuntime.create FAILED: ${t.javaClass.simpleName}: ${t.message}", t)
-                geckoRuntimeError = "${t.javaClass.simpleName}: ${t.message}"
-                throw t
+                Log.e(TAG, "GeckoRuntime.create FAILED with config file, trying clean fallback", t)
+                try {
+                    // Fallback: Delete config file and retry initialization cleanly
+                    val cfg = File(appCtx.filesDir, "geckoview-config.yaml")
+                    if (cfg.exists()) cfg.delete()
+                    
+                    val fallbackSettings = GeckoRuntimeSettings.Builder()
+                        .aboutConfigEnabled(isDebug)
+                        .consoleOutput(isDebug)
+                        .debugLogging(isDebug)
+                        .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
+                        .locales(arrayOf(lang))
+                        .contentBlocking(cbSettings)
+                        .build()
+                        
+                    geckoRuntime = GeckoRuntime.create(appCtx, fallbackSettings)
+                    geckoRuntimeError = null
+                    applyProxyPrefsLive()
+                } catch (fallbackError: Throwable) {
+                    Log.e(TAG, "GeckoRuntime fallback initialization also failed: ${fallbackError.message}", fallbackError)
+                    geckoRuntimeError = "${fallbackError.javaClass.simpleName}: ${fallbackError.message}"
+                    throw fallbackError
+                }
             }
             pruneTemporaryStorage(appCtx)
 
@@ -4139,29 +4150,34 @@ class BrowserViewModel : ViewModel() {
      * apply them in the current session.
      */
     fun restartApp(context: Context) {
-        // Use AlarmManager to schedule the relaunch 500 ms in the future so the
-        // new process is guaranteed to be queued before we kill the current one.
-        // A bare startActivity + killProcess races on some OEMs and can leave the
-        // app dead.
-        try {
-            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            if (intent != null) {
-                intent.addFlags(
-                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
-                )
-                val pending = android.app.PendingIntent.getActivity(
-                    context, 0, intent,
-                    android.app.PendingIntent.FLAG_ONE_SHOT or android.app.PendingIntent.FLAG_IMMUTABLE
-                )
-                val am = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                am.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + 500, pending)
+        viewModelScope.launch(Dispatchers.Main) {
+            try {
+                regenerateGeckoConfig()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to flush gecko config before restart", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "restartApp: failed to schedule relaunch", e)
+            privacyRestartNeeded = false
+
+            try {
+                val packageManager = context.packageManager
+                val launchIntent = packageManager.getLaunchIntentForPackage(context.packageName)
+                if (launchIntent != null && launchIntent.component != null) {
+                    val restartIntent = android.content.Intent.makeRestartActivityTask(launchIntent.component)
+                    context.startActivity(restartIntent)
+                    if (context is android.app.Activity) {
+                        context.finishAffinity()
+                    }
+                    Runtime.getRuntime().exit(0)
+                    return@launch
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "makeRestartActivityTask failed, fallback to recreate", e)
+            }
+
+            if (context is android.app.Activity) {
+                context.recreate()
+            }
         }
-        privacyRestartNeeded = false
-        android.os.Process.killProcess(android.os.Process.myPid())
     }
 
     /**
@@ -4473,7 +4489,11 @@ class BrowserViewModel : ViewModel() {
                 sb.append("  canvas.captureStream.enabled: false\n")
                 sb.append("  dom.webaudio.enabled: false\n")
             }
-            configFile.writeText(sb.toString())
+            val tmpFile = File(ctx.filesDir, "geckoview-config.tmp")
+            tmpFile.writeText(sb.toString())
+            if (tmpFile.exists() && tmpFile.length() > 0) {
+                tmpFile.renameTo(configFile)
+            }
             privacyRestartNeeded = true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to regenerate geckoview-config.yaml", e)
