@@ -256,17 +256,15 @@ fun NewsScreen(
                         .weight(1f)
                 ) {
                     itemsIndexed(viewModel.newsArticles, key = { index, article -> "${article.link}_$index" }) { _, article ->
-                        val domain = remember(article.source, article.link) {
-                            viewModel.extractDomain(article.link.ifEmpty { null }, article.source)
+                        val universalFallbackPhoto = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800"
+                        val fallbackPhoto = remember(article.title, viewModel.selectedNewsCategory) {
+                            viewModel.getFallbackCategoryPhoto(article.title, viewModel.selectedNewsCategory)
                         }
-                        val providerLogoUrl = remember(domain) {
-                            "https://www.google.com/s2/favicons?domain=$domain&sz=128"
+                        val initialPhoto = remember(article.imageUrl, fallbackPhoto) {
+                            if (article.imageUrl.isNotBlank() && article.imageUrl.startsWith("http")) article.imageUrl else fallbackPhoto
                         }
-                        val hasArticleImage = article.imageUrl.isNotBlank() && article.imageUrl.startsWith("http")
-                        var currentImgUrl by remember(article.imageUrl) {
-                            mutableStateOf(if (hasArticleImage) article.imageUrl else "")
-                        }
-                        var isLoadFailed by remember(article.imageUrl) { mutableStateOf(!hasArticleImage) }
+                        var currentImgUrl by remember(article.imageUrl, initialPhoto) { mutableStateOf(initialPhoto) }
+                        var isLoadFailed by remember(article.imageUrl, fallbackPhoto) { mutableStateOf(false) }
 
                         Card(
                             onClick = {
@@ -283,7 +281,7 @@ fun NewsScreen(
                             Column(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                // Article Headline Photo with News Provider Logo Fallback
+                                // Article Headline Photo with Multi-Tier Real Photo Fallback
                                 if (!isLoadFailed && currentImgUrl.isNotBlank()) {
                                     AsyncImage(
                                         model = ImageRequest.Builder(LocalContext.current)
@@ -292,7 +290,13 @@ fun NewsScreen(
                                             .setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                                             .listener(
                                                 onError = { _, _ ->
-                                                    isLoadFailed = true
+                                                    if (currentImgUrl != fallbackPhoto) {
+                                                        currentImgUrl = fallbackPhoto
+                                                    } else if (currentImgUrl != universalFallbackPhoto) {
+                                                        currentImgUrl = universalFallbackPhoto
+                                                    } else {
+                                                        isLoadFailed = true
+                                                    }
                                                 }
                                             )
                                             .build(),
@@ -305,69 +309,61 @@ fun NewsScreen(
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
                                     )
                                 } else {
-                                    // Sleek News Publisher Provider Header Card (Fallback)
+                                    // Sleek Editorial News Banner Fallback (No dark/blank placeholders)
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(150.dp)
+                                            .height(190.dp)
                                             .clip(RoundedCornerShape(16.dp))
                                             .background(
                                                 Brush.linearGradient(
-                                                    colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+                                                    colors = listOf(
+                                                        MaterialTheme.colorScheme.primaryContainer,
+                                                        MaterialTheme.colorScheme.surfaceVariant
+                                                    )
                                                 )
                                             )
-                                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp)),
-                                        contentAlignment = Alignment.Center
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.CenterStart
                                     ) {
                                         Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            verticalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier.fillMaxSize()
                                         ) {
-                                            // Provider Favicon / High-Res Logo Badge
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = Color(0xFF334155).copy(alpha = 0.6f),
-                                                border = BorderStroke(1.dp, Color(0xFF475569)),
-                                                modifier = Modifier.size(52.dp)
+                                            Row(
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Box(
-                                                    contentAlignment = Alignment.Center,
-                                                    modifier = Modifier.fillMaxSize()
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                                 ) {
-                                                    AsyncImage(
-                                                        model = ImageRequest.Builder(LocalContext.current)
-                                                            .data(providerLogoUrl)
-                                                            .crossfade(true)
-                                                            .build(),
-                                                        contentDescription = article.source,
-                                                        modifier = Modifier
-                                                            .size(32.dp)
-                                                            .clip(CircleShape)
+                                                    Text(
+                                                        text = viewModel.selectedNewsCategory.uppercase(),
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                                     )
                                                 }
-                                            }
-                                            // Publisher Source Name
-                                            Text(
-                                                text = article.source.ifBlank { "Omni News" },
-                                                color = Color(0xFFF8FAFC),
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                            // Category Tag Chip
-                                            Surface(
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = Color(0xFF6366F1).copy(alpha = 0.18f),
-                                                border = BorderStroke(0.5.dp, Color(0xFF818CF8).copy(alpha = 0.4f))
-                                            ) {
                                                 Text(
-                                                    text = viewModel.selectedNewsCategory.uppercase(),
-                                                    color = Color(0xFFA5B4FC),
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                                    text = article.source.ifBlank { "Omni News" },
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
                                                 )
                                             }
+                                            Text(
+                                                text = article.title,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                maxLines = 3,
+                                                overflow = TextOverflow.Ellipsis,
+                                                lineHeight = 20.sp
+                                            )
                                         }
                                     }
                                 }

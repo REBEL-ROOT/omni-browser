@@ -5764,7 +5764,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     /** Extract a clean domain from the source URL attribute or fall back to a lookup table. */
-    fun extractDomain(sourceUrl: String?, sourceName: String): String {
+    private fun extractDomain(sourceUrl: String?, sourceName: String): String {
         if (!sourceUrl.isNullOrEmpty()) {
             try {
                 val host = Uri.parse(sourceUrl).host ?: ""
@@ -5774,19 +5774,108 @@ class BrowserViewModel : ViewModel() {
         return getDomainForSource(sourceName)
     }
 
+    private val topicHeadlinePhotos = mapOf(
+        "Technology" to listOf(
+            "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800",
+            "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=800",
+            "https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=800",
+            "https://images.unsplash.com/photo-1531297484001-80022131f5a1?q=80&w=800",
+            "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=800",
+            "https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=800",
+            "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800"
+        ),
+        "Sports" to listOf(
+            "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=800",
+            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=800",
+            "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800",
+            "https://images.unsplash.com/photo-1530549387789-4c1017266635?q=80&w=800",
+            "https://images.unsplash.com/photo-1517649763962-0c623266010b?q=80&w=800"
+        ),
+        "Business" to listOf(
+            "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=800",
+            "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800",
+            "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=800",
+            "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?q=80&w=800",
+            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=800"
+        ),
+        "World" to listOf(
+            "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800",
+            "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=800",
+            "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=800",
+            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800",
+            "https://images.unsplash.com/photo-1508873696983-2df515122519?q=80&w=800",
+            "https://images.unsplash.com/photo-1477959858617-67f30ac4ce78?q=80&w=800"
+        ),
+        "Top Stories" to listOf(
+            "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800",
+            "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=800",
+            "https://images.unsplash.com/photo-1477959858617-67f30ac4ce78?q=80&w=800",
+            "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=800"
+        ),
+        "News" to listOf(
+            "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800",
+            "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=800",
+            "https://images.unsplash.com/photo-1477959858617-67f30ac4ce78?q=80&w=800"
+        ),
+        "Science" to listOf(
+            "https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?q=80&w=800",
+            "https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=800",
+            "https://images.unsplash.com/photo-1507668077129-56e32842fceb?q=80&w=800",
+            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800"
+        ),
+        "Entertainment" to listOf(
+            "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800",
+            "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=800",
+            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800",
+            "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800"
+        ),
+        "Health" to listOf(
+            "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?q=80&w=800",
+            "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=800",
+            "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?q=80&w=800",
+            "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800"
+        ),
+        "Astrology" to listOf(
+            "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
+            "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
+            "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800"
+        ),
+        "Recipes" to listOf(
+            "https://images.unsplash.com/photo-1498837167922-ddd27525d352?q=80&w=800",
+            "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800",
+            "https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?q=80&w=800"
+        )
+    )
+
     private fun resolveHeadlineImageUrl(
         xmlImage: String,
-        cleanTitle: String,
+        title: String,
         category: String
     ): String {
         if (xmlImage.isNotBlank() && !xmlImage.contains("favicons") && !xmlImage.contains("favicon.ico")) {
             return xmlImage
         }
-        return ""
+
+        val pool = topicHeadlinePhotos[category] ?: topicHeadlinePhotos["World"]!!
+        val index = Math.abs(title.hashCode()) % pool.size
+        return pool[index]
     }
 
     fun getFallbackCategoryPhoto(title: String, category: String): String {
-        return ""
+        val lowerTitle = title.lowercase()
+        val detectedCategory = when {
+            category.isNotBlank() && topicHeadlinePhotos.containsKey(category) -> category
+            lowerTitle.contains("ai") || lowerTitle.contains("tech") || lowerTitle.contains("phone") || lowerTitle.contains("app") || lowerTitle.contains("chip") || lowerTitle.contains("google") || lowerTitle.contains("apple") || lowerTitle.contains("nvidia") -> "Technology"
+            lowerTitle.contains("crypto") || lowerTitle.contains("bitcoin") || lowerTitle.contains("stock") || lowerTitle.contains("market") || lowerTitle.contains("bank") || lowerTitle.contains("economy") || lowerTitle.contains("trade") -> "Business"
+            lowerTitle.contains("match") || lowerTitle.contains("score") || lowerTitle.contains("football") || lowerTitle.contains("soccer") || lowerTitle.contains("cricket") || lowerTitle.contains("nba") || lowerTitle.contains("league") -> "Sports"
+            lowerTitle.contains("movie") || lowerTitle.contains("film") || lowerTitle.contains("actor") || lowerTitle.contains("music") || lowerTitle.contains("star") || lowerTitle.contains("show") || lowerTitle.contains("series") -> "Entertainment"
+            lowerTitle.contains("doctor") || lowerTitle.contains("hospital") || lowerTitle.contains("health") || lowerTitle.contains("virus") || lowerTitle.contains("medicine") || lowerTitle.contains("diet") -> "Health"
+            lowerTitle.contains("space") || lowerTitle.contains("nasa") || lowerTitle.contains("science") || lowerTitle.contains("planet") || lowerTitle.contains("astronomy") -> "Science"
+            else -> "World"
+        }
+        val pool = topicHeadlinePhotos[detectedCategory] ?: topicHeadlinePhotos["World"]!!
+        val index = Math.abs(title.hashCode()) % pool.size
+        return pool[index]
     }
 
     private fun enrichArticlesWithOriginalOgImages(articles: List<NewsArticle>, category: String) {

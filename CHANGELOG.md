@@ -2,6 +2,21 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.7.1] - 2026-08-02
+
+### Added
+- **Chrome & Brave-Style Downloads Overhaul**: Redesigned Downloads screen with real-time storage metrics (`Using X MB of Y GB`), live search query bar, scrollable category filter chips (*All, Videos, Audio, Images, Documents, APKs, Other*), and 3-dot item context menus (**Share**, **Rename**, **Delete**).
+- **Default Quick Scroll Buttons**: Enabled floating scroll shortcuts (Scroll to Top / Scroll to Bottom) by default across the browser.
+- **Authentic News Photography & Multi-Tier Fallback Chain**: Replaced all synthetic AI stock photos with genuine editorial photography across all categories (*Top Stories, Technology, Business, World, Sports, Science, Entertainment, Health, Astrology, Recipes*). Implemented a 3-tier photo fallback chain with an editorial press fallback banner.
+- **Enhanced GitHub Releases OTA Updates Engine**: Implemented dual-mode version checking (`version.json` + direct GitHub Releases API fallback) and ABI-aware APK asset parsing for seamless background updates and one-tap package installation.
+
+### Fixed
+- **Android 11+ Package Visibility & External File Opener**: Resolved "no app available to open this file" issue by adding package queries (`ACTION_VIEW`, `ACTION_SEND`, `ACTION_INSTALL_PACKAGE`) to `AndroidManifest.xml` and explicit `grantUriPermission()` calls across resolved target apps.
+- **Physical File Deletion & Vault Synchronization**: Fixed `deleteDownload()` to physically delete files from local storage, remove MediaStore records, and sync deletion and renaming with the encrypted SQLCipher Room vault (`PrivateLockerManager.kt`).
+- **Built-in Force Dark WebExtension & Glitch Fixes**: Renamed extension to `"Omni Force Dark Theme"` (`omni-force-dark@omnibrowser.app`), fixed Google Search dark mode glitches via native `color-scheme: dark` injection and `PREF=f6=400` cookie setting.
+
+---
+
 ## [1.2.6.7] - 2026-08-01
 
 ### Fixed
