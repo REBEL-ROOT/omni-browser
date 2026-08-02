@@ -594,7 +594,7 @@ fun AppearanceScreen(
                 }
 
                 val presets = listOf(
-                    AppIconPreset("Default", stringResource(id = R.string.icon_preset_default), com.rebelroot.omni.R.drawable.ic_omni_logo, Color.White to Color.Unspecified),
+                    AppIconPreset("Default", stringResource(id = R.string.icon_preset_default), com.rebelroot.omni.R.drawable.ic_omni_ring_light, Color.Unspecified to Color.Unspecified),
                     AppIconPreset("Dark", stringResource(id = R.string.icon_preset_dark), com.rebelroot.omni.R.drawable.ic_omni_logo, Color(0xFF0D0D0F) to Color.Unspecified),
                     AppIconPreset("Aura Dark", stringResource(id = R.string.icon_preset_aura_dark), com.rebelroot.omni.R.drawable.ic_omni_ring_dark, Color.Unspecified to Color.Unspecified),
                     AppIconPreset("Aura Light", stringResource(id = R.string.icon_preset_aura_light), com.rebelroot.omni.R.drawable.ic_omni_ring_light, Color.Unspecified to Color.Unspecified)
