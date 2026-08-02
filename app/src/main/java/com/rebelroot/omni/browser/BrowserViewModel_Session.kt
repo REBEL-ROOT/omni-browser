@@ -654,12 +654,72 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 !lowerUri.startsWith("javascript:") && 
                 !lowerUri.startsWith("data:")
             ) {
+                // 1. Gesture and Setting Check
+                val isGestureAllowed = request.hasUserGesture && !request.isRedirect
+                val isLaunchAllowed = isOpenExternalAppAllowed && isGestureAllowed
+
+                // Helper for in-browser fallback chain
+                val performFallback: (intentPackage: String?, isBlocked: Boolean) -> Unit = { intentPackage, isBlocked ->
+                    val fallbackUrl = extractFallbackUrl(uri)
+                    if (fallbackUrl != null) {
+                        Log.i(TAG, "Navigating to fallback URL: $fallbackUrl")
+                        loadUrl(fallbackUrl)
+                    } else if (!intentPackage.isNullOrBlank()) {
+                        val storeUrl = "https://play.google.com/store/apps/details?id=$intentPackage"
+                        Log.i(TAG, "Navigating to web Play Store fallback: $storeUrl")
+                        loadUrl(storeUrl)
+                    } else {
+                        val toastMsg = if (isBlocked) {
+                            "Blocked automatic redirect to an external app"
+                        } else {
+                            "No app found to handle this link"
+                        }
+                        Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                if (!isLaunchAllowed) {
+                    Log.w(TAG, "🚫 onLoadRequest: Blocked automatic external app launch (hasUserGesture=${request.hasUserGesture}, isRedirect=${request.isRedirect}, setting=$isOpenExternalAppAllowed): $uri")
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val intentPackage = if (lowerUri.startsWith("intent:")) {
+                            try {
+                                Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } else if (lowerUri.startsWith("market:")) {
+                            try {
+                                Uri.parse(uri).getQueryParameter("id")
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } else {
+                            try {
+                                Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
+                                    ?: Uri.parse(uri).getQueryParameter("package")
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                        performFallback(intentPackage, true)
+                    }
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+
                 if (lowerUri.startsWith("intent:") || lowerUri.startsWith("market:")) {
                     Log.i(TAG, "Intercepted intent/market URI: $uri")
                     
                     try {
-                        val intent = Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
-                        val intentPackage = intent.getPackage()
+                        val intent = if (lowerUri.startsWith("intent:")) {
+                            Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
+                        } else {
+                            Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+                        }
+                        val intentPackage = if (lowerUri.startsWith("intent:")) {
+                            intent.getPackage()
+                        } else {
+                            Uri.parse(uri).getQueryParameter("id")
+                        }
                         
                         val isCalendarSpam = intentPackage?.contains("calendar") == true || intentPackage?.contains("cal") == true ||
                                 intent.dataString?.contains("calendar") == true || intent.dataString?.contains("webcal") == true || intent.dataString?.contains(".ics") == true
@@ -679,37 +739,34 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                                         intent.setSelector(null)
                                     }
-                                    val chooser = Intent.createChooser(intent, "Open with")
-                                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    context.startActivity(chooser)
+
+                                    val pm = context.packageManager
+                                    val resolveInfos = try {
+                                        pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                                    } catch (_: Exception) {
+                                        emptyList()
+                                    }
+
+                                    val hasExplicitPackage = !intent.getPackage().isNullOrBlank()
+                                    val isSingleHandler = resolveInfos.size == 1
+
+                                    if (hasExplicitPackage || isSingleHandler) {
+                                        Log.i(TAG, "Launching intent directly (explicitPackage=$hasExplicitPackage, handlers=${resolveInfos.size})")
+                                        context.startActivity(intent)
+                                    } else if (resolveInfos.size > 1) {
+                                        Log.i(TAG, "Launching chooser for intent (${resolveInfos.size} handlers)")
+                                        val chooser = Intent.createChooser(intent, "Open with")
+                                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(chooser)
+                                    } else {
+                                        throw android.content.ActivityNotFoundException("No app found to handle intent")
+                                    }
                                 } catch (e: android.content.ActivityNotFoundException) {
                                     Log.w(TAG, "No app found for intent, checking for fallback URL", e)
-                                    val fallbackUrl = extractFallbackUrl(uri)
-                                    if (fallbackUrl != null) {
-                                        Log.i(TAG, "Navigating to fallback URL: $fallbackUrl")
-                                        loadUrl(fallbackUrl)
-                                    } else if (intentPackage != null) {
-                                        try {
-                                            val marketIntent = Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse("market://details?id=$intentPackage")
-                                            )
-                                            marketIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            context.startActivity(marketIntent)
-                                        } catch (e2: Exception) {
-                                            loadUrl("https://play.google.com/store/apps/details?id=$intentPackage")
-                                        }
-                                    } else {
-                                        Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
-                                    }
+                                    performFallback(intentPackage, false)
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to launch external intent", e)
-                                    val fallbackUrl = extractFallbackUrl(uri)
-                                    if (fallbackUrl != null) {
-                                        loadUrl(fallbackUrl)
-                                    } else {
-                                        Toast.makeText(context, "Could not open this link", Toast.LENGTH_SHORT).show()
-                                    }
+                                    performFallback(intentPackage, false)
                                 }
                             }
                         }
@@ -721,28 +778,51 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
                 Log.i(TAG, "Handling custom protocol URI: $uri")
                 viewModelScope.launch(Dispatchers.Main) {
+                    val intentPackage = try {
+                        Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
+                            ?: Uri.parse(uri).getQueryParameter("package")
+                    } catch (_: Exception) {
+                        null
+                    }
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         intent.addCategory(Intent.CATEGORY_BROWSABLE)
-                        val chooserTitle = when {
-                            lowerUri.startsWith("upi:") -> "Pay with"
-                            lowerUri.startsWith("mailto:") -> "Send email with"
-                            lowerUri.startsWith("tel:") -> "Call with"
-                            lowerUri.startsWith("sms:") || lowerUri.startsWith("smsto:") -> "Send SMS with"
-                            else -> "Open with"
+
+                        val pm = context.packageManager
+                        val resolveInfos = try {
+                            pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                        } catch (_: Exception) {
+                            emptyList()
                         }
-                        val chooser = Intent.createChooser(intent, chooserTitle)
-                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(chooser)
+
+                        val hasExplicitPackage = !intent.getPackage().isNullOrBlank()
+                        val isSingleHandler = resolveInfos.size == 1
+
+                        if (hasExplicitPackage || isSingleHandler) {
+                            Log.i(TAG, "Launching custom protocol directly (explicitPackage=$hasExplicitPackage, handlers=${resolveInfos.size})")
+                            context.startActivity(intent)
+                        } else if (resolveInfos.size > 1) {
+                            val chooserTitle = when {
+                                lowerUri.startsWith("upi:") -> "Pay with"
+                                lowerUri.startsWith("mailto:") -> "Send email with"
+                                lowerUri.startsWith("tel:") -> "Call with"
+                                lowerUri.startsWith("sms:") || lowerUri.startsWith("smsto:") -> "Send SMS with"
+                                else -> "Open with"
+                            }
+                            Log.i(TAG, "Launching chooser for custom protocol (${resolveInfos.size} handlers)")
+                            val chooser = Intent.createChooser(intent, chooserTitle)
+                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(chooser)
+                        } else {
+                            throw android.content.ActivityNotFoundException("No app found to handle custom protocol")
+                        }
                     } catch (e: android.content.ActivityNotFoundException) {
-                        Log.e(TAG, "No app found for custom protocol: $uri", e)
-                        val schemeName = uri.split(":").firstOrNull() ?: "link"
-                        Toast.makeText(context, "No app found to handle $schemeName links", Toast.LENGTH_SHORT).show()
+                        Log.w(TAG, "No app found for custom protocol: $uri", e)
+                        performFallback(intentPackage, false)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to launch custom protocol intent for: $uri", e)
-                        val schemeName = uri.split(":").firstOrNull() ?: "link"
-                        Toast.makeText(context, "No app found to handle $schemeName", Toast.LENGTH_SHORT).show()
+                        performFallback(intentPackage, false)
                     }
                 }
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
@@ -767,14 +847,11 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
             
             // Check if this error is an ERROR_UNKNOWN (17) caused by us returning DENY
-            // in onLoadRequest for OAuth pages, direct videos, or spam calendars.
+            // in onLoadRequest for OAuth pages, direct videos, spam calendars, or external app links.
             val isDeniedByCustomIntercept = error.code == org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN && (
                 isGoogleAuthHost ||
                 (isNativePlayerEnabled && isDirectVideoUrl(uri ?: "")) ||
-                lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") ||
-                lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") ||
-                lowerUri.contains(".ics?") || lowerUri.contains("calendar.google.com") ||
-                (lowerUri.startsWith("intent:") && (lowerUri.contains("calendar") || lowerUri.contains(".ics") || lowerUri.contains("webcal")))
+                (!lowerUri.startsWith("http://") && !lowerUri.startsWith("https://") && !lowerUri.startsWith("about:") && !lowerUri.startsWith("javascript:") && !lowerUri.startsWith("data:"))
             )
             
             if (isDeniedByCustomIntercept) {

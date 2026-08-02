@@ -150,6 +150,7 @@ class BrowserViewModel : ViewModel() {
         
 
         val POPUP_BLOCKER_ENABLED_KEY = booleanPreferencesKey("popup_blocker_enabled")
+        val OPEN_EXTERNAL_APP_ALLOWED_KEY = booleanPreferencesKey("open_external_app_allowed")
         val UNIVERSAL_COPY_ENABLED_KEY = booleanPreferencesKey("universal_copy_enabled")
         val AI_BLOCKER_ENABLED_KEY = booleanPreferencesKey("ai_blocker_enabled")
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
@@ -382,6 +383,8 @@ class BrowserViewModel : ViewModel() {
 
     /** When true (default), popup windows not triggered by a real user tap are blocked. */
     var isPopupBlockerEnabled by mutableStateOf(true)
+    /** When true (default), user-initiated link taps can open external apps. Automatic redirects are always blocked. */
+    var isOpenExternalAppAllowed by mutableStateOf(true)
     var isUniversalCopyEnabled by mutableStateOf(false)
     var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
@@ -2291,6 +2294,10 @@ class BrowserViewModel : ViewModel() {
             }
 
             viewModelScope.launch {
+                isOpenExternalAppAllowed = getOpenExternalAppAllowedPreference(appCtx).first()
+            }
+
+            viewModelScope.launch {
                 isNativePlayerEnabled = getNativePlayerPreference(appCtx).first()
                 syncNativePlayerStateInPage()
             }
@@ -2880,6 +2887,25 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun toggleOpenExternalAppAllowed(context: Context) {
+        viewModelScope.launch {
+            val newState = !isOpenExternalAppAllowed
+            isOpenExternalAppAllowed = newState
+            context.dataStore.edit { preferences ->
+                preferences[OPEN_EXTERNAL_APP_ALLOWED_KEY] = newState
+            }
+        }
+    }
+
+    fun updateOpenExternalAppAllowed(enabled: Boolean, context: Context) {
+        viewModelScope.launch {
+            isOpenExternalAppAllowed = enabled
+            context.dataStore.edit { preferences ->
+                preferences[OPEN_EXTERNAL_APP_ALLOWED_KEY] = enabled
+            }
+        }
+    }
+
     fun toggleUniversalCopy(context: Context) {
         if (isUniversalCopyToggling) return
         isUniversalCopyToggling = true
@@ -2971,6 +2997,12 @@ class BrowserViewModel : ViewModel() {
     private fun getPopupBlockerPreference(context: Context): Flow<Boolean> {
         return context.dataStore.data.map { preferences ->
             preferences[POPUP_BLOCKER_ENABLED_KEY] ?: true  // Default ON
+        }
+    }
+
+    private fun getOpenExternalAppAllowedPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[OPEN_EXTERNAL_APP_ALLOWED_KEY] ?: true  // Default ON
         }
     }
 

@@ -213,6 +213,19 @@ fun PrivacySecurityScreen(
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor
                     )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Item 8: Open links in external apps
+                    SettingsSwitchRow(
+                        icon = Icons.Rounded.OpenInNew,
+                        title = "Open links in external apps",
+                        subtitle = "Only when you tap a link; automatic redirects are always blocked",
+                        checked = viewModel.isOpenExternalAppAllowed,
+                        onCheckedChange = { viewModel.toggleOpenExternalAppAllowed(context) },
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
                 }
             }
 
