@@ -207,7 +207,7 @@ fun WallpaperScreen(
                 viewModel = viewModel,
                 onBack = onNavigateBack,
                 onOpenGallery = { showOnlineGallery = true },
-                onPickPhoto = { launcher.launch("image/*") },
+                onPickPhoto = { launcher.launch("*/*") },
                 onEditWallpaper = { editingWallpaperUri = it },
                 bgColor = bgColor, cardColor = cardColor, cardBorder = cardBorder,
                 textPrimary = textPrimary, textSecondary = textSecondary,
@@ -232,6 +232,47 @@ private fun WallpaperHome(
 ) {
     val context = LocalContext.current
     val selectedWallpaper = viewModel.browserWallpaperUri
+    var showCustomUrlDialog by remember { mutableStateOf(false) }
+    var customUrlText by remember { mutableStateOf("") }
+
+    if (showCustomUrlDialog) {
+        AlertDialog(
+            onDismissRequest = { showCustomUrlDialog = false },
+            title = { Text("Custom Video or GIF URL", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter a direct HTTP/HTTPS URL for any online GIF or MP4/WebM video:", fontSize = 13.sp, color = textSecondary)
+                    OutlinedTextField(
+                        value = customUrlText,
+                        onValueChange = { customUrlText = it },
+                        placeholder = { Text("https://example.com/wallpaper.mp4") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val clean = customUrlText.trim()
+                        if (clean.isNotBlank()) {
+                            viewModel.saveBrowserWallpaperUri(context, clean)
+                            showCustomUrlDialog = false
+                            customUrlText = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = accent)
+                ) {
+                    Text("Apply Wallpaper")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomUrlDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -258,31 +299,44 @@ private fun WallpaperHome(
 
             // ── Action row ──────────────────────────────────────────────────
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // My photos
-                    OutlinedButton(
-                        onClick = onPickPhoto,
-                        shape = RoundedCornerShape(24.dp),
-                        border = BorderStroke(1.dp, cardBorder),
-                        modifier = Modifier.weight(1f)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Rounded.PhotoLibrary, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("My Photos", fontSize = 13.sp)
+                        // My Media (GIF/Video/Photo)
+                        OutlinedButton(
+                            onClick = onPickPhoto,
+                            shape = RoundedCornerShape(24.dp),
+                            border = BorderStroke(1.dp, cardBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Rounded.FolderOpen, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Local File", fontSize = 13.sp)
+                        }
+                        // Custom Direct URL
+                        OutlinedButton(
+                            onClick = { showCustomUrlDialog = true },
+                            shape = RoundedCornerShape(24.dp),
+                            border = BorderStroke(1.dp, cardBorder),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Rounded.Link, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Paste URL", fontSize = 13.sp)
+                        }
                     }
                     // Online gallery — main CTA
                     Button(
                         onClick = onOpenGallery,
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = accent),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Rounded.CloudDownload, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Online", fontSize = 13.sp)
+                        Text("Online Image Gallery", fontSize = 13.sp)
                     }
                 }
             }
@@ -337,10 +391,64 @@ private fun WallpaperHome(
                 }
             }
 
-            // ── Section header ──────────────────────────────────────────────
+            // ── Live Animated Wallpapers Section ─────────────────────────────
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text("Your Library", color = textPrimary, fontWeight = FontWeight.SemiBold,
-                    fontSize = 17.sp, modifier = Modifier.padding(start = 2.dp, top = 8.dp, bottom = 2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Videocam, null, tint = accent, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Live Animated Wallpapers (GIF & Video)",
+                        color = textPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(start = 2.dp, top = 8.dp, bottom = 2.dp)
+                    )
+                }
+            }
+
+            items(com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS) { preset ->
+                val sel = selectedWallpaper == preset.mediaUrl
+                WallpaperTile(
+                    imageUrl = preset.thumbUrl,
+                    isSelected = sel,
+                    accent = accent,
+                    cardColor = cardColor,
+                    cardBorder = cardBorder,
+                    onClick = { viewModel.saveBrowserWallpaperUri(context, preset.mediaUrl) }
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.65f),
+                            shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp),
+                            modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (preset.isVideo) Icons.Rounded.PlayArrow else Icons.Rounded.Gif,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFD700),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = preset.title,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Static Wallpaper Library ─────────────────────────────────────
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text("Static Wallpapers", color = textPrimary, fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.sp, modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 2.dp))
             }
 
             // ── No wallpaper tile ───────────────────────────────────────────
@@ -360,7 +468,8 @@ private fun WallpaperHome(
             }
 
             // ── Active custom wallpaper ─────────────────────────────────────
-            val isCustomActive = isActive && !PRESET_WALLPAPERS.contains(selectedWallpaper)
+            val isPresetLive = com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS.any { it.mediaUrl == selectedWallpaper }
+            val isCustomActive = isActive && !PRESET_WALLPAPERS.contains(selectedWallpaper) && !isPresetLive
             if (isCustomActive) {
                 item {
                     WallpaperTile(imageUrl = selectedWallpaper, isSelected = true, accent = accent,

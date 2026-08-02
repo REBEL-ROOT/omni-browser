@@ -244,6 +244,7 @@ dependencies {
 
     // === Image Loading ===
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-gif:2.7.0")
 
     // === AndroidX Media3 / ExoPlayer ===
     val media3Version = "1.3.1"

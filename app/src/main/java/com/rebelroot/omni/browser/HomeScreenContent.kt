@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.settings.AnimatedWallpaperBackground
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -267,25 +268,12 @@ fun HomeScreenContent(
                     .fillMaxSize()
                     .clipToBounds()
             ) {
-                coil.compose.AsyncImage(
-                    model = viewModel.browserWallpaperUri,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = viewModel.wallpaperScale
-                            scaleY = viewModel.wallpaperScale
-                            translationX = viewModel.wallpaperOffsetX
-                            translationY = viewModel.wallpaperOffsetY
-                        }
-                        .then(
-                            if (viewModel.wallpaperBlur > 0f) {
-                                Modifier.blur(viewModel.wallpaperBlur.dp).graphicsLayer()
-                            } else {
-                                Modifier
-                            }
-                        )
+                com.rebelroot.omni.settings.AnimatedWallpaperBackground(
+                    wallpaperUri = viewModel.browserWallpaperUri!!,
+                    scale = viewModel.wallpaperScale,
+                    offsetX = viewModel.wallpaperOffsetX,
+                    offsetY = viewModel.wallpaperOffsetY,
+                    blur = viewModel.wallpaperBlur
                 )
             }
             val userDim = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else 0.20f
