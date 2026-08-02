@@ -1983,6 +1983,11 @@ class BrowserViewModel : ViewModel() {
             } catch (e: Exception) {
                 "en"
             }
+            val targetLocales = if (lang.startsWith("en", ignoreCase = true)) {
+                arrayOf("en-US", "en")
+            } else {
+                arrayOf(lang, "en-US", "en")
+            }
 
             val prefs = runBlocking { appCtx.dataStore.data.first() }
             val dnt = prefs[DO_NOT_TRACK_KEY] ?: true
@@ -2023,6 +2028,7 @@ class BrowserViewModel : ViewModel() {
             try {
                 val sb = java.lang.StringBuilder()
                 sb.append("pref:\n")
+                sb.append("  intl.accept_languages: \"${targetLocales.joinToString(", ")}\"\n")
                 sb.append("  dom.ipc.processCount: 1\n")
                 sb.append("  dom.ipc.processCount.webIsolated: 1\n")
                 sb.append("  privacy.donottrackheader.enabled: ${dnt}\n")
@@ -2122,7 +2128,7 @@ class BrowserViewModel : ViewModel() {
                 .debugLogging(isDebug)
                 .remoteDebuggingEnabled(isDebug)
                 .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
-                .locales(arrayOf(lang)) // Configures Accept-Language headers automatically
+                .locales(targetLocales) // Configures Accept-Language headers with English fallback
                 .contentBlocking(cbSettings)
                 .configFilePath(configFile.absolutePath)
 
@@ -2144,7 +2150,7 @@ class BrowserViewModel : ViewModel() {
                         .consoleOutput(isDebug)
                         .debugLogging(isDebug)
                         .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
-                        .locales(arrayOf(lang))
+                        .locales(targetLocales)
                         .contentBlocking(cbSettings)
                         .build()
                         
@@ -3509,6 +3515,10 @@ class BrowserViewModel : ViewModel() {
                 val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
                 sp.edit().putString("selected_language", langCode).commit()
             } catch (e: Exception) { /* ignore */ }
+            try {
+                val acceptLangs = if (langCode.startsWith("en", ignoreCase = true)) "en-US, en" else "$langCode, en-US, en"
+                GeckoPreferenceController.setGeckoPref("intl.accept_languages", acceptLangs, GeckoPreferenceController.PREF_BRANCH_USER)
+            } catch (_: Exception) {}
             withContext(Dispatchers.Main) {
                 try {
                     val appLocales = androidx.core.os.LocaleListCompat.forLanguageTags(langCode)
