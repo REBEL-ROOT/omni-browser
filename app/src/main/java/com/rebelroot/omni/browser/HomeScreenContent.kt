@@ -756,23 +756,34 @@ fun HomeScreenContent(
                                         )
                                     }
                                     shortcut.isFeature -> {
-                                        val (icon, isAccented, action) = when (shortcut.title) {
-                                            "Downloads" -> Triple(Icons.Rounded.Download, true, onOpenDownloads)
-                                            "History"   -> Triple(Icons.Rounded.History,  false, onOpenHistory)
-                                            "Bookmarks" -> Triple(Icons.Rounded.Bookmark, false, onOpenBookmarks)
-                                            "Incognito" -> Triple(
+                                        val (icon, isAccented, action) = when (shortcut.id.lowercase()) {
+                                            "downloads" -> Triple(Icons.Rounded.Download, true, onOpenDownloads)
+                                            "history"   -> Triple(Icons.Rounded.History,  false, onOpenHistory)
+                                            "bookmarks" -> Triple(Icons.Rounded.Bookmark, false, onOpenBookmarks)
+                                            "incognito" -> Triple(
                                                 if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                                 false,
                                                 { viewModel.toggleIncognitoMode(context) }
                                             )
                                             else -> Triple(Icons.Rounded.Extension, false, {})
                                         }
-                                        val displayTitle = when (shortcut.title) {
-                                            "Downloads" -> stringResource(id = R.string.downloads_title)
-                                            "History"   -> stringResource(id = R.string.history_title)
-                                            "Bookmarks" -> stringResource(id = R.string.bookmarks_title)
-                                            "Incognito" -> stringResource(id = R.string.incognito_title)
-                                            else        -> shortcut.title
+                                        val downloadsStr = stringResource(id = R.string.downloads_title)
+                                        val historyStr   = stringResource(id = R.string.history_title)
+                                        val bookmarksStr = stringResource(id = R.string.bookmarks_title)
+                                        val incognitoStr = stringResource(id = R.string.incognito_title)
+
+                                        val displayTitle = when (shortcut.id.lowercase()) {
+                                            "downloads" -> downloadsStr
+                                            "history"   -> historyStr
+                                            "bookmarks" -> bookmarksStr
+                                            "incognito" -> incognitoStr
+                                            else        -> when (shortcut.title) {
+                                                "Downloads" -> downloadsStr
+                                                "History"   -> historyStr
+                                                "Bookmarks" -> bookmarksStr
+                                                "Incognito" -> incognitoStr
+                                                else        -> shortcut.title
+                                            }
                                         }
                                         CompactShortcutItem(
                                             title = displayTitle,

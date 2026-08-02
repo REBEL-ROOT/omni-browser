@@ -3487,9 +3487,13 @@ class BrowserViewModel : ViewModel() {
                 val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
                 sp.edit().putString("selected_language", langCode).apply()
             } catch (e: Exception) { /* ignore */ }
-            selectedLanguageCode = langCode
-            isLanguageSelectionDone = true
             withContext(Dispatchers.Main) {
+                try {
+                    val appLocales = androidx.core.os.LocaleListCompat.forLanguageTags(langCode)
+                    androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocales)
+                } catch (_: Exception) {}
+                selectedLanguageCode = langCode
+                isLanguageSelectionDone = true
                 onDone()
             }
         }

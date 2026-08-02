@@ -35,7 +35,7 @@ android {
 
         // Restrict bundled translations to only the languages the app actively supports
         localeFilters += listOf(
-            "en", "hi", "es", "fr", "de", "pt", "ru", "ja", "zh", "ar"
+            "en", "hi", "es", "fr", "de", "pt", "pl", "ru", "ja", "zh", "ar"
         )
     }
 

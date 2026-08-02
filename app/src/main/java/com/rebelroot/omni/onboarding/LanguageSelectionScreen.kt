@@ -71,9 +71,11 @@ private val supportedLanguages = listOf(
     LanguageItem("de", "Deutsch", "German"),
     LanguageItem("hi", "हिन्दी", "Hindi"),
     LanguageItem("pt", "Português", "Portuguese"),
+    LanguageItem("pl", "Polski", "Polish"),
     LanguageItem("ru", "Русский", "Russian"),
-    LanguageItem("zh", "简体中文", "Chinese"),
-    LanguageItem("ja", "日本語", "Japanese")
+    LanguageItem("zh", "简体中文", "Chinese (Mandarin)"),
+    LanguageItem("ja", "日本語", "Japanese"),
+    LanguageItem("ar", "العربية", "Arabic")
 )
 
 @Composable
