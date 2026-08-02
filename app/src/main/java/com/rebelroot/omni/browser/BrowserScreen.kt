@@ -6041,7 +6041,7 @@ fun BrowserScreen(
                         val runtime = viewModel.getGeckoRuntime(context)
                         FireButton(runtime, context).burn()
                         viewModel.burnAllData(context)
-                        Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                     }
                 },
                 onOpenDownloads = onOpenDownloads,
@@ -6111,13 +6111,13 @@ fun BrowserScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Quick Tools",
+                                text = stringResource(id = R.string.quick_tools_title),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Long-press & drag to reorder",
+                                text = stringResource(id = R.string.quick_tools_reorder_hint),
                                 fontSize = 10.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 fontWeight = FontWeight.Medium
@@ -6148,32 +6148,32 @@ fun BrowserScreen(
 
                         // Resolve tool display info
                         fun toolTitle(id: String): String = when (id) {
-                            "image_grabber"  -> "Image Grabber"
-                            "page_inspector" -> "Page Inspector"
-                            "force_zoom"     -> if (viewModel.accessibilityForceZoom) "Zoom: On" else "Force Zoom"
+                            "image_grabber"  -> context.getString(R.string.tool_image_grabber)
+                            "page_inspector" -> context.getString(R.string.tool_page_inspector)
+                            "force_zoom"     -> if (viewModel.accessibilityForceZoom) context.getString(R.string.tool_force_zoom_on) else context.getString(R.string.tool_force_zoom)
                             "vpn"            -> when (viewModel.proxyProvider) {
                                 "tor", "tor_builtin" -> {
                                     val state = viewModel.activeTorState().value
-                                    if (state is com.rebelroot.omni.privacy.TorState.Connected) "Tor: On" else "Tor"
+                                    if (state is com.rebelroot.omni.privacy.TorState.Connected) context.getString(R.string.tool_vpn_tor_on) else context.getString(R.string.tool_vpn_tor)
                                 }
                                 "wireguard" -> {
                                     val state = viewModel.vpnManager.state.value
-                                    if (state is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) "VPN: On" else "VPN"
+                                    if (state is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) context.getString(R.string.tool_vpn_on) else context.getString(R.string.tool_vpn)
                                 }
-                                else -> "Network"
+                                else -> context.getString(R.string.tool_network)
                             }
-                            "qr_scanner"     -> "QR Scanner"
-                            "safe_locker"    -> "Safe Locker"
-                            "translator"     -> "Translator"
-                            "edit_page"      -> if (isEditing) "Stop Edit" else "Edit Page"
-                            "save_pdf"       -> "Save PDF"
-                            "pin_web_app"    -> "Pin Web App"
-                            "auto_scroll"    -> "Auto-Scroll"
-                            "qr_scan_page"   -> "QR Scan Page"
-                            "qr_generator"   -> "QR Generator"
-                            "console_log"    -> "Console Log"
-                            "dev_notes"      -> "Dev Notes"
-                            "site_style"     -> "Site Style"
+                            "qr_scanner"     -> context.getString(R.string.tool_qr_scanner)
+                            "safe_locker"    -> context.getString(R.string.tool_safe_locker)
+                            "translator"     -> context.getString(R.string.tool_translator)
+                            "edit_page"      -> if (isEditing) context.getString(R.string.tool_stop_edit) else context.getString(R.string.tool_edit_page)
+                            "save_pdf"       -> context.getString(R.string.tool_save_pdf)
+                            "pin_web_app"    -> context.getString(R.string.tool_pin_web_app)
+                            "auto_scroll"    -> context.getString(R.string.tool_auto_scroll)
+                            "qr_scan_page"   -> context.getString(R.string.tool_qr_scan_page)
+                            "qr_generator"   -> context.getString(R.string.tool_qr_generator)
+                            "console_log"    -> context.getString(R.string.tool_console_log)
+                            "dev_notes"      -> context.getString(R.string.tool_dev_notes)
+                            "site_style"     -> context.getString(R.string.tool_site_style)
                             else -> id
                         }
                         fun toolIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector = when (id) {
@@ -6203,21 +6203,21 @@ fun BrowserScreen(
                             "image_grabber" -> ({
                                 showQuickToolsSheet = false
                                 if (!showHomeScreen && activeTab != null) showImageGrabberSheet = true
-                                else Toast.makeText(context, "Open a webpage first to extract images", Toast.LENGTH_SHORT).show()
+                                else Toast.makeText(context, context.getString(R.string.toast_open_webpage_images), Toast.LENGTH_SHORT).show()
                             })
                             "page_inspector" -> ({
                                 showQuickToolsSheet = false
                                 if (!showHomeScreen && activeTab != null) showPageInspectorSheet = true
-                                else Toast.makeText(context, "Open a webpage first to inspect page", Toast.LENGTH_SHORT).show()
+                                else Toast.makeText(context, context.getString(R.string.toast_open_webpage_inspect), Toast.LENGTH_SHORT).show()
                             })
                             "force_zoom" -> ({
                                 val nextState = !viewModel.accessibilityForceZoom
                                 viewModel.saveAccessibilityForceZoom(context, nextState)
                                 if (nextState) {
                                     viewModel.injectZoomEnabler()
-                                    Toast.makeText(context, "🔍 Force Zoom Enabled: Pinch to zoom on any website", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "🔍 " + context.getString(R.string.toast_force_zoom_on), Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "Force Zoom Disabled", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_force_zoom_off), Toast.LENGTH_SHORT).show()
                                 }
                                 showQuickToolsSheet = false
                             })
@@ -6228,16 +6228,16 @@ fun BrowserScreen(
                                         val state = viewModel.activeTorState().value
                                         if (state is com.rebelroot.omni.privacy.TorState.Connected) {
                                             viewModel.disconnectTor()
-                                            Toast.makeText(context, "🧅 Tor Disconnected", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "🧅 " + context.getString(R.string.toast_tor_disconnected), Toast.LENGTH_SHORT).show()
                                         } else {
                                             viewModel.connectTor()
-                                            Toast.makeText(context, "🧅 Connecting to Tor…", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "🧅 " + context.getString(R.string.toast_tor_connecting), Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                     "wireguard" -> {
                                         if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
                                             viewModel.disconnectVpn()
-                                            Toast.makeText(context, "🛡️ VPN Disconnected", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "🛡️ " + context.getString(R.string.toast_vpn_disconnected), Toast.LENGTH_SHORT).show()
                                         } else {
                                             val config = viewModel.customVpnConfig
                                             if (!config.isNullOrBlank()) {
@@ -6246,16 +6246,16 @@ fun BrowserScreen(
                                                     vpnPermissionLauncher.launch(vpnIntent)
                                                 } else {
                                                     viewModel.connectCustomVpn()
-                                                    Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, "🛡️ " + context.getString(R.string.toast_vpn_connecting), Toast.LENGTH_SHORT).show()
                                                 }
                                             } else {
                                                 onOpenSettings()
-                                                Toast.makeText(context, "Add VPN configuration in Settings first", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(context, context.getString(R.string.toast_vpn_setup_required), Toast.LENGTH_LONG).show()
                                             }
                                         }
                                     }
                                     else -> {
-                                        Toast.makeText(context, "Direct connection active — no proxy", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.toast_direct_connection), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             })
@@ -6266,27 +6266,27 @@ fun BrowserScreen(
                             "safe_locker"  -> ({ showQuickToolsSheet = false; onOpenLocker() })
                             "translator"   -> ({ showQuickToolsSheet = false; translationSourceText = ""; translationResultText = ""; showTranslationDialog = true })
                             "edit_page" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; if (!viewModel.hasSeenEditPageOverview) { pendingEditPageAction = { viewModel.toggleEditMode() }; showEditPageOverviewDialog = true } else viewModel.toggleEditMode() }
                             })
                             "save_pdf" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; if (!viewModel.hasSeenPdfOverview) { pendingPdfAction = { viewModel.printCurrentPage(context) }; showPdfOverviewDialog = true } else viewModel.printCurrentPage(context) }
                             })
                             "pin_web_app" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url) }
                             })
                             "auto_scroll" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; isAutoScrollActive = !isAutoScrollActive }
                             })
                             "qr_scan_page" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { viewModel.scanPageForQrCodes() }; showQrOverviewDialog = true } else viewModel.scanPageForQrCodes() }
                             })
                             "qr_generator" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true }; showQrOverviewDialog = true } else { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true } }
                             })
                             "console_log" -> ({
@@ -6298,7 +6298,7 @@ fun BrowserScreen(
                                 if (!viewModel.hasSeenDevNotesOverview) { pendingDevNotesAction = { showDevNotesSheet = true }; showDevNotesOverviewDialog = true } else showDevNotesSheet = true
                             })
                             "site_style" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, "Open a webpage first to use this tool", Toast.LENGTH_SHORT).show()
+                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; showSiteStyleCustomizerSheet = true }
                             })
                             else -> ({})
