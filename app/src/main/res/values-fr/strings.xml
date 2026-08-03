@@ -967,4 +967,14 @@
     <string name="menu_add_tab_to_new_group">Ajouter l\'onglet à un nouveau groupe</string>
     <string name="menu_recent_tabs">Onglets récents</string>
     <string name="toast_group_created">Groupe créé avec l\'onglet actif</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">Grouper auto</string>
+    <string name="tab_group_auto_grouped_toast">%1$d onglets regroupés dans %2$d groupes</string>
+    <string name="tab_group_ungroup">Dissocier les onglets</string>
+    <string name="tab_group_close_group_and_tabs">Fermer le groupe et les onglets</string>
+    <string name="tab_group_save_bookmarks">Enregistrer le groupe dans les favoris</string>
+    <string name="tab_group_share_links">Partager les liens du groupe</string>
+    <string name="tab_group_saved_bookmarks_toast">Groupe enregistré dans les favoris</string>
+    <string name="tab_group_copied_links_toast">Liens du groupe copiés dans le presse-papiers</string>
 </resources>

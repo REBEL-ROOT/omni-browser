@@ -965,4 +965,14 @@
     <string name="menu_add_tab_to_new_group">Добавить вкладку в новую группу</string>
     <string name="menu_recent_tabs">Недавние вкладки</string>
     <string name="toast_group_created">Группа создана с активной вкладкой</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">Автогруппировка</string>
+    <string name="tab_group_auto_grouped_toast">Сгруппировано %1$d вкладок в %2$d групп</string>
+    <string name="tab_group_ungroup">Разгруппировать вкладки</string>
+    <string name="tab_group_close_group_and_tabs">Закрыть группу и вкладки</string>
+    <string name="tab_group_save_bookmarks">Сохранить группу в закладки</string>
+    <string name="tab_group_share_links">Поделиться ссылками группы</string>
+    <string name="tab_group_saved_bookmarks_toast">Группа сохранена в закладки</string>
+    <string name="tab_group_copied_links_toast">Ссылки группы скопированы в буфер обмена</string>
 </resources>

@@ -965,4 +965,14 @@
     <string name="menu_add_tab_to_new_group">将标签页添加到新分组</string>
     <string name="menu_recent_tabs">最近打开的标签页</string>
     <string name="toast_group_created">已创建包含当前标签页的分组</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">自动分组</string>
+    <string name="tab_group_auto_grouped_toast">已将 %1$d 个标签页智能归类到 %2$d 个分组</string>
+    <string name="tab_group_ungroup">取消分组</string>
+    <string name="tab_group_close_group_and_tabs">关闭分组及标签页</string>
+    <string name="tab_group_save_bookmarks">将分组保存至书签</string>
+    <string name="tab_group_share_links">分享分组链接</string>
+    <string name="tab_group_saved_bookmarks_toast">已将分组保存至书签</string>
+    <string name="tab_group_copied_links_toast">已将分组链接复制到剪贴板</string>
 </resources>

@@ -967,4 +967,14 @@
     <string name="menu_add_tab_to_new_group">Dodaj kartę do nowej grupy</string>
     <string name="menu_recent_tabs">Ostatnie karty</string>
     <string name="toast_group_created">Utworzono grupę z aktywną kartą</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">Auto-grupuj</string>
+    <string name="tab_group_auto_grouped_toast">Pogrupowano %1$d kart w %2$d grup</string>
+    <string name="tab_group_ungroup">Rozgrupuj karty</string>
+    <string name="tab_group_close_group_and_tabs">Zamknij grupę i karty</string>
+    <string name="tab_group_save_bookmarks">Zapisz grupę do zakładek</string>
+    <string name="tab_group_share_links">Udostępnij linki grupy</string>
+    <string name="tab_group_saved_bookmarks_toast">Zapisano grupę do zakładek</string>
+    <string name="tab_group_copied_links_toast">Skopiowano linki grupy do schowka</string>
 </resources>

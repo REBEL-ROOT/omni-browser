@@ -1388,6 +1388,22 @@ fun BrowserScreen(
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
                                 )
                             }
+                            val activeTabGroup = remember(viewModel.activeTabId, viewModel.tabGroups.toList()) {
+                                viewModel.activeTabId?.let { viewModel.getGroupForTab(it) }
+                            }
+                            if (activeTabGroup != null && !showHomeScreen && !viewModel.isFullscreen && !isInputFocused) {
+                                val groupTabs = remember(activeTabGroup, viewModel.tabs.toList()) {
+                                    viewModel.tabs.filter { it.id in activeTabGroup.tabIds }
+                                }
+                                InGroupTabStrip(
+                                    group = activeTabGroup,
+                                    groupTabs = groupTabs,
+                                    activeTabId = viewModel.activeTabId,
+                                    onSelectTab = { viewModel.selectTab(it) },
+                                    onNewTabInGroup = { viewModel.createNewTab(context, "about:blank", activeTabGroup.id) },
+                                    isDark = viewModel.isDarkThemeEnabled
+                                )
+                            }
                             PhoneAddressBar(
                             viewModel = viewModel,
                             inputUrl = inputUrl,
@@ -4457,6 +4473,42 @@ fun BrowserScreen(
                                             fontSize = 16.sp,
                                             modifier = Modifier.weight(1f)
                                         )
+                                        // Save group to bookmarks
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(group.color).copy(alpha = 0.2f))
+                                                .clickable { viewModel.saveGroupToBookmarks(group.id, context) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.StarOutline, stringResource(R.string.tab_group_save_bookmarks), tint = Color(group.color), modifier = Modifier.size(14.dp))
+                                        }
+                                        // Share group links
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(group.color).copy(alpha = 0.2f))
+                                                .clickable { viewModel.shareGroupLinks(group.id, context) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.Share, stringResource(R.string.tab_group_share_links), tint = Color(group.color), modifier = Modifier.size(14.dp))
+                                        }
+                                        // Ungroup tabs
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(group.color).copy(alpha = 0.2f))
+                                                .clickable {
+                                                    viewModel.ungroupTabs(group.id)
+                                                    activeGroupView = null
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.LayersClear, stringResource(R.string.tab_group_ungroup), tint = Color(group.color), modifier = Modifier.size(14.dp))
+                                        }
                                         // Rename group
                                         Box(
                                             modifier = Modifier
@@ -4472,19 +4524,19 @@ fun BrowserScreen(
                                         ) {
                                             Icon(Icons.Rounded.Edit, "Rename", tint = Color(group.color), modifier = Modifier.size(14.dp))
                                         }
-                                        // Delete group
+                                        // Delete group & tabs
                                         Box(
                                             modifier = Modifier
                                                 .size(28.dp)
                                                 .clip(CircleShape)
                                                 .background(Color(0xFFFF3B5C).copy(alpha = 0.15f))
-                                                .clickable { 
-                                                    viewModel.deleteTabGroup(group.id)
+                                                .clickable {
+                                                    viewModel.closeGroupAndTabs(group.id, context)
                                                     activeGroupView = null
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Rounded.Close, "Delete", tint = Color(0xFFFF3B5C), modifier = Modifier.size(14.dp))
+                                            Icon(Icons.Rounded.Close, stringResource(R.string.tab_group_close_group_and_tabs), tint = Color(0xFFFF3B5C), modifier = Modifier.size(14.dp))
                                         }
                                     }
 
@@ -7506,6 +7558,101 @@ private fun ExitOptionRow(
                 tint = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.25f),
                 modifier = Modifier.size(20.dp)
             )
+        }
+    }
+}
+
+@Composable
+fun InGroupTabStrip(
+    group: TabGroup,
+    groupTabs: List<TabState>,
+    activeTabId: String?,
+    onSelectTab: (String) -> Unit,
+    onNewTabInGroup: () -> Unit,
+    isDark: Boolean
+) {
+    val groupColor = Color(group.color)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = (if (isDark) Color(0xFF16222F) else Color(0xFFF1F5F9)).copy(alpha = 0.95f),
+        border = BorderStroke(0.5.dp, groupColor.copy(alpha = 0.4f)),
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Group Dot & Title
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(end = 4.dp)
+            ) {
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(groupColor))
+                Text(
+                    text = group.title,
+                    color = groupColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+
+            // Scrollable tabs row
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(groupTabs.size, key = { groupTabs[it].id }) { idx ->
+                    val tab = groupTabs[idx]
+                    val isActive = tab.id == activeTabId
+                    Box(
+                        modifier = Modifier
+                            .height(26.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(if (isActive) groupColor.copy(alpha = 0.25f) else Color.Transparent)
+                            .border(
+                                BorderStroke(if (isActive) 1.dp else 0.dp, if (isActive) groupColor else Color.Transparent),
+                                RoundedCornerShape(13.dp)
+                            )
+                            .clickable { onSelectTab(tab.id) }
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (tab.title.isNullOrBlank() || tab.title == "about:blank") stringResource(R.string.new_tab_title) else tab.title,
+                            color = if (isActive) (if (isDark) Color.White else Color.Black) else (if (isDark) Color(0xFF8E9AA8) else Color(0xFF64748B)),
+                            fontSize = 10.sp,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            // Add new tab in group button
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(groupColor.copy(alpha = 0.15f))
+                    .clickable { onNewTabInGroup() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = null,
+                    tint = groupColor,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
         }
     }
 }

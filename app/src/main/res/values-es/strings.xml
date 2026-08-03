@@ -970,4 +970,14 @@
     <string name="menu_add_tab_to_new_group">Añadir pestaña a un nuevo grupo</string>
     <string name="menu_recent_tabs">Pestañas recientes</string>
     <string name="toast_group_created">Grupo creado con la pestaña activa</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">Agrupar auto.</string>
+    <string name="tab_group_auto_grouped_toast">%1$d pestañas agrupadas en %2$d grupos</string>
+    <string name="tab_group_ungroup">Desagrupar pestañas</string>
+    <string name="tab_group_close_group_and_tabs">Cerrar grupo y pestañas</string>
+    <string name="tab_group_save_bookmarks">Guardar grupo en marcadores</string>
+    <string name="tab_group_share_links">Compartir enlaces del grupo</string>
+    <string name="tab_group_saved_bookmarks_toast">Grupo guardado en marcadores</string>
+    <string name="tab_group_copied_links_toast">Enlaces del grupo copiados al portapapeles</string>
 </resources>

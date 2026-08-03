@@ -964,4 +964,14 @@ tellungen &amp; Layout</string>
     <string name="menu_add_tab_to_new_group">Tab zu neuer Gruppe hinzufügen</string>
     <string name="menu_recent_tabs">Kürzlich geöffnete Tabs</string>
     <string name="toast_group_created">Gruppe mit aktivem Tab erstellt</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">Auto-Gruppieren</string>
+    <string name="tab_group_auto_grouped_toast">%1$d Tabs automatisch in %2$d Gruppen sortiert</string>
+    <string name="tab_group_ungroup">Gruppe auflösen</string>
+    <string name="tab_group_close_group_and_tabs">Gruppe und Tabs schließen</string>
+    <string name="tab_group_save_bookmarks">Gruppe als Lesezeichen speichern</string>
+    <string name="tab_group_share_links">Gruppen-Links teilen</string>
+    <string name="tab_group_saved_bookmarks_toast">Gruppe als Lesezeichen gespeichert</string>
+    <string name="tab_group_copied_links_toast">Gruppen-Links in Zwischenablage kopiert</string>
 </resources>

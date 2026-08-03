@@ -965,4 +965,14 @@
     <string name="menu_add_tab_to_new_group">新しいグループにタブを追加</string>
     <string name="menu_recent_tabs">最近のタブ</string>
     <string name="toast_group_created">アクティブなタブでグループが作成されました</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">自動グループ化</string>
+    <string name="tab_group_auto_grouped_toast">%1$d個のタブを%2$d個のグループに自動分類しました</string>
+    <string name="tab_group_ungroup">グループ解除</string>
+    <string name="tab_group_close_group_and_tabs">グループとタブを閉じる</string>
+    <string name="tab_group_save_bookmarks">グループをブックマークに保存</string>
+    <string name="tab_group_share_links">グループのリンクを共有</string>
+    <string name="tab_group_saved_bookmarks_toast">グループをブックマークに保存しました</string>
+    <string name="tab_group_copied_links_toast">グループのリンクをクリップボードにコピーしました</string>
 </resources>

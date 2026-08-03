@@ -967,4 +967,14 @@
     <string name="menu_add_tab_to_new_group">नए समूह में टैब जोड़ें</string>
     <string name="menu_recent_tabs">हाल के टैब</string>
     <string name="toast_group_created">सक्रिय टैब के साथ समूह बनाया गया</string>
+
+    <!-- Tab Group Enhancements -->
+    <string name="tab_group_auto_group">ऑटो ग्रुप</string>
+    <string name="tab_group_auto_grouped_toast">%1$d टैब %2$d समूहों में ऑटो-ग्रुप किए गए</string>
+    <string name="tab_group_ungroup">अनग्रुप करें</string>
+    <string name="tab_group_close_group_and_tabs">समूह और टैब बंद करें</string>
+    <string name="tab_group_save_bookmarks">समूह को बुकमार्क में सहेजें</string>
+    <string name="tab_group_share_links">समूह लिंक साझा करें</string>
+    <string name="tab_group_saved_bookmarks_toast">समूह बुकमार्क में सहेजा गया</string>
+    <string name="tab_group_copied_links_toast">समूह लिंक क्लिपबोर्ड पर कॉपी किए गए</string>
 </resources>
