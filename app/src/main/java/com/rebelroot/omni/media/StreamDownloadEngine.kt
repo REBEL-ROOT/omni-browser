@@ -149,7 +149,7 @@ class StreamDownloadEngine(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(progress in 0..99)
             .setAutoCancel(progress >= 100 || progress < 0)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", pendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, context.getString(R.string.cancel_text), pendingIntent)
 
         if (progress in 0..100) {
             builder.setProgress(100, progress, isIndeterminate)
@@ -167,7 +167,7 @@ class StreamDownloadEngine(
         val notificationId = getNotificationId(jobId)
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Download Complete")
+            .setContentTitle(context.getString(R.string.download_notification_complete))
             .setContentText(filename)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
@@ -183,7 +183,7 @@ class StreamDownloadEngine(
         val notificationId = getNotificationId(jobId)
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("Download Failed")
+            .setContentTitle(context.getString(R.string.download_notification_failed))
             .setContentText(errorMsg)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
@@ -213,7 +213,7 @@ class StreamDownloadEngine(
         )
         _jobs.update { list -> list + job }
         saveDownloadHistory()
-        updateNotification(jobId, filename, "Starting download...", 0)
+        updateNotification(jobId, filename, context.getString(R.string.download_progress_starting), 0)
         return Pair(jobId, progressFlow)
     }
 
@@ -412,7 +412,7 @@ class StreamDownloadEngine(
                 when (progress) {
                     is DownloadProgress.Downloading -> {
                         val pct = progress.percent
-                        val text = if (pct >= 0) "$pct% completed" else "Downloading..."
+                        val text = if (pct >= 0) context.getString(R.string.download_progress_completed, pct) else context.getString(R.string.download_progress_downloading)
                         updateNotification(jobId, filename, text, pct)
                         if (pct != lastPercent) {
                             lastPercent = pct
@@ -424,7 +424,7 @@ class StreamDownloadEngine(
                         saveDownloadHistory()
                     }
                     is DownloadProgress.Complete -> {
-                        showCompleteNotification(jobId, filename, "Saved successfully")
+                        showCompleteNotification(jobId, filename, context.getString(R.string.download_saved_successfully))
                         jobNotificationIds.remove(jobId)
                         saveDownloadHistory()
                     }
@@ -449,7 +449,7 @@ class StreamDownloadEngine(
                 }
             } catch (e: Exception) {
                 Log.e("DownloadEngine", "Download failed for job $jobId", e)
-                progressFlow.value = DownloadProgress.Error(e.message ?: "Unknown download error")
+                progressFlow.value = DownloadProgress.Error(e.message ?: context.getString(R.string.download_unknown_error))
             } finally {
                 runningJobs.remove(jobId)
             }
@@ -488,14 +488,14 @@ class StreamDownloadEngine(
                 when (progress) {
                     is DownloadProgress.Downloading -> {
                         val pct = progress.percent
-                        val text = if (pct >= 0) "$pct% completed" else "Downloading..."
+                        val text = if (pct >= 0) context.getString(R.string.download_progress_completed, pct) else context.getString(R.string.download_progress_downloading)
                         updateNotification(jobId, filename, text, pct)
                     }
                     is DownloadProgress.Muxing -> {
                         updateNotification(jobId, filename, progress.message, -1, isIndeterminate = true)
                     }
                     is DownloadProgress.Complete -> {
-                        showCompleteNotification(jobId, filename, "Saved successfully")
+                        showCompleteNotification(jobId, filename, context.getString(R.string.download_saved_successfully))
                         jobNotificationIds.remove(jobId)
                         saveDownloadHistory()
                     }
@@ -513,7 +513,7 @@ class StreamDownloadEngine(
                 downloadGenericFile(jobId, url, filename, contentType, saveToLocker, progressFlow, cookies, referrerUrl)
             } catch (e: Exception) {
                 Log.e("DownloadEngine", "Generic download failed for job $jobId", e)
-                progressFlow.value = DownloadProgress.Error(e.message ?: "Unknown download error")
+                progressFlow.value = DownloadProgress.Error(e.message ?: context.getString(R.string.download_unknown_error))
             } finally {
                 runningJobs.remove(jobId)
             }
@@ -550,7 +550,7 @@ class StreamDownloadEngine(
             val connection = openConnectionWithRedirects(urlStr, headers)
 
             if (connection.responseCode !in 200..299) {
-                progressFlow.value = DownloadProgress.Error("Server returned code ${connection.responseCode}")
+                progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_server_code_error, connection.responseCode))
                 connection.disconnect()
                 return@withContext
             }
@@ -581,7 +581,7 @@ class StreamDownloadEngine(
             }
 
             if (saveToLocker) {
-                progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
                 val mime = contentType ?: getMimeTypeForFile(filename)
                 val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(targetFile), filename, mime)
                 targetFile.delete()
@@ -589,7 +589,7 @@ class StreamDownloadEngine(
                 val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                 progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
             } else {
-                progressFlow.value = DownloadProgress.Muxing("Saving to Downloads folder...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_downloads_folder))
                 val (savedFile, savedUri) = saveGenericToPublicDownloads(targetFile, filename, contentType)
                 targetFile.delete()
                 progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes, savedUri)
@@ -688,7 +688,7 @@ class StreamDownloadEngine(
             val connection = openConnectionWithRedirects(urlStr, headers)
 
             if (connection.responseCode !in 200..299) {
-                progressFlow.value = DownloadProgress.Error("Server returned code ${connection.responseCode}")
+                progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_server_code_error, connection.responseCode))
                 connection.disconnect()
                 return@withContext
             }
@@ -720,7 +720,7 @@ class StreamDownloadEngine(
             }
 
             if (saveToLocker) {
-                progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
                 val mimeType = getMimeTypeForFile(filename)
                 val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(targetFile), filename, mimeType)
                 targetFile.delete()
@@ -728,7 +728,7 @@ class StreamDownloadEngine(
                 val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                 progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
             } else {
-                progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_public_downloads))
                 val savedFile = saveToPublicDownloads(targetFile, filename)
                 progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes)
             }
@@ -827,7 +827,7 @@ class StreamDownloadEngine(
             if (!isActive) return@withContext
 
             // 3. Mux/Merge using FFmpeg
-            progressFlow.value = DownloadProgress.Muxing("Merging video and audio...")
+            progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_merging_av))
             Log.i("DownloadEngine", "Muxing split tracks using FFmpeg...")
             
             var muxSuccess = false
@@ -864,7 +864,7 @@ class StreamDownloadEngine(
             // 4. Save/Encrypt complete file
             val totalBytes = finalOutFile.length()
             if (saveToLocker) {
-                progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
                 val mimeType = getMimeTypeForFile(filename)
                 val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutFile), filename, mimeType)
                 finalOutFile.delete()
@@ -872,7 +872,7 @@ class StreamDownloadEngine(
                 val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                 progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
             } else {
-                progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_public_downloads))
                 val savedFile = saveToPublicDownloads(finalOutFile, filename)
                 progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes)
             }
@@ -982,7 +982,7 @@ class StreamDownloadEngine(
 
         var success = false
         if (ffmpegBridge.isNativeActive()) {
-            progressFlow.value = DownloadProgress.Muxing("Downloading and converting via FFmpeg...")
+            progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_ffmpeg))
             val argsList = mutableListOf<String>()
             
             if (!referrerUrl.isNullOrEmpty() || !cookies.isNullOrEmpty()) {
@@ -1013,24 +1013,24 @@ class StreamDownloadEngine(
         }
 
         if (!success) {
-            progressFlow.value = DownloadProgress.Muxing("Fetching HLS manifest...")
+            progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_fetching_hls))
             
             var resolvedUrl = manifestUrl
             var m3u8Content = fetchTextUrl(resolvedUrl, referrerUrl, cookies)
             
             if (m3u8Content.isEmpty()) {
-                progressFlow.value = DownloadProgress.Error("Empty manifest or network error")
+                progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_empty_manifest))
                 return@withContext
             }
 
             if (m3u8Content.contains("#EXT-X-STREAM-INF")) {
-                progressFlow.value = DownloadProgress.Muxing("Resolving HLS Master Playlist...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_resolving_hls_master))
                 val variants = parseM3U8MasterPlaylist(resolvedUrl, m3u8Content)
                 if (variants.isNotEmpty()) {
                     resolvedUrl = variants.first().first
                     m3u8Content = fetchTextUrl(resolvedUrl, referrerUrl, cookies)
                     if (m3u8Content.isEmpty()) {
-                        progressFlow.value = DownloadProgress.Error("Failed to fetch variant playlist")
+                        progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_variant_playlist))
                         return@withContext
                     }
                 }
@@ -1038,7 +1038,7 @@ class StreamDownloadEngine(
 
             val segmentUrls = parseM3U8Segments(resolvedUrl, m3u8Content)
             if (segmentUrls.isEmpty()) {
-                progressFlow.value = DownloadProgress.Error("No segment chunks found in manifest")
+                progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_no_hls_segments))
                 return@withContext
             }
 
@@ -1103,11 +1103,11 @@ class StreamDownloadEngine(
                 }
 
                 if (downloadedCount.get() < totalSegments) {
-                    progressFlow.value = DownloadProgress.Error("Failed downloading HLS chunks ($downloadedCount/$totalSegments completed)")
+                    progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_hls_chunks, downloadedCount.get(), totalSegments))
                     return@withContext
                 }
 
-                progressFlow.value = DownloadProgress.Muxing("Stitching HLS segments...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_stitching_hls))
                 
                 val tempStitchedTs = File(tempDir, "temp_stitched.ts")
                 if (tempStitchedTs.exists()) tempStitchedTs.delete()
@@ -1120,7 +1120,7 @@ class StreamDownloadEngine(
                     } ?: emptyList()
 
                 if (segments.isEmpty()) {
-                    progressFlow.value = DownloadProgress.Error("No segments found to stitch")
+                    progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_no_segments_to_stitch))
                     return@withContext
                 }
 
@@ -1131,7 +1131,7 @@ class StreamDownloadEngine(
                             inputStream.copyTo(outputStream)
                         }
                         val percent = ((index + 1) * 100) / segments.size
-                        progressFlow.value = DownloadProgress.Muxing("Stitching segments: $percent%")
+                        progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_stitching_percent, percent))
                     }
                 }
 
@@ -1141,7 +1141,7 @@ class StreamDownloadEngine(
 
                 var finalSuccess = false
                 if (ffmpegBridge.isNativeActive()) {
-                    progressFlow.value = DownloadProgress.Muxing("Remuxing stitched segments to MP4...")
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_remuxing_mp4))
                     val result = ffmpegBridge.execute("-i", tempStitchedTs.absolutePath, "-c", "copy", finalOutFile.absolutePath)
                     if (result == 0) {
                         finalSuccess = true
@@ -1150,7 +1150,7 @@ class StreamDownloadEngine(
 
                 if (!finalSuccess) {
                     if (!isActive) return@withContext
-                    progressFlow.value = DownloadProgress.Muxing("Stitching & converting HLS to MP4...")
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_converting_hls_mp4))
                     finalSuccess = remuxTsToMp4(tempStitchedTs, finalOutFile)
                 }
 
@@ -1158,7 +1158,7 @@ class StreamDownloadEngine(
                     success = true
                 } else {
                     if (!isActive) return@withContext
-                    progressFlow.value = DownloadProgress.Muxing("Remuxing failed. Saving as raw TS stream...")
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_raw_ts))
                     val tsFilename = filename.removeSuffix(".mp4") + ".ts"
                     val finalOutTsFile = File(targetDir, tsFilename)
                     if (finalOutTsFile.exists()) finalOutTsFile.delete()
@@ -1172,21 +1172,21 @@ class StreamDownloadEngine(
                         saveDownloadHistory()
                         
                         if (saveToLocker) {
-                            progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                            progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
                             val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutTsFile), tsFilename, "video/mp2t")
                             finalOutTsFile.delete()
                             val category = getCategoryForFile(tsFilename)
                             val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                             progressFlow.value = DownloadProgress.Complete(finalLockerFile, finalLockerFile.length())
                         } else {
-                            progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
+                            progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_public_downloads))
                             val savedFile = saveToPublicDownloads(finalOutTsFile, tsFilename)
                             progressFlow.value = DownloadProgress.Complete(savedFile, savedFile.length())
                         }
                         return@withContext
                     } catch (e: Exception) {
                         Log.e("DownloadEngine", "Failed to copy fallback TS file", e)
-                        progressFlow.value = DownloadProgress.Error("Stitching and MP4 conversion failed")
+                        progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_stitching_conversion))
                         return@withContext
                     }
                 }
@@ -1197,7 +1197,7 @@ class StreamDownloadEngine(
 
         if (success) {
             if (saveToLocker) {
-                progressFlow.value = DownloadProgress.Muxing("Encrypting and moving to Private Locker...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
                 val mimeType = getMimeTypeForFile(filename)
                 val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(finalOutFile), filename, mimeType)
                 finalOutFile.delete()
@@ -1205,12 +1205,12 @@ class StreamDownloadEngine(
                 val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
                 progressFlow.value = DownloadProgress.Complete(finalLockerFile, finalLockerFile.length())
             } else {
-                progressFlow.value = DownloadProgress.Muxing("Saving to public Downloads...")
+                progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_public_downloads))
                 val savedFile = saveToPublicDownloads(finalOutFile, filename)
                 progressFlow.value = DownloadProgress.Complete(savedFile, savedFile.length())
             }
         } else {
-            progressFlow.value = DownloadProgress.Error("Stitching and MP4 conversion failed")
+            progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_error_stitching_conversion))
         }
     }
 

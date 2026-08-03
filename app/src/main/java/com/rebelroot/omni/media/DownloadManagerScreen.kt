@@ -25,6 +25,7 @@ import android.os.Environment
 import android.os.StatFs
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,21 +50,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import com.rebelroot.omni.R
 import java.io.File
 
-private enum class DownloadCategory(val label: String) {
-    ALL("All"),
-    VIDEOS("Videos"),
-    AUDIO("Audio"),
-    IMAGES("Images"),
-    DOCUMENTS("Documents"),
-    APKS("APKs"),
-    OTHER("Other")
+private enum class DownloadCategory(@StringRes val labelRes: Int) {
+    ALL(R.string.download_category_all),
+    VIDEOS(R.string.download_category_videos),
+    AUDIO(R.string.download_category_audio),
+    IMAGES(R.string.download_category_images),
+    DOCUMENTS(R.string.download_category_documents),
+    APKS(R.string.download_category_apks),
+    OTHER(R.string.download_category_other)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,7 +121,7 @@ fun DownloadManagerScreen(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search downloads...", fontSize = 14.sp) },
+                            placeholder = { Text(stringResource(R.string.downloads_search_placeholder), fontSize = 14.sp) },
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
@@ -131,13 +134,17 @@ fun DownloadManagerScreen(
                     } else {
                         Column {
                             Text(
-                                text = androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.downloads_title),
+                                text = stringResource(id = R.string.downloads_title),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp
                             )
                             if (deviceStorageInfo.second > 0) {
                                 Text(
-                                    text = "Using ${formatBytes(totalDownloadedBytes)} of ${formatBytes(deviceStorageInfo.second)}",
+                                    text = stringResource(
+                                        R.string.downloads_storage_usage,
+                                        formatBytes(totalDownloadedBytes),
+                                        formatBytes(deviceStorageInfo.second)
+                                    ),
                                     fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
@@ -147,7 +154,7 @@ fun DownloadManagerScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.back_desc))
                     }
                 },
                 actions = {
@@ -157,7 +164,7 @@ fun DownloadManagerScreen(
                     }) {
                         Icon(
                             imageVector = if (isSearching) Icons.Rounded.Close else Icons.Rounded.Search,
-                            contentDescription = if (isSearching) "Close Search" else "Search"
+                            contentDescription = if (isSearching) stringResource(R.string.downloads_close_search) else stringResource(R.string.downloads_search)
                         )
                     }
                 },
@@ -191,7 +198,7 @@ fun DownloadManagerScreen(
                         onClick = { selectedCategory = cat },
                         label = {
                             Text(
-                                text = cat.label,
+                                text = stringResource(cat.labelRes),
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
@@ -222,7 +229,7 @@ fun DownloadManagerScreen(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (searchQuery.isNotBlank()) "No matching downloads found" else androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.downloads_empty),
+                            text = if (searchQuery.isNotBlank()) stringResource(R.string.downloads_no_matching) else stringResource(id = R.string.downloads_empty),
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                             fontSize = 15.sp
                         )
@@ -266,12 +273,12 @@ fun DownloadManagerScreen(
     renameJob?.let { job ->
         AlertDialog(
             onDismissRequest = { renameJob = null },
-            title = { Text("Rename File", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.download_rename_file), fontWeight = FontWeight.Bold) },
             text = {
                 OutlinedTextField(
                     value = renameText,
                     onValueChange = { renameText = it },
-                    label = { Text("Filename") },
+                    label = { Text(stringResource(R.string.download_filename_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -283,18 +290,18 @@ fun DownloadManagerScreen(
                         if (target != null && renameText.isNotBlank()) {
                             val success = engine.renameDownload(target.id, renameText)
                             if (!success) {
-                                Toast.makeText(context, "Could not rename file", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.download_rename_failed), Toast.LENGTH_SHORT).show()
                             }
                         }
                         renameJob = null
                     }
                 ) {
-                    Text("Rename")
+                    Text(stringResource(R.string.download_rename))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { renameJob = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_text))
                 }
             }
         )
@@ -304,10 +311,10 @@ fun DownloadManagerScreen(
     deleteJob?.let { job ->
         AlertDialog(
             onDismissRequest = { deleteJob = null },
-            title = { Text("Delete Download", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.download_delete_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text("Are you sure you want to remove \"${job.filename}\"?")
+                    Text(stringResource(R.string.download_delete_confirm, job.filename))
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -320,7 +327,7 @@ fun DownloadManagerScreen(
                             onCheckedChange = { deleteFromDiskChecked = it }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Delete file from device storage", fontSize = 13.5.sp)
+                        Text(stringResource(R.string.download_delete_from_storage), fontSize = 13.5.sp)
                     }
                 }
             },
@@ -335,12 +342,12 @@ fun DownloadManagerScreen(
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.download_delete), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deleteJob = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_text))
                 }
             }
         )
@@ -420,7 +427,11 @@ private fun DownloadListItem(
                     is StreamDownloadEngine.DownloadProgress.Downloading -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (progress.percent >= 0) "Downloading: ${progress.percent}%" else "Downloading...",
+                                text = if (progress.percent >= 0) {
+                                    stringResource(R.string.downloads_downloading_percent, progress.percent)
+                                } else {
+                                    stringResource(R.string.downloads_downloading)
+                                },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Medium
@@ -460,7 +471,7 @@ private fun DownloadListItem(
                     }
                     is StreamDownloadEngine.DownloadProgress.Error -> {
                         Text(
-                            text = "Failed: ${progress.message}",
+                            text = stringResource(R.string.downloads_failed_prefix, progress.message),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
@@ -479,7 +490,7 @@ private fun DownloadListItem(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "More options",
+                        contentDescription = stringResource(R.string.download_more_options),
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
@@ -491,7 +502,7 @@ private fun DownloadListItem(
                     // Share
                     if (progressState is StreamDownloadEngine.DownloadProgress.Complete && !job.saveToLocker) {
                         DropdownMenuItem(
-                            text = { Text("Share") },
+                            text = { Text(stringResource(R.string.download_share)) },
                             leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
                             onClick = {
                                 showMenu = false
@@ -503,7 +514,7 @@ private fun DownloadListItem(
                     // Rename
                     if (progressState is StreamDownloadEngine.DownloadProgress.Complete) {
                         DropdownMenuItem(
-                            text = { Text("Rename") },
+                            text = { Text(stringResource(R.string.download_rename)) },
                             leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
                             onClick = {
                                 showMenu = false
@@ -513,7 +524,7 @@ private fun DownloadListItem(
                     }
                     // Delete
                     DropdownMenuItem(
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(stringResource(R.string.download_delete), color = MaterialTheme.colorScheme.error) },
                         leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                         onClick = {
                             showMenu = false
@@ -648,7 +659,7 @@ private fun openDownloadedFile(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    if (launchIntentWithPermissions(viewIntent, "Open with")) return
+    if (launchIntentWithPermissions(viewIntent, context.getString(R.string.download_open_with))) return
 
     // 2. Secondary: Wildcard */* intent
     val wildcardIntent = Intent(Intent.ACTION_VIEW).apply {
@@ -656,7 +667,7 @@ private fun openDownloadedFile(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    if (launchIntentWithPermissions(wildcardIntent, "Open with")) return
+    if (launchIntentWithPermissions(wildcardIntent, context.getString(R.string.download_open_with))) return
 
     // 3. Tertiary: Share ACTION_SEND intent
     val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -665,7 +676,7 @@ private fun openDownloadedFile(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    if (launchIntentWithPermissions(shareIntent, "Open file using...")) return
+    if (launchIntentWithPermissions(shareIntent, context.getString(R.string.download_open_file_using))) return
 
     // 4. Ultimate Fallback: Launch System Files App / Storage Access Framework directly
     try {
@@ -677,7 +688,7 @@ private fun openDownloadedFile(
         }
         context.startActivity(filesAppIntent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Could not open file: ${file.name}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.download_open_failed, file.name), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -702,7 +713,7 @@ private fun shareDownloadedFile(context: Context, file: File, openUri: Uri?) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
-        val chooser = Intent.createChooser(shareIntent, "Share file via").apply {
+        val chooser = Intent.createChooser(shareIntent, context.getString(R.string.download_share_file_via)).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -718,7 +729,7 @@ private fun shareDownloadedFile(context: Context, file: File, openUri: Uri?) {
 
         context.startActivity(chooser)
     } catch (e: Exception) {
-        Toast.makeText(context, "Could not share file", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.download_share_failed), Toast.LENGTH_SHORT).show()
     }
 }
 
