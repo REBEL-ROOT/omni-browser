@@ -1054,4 +1054,33 @@
     <string name="download_quality_label">Quality: %1$s</string>
     <string name="download_quality_extract_audio">Extract Audio (MP3)</string>
     <string name="download_quality_source_stream">Source Stream (Auto)</string>
+
+    <!-- Incognito Screen -->
+    <string name="incognito_mode_desc">Incognito Mode</string>
+    <string name="incognito_screen_title">You\'ve gone incognito</string>
+    <string name="incognito_description">Your browsing history, search history, and cookies won\'t be saved. Files downloaded and bookmarks created will still be kept.</string>
+
+    <!-- Download Sheet -->
+    <string name="download_sheet_mp3">MP3</string>
+    <string name="download_toast_external">Opening external download manager…</string>
+    <string name="download_toast_no_handoff">This media needs Omni\'s built-in downloader — handing off isn\'t supported</string>
+    <string name="download_toast_started">Download started...</string>
+    <string name="download_toast_locker">Downloading to Locker...</string>
+    <string name="download_toast_mp3_no_handoff">MP3 extraction needs Omni\'s built-in downloader — handing off isn\'t supported</string>
+    <string name="download_toast_mp3_started">Downloading as MP3...</string>
+    <string name="download_destination_local">Download Locally</string>
+    <string name="download_destination_vault">Save to Private Vault 🔒</string>
+
+    <!-- Manga Download Toasts -->
+    <string name="manga_toast_starting">⏳ Starting download (%1$s to %2$s)...</string>
+    <string name="manga_toast_pdf_vault">🔒 Saved Manga PDF (%1$d pages) to Private Vault</string>
+    <string name="manga_toast_pdf_downloads">📄 Saved Manga PDF (%1$d pages) to Downloads/OmniBrowser/%2$s</string>
+    <string name="manga_toast_pdf_failed">Failed to compile PDF: %1$s</string>
+    <string name="manga_mode_pdf">PDF document</string>
+    <string name="manga_mode_images">%1$d images</string>
+    <string name="manga_toast_images_vault">🔒 Saved %1$d images to Private Vault</string>
+    <string name="manga_toast_images_downloads">✅ Downloaded %1$d images to Downloads/OmniBrowser/%2$s</string>
+
+    <!-- Download Sheet -->
+    <string name="download_media_title">Download Media</string>
 </resources>

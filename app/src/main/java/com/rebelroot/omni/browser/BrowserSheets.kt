@@ -2797,9 +2797,9 @@ fun downloadMangaImagesAndPdf(
     if (urls.isEmpty()) return
     val appCtx = context.applicationContext
     val targetCount = urls.size
-    val destText = if (saveToLocker) "Private Vault 🔒" else "Downloads"
-    val modeText = if (asPdf) "PDF document" else "$targetCount images"
-    Toast.makeText(appCtx, "⏳ Starting download ($modeText to $destText)...", Toast.LENGTH_SHORT).show()
+    val destText = if (saveToLocker) context.getString(R.string.download_destination_vault) else context.getString(R.string.downloads_title)
+    val modeText = if (asPdf) context.getString(R.string.manga_mode_pdf, targetCount) else context.getString(R.string.manga_mode_images, targetCount)
+    Toast.makeText(appCtx, context.getString(R.string.manga_toast_starting, modeText, destText), Toast.LENGTH_SHORT).show()
 
     val timeStamp = System.currentTimeMillis() / 1000
     val filename = if (asPdf) "Manga_$timeStamp.pdf" else "Manga_$timeStamp ($targetCount images)"
@@ -2943,7 +2943,7 @@ fun downloadMangaImagesAndPdf(
                     if (tempPdfFile.exists()) tempPdfFile.delete()
 
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        Toast.makeText(appCtx, "🔒 Saved Manga PDF ($successCount pages) to Private Vault", Toast.LENGTH_LONG).show()
+                        Toast.makeText(appCtx, context.getString(R.string.manga_toast_pdf_vault, successCount), Toast.LENGTH_LONG).show()
                     }
                 } else {
                     val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
@@ -2965,7 +2965,7 @@ fun downloadMangaImagesAndPdf(
                     }
 
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        Toast.makeText(appCtx, "📄 Saved Manga PDF ($successCount pages) to Downloads/OmniBrowser/$pdfFileName", Toast.LENGTH_LONG).show()
+                        Toast.makeText(appCtx, context.getString(R.string.manga_toast_pdf_downloads, successCount, pdfFileName), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
@@ -2974,7 +2974,7 @@ fun downloadMangaImagesAndPdf(
                     downloadEngine?.failExternalJob(jobId, filename, e.localizedMessage ?: "PDF Error")
                 }
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    Toast.makeText(appCtx, "Failed to compile PDF: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(appCtx, context.getString(R.string.manga_toast_pdf_failed, e.localizedMessage), Toast.LENGTH_SHORT).show()
                 }
             }
         } else {
@@ -2984,7 +2984,7 @@ fun downloadMangaImagesAndPdf(
                 downloadEngine?.completeExternalJob(jobId, filename, folderFile, totalBytesDownloaded, firstSavedUri)
             }
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                val msg = if (saveToLocker) "🔒 Saved $successCount images to Private Vault" else "✅ Downloaded $successCount images to Downloads/OmniBrowser/$folderName"
+                val msg = if (saveToLocker) context.getString(R.string.manga_toast_images_vault, successCount) else context.getString(R.string.manga_toast_images_downloads, successCount, folderName)
                 Toast.makeText(appCtx, msg, Toast.LENGTH_LONG).show()
             }
         }

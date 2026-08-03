@@ -3229,7 +3229,7 @@ fun BrowserScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "Download Media",
+                            text = stringResource(R.string.download_media_title),
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.primary
@@ -3292,7 +3292,7 @@ fun BrowserScreen(
                                             ) {
                                                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Play", fontSize = 12.sp)
+                                                Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                             OutlinedButton(
                                                 onClick = {
@@ -3324,12 +3324,12 @@ fun BrowserScreen(
                                                                     else -> "video/mp4"
                                                                 }
                                                             )
-                                                            Toast.makeText(context, "Opening external download manager…", Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
                                                         } else {
                                                             if (viewModel.isExternalDownloadManagerEnabled) {
-                                                                Toast.makeText(context, "This media needs Omni's built-in downloader — handing off isn't supported", Toast.LENGTH_LONG).show()
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_no_handoff), Toast.LENGTH_LONG).show()
                                                             } else {
-                                                                Toast.makeText(context, "Download started...", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
                                                             }
                                                             viewModel.streamDownloadEngine.startDownload(
                                                                 url = item.url,
@@ -3348,7 +3348,7 @@ fun BrowserScreen(
                                             ) {
                                                 Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Save", fontSize = 12.sp)
+                                                Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                             OutlinedButton(
                                                 onClick = {
@@ -3378,7 +3378,7 @@ fun BrowserScreen(
                                                             cookies = viewModel.activeVideoCookies,
                                                             audioUrl = audioUrl
                                                         )
-                                                        Toast.makeText(context, "Downloading to Locker...", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1f),
@@ -3386,7 +3386,7 @@ fun BrowserScreen(
                                             ) {
                                                 Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Locker", fontSize = 12.sp)
+                                                Text(stringResource(R.string.locker_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                             OutlinedButton(
                                                 onClick = {
@@ -3417,12 +3417,12 @@ fun BrowserScreen(
                                                                 filename = suggestedName,
                                                                 contentType = "audio/mpeg"
                                                             )
-                                                            Toast.makeText(context, "Opening external download manager…", Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
                                                         } else {
                                                             if (viewModel.isExternalDownloadManagerEnabled) {
-                                                                Toast.makeText(context, "MP3 extraction needs Omni's built-in downloader — handing off isn't supported", Toast.LENGTH_LONG).show()
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_mp3_no_handoff), Toast.LENGTH_LONG).show()
                                                             } else {
-                                                                Toast.makeText(context, "Downloading as MP3...", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_mp3_started), Toast.LENGTH_SHORT).show()
                                                             }
                                                             viewModel.streamDownloadEngine.startDownload(
                                                                 url = mp3Url,
@@ -3440,7 +3440,7 @@ fun BrowserScreen(
                                             ) {
                                                 Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(20.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("MP3", fontSize = 12.sp)
+                                                Text(stringResource(R.string.download_sheet_mp3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                         }
                                     }
@@ -7167,7 +7167,7 @@ fun BrowserScreen(
                         ) {
                             Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Download Locally", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            Text(stringResource(R.string.download_destination_local), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                         }
 
                         OutlinedButton(
@@ -7178,14 +7178,14 @@ fun BrowserScreen(
                         ) {
                             Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save to Private Vault 🔒", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.download_destination_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
                         }
 
                         TextButton(
                             onClick = { viewModel.pendingGenericDownload = null },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                            Text(stringResource(R.string.cancel_text), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))

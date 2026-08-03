@@ -427,20 +427,20 @@ fun HomeScreenContent(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.VisibilityOff,
-                        contentDescription = "Incognito Mode",
+                        contentDescription = stringResource(R.string.incognito_mode_desc),
                         tint = Color(0xFFCBB2FF),
                         modifier = Modifier.size(44.dp)
                     )
                 }
                 Text(
-                    text = "You've gone incognito",
+                    text = stringResource(R.string.incognito_screen_title),
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "Your browsing history, search history, and cookies won't be saved. Files downloaded and bookmarks created will still be kept.",
+                    text = stringResource(R.string.incognito_description),
                     color = Color(0xFF9186A8),
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
