@@ -1,0 +1,385 @@
+package com.rebelroot.omni.tools.passwords
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import java.util.UUID
+
+// ─── Password generator helpers ────────────────────────────────────────────
+
+private const val CHARS_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+private const val CHARS_LOWER = "abcdefghijklmnopqrstuvwxyz"
+private const val CHARS_DIGITS = "0123456789"
+private const val CHARS_SYMBOLS = "!@#\$%^&*()-_=+[]{}|;:,.<>?"
+
+fun generatePassword(
+    length: Int,
+    useUpper: Boolean,
+    useLower: Boolean,
+    useDigits: Boolean,
+    useSymbols: Boolean
+): String {
+    val pool = buildString {
+        if (useUpper) append(CHARS_UPPER)
+        if (useLower) append(CHARS_LOWER)
+        if (useDigits) append(CHARS_DIGITS)
+        if (useSymbols) append(CHARS_SYMBOLS)
+    }.ifEmpty { CHARS_LOWER + CHARS_DIGITS }
+
+    val rng = java.security.SecureRandom()
+
+    // Guarantee at least one char from each required class
+    val required = buildList {
+        if (useUpper) add(CHARS_UPPER[rng.nextInt(CHARS_UPPER.length)])
+        if (useLower) add(CHARS_LOWER[rng.nextInt(CHARS_LOWER.length)])
+        if (useDigits) add(CHARS_DIGITS[rng.nextInt(CHARS_DIGITS.length)])
+        if (useSymbols) add(CHARS_SYMBOLS[rng.nextInt(CHARS_SYMBOLS.length)])
+    }
+
+    val rest = (required.size until length).map { pool[rng.nextInt(pool.length)] }
+    return (required + rest).shuffled(rng).joinToString("")
+}
+
+// ─── Strength meter (shared with MasterPasswordScreen logic) ───────────────
+
+internal fun passwordStrengthLabel(password: String): Pair<String, Color> {
+    if (password.isBlank()) return "Weak" to Color(0xFFEF4444)
+    val hasUpper = password.any(Char::isUpperCase)
+    val hasLower = password.any(Char::isLowerCase)
+    val hasDigit = password.any(Char::isDigit)
+    val hasSymbol = password.any { !it.isLetterOrDigit() }
+    return when {
+        password.length >= 12 && hasUpper && hasLower && hasDigit && hasSymbol ->
+            "Strong" to Color(0xFF16A34A)
+        password.length >= 8 && hasUpper && hasLower && (hasDigit || hasSymbol) ->
+            "Fair" to Color(0xFFF59E0B)
+        else -> "Weak" to Color(0xFFEF4444)
+    }
+}
+
+// ─── Password generator bottom sheet ───────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PasswordGeneratorSheet(
+    onDismiss: () -> Unit,
+    onUsePassword: (String) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    var length by rememberSaveable { mutableFloatStateOf(20f) }
+    var useUpper by rememberSaveable { mutableStateOf(true) }
+    var useLower by rememberSaveable { mutableStateOf(true) }
+    var useDigits by rememberSaveable { mutableStateOf(true) }
+    var useSymbols by rememberSaveable { mutableStateOf(true) }
+
+    var generated by remember {
+        mutableStateOf(generatePassword(20, true, true, true, true))
+    }
+
+    fun regenerate() {
+        generated = generatePassword(length.toInt(), useUpper, useLower, useDigits, useSymbols)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("Password Generator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+
+            // Generated password display
+            OutlinedTextField(
+                value = generated,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Generated password") },
+                trailingIcon = {
+                    IconButton(onClick = ::regenerate) {
+                        Icon(Icons.Filled.Casino, contentDescription = "Regenerate")
+                    }
+                }
+            )
+
+            // Length slider
+            Column {
+                Text("Length: ${length.toInt()}", style = MaterialTheme.typography.bodyMedium)
+                Slider(
+                    value = length,
+                    onValueChange = { length = it; regenerate() },
+                    valueRange = 8f..64f,
+                    steps = 55,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Character class toggles
+            CharToggleRow("Uppercase (A–Z)", useUpper) { useUpper = it; regenerate() }
+            CharToggleRow("Lowercase (a–z)", useLower) { useLower = it; regenerate() }
+            CharToggleRow("Numbers (0–9)", useDigits) { useDigits = it; regenerate() }
+            CharToggleRow("Symbols (!@#…)", useSymbols) { useSymbols = it; regenerate() }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        onUsePassword(generated)
+                        onDismiss()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Use This Password")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+// ─── Add / Edit entry sheet ─────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PasswordEntrySheet(
+    existing: PasswordEntry? = null,
+    onDismiss: () -> Unit,
+    onSave: (PasswordEntry) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    var label by rememberSaveable { mutableStateOf(existing?.label ?: "") }
+    var domain by rememberSaveable { mutableStateOf(existing?.domain ?: "") }
+    var username by rememberSaveable { mutableStateOf(existing?.username ?: "") }
+    var password by rememberSaveable { mutableStateOf(existing?.password ?: "") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
+    var domainError by rememberSaveable { mutableStateOf(false) }
+    var usernameError by rememberSaveable { mutableStateOf(false) }
+    var passwordError by rememberSaveable { mutableStateOf(false) }
+
+    var showGenerator by remember { mutableStateOf(false) }
+
+    val (strengthLabel, strengthColor) = remember(password) { passwordStrengthLabel(password) }
+
+    if (showGenerator) {
+        PasswordGeneratorSheet(
+            onDismiss = { showGenerator = false },
+            onUsePassword = { generated ->
+                password = generated
+                showGenerator = false
+            }
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                if (existing == null) "Add Password" else "Edit Password",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            // Label (optional)
+            OutlinedTextField(
+                value = label,
+                onValueChange = { label = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Label (optional)") },
+                singleLine = true
+            )
+
+            // Domain / website
+            OutlinedTextField(
+                value = domain,
+                onValueChange = { domain = it; domainError = false },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Domain / Website") },
+                singleLine = true,
+                isError = domainError,
+                supportingText = if (domainError) {{ Text("Domain is required") }} else null
+            )
+
+            // Username / email
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it; usernameError = false },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Username / Email") },
+                singleLine = true,
+                isError = usernameError,
+                supportingText = if (usernameError) {{ Text("Username is required") }} else null
+            )
+
+            // Password field + generate button
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it; passwordError = false },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Password") },
+                singleLine = true,
+                isError = passwordError,
+                supportingText = if (passwordError) {{ Text("Password is required") }} else null,
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    Row {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                            )
+                        }
+                        IconButton(onClick = { showGenerator = true }) {
+                            Icon(Icons.Filled.Casino, contentDescription = "Generate password")
+                        }
+                    }
+                }
+            )
+
+            // Strength meter (only when password is non-empty)
+            AnimatedVisibility(visible = password.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val progress = when (strengthLabel) {
+                        "Strong" -> 1.0f
+                        "Fair" -> 0.65f
+                        else -> 0.3f
+                    }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = strengthColor,
+                        trackColor = strengthColor.copy(alpha = 0.2f)
+                    )
+                    Text(strengthLabel, color = strengthColor, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = {
+                    domainError = domain.isBlank()
+                    usernameError = username.isBlank()
+                    passwordError = password.isBlank()
+                    if (domainError || usernameError || passwordError) return@Button
+
+                    val now = System.currentTimeMillis()
+                    val entry = PasswordEntry(
+                        id = existing?.id ?: UUID.randomUUID().toString(),
+                        label = label.trim(),
+                        domain = domain.trim(),
+                        username = username.trim(),
+                        password = password,
+                        notes = existing?.notes ?: "",
+                        createdAt = existing?.createdAt ?: now,
+                        updatedAt = now
+                    )
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        onSave(entry)
+                        onDismiss()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (existing == null) "Save" else "Update")
+            }
+        }
+    }
+}
+
+// ─── Delete confirmation dialog ─────────────────────────────────────────────
+
+@Composable
+fun DeletePasswordDialog(
+    entry: PasswordEntry,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete password?") },
+        text = {
+            Text("Remove the saved credentials for ${entry.domain.ifBlank { "this entry" }}? This cannot be undone.")
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}

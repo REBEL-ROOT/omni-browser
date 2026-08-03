@@ -219,7 +219,7 @@ fun PrivacySecurityScreen(
                     SettingsSwitchRow(
                         icon = Icons.Rounded.OpenInNew,
                         title = "Open links in external apps",
-                        subtitle = "Only when you tap a link; automatic redirects are always blocked",
+                        subtitle = "Tap links open directly; auto-redirects ask per site",
                         checked = viewModel.isOpenExternalAppAllowed,
                         onCheckedChange = { viewModel.toggleOpenExternalAppAllowed(context) },
                         textPrimaryColor = textPrimaryColor,

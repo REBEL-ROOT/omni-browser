@@ -19,5 +19,12 @@ data class TabState(
     val settingsVersion: Int = 0,
     val isUriLoaded: Boolean = true,
     val isIncognito: Boolean = false,
-    val lastActiveTime: Long = System.currentTimeMillis()
+    val lastActiveTime: Long = System.currentTimeMillis(),
+    /** True when the GeckoSession has been closed to reclaim memory. The tab
+     *  metadata (url, title, history flags) is preserved; the session is
+     *  re-created and the page reloaded when the tab is focused again. */
+    val isSuspended: Boolean = false,
+    /** Optional low-resolution thumbnail captured just before suspension,
+     *  used to show a preview in the tab strip while the tab is suspended. */
+    val suspendThumbnail: android.graphics.Bitmap? = null
 )

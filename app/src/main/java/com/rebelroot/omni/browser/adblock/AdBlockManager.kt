@@ -81,7 +81,7 @@ class AdBlockManager(private val context: Context) {
     }
 
     private val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    internal val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     var isMasterEnabled: Boolean
         get() = prefs.getBoolean(KEY_MASTER_ENABLED, true)
@@ -310,6 +310,25 @@ class AdBlockManager(private val context: Context) {
         blockedDomains.clear()
         blockedDomains.addAll(newSet)
         Log.i(TAG, "Loaded ${blockedDomains.size} active blocked domains into memory")
+    }
+
+    /**
+     * Clears the in-memory blocked-domains set to reclaim RAM under memory
+     * pressure. The set is lazily rebuilt from the disk cache on next lookup.
+     * Called from [BrowserViewModel.onCriticalMemory].
+     */
+    fun trimBlockedDomains() {
+        blockedDomains.clear()
+        Log.i(TAG, "trimBlockedDomains: in-memory set cleared")
+    }
+
+    /**
+     * Cancels the background coroutine scope. Call from ViewModel.onCleared()
+     * so the IO scope does not outlive the ViewModel.
+     */
+    fun shutdown() {
+        scope.cancel()
+        Log.i(TAG, "AdBlockManager shutdown")
     }
 
     fun isHostBlocked(host: String?): Boolean {

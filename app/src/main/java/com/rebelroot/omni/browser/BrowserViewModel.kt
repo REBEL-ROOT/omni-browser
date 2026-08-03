@@ -54,13 +54,15 @@ import com.rebelroot.omni.privacy.TorManager
 import com.rebelroot.omni.privacy.EmbeddedTorManager
 import com.rebelroot.omni.privacy.TorState
 import com.rebelroot.omni.tools.locker.PrivateLockerManager
+import com.rebelroot.omni.tools.passwords.PasswordEntry
+import com.rebelroot.omni.tools.passwords.PasswordVaultManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
@@ -103,6 +105,9 @@ class BrowserViewModel : ViewModel() {
 
     companion object {
         internal const val TAG = "BrowserViewModel"
+
+        /** Default maximum number of background tabs with live GeckoSessions. */
+        internal const val DEFAULT_MAX_LIVE_TABS = 6
 
         internal const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
         internal const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
@@ -253,6 +258,8 @@ class BrowserViewModel : ViewModel() {
         val COMPROMISED_PASSWORD_WARNING_KEY = booleanPreferencesKey("compromised_password_warning")
         val HTTPS_ONLY_MODE_KEY = booleanPreferencesKey("https_only_mode")
         val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
+        val PASSWORD_MIGRATION_DONE_KEY = booleanPreferencesKey("password_migration_done")
+        val DEVNOTES_PASSWORD_MIGRATION_KEY = booleanPreferencesKey("devnotes_password_migration_done")
         val UI_SCALE_KEY = floatPreferencesKey("ui_scale")
         
         val TAB_LAYOUT_MODE_KEY = stringPreferencesKey("tab_layout_mode")
@@ -399,6 +406,18 @@ class BrowserViewModel : ViewModel() {
     var isNativePlayerEnabled by mutableStateOf(true)
     var isYouTubeEnabled by mutableStateOf(false)
     var pendingVideoUrl: String? = null
+    internal var passwordVaultManager: PasswordVaultManager? = null
+    internal var passwordVaultSyncJob: Job? = null
+    /** Credentials saved before the vault finished opening — flushed in attachPasswordVault. */
+    internal val pendingVaultWrites = mutableListOf<PasswordEntry>()
+    data class PendingExternalAppRequest(
+        val uri: String,
+        val packageName: String? = null,
+        val fallbackUrl: String? = null,
+        val blockedAutomatically: Boolean = false,
+        val sourceHost: String = ""
+    )
+    var pendingExternalAppRequest by mutableStateOf<PendingExternalAppRequest?>(null)
     var activeVideoCookies by mutableStateOf<String?>(null)
     var customVpnConfig by mutableStateOf<String?>(null)
     var proxyProvider by mutableStateOf("direct")
@@ -663,6 +682,13 @@ class BrowserViewModel : ViewModel() {
             return false
         }
 
+        // SAFETY: if the URL has no path at all (bare domain like catbox.moe),
+        // the lastSegment is the domain itself — never a downloadable file.
+        val pathPart = pathAndQuery.substringAfter("://", "").substringAfter("/")
+        if (pathPart.isBlank()) {
+            return false
+        }
+
         val ext = lastSegment.substringAfterLast('.', "").lowercase()
 
         if (ext.isEmpty()) {
@@ -691,7 +717,12 @@ class BrowserViewModel : ViewModel() {
             "band","cool","best","realty","properties","agency","expert","center","digital",
             "systems","solutions","today","farm","city","town","cash","money","bet",
             "casino","poker","loan","credit","insurance","investments","finance","tax",
-            "legal","host","web","law","yoga","pro","tech"
+            "legal","host","web","law","yoga","pro","tech",
+            // Additional TLDs commonly used
+            "moe","rip","link","click","download","party","racing","win","date",
+            "review","audio","video","photo","pics","pic","men","stream","accountant",
+            "science","gq","tk","ml","cf","ga","buzz","guru","ninja","pink","red",
+            "blue","black","kim","dad","foo","mov","zip","phd","nyc","one","two"
         )
         if (ext in commonTlds) return false
 
@@ -1039,6 +1070,12 @@ class BrowserViewModel : ViewModel() {
     val userExtensions = mutableStateListOf<WebExtension>()
     val extensionIcons = mutableStateMapOf<String, android.graphics.Bitmap>()
     var extensionViewMode by mutableStateOf("List") // "List" or "Grid"
+
+    /** Drops all cached extension icon bitmaps. They are re-fetched on next display.
+     *  Called from MainActivity.onTrimMemory(MODERATE/CRITICAL). */
+    fun clearIconCache() {
+        extensionIcons.clear()
+    }
     
     // Console Logs
     val consoleLogs = mutableStateListOf<ConsoleLogEntry>()
@@ -1323,6 +1360,7 @@ class BrowserViewModel : ViewModel() {
             "notifications" -> perm?.notifications ?: defaultNotifications
             "javascript" -> perm?.javascript ?: (if (defaultJavascriptAllowed) "allow" else "block")
             "autoplay" -> perm?.autoplay ?: (if (defaultAutoplayAllowed) "allow" else "block")
+            "externalApp" -> perm?.externalApp ?: "ask"
             else -> "ask"
         }
     }
@@ -1338,6 +1376,7 @@ class BrowserViewModel : ViewModel() {
             "notifications" -> current.copy(notifications = value)
             "javascript" -> current.copy(javascript = value)
             "autoplay" -> current.copy(autoplay = value)
+            "externalApp" -> current.copy(externalApp = value)
             else -> current
         }
         if (idx != -1) {
@@ -1627,6 +1666,8 @@ class BrowserViewModel : ViewModel() {
         }
         loadUrlInTab(newTab, url)
         saveTabs()
+        // Enforce the live-session cap after adding the new tab.
+        enforceSuspendLimit()
     }
 
     fun dismissContextMenu() {
@@ -1636,6 +1677,14 @@ class BrowserViewModel : ViewModel() {
     fun selectTab(tabId: String) {
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
+
+        // If the target tab is suspended, restore its GeckoSession before switching.
+        // resumeTab uses the stored appContext; it's a no-op if already live.
+        val ctx = appContext
+        if (tabs[tabIndex].isSuspended && ctx != null) {
+            resumeTab(tabId, ctx)
+        }
+
         val tab = tabs[tabIndex]
         tabs[tabIndex] = tab.copy(lastActiveTime = System.currentTimeMillis())
         val oldSession = geckoSession
@@ -1703,6 +1752,10 @@ class BrowserViewModel : ViewModel() {
             }
             reload()
         }
+
+        // After activating a tab, evict least-recently-used background tabs
+        // beyond the live limit to keep session count bounded.
+        enforceSuspendLimit()
     }
 
     fun closeTab(tabId: String, context: Context) {
@@ -5776,7 +5829,11 @@ class BrowserViewModel : ViewModel() {
     var hasMoreNews by mutableStateOf(true)
     private var newsPageIndex = 0
 
-    private val categoryNewsCache = mutableMapOf<String, List<NewsArticle>>()
+    private val categoryNewsCache: MutableMap<String, List<NewsArticle>> =
+        object : java.util.LinkedHashMap<String, List<NewsArticle>>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, List<NewsArticle>>): Boolean =
+                size > 8
+        }
 
     fun fetchNews(category: String = "News", forceRefresh: Boolean = false) {
         selectedNewsCategory = category
@@ -7804,11 +7861,140 @@ class BrowserViewModel : ViewModel() {
         siteStyleWarmFilter = sp.getBoolean("site_style_warm_filter", false)
     }
 
+    // -------------------------------------------------------------------------
+    // Tab suspension / LRU eviction (TIER 1 — biggest RAM win)
+    // -------------------------------------------------------------------------
+
+    /** Maximum number of tabs that keep a live GeckoSession at any time.
+     *  The active tab is always live; the (maxLiveTabs - 1) most-recently-used
+     *  background tabs stay live; all others are suspended (session closed).
+     *  Exposed as a var so MainActivity.onTrimMemory can temporarily tighten
+     *  the cap under low-memory pressure, then restore the default. */
+    var maxLiveTabs: Int = DEFAULT_MAX_LIVE_TABS
+
+    /**
+     * Closes the GeckoSession of background tabs that exceed [MAX_LIVE_TABS],
+     * keeping the LRU order. The active tab is never suspended.
+     * Safe to call at any time; already-suspended tabs are skipped.
+     */
+    fun enforceSuspendLimit() {
+        try {
+            val currentActiveId = activeTabId ?: return
+            val backgroundTabs = tabs
+                .filter { !it.isSuspended && it.id != currentActiveId }
+                .sortedByDescending { it.lastActiveTime }
+
+            val allowedLive = (maxLiveTabs - 1).coerceAtLeast(0)
+            val toSuspend = backgroundTabs.drop(allowedLive)
+            toSuspend.forEach { suspendTab(it.id) }
+        } catch (e: Exception) {
+            Log.w(TAG, "enforceSuspendLimit: ${e.message}")
+        }
+    }
+
+    /**
+     * Suspends a single tab by id: deactivates and closes its GeckoSession
+     * while preserving all metadata so it can be resumed later.
+     */
+    fun suspendTab(tabId: String) {
+        try {
+            val idx = tabs.indexOfFirst { it.id == tabId }
+            if (idx == -1) return
+            val tab = tabs[idx]
+            if (tab.isSuspended) return
+            if (tab.id == activeTabId) return  // never suspend the active tab
+
+            runCatching {
+                tab.session.setActive(false)
+                if (tab.session.isOpen) tab.session.close()
+            }
+            tabs[idx] = tab.copy(isSuspended = true)
+            Log.d(TAG, "Suspended tab ${tab.id} (${tab.url})")
+        } catch (e: Exception) {
+            Log.w(TAG, "suspendTab($tabId): ${e.message}")
+        }
+    }
+
+    /**
+     * Resumes a suspended tab: creates a fresh GeckoSession, wires all
+     * listeners, opens it, and reloads the tab's URL.
+     * Must be called with a valid [context] before [selectTab].
+     */
+    fun resumeTab(tabId: String, context: Context) {
+        try {
+            val idx = tabs.indexOfFirst { it.id == tabId }
+            if (idx == -1) return
+            val tab = tabs[idx]
+            if (!tab.isSuspended) return
+
+            val runtime = getGeckoRuntime(context)
+            val isJsAllowed = getSitePermissionValue(tab.url, "javascript") == "allow"
+            val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+                .usePrivateMode(tab.isIncognito)
+                .userAgentMode(
+                    if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP
+                    else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE
+                )
+                .viewportMode(
+                    if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP
+                    else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE
+                )
+                .allowJavascript(isJsAllowed)
+                .build()
+
+            val newSession = org.mozilla.geckoview.GeckoSession(settings)
+            val resumedTab = tab.copy(
+                session = newSession,
+                isSuspended = false,
+                isUriLoaded = false   // triggers lazy load on selectTab
+            )
+            setupTabSessionListeners(resumedTab, context)
+            tabs[idx] = resumedTab
+            newSession.open(runtime)
+            Log.d(TAG, "Resumed tab ${tab.id} (${tab.url})")
+        } catch (e: Exception) {
+            Log.w(TAG, "resumeTab($tabId): ${e.message}")
+        }
+    }
+
+    /**
+     * Called from [MainActivity.onTrimMemory] on RUNNING_CRITICAL / COMPLETE.
+     * Suspends ALL background tabs immediately to free Gecko content processes.
+     */
+    fun onCriticalMemory() {
+        try {
+            val currentActiveId = activeTabId
+            tabs.filter { !it.isSuspended && it.id != currentActiveId }
+                .forEach { suspendTab(it.id) }
+            adBlockManager.trimBlockedDomains()
+            categoryNewsCache.clear()
+            extensionIcons.clear()
+            Log.i(TAG, "onCriticalMemory: all background tabs suspended, caches cleared")
+        } catch (e: Exception) {
+            Log.w(TAG, "onCriticalMemory: ${e.message}")
+        }
+    }
+
+    // -------------------------------------------------------------------------
+
     override fun onCleared() {
+        // Close every live GeckoSession before the ViewModel is destroyed so
+        // Gecko content processes are not leaked across the ViewModel lifecycle.
+        tabs.forEach { tab ->
+            runCatching {
+                if (!tab.isSuspended && tab.session.isOpen) {
+                    tab.session.setActive(false)
+                    tab.session.close()
+                }
+            }
+        }
+        runCatching { dismissExtensionPopup() }
+        runCatching { tts?.shutdown() }
+        runCatching { translationManager.close() }
+        runCatching { adBlockManager.shutdown() }
+        runCatching { torManager.shutdown() }
+        runCatching { embeddedTorManager.shutdown() }
         super.onCleared()
-        dismissExtensionPopup()
-        translationManager.close()
-        tts?.shutdown()
     }
 }
 

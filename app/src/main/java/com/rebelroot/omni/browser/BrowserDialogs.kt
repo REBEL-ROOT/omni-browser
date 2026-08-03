@@ -1560,3 +1560,163 @@ fun RenameTabGroupDialog(
         }
     )
 }
+
+@Composable
+fun ExternalAppRedirectDialog(
+    request: BrowserViewModel.PendingExternalAppRequest,
+    viewModel: BrowserViewModel,
+    context: Context,
+    onDismiss: () -> Unit
+) {
+    val isDark = viewModel.isDarkThemeEnabled
+    val containerColor = if (viewModel.isAmoledMode) Color(0xFF000000)
+                         else if (isDark) Color(0xFF0F1B26)
+                         else MaterialTheme.colorScheme.surface
+    val textPrimary = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val textSecondary = if (isDark) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    // Derive a display name: app package label > scheme > truncated URI
+    val appLabel = remember(request.packageName) {
+        if (!request.packageName.isNullOrBlank()) {
+            try {
+                context.packageManager
+                    .getApplicationLabel(
+                        context.packageManager.getApplicationInfo(request.packageName, 0)
+                    ).toString()
+            } catch (_: Exception) { request.packageName }
+        } else {
+            try { Uri.parse(request.uri).scheme ?: request.uri } catch (_: Exception) { request.uri }
+        }
+    }
+
+    val siteLabel = request.sourceHost.ifBlank { "this site" }
+
+    fun doLaunch() {
+        try {
+            val lowerUri = request.uri.lowercase()
+            val intent = if (lowerUri.startsWith("intent:")) {
+                Intent.parseUri(request.uri, Intent.URI_INTENT_SCHEME).apply {
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                    setComponent(null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) setSelector(null)
+                }
+            } else {
+                Intent(Intent.ACTION_VIEW, Uri.parse(request.uri)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                }
+            }
+            val pm = context.packageManager
+            val handlers = try {
+                pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            } catch (_: Exception) { emptyList() }
+
+            when {
+                handlers.size == 1 || !intent.getPackage().isNullOrBlank() ->
+                    context.startActivity(intent)
+                handlers.size > 1 -> {
+                    val chooser = Intent.createChooser(intent, "Open with").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(chooser)
+                }
+                else -> Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: android.content.ActivityNotFoundException) {
+            // Try fallback URL if present
+            if (!request.fallbackUrl.isNullOrBlank()) {
+                viewModel.loadUrl(request.fallbackUrl)
+            } else {
+                Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e("ExternalAppDialog", "Failed to launch external app", e)
+            Toast.makeText(context, "Could not open external app", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = containerColor,
+        icon = {
+            Icon(
+                imageVector = Icons.Rounded.OpenInNew,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Open in $appLabel?",
+                color = textPrimary,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "$siteLabel wants to open an external app.",
+                    color = textSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+            }
+        },
+        confirmButton = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // "Always open" — saves per-site allow and launches
+                Button(
+                    onClick = {
+                        viewModel.updateSitePermission(request.sourceHost, "externalApp", "allow")
+                        doLaunch()
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                ) {
+                    Text("Always open", fontWeight = FontWeight.SemiBold)
+                }
+                // "Open once" — launches without saving
+                OutlinedButton(
+                    onClick = {
+                        doLaunch()
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.6f))
+                ) {
+                    Text("Open once", color = accentColor, fontWeight = FontWeight.SemiBold)
+                }
+                // "Stay" — saves per-site block so future auto-redirects from this site are silently denied
+                TextButton(
+                    onClick = {
+                        viewModel.updateSitePermission(request.sourceHost, "externalApp", "block")
+                        // Load fallback URL in-browser if available, otherwise stay
+                        if (!request.fallbackUrl.isNullOrBlank()) {
+                            viewModel.loadUrl(request.fallbackUrl)
+                        }
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Stay on page", color = textSecondary)
+                }
+            }
+        },
+        dismissButton = {}
+    )
+}

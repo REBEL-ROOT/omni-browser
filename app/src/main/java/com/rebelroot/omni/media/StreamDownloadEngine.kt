@@ -1338,8 +1338,14 @@ class StreamDownloadEngine(
             throw Exception("Segment server returned code ${connection.responseCode}")
         }
         
-        val rawBytes = connection.inputStream.use { input ->
-            input.readBytes()
+        val rawBytes = try {
+            connection.inputStream.use { input ->
+                input.readBytes()
+            }
+        } catch (oom: OutOfMemoryError) {
+            Log.e("DownloadEngine", "OOM reading HLS segment $segmentIndex — skipping", oom)
+            connection.disconnect()
+            return 0L
         }
         connection.disconnect()
         
@@ -1674,7 +1680,12 @@ class StreamDownloadEngine(
             }
             val connection = openConnectionWithRedirects(keyUrl, headers)
             val result = if (connection.responseCode in 200..299) {
-                connection.inputStream.readBytes()
+                try {
+                    connection.inputStream.readBytes()
+                } catch (oom: OutOfMemoryError) {
+                    Log.e("DownloadEngine", "OOM reading encryption key from $keyUrl — treating as no-key", oom)
+                    null
+                }
             } else {
                 null
             }

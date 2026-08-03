@@ -168,4 +168,9 @@ class EmbeddedTorManager(private val context: Context) {
     fun isConnected(): Boolean {
         return _state.value is TorState.Connected
     }
+
+    /** Cancels the background coroutine scope. Call from ViewModel.onCleared(). */
+    fun shutdown() {
+        scope.cancel()
+    }
 }

@@ -64,7 +64,6 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
-import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
@@ -517,7 +516,7 @@ private fun WallpaperHome(
                           selectedWallpaper.contains(presetHash) ||
                           (!preset.isVideo && selectedWallpaper.lowercase().contains(".gif"))
                       ))
-                // Show actual media in the tile — GIF animates, video shows its thumbnail
+                // GIFs animate in the tile; videos always use their static thumbUrl for instant load
                 val tileModel = if (!preset.isVideo) {
                     remember(preset.mediaUrl) {
                         ImageRequest.Builder(context)
@@ -530,20 +529,9 @@ private fun WallpaperHome(
                             .build()
                     }
                 } else {
-                    // Video: show a frame from the actual video using VideoFrameDecoder
-                    // HLS streams (.m3u8) can't be frame-decoded — use static thumbnail
-                    val isHls = preset.mediaUrl.lowercase().contains(".m3u8")
-                    if (isHls) {
-                        preset.thumbUrl
-                    } else {
-                        remember(preset.mediaUrl) {
-                            ImageRequest.Builder(context)
-                                .data(preset.mediaUrl)
-                                .decoderFactory(VideoFrameDecoder.Factory())
-                                .crossfade(true)
-                                .build()
-                        }
-                    }
+                    // Always use the pre-defined static thumbnail — avoids downloading the
+                    // full video just to extract a frame, which was causing ~30 s blank cards.
+                    preset.thumbUrl
                 }
                 WallpaperTile(
                     model = tileModel,

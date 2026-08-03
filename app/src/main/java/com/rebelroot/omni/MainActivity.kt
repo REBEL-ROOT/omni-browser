@@ -349,6 +349,7 @@ class MainActivity : FragmentActivity() {
                                 onOpenQrTools = { navController.navigate("qr_tools") },
                                 onOpenDownloads = { navController.navigate("downloads") },
                                 onOpenSettings = { navController.navigate("settings") },
+                                onOpenPasswordManager = { navController.navigate("password_manager") },
                                 onOpenAppearance = { navController.navigate("appearance") },
                                 onOpenHistory = { navController.navigate("history") },
                                 onOpenBookmarks = { navController.navigate("bookmarks") },
@@ -366,6 +367,11 @@ class MainActivity : FragmentActivity() {
                                     this@MainActivity.finishAffinity()
                                 }
                             )
+                        }
+
+                        // Password Manager Screen
+                        composable("password_manager") {
+                            com.rebelroot.omni.tools.passwords.PasswordManagerScreen(browserViewModel)
                         }
 
                         // Sandboxed Encrypted Vault Room
@@ -480,6 +486,9 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onOpenSiteSettings = {
                                     navController.navigate("settings_site")
+                                },
+                                onOpenPasswordManager = {
+                                    navController.navigate("password_manager")
                                 },
                                 onSettingsImported = {
                                     this@MainActivity.recreate()
@@ -652,16 +661,50 @@ class MainActivity : FragmentActivity() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         try {
-            // Trim image loading memory caches (Coil) to reclaim memory
-            coil.Coil.imageLoader(this).memoryCache?.clear()
-            
-            // Clean up JVM garbage collection if memory is getting low
-            if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
-                System.gc()
+            when (level) {
+                // COMPLETE (80): system is killing background processes — suspend everything.
+                android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                    browserViewModel.onCriticalMemory()
+                    coil.Coil.imageLoader(this).memoryCache?.clear()
+                    android.util.Log.i("MainActivity", "🧹 onTrimMemory COMPLETE (80): all background tabs suspended, caches cleared")
+                }
+
+                // MODERATE (60): app is low in the cached background LRU — drop bitmaps.
+                android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE -> {
+                    browserViewModel.clearIconCache()
+                    coil.Coil.imageLoader(this).memoryCache?.clear()
+                    android.util.Log.d("MainActivity", "🧹 onTrimMemory MODERATE (60): icon + image caches cleared")
+                }
+
+                // BACKGROUND (40) / UI_HIDDEN (20): just clear Coil memory cache.
+                android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+                android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
+                    coil.Coil.imageLoader(this).memoryCache?.clear()
+                    android.util.Log.d("MainActivity", "🧹 onTrimMemory BACKGROUND/UI_HIDDEN ($level): image cache cleared")
+                }
+
+                // RUNNING_CRITICAL (15): process is still foreground but OS is desperate.
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
+                    browserViewModel.onCriticalMemory()
+                    coil.Coil.imageLoader(this).memoryCache?.clear()
+                    android.util.Log.i("MainActivity", "🧹 onTrimMemory RUNNING_CRITICAL (15): all background tabs suspended, caches cleared")
+                }
+
+                // RUNNING_LOW (10): pressure building — tighten cap to 3 live tabs.
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
+                    browserViewModel.maxLiveTabs = 3
+                    browserViewModel.enforceSuspendLimit()
+                    browserViewModel.maxLiveTabs = BrowserViewModel.DEFAULT_MAX_LIVE_TABS
+                    coil.Coil.imageLoader(this).memoryCache?.clear()
+                    android.util.Log.i("MainActivity", "🧹 onTrimMemory RUNNING_LOW (10): excess background tabs suspended")
+                }
             }
-            android.util.Log.d("MainActivity", "🧹 onTrimMemory level $level: Purged image loader memory cache and triggered GC")
-        } catch (e: Exception) {
-            android.util.Log.w("MainActivity", "Failed to trim memory: $e")
+            // NOTE: System.gc() intentionally removed — it causes a stop-the-world pause
+            // under exactly the pressure where we can least afford it; the session
+            // suspensions above free far more memory than a GC hint ever could.
+        } catch (e: Throwable) {
+            // Catch Throwable so an OOM inside the trim path cannot crash the process.
+            android.util.Log.w("MainActivity", "onTrimMemory($level) failed: $e")
         }
     }
 

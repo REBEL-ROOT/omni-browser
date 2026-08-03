@@ -55,23 +55,46 @@ object QrCodeDecoder {
 
     /**
      * Decodes a QR code from a gallery/file Uri.
+     * Uses a two-pass BitmapFactory decode: first reads image dimensions with
+     * inJustDecodeBounds, then calculates an inSampleSize so the decoded
+     * bitmap fits within 1024×1024 — preventing OOM on large gallery photos.
      */
     fun decodeUri(context: Context, uri: Uri): String? {
         var inputStream: InputStream? = null
         return try {
+            // Pass 1: read dimensions only (no pixels allocated)
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             inputStream = context.contentResolver.openInputStream(uri)
-            val bitmap = BitmapFactory.decodeStream(inputStream)
+            BitmapFactory.decodeStream(inputStream, null, opts)
+            inputStream?.close()
+
+            // Calculate the largest power-of-2 sample size that keeps the image
+            // within a 1024×1024 box — a safe size for ZXing to decode.
+            val maxDim = 1024
+            var sampleSize = 1
+            var w = opts.outWidth
+            var h = opts.outHeight
+            while (w > maxDim || h > maxDim) {
+                sampleSize *= 2
+                w /= 2
+                h /= 2
+            }
+
+            // Pass 2: decode scaled-down bitmap
+            val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            inputStream = context.contentResolver.openInputStream(uri)
+            val bitmap = BitmapFactory.decodeStream(inputStream, null, decodeOpts)
             if (bitmap != null) {
-                decodeBitmap(bitmap)
+                val result = decodeBitmap(bitmap)
+                bitmap.recycle()
+                result
             } else {
                 null
             }
         } catch (e: Exception) {
             null
         } finally {
-            try {
-                inputStream?.close()
-            } catch (_: Exception) {}
+            try { inputStream?.close() } catch (_: Exception) {}
         }
     }
 

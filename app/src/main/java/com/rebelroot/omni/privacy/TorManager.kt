@@ -137,6 +137,13 @@ class TorManager(private val context: Context) {
         return _state.value is TorState.Connected
     }
 
+    /** Cancels background coroutines. Call from ViewModel.onCleared(). */
+    fun shutdown() {
+        testJob?.cancel()
+        testJob = null
+        scope.cancel()
+    }
+
     /**
      * Opens Orbot's UI so the user can manually tap "New Identity".
      *

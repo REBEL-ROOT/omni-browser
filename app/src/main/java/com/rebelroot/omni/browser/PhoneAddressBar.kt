@@ -148,6 +148,7 @@ fun PhoneAddressBar(
     onOpenDownloads: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPasswordManager: () -> Unit,
     onShowCustomizationSheet: () -> Unit,
     onShowThemeSheet: () -> Unit = {},
     onShowQuickTools: () -> Unit = {},
@@ -668,6 +669,7 @@ fun PhoneAddressBar(
                     onOpenDownloads = onOpenDownloads,
                     onOpenBookmarks = onOpenBookmarks,
                     onOpenSettings = onOpenSettings,
+                    onOpenPasswordManager = onOpenPasswordManager,
                     onShowThemeSheet = onShowThemeSheet,
                     onShowQuickTools = onShowQuickTools,
                     onShowFeedbackDialog = onShowFeedbackDialog,
@@ -694,6 +696,7 @@ fun omnimenuDropdown(
     onOpenDownloads: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPasswordManager: () -> Unit,
     onShowThemeSheet: () -> Unit = {},
     onShowQuickTools: () -> Unit = {},
     onShowFeedbackDialog: () -> Unit = {},
@@ -988,6 +991,13 @@ fun omnimenuDropdown(
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onOpenSettings() }
+            )
+            MinimalMenuItem(
+                text = "Password Manager",
+                icon = Icons.Rounded.Lock,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                onClick = { onDismissRequest(); onOpenPasswordManager() }
             )
             MinimalMenuItem(
                 text = "Help & feedback",

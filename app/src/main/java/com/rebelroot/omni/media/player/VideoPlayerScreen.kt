@@ -620,9 +620,25 @@ fun VideoPlayerScreen(
             .background(Color.Black)
     ) {
         if (youtubeVideoId != null) {
+            // Capture the WebView reference so onRelease can properly destroy it,
+            // preventing the ~50–150MB Chromium renderer from leaking on close.
+            var youtubeWebView by remember { mutableStateOf<android.webkit.WebView?>(null) }
+            DisposableEffect(youtubeVideoId) {
+                onDispose {
+                    youtubeWebView?.apply {
+                        try {
+                            stopLoading()
+                            loadUrl("about:blank")
+                            removeAllViews()
+                            destroy()
+                        } catch (_: Exception) {}
+                    }
+                    youtubeWebView = null
+                }
+            }
             AndroidView(
                 factory = { ctx ->
-                    android.webkit.WebView(ctx).apply {
+                    android.webkit.WebView(ctx).also { youtubeWebView = it }.apply {
                         settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true

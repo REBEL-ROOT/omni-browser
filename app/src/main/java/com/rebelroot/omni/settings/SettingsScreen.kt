@@ -82,6 +82,7 @@ fun SettingsScreen(
     onOpenTabs: () -> Unit = {},
     onOpenAccessibility: () -> Unit = {},
     onOpenSiteSettings: () -> Unit = {},
+    onOpenPasswordManager: () -> Unit = {},
     onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
@@ -175,6 +176,7 @@ fun SettingsScreen(
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var showAddSearchEngineDialog by remember { mutableStateOf(false) }
     var editingSearchEngine by remember { mutableStateOf<com.rebelroot.omni.browser.CustomSearchEngine?>(null) }
+    val discordInviteUrl = "https://discord.gg/uDR2PAy4dS"
 
 
 
@@ -746,6 +748,8 @@ fun SettingsScreen(
                 SettingsCard {
                     NavRow(Icons.Rounded.Security, stringResource(id = R.string.privacy_security_title), stringResource(id = R.string.privacy_security_desc), onOpenPrivacySecurity)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Lock, "Password Manager", "Create, unlock, and manage saved passwords", onOpenPasswordManager)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.VisibilityOff, stringResource(id = R.string.private_browsing_mode), stringResource(id = R.string.private_browsing_mode_desc), viewModel.isIncognitoMode) { viewModel.toggleIncognitoMode(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     // Notifications
@@ -966,6 +970,7 @@ fun SettingsScreen(
                         if (!isCheckingUpdate) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
                     }
 
+                    // Update result dialogs — scoped inside the About card so updateResult state is accessible
                     updateResult?.let { result ->
                         when (result) {
                             is BrowserViewModel.UpdateCheckResult.NewUpdateAvailable -> {
@@ -984,8 +989,8 @@ fun SettingsScreen(
                                                 try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
                                                 catch (e: Exception) { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.rebelroot.omni")).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }) }
                                             }
-                                        }) { 
-                                            Text(if (result.playStoreUrl.contains("github.com")) "Download & Install" else stringResource(id = R.string.update_dialog_btn)) 
+                                        }) {
+                                            Text(if (result.playStoreUrl.contains("github.com")) "Download & Install" else stringResource(id = R.string.update_dialog_btn))
                                         }
                                     },
                                     dismissButton = { TextButton(onClick = { updateResult = null }) { Text(stringResource(id = R.string.update_dialog_later), color = textSecondaryColor) } }
@@ -1052,7 +1057,40 @@ fun SettingsScreen(
                             }
                         )
                     }
-
+                } // end About SettingsCard
+            } // end About Column
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader("Community")
+                SettingsCard {
+                    // Discord
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                try {
+                                    context.startActivity(
+                                        android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(discordInviteUrl)
+                                        ).apply {
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Unable to open Discord invite", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.Chat, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Discord", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Join the Omni Browser community", color = textSecondaryColor, fontSize = 11.sp)
+                        }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                    }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.AutoMirrored.Rounded.Help, stringResource(id = R.string.help_support_title), stringResource(id = R.string.help_support_desc), onClick = { onOpenUrl("https://rebelroot.xyz/support") })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))

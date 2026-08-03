@@ -138,6 +138,7 @@ fun BrowserScreen(
     onOpenQrTools: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPasswordManager: () -> Unit,
     onOpenAppearance: () -> Unit = {},
     onOpenHistory: () -> Unit,
     onOpenBookmarks: () -> Unit,
@@ -1193,6 +1194,7 @@ fun BrowserScreen(
                                             onShowExtensions = { showExtensionsSheet = true },
                                             onShowPlayerSettings = { showPlayerSettingsDialog = true },
                                             onShowSiteInfo = { showSiteInfoSheet = true },
+                                            onOpenPasswordManager = onOpenPasswordManager,
                                             onFindInPage = { viewModel.openFindInPage() }
                                         )
                                     }
@@ -1224,6 +1226,7 @@ fun BrowserScreen(
                                         onOpenDownloads = onOpenDownloads,
                                         onOpenBookmarks = onOpenBookmarks,
                                         onOpenSettings = onOpenSettings,
+                                        onOpenPasswordManager = onOpenPasswordManager,
                                         onShowThemeSheet = { showThemeSheet = true },
                                         onShowQuickTools = { showQuickToolsSheet = true },
                                         onShowFeedbackDialog = { showFeedbackDialog = true },
@@ -1410,6 +1413,7 @@ fun BrowserScreen(
                             onOpenDownloads = onOpenDownloads,
                             onOpenBookmarks = onOpenBookmarks,
                             onOpenSettings = onOpenSettings,
+                            onOpenPasswordManager = onOpenPasswordManager,
                             onShowThemeSheet = { showThemeSheet = true },
                             onShowQuickTools = { showQuickToolsSheet = true },
                             onShowFeedbackDialog = { showFeedbackDialog = true },
@@ -2075,6 +2079,7 @@ fun BrowserScreen(
                                     showMenu = showMenu,
                                     onShowMenuChange = { showMenu = it },
                                     onOpenSettings = onOpenSettings,
+                                    onOpenPasswordManager = onOpenPasswordManager,
                                     onShowThemeSheet = { showThemeSheet = true },
                                     onShowQuickTools = { showQuickToolsSheet = true },
                                     onShowFeedbackDialog = { showFeedbackDialog = true },
@@ -7069,7 +7074,17 @@ fun BrowserScreen(
             viewModel.activeMediaPermissionPrompt?.let { prompt ->
                 MediaPermissionPromptDialog(prompt = prompt, isDarkThemeEnabled = viewModel.isDarkThemeEnabled)
             }
-            
+
+            // External app redirect dialog (auto-redirects blocked by default until user decides)
+            viewModel.pendingExternalAppRequest?.let { request ->
+                ExternalAppRedirectDialog(
+                    request = request,
+                    viewModel = viewModel,
+                    context = context,
+                    onDismiss = { viewModel.pendingExternalAppRequest = null }
+                )
+            }
+
             // Native Player Settings dialog
             if (showPlayerSettingsDialog) {
                 PlayerSettingsDialog(

@@ -654,20 +654,29 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 !lowerUri.startsWith("javascript:") && 
                 !lowerUri.startsWith("data:")
             ) {
-                // 1. Gesture and Setting Check
-                val isGestureAllowed = request.hasUserGesture && !request.isRedirect
-                val isLaunchAllowed = isOpenExternalAppAllowed && isGestureAllowed
+                // 1. Gesture / setting / per-site check — mirrors Chrome/Firefox behaviour:
+                //    • User-initiated tap (hasUserGesture && !isRedirect): launch directly when
+                //      the global toggle is on.
+                //    • Automatic redirect (isRedirect or no user gesture): consult the per-site
+                //      externalApp permission — "allow" = launch silently, "block" = deny silently,
+                //      "ask" (default) = queue a one-time dialog so the user decides.
+                val isUserInitiated = request.hasUserGesture && !request.isRedirect
+                val sourceHost = try { Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.") ?: "" } catch (_: Exception) { "" }
+                val sitePerm = getSitePermissionValue(tab.url, "externalApp")
 
-                // Helper for in-browser fallback chain
+                // Helper for a browser-style external-app prompt.
                 val performFallback: (intentPackage: String?, isBlocked: Boolean) -> Unit = { intentPackage, isBlocked ->
                     val fallbackUrl = extractFallbackUrl(uri)
-                    if (fallbackUrl != null) {
-                        Log.i(TAG, "Navigating to fallback URL: $fallbackUrl")
-                        loadUrl(fallbackUrl)
-                    } else if (!intentPackage.isNullOrBlank()) {
-                        val storeUrl = "https://play.google.com/store/apps/details?id=$intentPackage"
-                        Log.i(TAG, "Navigating to web Play Store fallback: $storeUrl")
-                        loadUrl(storeUrl)
+                    if (!intentPackage.isNullOrBlank() || fallbackUrl != null) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
+                                uri = uri,
+                                packageName = intentPackage,
+                                fallbackUrl = fallbackUrl,
+                                blockedAutomatically = isBlocked,
+                                sourceHost = sourceHost
+                            )
+                        }
                     } else {
                         val toastMsg = if (isBlocked) {
                             "Blocked automatic redirect to an external app"
@@ -678,32 +687,42 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     }
                 }
 
-                if (!isLaunchAllowed) {
-                    Log.w(TAG, "🚫 onLoadRequest: Blocked automatic external app launch (hasUserGesture=${request.hasUserGesture}, isRedirect=${request.isRedirect}, setting=$isOpenExternalAppAllowed): $uri")
-                    viewModelScope.launch(Dispatchers.Main) {
-                        val intentPackage = if (lowerUri.startsWith("intent:")) {
-                            try {
-                                Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
-                            } catch (_: Exception) {
-                                null
-                            }
-                        } else if (lowerUri.startsWith("market:")) {
-                            try {
-                                Uri.parse(uri).getQueryParameter("id")
-                            } catch (_: Exception) {
-                                null
-                            }
-                        } else {
-                            try {
-                                Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
-                                    ?: Uri.parse(uri).getQueryParameter("package")
-                            } catch (_: Exception) {
-                                null
-                            }
-                        }
-                        performFallback(intentPackage, true)
-                    }
+                // Global toggle OFF → block everything (existing behaviour preserved)
+                if (!isOpenExternalAppAllowed) {
+                    Log.w(TAG, "🚫 onLoadRequest: External app launches disabled in settings: $uri")
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+
+                // Automatic redirect path — check per-site permission
+                if (!isUserInitiated) {
+                    when (sitePerm) {
+                        "allow" -> {
+                            // Per-site always-allow: fall through to the launch logic below
+                            Log.i(TAG, "✅ onLoadRequest: Auto-redirect allowed by site permission for $sourceHost: $uri")
+                        }
+                        "block" -> {
+                            Log.w(TAG, "🚫 onLoadRequest: Auto-redirect blocked by site permission for $sourceHost: $uri")
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+                        else -> {
+                            // "ask" — queue dialog, let user decide
+                            Log.i(TAG, "❓ onLoadRequest: Auto-redirect queued for user decision ($sourceHost): $uri")
+                            viewModelScope.launch(Dispatchers.Main) {
+                                val intentPackage = if (lowerUri.startsWith("intent:")) {
+                                    try { Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage() } catch (_: Exception) { null }
+                                } else if (lowerUri.startsWith("market:")) {
+                                    try { Uri.parse(uri).getQueryParameter("id") } catch (_: Exception) { null }
+                                } else {
+                                    try {
+                                        Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
+                                            ?: Uri.parse(uri).getQueryParameter("package")
+                                    } catch (_: Exception) { null }
+                                }
+                                performFallback(intentPackage, true)
+                            }
+                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        }
+                    }
                 }
 
                 if (lowerUri.startsWith("intent:") || lowerUri.startsWith("market:")) {
@@ -762,7 +781,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                         throw android.content.ActivityNotFoundException("No app found to handle intent")
                                     }
                                 } catch (e: android.content.ActivityNotFoundException) {
-                                    Log.w(TAG, "No app found for intent, checking for fallback URL", e)
+                                    Log.w(TAG, "No app found for intent, prompting user instead", e)
                                     performFallback(intentPackage, false)
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to launch external intent", e)
