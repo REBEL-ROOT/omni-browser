@@ -1072,4 +1072,19 @@
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">इन्कॉग्निटो लॉक है</string>
+    <string name="browser_incognito_auth_desc">अपने निजी टैब तक पहुंचने के लिए प्रमाणित करें।</string>
+    <string name="browser_unlock">अनलॉक करें</string>
+    <string name="browser_unlock_incognito_tabs">इन्कॉग्निटो टैब अनलॉक करें</string>
+    <string name="browser_auth_view_private">अपने निजी टैब देखने के लिए प्रमाणित करें</string>
+    <string name="browser_dismiss">खारिज करें</string>
+    <string name="browser_video_detected">वीडियो का पता चला</string>
+    <string name="browser_play_premium">प्रीमियम प्लेयर में चलाएं</string>
+    <string name="browser_download_options">डाउनलोड विकल्प</string>
+    <string name="media_sniffer_banner_video_playing">वीडियो चल रहा है</string>
+    <string name="media_sniffer_banner_audio_playing">ऑडियो चल रहा है</string>
+    <string name="media_sniffer_banner_audio_detected">ऑडियो का पता चला</string>
+    <string name="media_sniffer_banner_media_detected">मीडिया का पता चला</string>
 </resources>

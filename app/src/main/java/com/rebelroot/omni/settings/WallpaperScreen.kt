@@ -6,6 +6,7 @@
 package com.rebelroot.omni.settings
 
 import android.content.Context
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -61,6 +62,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
@@ -127,41 +131,47 @@ private fun picsumFull(seed: String)  = "https://picsum.photos/seed/$seed/1600/2
 private fun generateCategoryWallpapers(categoryKey: String, count: Int = 48): List<OnlineWallpaper> {
     if (categoryKey == "live_wallpapers") {
         val livePresets = listOf(
-            Pair("Cyberpunk Night", "https://assets.mixkit.co/videos/preview/mixkit-futuristic-city-with-bright-neon-lights-at-night-41554-large.mp4"),
-            Pair("Rainy City Window", "https://assets.mixkit.co/videos/preview/mixkit-raindrops-on-a-window-pane-at-night-41549-large.mp4"),
-            Pair("Neon Fluid Waves", "https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-screens-with-graphs-and-data-41536-large.mp4"),
-            Pair("Deep Space Cosmos", "https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-4040-large.mp4"),
-            Pair("Calm Ocean Waves", "https://assets.mixkit.co/videos/preview/mixkit-sea-waves-approaching-the-sand-41530-large.mp4"),
+            Pair("Calm Ocean Waves", "https://videos.pexels.com/video-files/5853147/5853147-hd_2048_1080_30fps.mp4"),
+            Pair("Sunset Horizon", "https://videos.pexels.com/video-files/11335978/11335978-hd_1920_1080_30fps.mp4"),
+            Pair("Sunlight Through Trees", "https://videos.pexels.com/video-files/11265968/11265968-hd_1920_1080_25fps.mp4"),
+            Pair("City Skyscrapers", "https://videos.pexels.com/video-files/12685044/12685044-hd_1920_1080_30fps.mp4"),
+            Pair("Rainy Night City", "https://videos.pexels.com/video-files/855432/855432-hd_1840_1034_25fps.mp4"),
+            Pair("Abstract Colors", "https://videos.pexels.com/video-files/10881637/10881637-hd_1920_1080_25fps.mp4"),
+            Pair("Plants by River", "https://videos.pexels.com/video-files/1208094/1208094-hd_1920_1080_30fps.mp4"),
+            Pair("Walking in Woods", "https://videos.pexels.com/video-files/8424070/8424070-hd_1920_1080_30fps.mp4"),
+            Pair("Pinterest City Clip", "https://v1.pinimg.com/videos/iht/hls/d0/b6/93/d0b69328b1f41ad0271fe4374baa688b.m3u8"),
             Pair("Matrix Digital Code", "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdW9uaXZ4OWYwNGd1bmM1c3Q4ZGFzeXJ4NnM2azE5enptcW5vdDVzdiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/L1R1tvI9svkIWwpVYr/giphy.gif"),
             Pair("Lo-Fi Coffee Shop", "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHpucjNlOWRxeWFvZmVudDFndDFjcHZtZ3d1NHEycDdmcDduYmsyeCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/d480lR5b5h8k9X0M/giphy.gif"),
-            Pair("Foggy Mountain Pines", "https://assets.mixkit.co/videos/preview/mixkit-sun-rays-through-the-trees-in-a-forest-41537-large.mp4"),
-            Pair("Retro Synthwave Grid", "https://assets.mixkit.co/videos/preview/mixkit-flying-over-a-retro-grid-with-neon-lights-41543-large.mp4"),
-            Pair("Green Aurora Lights", "https://assets.mixkit.co/videos/preview/mixkit-green-aurora-borealis-in-the-night-sky-41551-large.mp4"),
-            Pair("Cyber Neon Tunnel", "https://assets.mixkit.co/videos/preview/mixkit-loop-of-a-tunnel-with-neon-light-patterns-41544-large.mp4"),
-            Pair("Forest Waterfall", "https://assets.mixkit.co/videos/preview/mixkit-waterfall-in-a-dense-green-forest-41557-large.mp4")
+            Pair("Blue Sea Waves", "https://videos.pexels.com/video-files/5668625/5668625-hd_2048_1080_30fps.mp4")
         )
         return livePresets.mapIndexed { idx, (title, url) ->
-            val isVid = url.endsWith(".mp4")
+            val isVid = url.endsWith(".mp4") || url.endsWith(".m3u8")
+            val source = when {
+                url.contains("pexels.com") -> "Pexels Video"
+                url.contains("giphy.com") -> "Giphy Animation"
+                url.contains("pinimg.com") -> "Pinterest Video"
+                else -> "Stock Video"
+            }
             val thumb = when (idx) {
-                0 -> "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400"
-                1 -> "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=400"
-                2 -> "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400"
-                3 -> "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400"
-                4 -> "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400"
-                5 -> "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400"
-                6 -> "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400"
-                7 -> "https://images.unsplash.com/photo-1448375240586-882707db888b?w=400"
-                8 -> "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400"
-                9 -> "https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?w=400"
-                10 -> "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400"
-                else -> "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400"
+                0 -> "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400"
+                1 -> "https://images.unsplash.com/photo-1506815444479-bfdb1e96c566?w=400"
+                2 -> "https://images.unsplash.com/photo-1448375240586-882707db888b?w=400"
+                3 -> "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=400"
+                4 -> "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=400"
+                5 -> "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400"
+                6 -> "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=400"
+                7 -> "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400"
+                8 -> "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400"
+                9 -> "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400"
+                10 -> "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400"
+                else -> "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400"
             }
             OnlineWallpaper(
                 id = "live_preset_$idx",
                 thumbUrl = thumb,
                 fullUrl = url,
                 description = title,
-                photographer = if (isVid) "Mixkit Video" else "Giphy Animation"
+                photographer = source
             )
         }
     }
@@ -192,6 +202,7 @@ val PRESET_WALLPAPERS = listOf(
 suspend fun downloadWallpaperToFile(context: Context, url: String): String? = withContext(Dispatchers.IO) {
     try {
         val conn = URL(url).openConnection()
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
         conn.connectTimeout = 15000
         conn.readTimeout = 30000
         conn.connect()
@@ -270,10 +281,7 @@ fun WallpaperScreen(
                 viewModel = viewModel,
                 onDismiss = { editingWallpaperUri = null },
                 onApply = { cropUri, scale, offsetX, offsetY, dim, blur ->
-                    viewModel.saveBrowserWallpaperUri(context, cropUri)
-                    viewModel.saveWallpaperCrop(context, scale, offsetX, offsetY)
-                    viewModel.saveWallpaperDim(context, dim)
-                    viewModel.saveWallpaperBlur(context, blur)
+                    viewModel.saveAllWallpaperSettings(context, cropUri, scale, offsetX, offsetY, dim, blur)
                     editingWallpaperUri = null
                 }
             )
@@ -339,7 +347,13 @@ private fun WallpaperHome(
                     onClick = {
                         val clean = customUrlText.trim()
                         if (clean.isNotBlank()) {
-                            viewModel.saveBrowserWallpaperUri(context, clean)
+                            // Download first instead of saving raw URL (Fix #9)
+                            viewModel.downloadAndSetWallpaper(context, clean) { success ->
+                                if (!success) {
+                                    // Fallback: save remote URL if download fails
+                                    viewModel.saveBrowserWallpaperUri(context, clean)
+                                }
+                            }
                             showCustomUrlDialog = false
                             customUrlText = ""
                         }
@@ -465,7 +479,7 @@ private fun WallpaperHome(
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(id = R.string.wallpaper_customization), color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             }
-                            val dimVal = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else (if (isDark) 0.5f else 0.65f)
+                            val dimVal = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else 0.20f
                             SliderRow(stringResource(id = R.string.wallpaper_blur), "${viewModel.wallpaperBlur.toInt()} dp", viewModel.wallpaperBlur, 0f..25f, accent, textPrimary, textSecondary) { viewModel.saveWallpaperBlur(context, it) }
                             HorizontalDivider(color = cardBorder.copy(alpha = 0.4f))
                             SliderRow(stringResource(id = R.string.wallpaper_dim), "${(dimVal * 100).toInt()}%", dimVal, 0f..0.9f, accent, textPrimary, textSecondary) { viewModel.saveWallpaperDim(context, it) }
@@ -491,9 +505,48 @@ private fun WallpaperHome(
 
             items(com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS) { preset ->
                 val isDownloadingThis = viewModel.isWallpaperDownloading && viewModel.downloadingWallpaperUrl == preset.mediaUrl
-                val sel = selectedWallpaper == preset.mediaUrl || (selectedWallpaper != null && selectedWallpaper.contains(preset.id))
+                // Match by original URL, preset id, or MD5 hash in downloaded filename
+                val presetHash = remember(preset.mediaUrl) {
+                    java.security.MessageDigest.getInstance("MD5")
+                        .digest(preset.mediaUrl.toByteArray())
+                        .joinToString("") { "%02x".format(it) }
+                }
+                val sel = selectedWallpaper == preset.mediaUrl ||
+                      (selectedWallpaper != null && (
+                          selectedWallpaper.contains(preset.id) ||
+                          selectedWallpaper.contains(presetHash) ||
+                          (!preset.isVideo && selectedWallpaper.lowercase().contains(".gif"))
+                      ))
+                // Show actual media in the tile — GIF animates, video shows its thumbnail
+                val tileModel = if (!preset.isVideo) {
+                    remember(preset.mediaUrl) {
+                        ImageRequest.Builder(context)
+                            .data(preset.mediaUrl)
+                            .decoderFactory(
+                                if (android.os.Build.VERSION.SDK_INT >= 28) ImageDecoderDecoder.Factory()
+                                else GifDecoder.Factory()
+                            )
+                            .crossfade(true)
+                            .build()
+                    }
+                } else {
+                    // Video: show a frame from the actual video using VideoFrameDecoder
+                    // HLS streams (.m3u8) can't be frame-decoded — use static thumbnail
+                    val isHls = preset.mediaUrl.lowercase().contains(".m3u8")
+                    if (isHls) {
+                        preset.thumbUrl
+                    } else {
+                        remember(preset.mediaUrl) {
+                            ImageRequest.Builder(context)
+                                .data(preset.mediaUrl)
+                                .decoderFactory(VideoFrameDecoder.Factory())
+                                .crossfade(true)
+                                .build()
+                        }
+                    }
+                }
                 WallpaperTile(
-                    imageUrl = preset.thumbUrl,
+                    model = tileModel,
                     isSelected = sel,
                     accent = accent,
                     cardColor = cardColor,
@@ -546,7 +599,7 @@ private fun WallpaperHome(
             item {
                 val sel = selectedWallpaper == null || selectedWallpaper == "null" || selectedWallpaper.isEmpty()
                 WallpaperTile(
-                    imageUrl = null, isSelected = sel, accent = accent, cardColor = cardColor, cardBorder = cardBorder,
+                    model = null, isSelected = sel, accent = accent, cardColor = cardColor, cardBorder = cardBorder,
                     onClick = { viewModel.saveBrowserWallpaperUri(context, null) }
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -559,11 +612,20 @@ private fun WallpaperHome(
             }
 
             // ── Active custom wallpaper ─────────────────────────────────────
-            val isPresetLive = com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS.any { it.mediaUrl == selectedWallpaper }
-            val isCustomActive = isActive && !PRESET_WALLPAPERS.contains(selectedWallpaper) && !isPresetLive
+            val isPresetLive = com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS.any {
+                it.mediaUrl == selectedWallpaper || it.id == selectedWallpaper ||
+                (selectedWallpaper != null && selectedWallpaper.contains(
+                    java.security.MessageDigest.getInstance("MD5")
+                        .digest(it.mediaUrl.toByteArray())
+                        .joinToString("") { "%02x".format(it) }
+                ))
+            }
+            val isGalleryFile = selectedWallpaper?.startsWith("file://") == true &&
+                    selectedWallpaper?.contains("/wallpapers/") == true
+            val isCustomActive = isActive && !PRESET_WALLPAPERS.contains(selectedWallpaper) && !isPresetLive && !isGalleryFile
             if (isCustomActive) {
                 item {
-                    WallpaperTile(imageUrl = selectedWallpaper, isSelected = true, accent = accent,
+                    WallpaperTile(model = selectedWallpaper, isSelected = true, accent = accent,
                         cardColor = cardColor, cardBorder = cardBorder, onClick = { onEditWallpaper(selectedWallpaper!!) })
                 }
             }
@@ -572,7 +634,7 @@ private fun WallpaperHome(
             items(PRESET_WALLPAPERS) { uri ->
                 val sel = selectedWallpaper == uri
                 WallpaperTile(
-                    imageUrl = uri, isSelected = sel, accent = accent,
+                    model = uri, isSelected = sel, accent = accent,
                     cardColor = cardColor, cardBorder = cardBorder,
                     onClick = { viewModel.saveBrowserWallpaperUri(context, uri) }
                 )
@@ -854,7 +916,7 @@ private fun OnlineWallpaperTile(
 // ─── Library Tile (preset/custom) ───────────────────────────────────────────
 @Composable
 private fun WallpaperTile(
-    imageUrl: String?,
+    model: Any?,
     isSelected: Boolean,
     accent: Color,
     cardColor: Color,
@@ -874,9 +936,9 @@ private fun WallpaperTile(
             )
             .clickable(onClick = onClick)
     ) {
-        if (imageUrl != null) {
+        if (model != null) {
             AsyncImage(
-                model = imageUrl,
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -938,11 +1000,25 @@ fun WallpaperEditorView(
     val accentColor = MaterialTheme.colorScheme.primary
 
     val isEditingCurrent = uri == viewModel.browserWallpaperUri
-    var tempScale   by remember { mutableStateOf(if (isEditingCurrent) viewModel.wallpaperScale else 1.0f) }
-    var tempOffsetX by remember { mutableStateOf(if (isEditingCurrent) viewModel.wallpaperOffsetX else 0f) }
-    var tempOffsetY by remember { mutableStateOf(if (isEditingCurrent) viewModel.wallpaperOffsetY else 0f) }
-    var tempDim     by remember { mutableStateOf(if (isEditingCurrent && viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else 0.4f) }
-    var tempBlur    by remember { mutableStateOf(if (isEditingCurrent) viewModel.wallpaperBlur else 0f) }
+
+    // Use LaunchedEffect to avoid race with DataStore load (Fix #4)
+    var tempScale by remember { mutableStateOf(1.0f) }
+    var tempOffsetX by remember { mutableStateOf(0f) }
+    var tempOffsetY by remember { mutableStateOf(0f) }
+    var tempDim by remember { mutableStateOf(0.4f) }
+    var tempBlur by remember { mutableStateOf(0f) }
+    val editorReady = remember { mutableStateOf(false) }
+
+    LaunchedEffect(isEditingCurrent) {
+        if (isEditingCurrent && viewModel.wallpaperScale > 0f) {
+            tempScale = viewModel.wallpaperScale
+            tempOffsetX = viewModel.wallpaperOffsetX
+            tempOffsetY = viewModel.wallpaperOffsetY
+            tempDim = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else 0.4f
+            tempBlur = viewModel.wallpaperBlur
+        }
+        editorReady.value = true
+    }
 
     Scaffold(
         topBar = {
@@ -978,12 +1054,35 @@ fun WallpaperEditorView(
                 color = Color.Black
             ) {
                 Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                    val isVid = isVideoWallpaperUri(uri)
+                    val isGif = isGifWallpaperUri(uri)
                     Box(
                         modifier = Modifier.fillMaxSize()
                             .graphicsLayer { scaleX = tempScale; scaleY = tempScale; translationX = tempOffsetX; translationY = tempOffsetY }
                             .then(if (tempBlur > 0f) Modifier.blur(tempBlur.dp).graphicsLayer() else Modifier)
                     ) {
-                        AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        when {
+                            isVid -> {
+                                com.rebelroot.omni.settings.LIVE_ANIMATED_WALLPAPERS.find { it.mediaUrl == uri }?.thumbUrl?.let {
+                                    AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                }
+                                Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(0.7f),
+                                    modifier = Modifier.size(48.dp).align(Alignment.Center))
+                            }
+                            isGif -> {
+                                val context = LocalContext.current
+                                val gifRequest = remember(uri) {
+                                    ImageRequest.Builder(context)
+                                        .data(uri)
+                                        .decoderFactory(if (android.os.Build.VERSION.SDK_INT >= 28) ImageDecoderDecoder.Factory() else GifDecoder.Factory())
+                                        .build()
+                                }
+                                AsyncImage(model = gifRequest, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
+                            else -> {
+                                AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            }
+                        }
                     }
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = tempDim)))
                     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {

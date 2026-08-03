@@ -1070,4 +1070,19 @@
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">シークレットモードはロックされています</string>
+    <string name="browser_incognito_auth_desc">プライベートタブにアクセスするには認証してください。</string>
+    <string name="browser_unlock">ロック解除</string>
+    <string name="browser_unlock_incognito_tabs">シークレットタブのロックを解除</string>
+    <string name="browser_auth_view_private">プライベートタブを表示するには認証してください</string>
+    <string name="browser_dismiss">閉じる</string>
+    <string name="browser_video_detected">動画を検出しました</string>
+    <string name="browser_play_premium">プレミアムプレイヤーで再生</string>
+    <string name="browser_download_options">ダウンロードオプション</string>
+    <string name="media_sniffer_banner_video_playing">動画を再生中</string>
+    <string name="media_sniffer_banner_audio_playing">音声を再生中</string>
+    <string name="media_sniffer_banner_audio_detected">音声を検出しました</string>
+    <string name="media_sniffer_banner_media_detected">メディアを検出しました</string>
 </resources>

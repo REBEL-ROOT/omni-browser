@@ -9,6 +9,5 @@ data class TabGroup(
     val id: String,
     val title: String,
     val color: Long, // Color values (e.g. 0xFF4CAF50)
-    val tabIds: List<String> = emptyList(),
-    val isCollapsed: Boolean = false
+    val tabIds: List<String> = emptyList()
 )

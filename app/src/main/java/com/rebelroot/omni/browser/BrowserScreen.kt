@@ -161,8 +161,8 @@ fun BrowserScreen(
     fun tryUnlockIncognito() {
         if (keyguardManager.isDeviceSecure) {
             val intent = keyguardManager.createConfirmDeviceCredentialIntent(
-                "Unlock Incognito Tabs",
-                "Authenticate to view your private tabs"
+                context.getString(R.string.browser_unlock_incognito_tabs),
+                context.getString(R.string.browser_auth_view_private)
             )
             if (intent != null) {
                 unlockLauncher.launch(intent)
@@ -3016,7 +3016,7 @@ fun BrowserScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.PlayArrow,
-                                            contentDescription = "Play in Premium Player",
+                                            contentDescription = stringResource(R.string.browser_play_premium),
                                             tint = Color.White,
                                             modifier = Modifier.size(32.dp)
                                         )
@@ -7215,13 +7215,13 @@ fun BrowserScreen(
                         modifier = Modifier.size(72.dp)
                     )
                     Text(
-                        text = "Incognito locked",
+                        text = stringResource(R.string.browser_incognito_locked),
                         color = Color.White,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Authenticate to access your private tabs.",
+                        text = stringResource(R.string.browser_incognito_auth_desc),
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
@@ -7236,7 +7236,7 @@ fun BrowserScreen(
                     ) {
                         Icon(imageVector = Icons.Rounded.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Unlock", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.browser_unlock), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -7318,7 +7318,7 @@ private fun MediaSnifferBanner(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
-                    contentDescription = "Dismiss",
+                    contentDescription = stringResource(R.string.browser_dismiss),
                     tint = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -7334,7 +7334,7 @@ private fun MediaSnifferBanner(
             } else {
                 Icon(
                     imageVector = Icons.Rounded.PlayCircle,
-                    contentDescription = "Video Detected",
+                    contentDescription = stringResource(R.string.browser_video_detected),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -7344,10 +7344,10 @@ private fun MediaSnifferBanner(
 
             val hasOnlyAudio = nonDrmMedia.all { it.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO }
             val bannerText = when {
-                viewModel.isVideoPlayingInPage && hasOnlyAudio -> "Audio is playing"
-                viewModel.isVideoPlayingInPage -> "Video is playing"
-                hasOnlyAudio -> "Audio detected"
-                else -> "Media detected"
+                viewModel.isVideoPlayingInPage && hasOnlyAudio -> stringResource(R.string.media_sniffer_banner_audio_playing)
+                viewModel.isVideoPlayingInPage -> stringResource(R.string.media_sniffer_banner_video_playing)
+                hasOnlyAudio -> stringResource(R.string.media_sniffer_banner_audio_detected)
+                else -> stringResource(R.string.media_sniffer_banner_media_detected)
             }
             Text(
                 text = bannerText,
@@ -7368,7 +7368,7 @@ private fun MediaSnifferBanner(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = "Play in Premium Player",
+                    contentDescription = stringResource(R.string.browser_play_premium),
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
@@ -7382,7 +7382,7 @@ private fun MediaSnifferBanner(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Download,
-                    contentDescription = "Download Options",
+                    contentDescription = stringResource(R.string.browser_download_options),
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )

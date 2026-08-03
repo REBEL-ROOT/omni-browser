@@ -277,7 +277,7 @@ fun HomeScreenContent(
                 )
             }
             val userDim = if (viewModel.wallpaperDim >= 0f) viewModel.wallpaperDim else 0.20f
-            val effectiveDim = if (userDim > 0f) userDim else 0.18f
+            val effectiveDim = userDim  // Allow 0% — user slider range is 0f..0.9f
             val overlayColor = Color.Black.copy(alpha = effectiveDim)
             Box(
                 modifier = Modifier

@@ -1069,4 +1069,19 @@ tellungen &amp; Layout</string>
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">Inkognito gesperrt</string>
+    <string name="browser_incognito_auth_desc">Authentifiziere dich, um auf deine privaten Tabs zuzugreifen.</string>
+    <string name="browser_unlock">Entsperren</string>
+    <string name="browser_unlock_incognito_tabs">Inkognito-Tabs entsperren</string>
+    <string name="browser_auth_view_private">Authentifiziere dich, um deine privaten Tabs anzuzeigen</string>
+    <string name="browser_dismiss">Schließen</string>
+    <string name="browser_video_detected">Video erkannt</string>
+    <string name="browser_play_premium">Im Premium-Player abspielen</string>
+    <string name="browser_download_options">Download-Optionen</string>
+    <string name="media_sniffer_banner_video_playing">Video wird wiedergegeben</string>
+    <string name="media_sniffer_banner_audio_playing">Audio wird wiedergegeben</string>
+    <string name="media_sniffer_banner_audio_detected">Audio erkannt</string>
+    <string name="media_sniffer_banner_media_detected">Medien erkannt</string>
 </resources>

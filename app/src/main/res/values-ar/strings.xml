@@ -1070,4 +1070,19 @@
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">تم قفل التصفح الخفي</string>
+    <string name="browser_incognito_auth_desc">قم بالمصادقة للوصول إلى تبويباتك الخاصة.</string>
+    <string name="browser_unlock">فتح القفل</string>
+    <string name="browser_unlock_incognito_tabs">فتح قفل التبويبات الخفية</string>
+    <string name="browser_auth_view_private">قم بالمصادقة لعرض تبويباتك الخاصة</string>
+    <string name="browser_dismiss">تجاهل</string>
+    <string name="browser_video_detected">تم رصد فيديو</string>
+    <string name="browser_play_premium">التشغيل في المشغل المميز</string>
+    <string name="browser_download_options">خيارات التنزيل</string>
+    <string name="media_sniffer_banner_video_playing">يتم تشغيل فيديو</string>
+    <string name="media_sniffer_banner_audio_playing">يتم تشغيل صوت</string>
+    <string name="media_sniffer_banner_audio_detected">تم رصد صوت</string>
+    <string name="media_sniffer_banner_media_detected">تم رصد وسائط</string>
 </resources>

@@ -359,17 +359,18 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Hide system bars in landscape (fullscreen), show them in portrait.
+    // Hide system bars when video controls are hidden (immersive playback),
+    // show them when controls are visible so the user can see status/nav info.
     // Uses WindowInsetsController directly to avoid FullscreenManager's requestedOrientation
     // side-effect, which was creating an orientation feedback loop and crashing.
-    LaunchedEffect(isLandscape) {
+    LaunchedEffect(showControls) {
         activity?.let { act ->
             val window = act.window
             val decorView = window.decorView
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                 val ctrl = decorView.windowInsetsController
                 if (ctrl != null) {
-                    if (isLandscape) {
+                    if (!showControls) {
                         ctrl.hide(android.view.WindowInsets.Type.systemBars())
                         ctrl.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                     } else {
@@ -378,7 +379,7 @@ fun VideoPlayerScreen(
                 }
             } else {
                 val ctrl = androidx.core.view.WindowCompat.getInsetsController(window, decorView)
-                if (isLandscape) {
+                if (!showControls) {
                     ctrl.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                     ctrl.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 } else {
@@ -705,25 +706,27 @@ fun VideoPlayerScreen(
         val isPiP = viewModel?.isInPictureInPictureMode == true
         if (!isPiP) {
             if (youtubeVideoId != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .safeDrawingPadding()
-                        .padding(12.dp)
-                ) {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.size(40.dp)
+                if (!isLandscape) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .safeDrawingPadding()
+                            .padding(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        IconButton(
+                            onClick = onNavigateBack,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             } else {
@@ -911,34 +914,6 @@ fun VideoPlayerScreen(
                 )
             }
         }
-
-        // Always-visible back button — outside AnimatedVisibility so it's always accessible
-        // even when controls are faded out. Only shown when the full controls overlay is hidden.
-        AnimatedVisibility(
-            visible = !showControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .safeDrawingPadding()
-                .padding(12.dp)
-        ) {
-            IconButton(
-                onClick = onNavigateBack,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = Color.Black.copy(alpha = 0.45f)
-                ),
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                }
-        }
-
 
         // Elegant Media Playback Overlays
         AnimatedVisibility(

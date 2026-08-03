@@ -125,9 +125,9 @@ fun SettingsScreen(
     ) { isGranted ->
         isNotificationsEnabled = isGranted
         if (isGranted) {
-            Toast.makeText(context, "Notifications enabled successfully!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.settings_notifications_enabled_success), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Notification permission denied.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.settings_notifications_denied), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -468,9 +468,9 @@ fun SettingsScreen(
                     listOf(
                         SettingSearchResult(context.getString(R.string.theme_settings_title), context.getString(R.string.theme_settings_desc), "PERSONALIZATION", Icons.Rounded.Palette, onOpenTheme),
                         SettingSearchResult(context.getString(R.string.preferences_layout_title), context.getString(R.string.preferences_layout_desc), "PERSONALIZATION", Icons.Rounded.Tune, onOpenAppearance),
-                        SettingSearchResult("Wallpapers", "Browser background, dynamic wallpaper blur/dim", "PERSONALIZATION", Icons.Rounded.Wallpaper, onOpenWallpapers),
-                        SettingSearchResult("Accessibility", "Text scaling, force enable zoom, high contrast mode", "PERSONALIZATION", Icons.Rounded.AccessibilityNew, onOpenAccessibility),
-                        SettingSearchResult("Tabs", "Tab layouts, background tabs, auto-closing settings", "BROWSING", Icons.Rounded.Tab, onOpenTabs),
+                        SettingSearchResult(context.getString(R.string.wallpapers_title), context.getString(R.string.wallpapers_desc), "PERSONALIZATION", Icons.Rounded.Wallpaper, onOpenWallpapers),
+                        SettingSearchResult(context.getString(R.string.accessibility_title), context.getString(R.string.accessibility_desc), "PERSONALIZATION", Icons.Rounded.AccessibilityNew, onOpenAccessibility),
+                        SettingSearchResult(context.getString(R.string.tabs_settings_title), context.getString(R.string.tabs_settings_desc), "BROWSING", Icons.Rounded.Tab, onOpenTabs),
                         SettingSearchResult("Site Settings", "Manage site permissions, javascript, autoplay, popups", "BROWSING", Icons.Rounded.Language, onOpenSiteSettings),
                         SettingSearchResult(context.getString(R.string.default_browser_title), "Set Omni Browser as system default browser", "BROWSING", Icons.Rounded.OpenInBrowser, {
                             if (!isDefaultBrowser) {
@@ -768,7 +768,7 @@ fun SettingsScreen(
                                     } else { isNotificationsEnabled = true }
                                 } else {
                                     isNotificationsEnabled = false
-                                    Toast.makeText(context, "Notifications disabled.", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, context.getString(R.string.settings_notifications_disabled), Toast.LENGTH_LONG).show()
                                 }
                             },
                             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accentColor)

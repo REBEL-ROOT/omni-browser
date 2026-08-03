@@ -60,6 +60,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
@@ -80,6 +81,9 @@ import com.rebelroot.omni.tools.qrcode.QrCodeDecoder
 import com.rebelroot.omni.ThemeStateHolder
 import java.lang.ref.WeakReference
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -206,6 +210,8 @@ class BrowserViewModel : ViewModel() {
         val CUSTOM_ICON_PATH_KEY = stringPreferencesKey("custom_icon_path")
         val BROWSER_WALLPAPER_URI_KEY = stringPreferencesKey("browser_wallpaper_uri")
         val CHANGE_WALLPAPER_DAILY_KEY = booleanPreferencesKey("change_wallpaper_daily")
+        val LAST_DAILY_WALLPAPER_DATE_KEY = stringPreferencesKey("last_daily_wallpaper_date")
+        val DAILY_WALLPAPER_SEED_KEY = intPreferencesKey("daily_wallpaper_seed")
         val SHOW_DISCOVER_FEED_KEY = booleanPreferencesKey("show_discover_feed")
         val SHOW_BOTTOM_NAV_BAR_KEY = booleanPreferencesKey("show_bottom_nav_bar")
         val CHROME_NAV_BAR_KEY = booleanPreferencesKey("chrome_nav_bar_enabled")
@@ -501,6 +507,8 @@ class BrowserViewModel : ViewModel() {
     var wallpaperScale by mutableStateOf(1.0f)
     var wallpaperOffsetX by mutableStateOf(0f)
     var wallpaperOffsetY by mutableStateOf(0f)
+    var lastDailyWallpaperDate by mutableStateOf<String?>(null)
+    var dailyWallpaperSeed by mutableStateOf(0)
     var shouldOpenTabsSheetOnLaunch by mutableStateOf(false)
     var shortcutTileStyle by mutableStateOf("Circle")
     var homeUiScale by mutableStateOf(0.90f)
@@ -2498,6 +2506,8 @@ class BrowserViewModel : ViewModel() {
                     customIconPath = prefs[CUSTOM_ICON_PATH_KEY]
                     browserWallpaperUri = prefs[BROWSER_WALLPAPER_URI_KEY]
                     changeWallpaperDaily = prefs[CHANGE_WALLPAPER_DAILY_KEY] ?: false
+                    lastDailyWallpaperDate = prefs[LAST_DAILY_WALLPAPER_DATE_KEY]
+                    dailyWallpaperSeed = prefs[DAILY_WALLPAPER_SEED_KEY] ?: 0
                     showDiscoverFeed = prefs[SHOW_DISCOVER_FEED_KEY] ?: false
                     showBottomNavBar = prefs[SHOW_BOTTOM_NAV_BAR_KEY] ?: true
                     chromeNavBarEnabled = prefs[CHROME_NAV_BAR_KEY] ?: false
@@ -2525,7 +2535,8 @@ class BrowserViewModel : ViewModel() {
                 }
             }
 
-
+            // Check daily wallpaper rotation after prefs are fully loaded
+            checkAndRotateDailyWallpaper(appCtx)
 
             viewModelScope.launch {
                 loadPlayerSettings(appCtx)
@@ -3376,8 +3387,12 @@ class BrowserViewModel : ViewModel() {
         private set
     var downloadingWallpaperUrl by mutableStateOf<String?>(null)
         private set
+    private var downloadJob: Job? = null
 
     fun downloadAndSetWallpaper(context: Context, url: String?, onResult: ((Boolean) -> Unit)? = null) {
+        // Cancel any existing download to avoid race conditions
+        downloadJob?.cancel()
+
         if (url.isNullOrEmpty() || url == "null") {
             saveBrowserWallpaperUri(context, null)
             onResult?.invoke(true)
@@ -3390,7 +3405,18 @@ class BrowserViewModel : ViewModel() {
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        downloadJob = viewModelScope.launch(Dispatchers.IO) {
+            // For HLS streams, save remote URL directly (can't download as single file)
+            if (url.lowercase().contains(".m3u8")) {
+                saveBrowserWallpaperUri(context, url)
+                withContext(Dispatchers.Main) {
+                    isWallpaperDownloading = false
+                    downloadingWallpaperUrl = null
+                }
+                onResult?.invoke(true)
+                return@launch
+            }
+
             withContext(Dispatchers.Main) {
                 isWallpaperDownloading = true
                 downloadingWallpaperUrl = url
@@ -3402,6 +3428,7 @@ class BrowserViewModel : ViewModel() {
                 val extension = when {
                     url.lowercase().contains(".mp4") -> ".mp4"
                     url.lowercase().contains(".webm") -> ".webm"
+                    url.lowercase().contains(".m3u8") -> ".m3u8"
                     url.lowercase().contains(".gif") -> ".gif"
                     else -> ".jpg"
                 }
@@ -3494,6 +3521,8 @@ class BrowserViewModel : ViewModel() {
                     prefs.remove(WALLPAPER_SCALE_KEY)
                     prefs.remove(WALLPAPER_OFFSET_X_KEY)
                     prefs.remove(WALLPAPER_OFFSET_Y_KEY)
+                    prefs.remove(WALLPAPER_DIM_KEY)
+                    prefs.remove(WALLPAPER_BLUR_KEY)
                 } else {
                     prefs[BROWSER_WALLPAPER_URI_KEY] = uri
                 }
@@ -3503,6 +3532,63 @@ class BrowserViewModel : ViewModel() {
                 wallpaperScale = 1.0f
                 wallpaperOffsetX = 0f
                 wallpaperOffsetY = 0f
+                wallpaperDim = -1f
+                wallpaperBlur = 0f
+            }
+        }
+    }
+
+    /** Atomic save of all wallpaper settings — replaces 4 separate coroutine calls */
+    fun saveAllWallpaperSettings(context: Context, uri: String?, scale: Float, offsetX: Float, offsetY: Float, dim: Float, blur: Float) {
+        viewModelScope.launch {
+            context.dataStore.edit { prefs ->
+                if (uri == null) {
+                    prefs.remove(BROWSER_WALLPAPER_URI_KEY)
+                    prefs.remove(WALLPAPER_DIM_KEY)
+                    prefs.remove(WALLPAPER_BLUR_KEY)
+                } else {
+                    prefs[BROWSER_WALLPAPER_URI_KEY] = uri
+                    prefs[WALLPAPER_DIM_KEY] = dim
+                    prefs[WALLPAPER_BLUR_KEY] = blur
+                }
+                prefs[WALLPAPER_SCALE_KEY] = scale
+                prefs[WALLPAPER_OFFSET_X_KEY] = offsetX
+                prefs[WALLPAPER_OFFSET_Y_KEY] = offsetY
+            }
+            browserWallpaperUri = uri
+            wallpaperDim = dim
+            wallpaperBlur = blur
+            wallpaperScale = scale
+            wallpaperOffsetX = offsetX
+            wallpaperOffsetY = offsetY
+        }
+    }
+
+    /** Daily wallpaper rotation — picks a new wallpaper when the date changes */
+    fun checkAndRotateDailyWallpaper(context: Context) {
+        if (!changeWallpaperDaily) return
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        if (lastDailyWallpaperDate != today) {
+            dailyWallpaperSeed = today.hashCode()
+            val url = "https://picsum.photos/seed/omni_daily_$dailyWallpaperSeed/1600/2560"
+            viewModelScope.launch {
+                downloadAndSetWallpaper(context, url)
+                // Save the new date after rotation completes
+                context.dataStore.edit { prefs ->
+                    prefs[LAST_DAILY_WALLPAPER_DATE_KEY] = today
+                    prefs[DAILY_WALLPAPER_SEED_KEY] = dailyWallpaperSeed
+                }
+                lastDailyWallpaperDate = today
+            }
+        }
+    }
+
+    /** Delete all downloaded wallpaper files */
+    fun clearDownloadedWallpapers(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dir = File(context.filesDir, "wallpapers")
+            if (dir.exists()) {
+                dir.listFiles()?.forEach { it.delete() }
             }
         }
     }

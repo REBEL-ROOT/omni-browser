@@ -1075,4 +1075,19 @@
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">Incógnito bloqueado</string>
+    <string name="browser_incognito_auth_desc">Autentifícate para acceder a tus pestañas privadas.</string>
+    <string name="browser_unlock">Desbloquear</string>
+    <string name="browser_unlock_incognito_tabs">Desbloquear pestañas de incógnito</string>
+    <string name="browser_auth_view_private">Autentifícate para ver tus pestañas privadas</string>
+    <string name="browser_dismiss">Descartar</string>
+    <string name="browser_video_detected">Video detectado</string>
+    <string name="browser_play_premium">Reproducir en el reproductor premium</string>
+    <string name="browser_download_options">Opciones de descarga</string>
+    <string name="media_sniffer_banner_video_playing">Video en reproducción</string>
+    <string name="media_sniffer_banner_audio_playing">Audio en reproducción</string>
+    <string name="media_sniffer_banner_audio_detected">Audio detectado</string>
+    <string name="media_sniffer_banner_media_detected">Medios detectados</string>
 </resources>

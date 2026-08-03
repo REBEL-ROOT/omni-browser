@@ -1070,4 +1070,19 @@
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">无痕模式已锁定</string>
+    <string name="browser_incognito_auth_desc">验证身份以访问您的私密标签页。</string>
+    <string name="browser_unlock">解锁</string>
+    <string name="browser_unlock_incognito_tabs">解锁无痕标签页</string>
+    <string name="browser_auth_view_private">验证身份以查看您的私密标签页</string>
+    <string name="browser_dismiss">关闭</string>
+    <string name="browser_video_detected">检测到视频</string>
+    <string name="browser_play_premium">在高级播放器中播放</string>
+    <string name="browser_download_options">下载选项</string>
+    <string name="media_sniffer_banner_video_playing">视频正在播放</string>
+    <string name="media_sniffer_banner_audio_playing">音频正在播放</string>
+    <string name="media_sniffer_banner_audio_detected">检测到音频</string>
+    <string name="media_sniffer_banner_media_detected">检测到媒体</string>
 </resources>

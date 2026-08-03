@@ -1070,4 +1070,19 @@
 
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
+
+    <!-- Incognito Lock / Media Sniffer Banner -->
+    <string name="browser_incognito_locked">Инкогнито заблокирован</string>
+    <string name="browser_incognito_auth_desc">Пройдите аутентификацию, чтобы получить доступ к приватным вкладкам.</string>
+    <string name="browser_unlock">Разблокировать</string>
+    <string name="browser_unlock_incognito_tabs">Разблокировать вкладки инкогнито</string>
+    <string name="browser_auth_view_private">Пройдите аутентификацию, чтобы просмотреть приватные вкладки</string>
+    <string name="browser_dismiss">Скрыть</string>
+    <string name="browser_video_detected">Обнаружено видео</string>
+    <string name="browser_play_premium">Воспроизвести в премиум-плеере</string>
+    <string name="browser_download_options">Параметры загрузки</string>
+    <string name="media_sniffer_banner_video_playing">Видео воспроизводится</string>
+    <string name="media_sniffer_banner_audio_playing">Аудио воспроизводится</string>
+    <string name="media_sniffer_banner_audio_detected">Обнаружено аудио</string>
+    <string name="media_sniffer_banner_media_detected">Обнаружено медиа</string>
 </resources>
