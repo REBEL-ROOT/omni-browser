@@ -246,11 +246,13 @@ fun HomeScreenContent(
 
     val baseDensity = androidx.compose.ui.platform.LocalDensity.current
     val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val isTablet = screenWidthDp >= 600
     val responsiveWidthFactor = remember(screenWidthDp) {
-        (screenWidthDp / 390f).coerceIn(0.85f, 1.05f)
+        if (isTablet) 1.0f
+        else (screenWidthDp / 390f).coerceIn(0.85f, 1.05f)
     }
     val effectiveHomeScale = remember(viewModel.homeUiScale, responsiveWidthFactor) {
-        (viewModel.homeUiScale * responsiveWidthFactor).coerceIn(0.72f, 1.10f)
+        (viewModel.homeUiScale * responsiveWidthFactor).coerceIn(0.72f, if (isTablet) 1.0f else 1.10f)
     }
     val scaledDensity = remember(baseDensity, effectiveHomeScale) {
         androidx.compose.ui.unit.Density(
@@ -307,7 +309,13 @@ fun HomeScreenContent(
                             colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background)
                         )
                     }
-                )
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = if (isTablet) 720.dp else Int.MAX_VALUE.dp)
+                .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
                 .padding(start = 24.dp, end = 24.dp, bottom = 24.dp, top = 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -320,17 +328,31 @@ fun HomeScreenContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Far Left: Extensions Button
-                IconButton(
-                    onClick = { onOpenExtensions() },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Extension,
-                        contentDescription = "Extensions",
-                        tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                        modifier = Modifier.size(22.dp)
-                    )
+                // Far Left: Palette (when nav hidden) or Extensions (when nav visible)
+                if (viewModel.hideHomeBottomNav) {
+                    IconButton(
+                        onClick = { onShowCustomizationSheetChange(true) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Palette,
+                            contentDescription = "Customize Home",
+                            tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = { onOpenExtensions() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Extension,
+                            contentDescription = "Extensions",
+                            tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
 
                 // Far Right: Tabs Button + 3-Dot Menu Button
@@ -406,7 +428,7 @@ fun HomeScreenContent(
                             onShowQuickTools = onShowQuickTools,
                             onShowFeedbackDialog = onShowFeedbackDialog,
                             onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
-                            onShowExtensions = {},
+                            onShowExtensions = { onOpenExtensions() },
                             onShowPlayerSettings = {},
                             onShowSiteInfo = {}
                         )
@@ -1687,6 +1709,7 @@ fun HomeScreenContent(
                 }
             }
         }
+        } // end outer background Column
     }
 
     if (showCustomizationSheet) {
