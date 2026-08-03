@@ -219,6 +219,7 @@ class BrowserViewModel : ViewModel() {
         val DAILY_WALLPAPER_SEED_KEY = intPreferencesKey("daily_wallpaper_seed")
         val SHOW_DISCOVER_FEED_KEY = booleanPreferencesKey("show_discover_feed")
         val SHOW_BOTTOM_NAV_BAR_KEY = booleanPreferencesKey("show_bottom_nav_bar")
+        val HIDE_HOME_BOTTOM_NAV_KEY = booleanPreferencesKey("hide_home_bottom_nav")
         val CHROME_NAV_BAR_KEY = booleanPreferencesKey("chrome_nav_bar_enabled")
         val SHOW_HOME_LOGO_KEY = booleanPreferencesKey("show_home_logo")
         val SHOW_HOME_SHORTCUTS_KEY = booleanPreferencesKey("show_home_shortcuts")
@@ -519,6 +520,7 @@ class BrowserViewModel : ViewModel() {
     var showHomeLogo by mutableStateOf(true)
     var showHomeShortcuts by mutableStateOf(true)
     var showBottomNavBar by mutableStateOf(true)
+    var hideHomeBottomNav by mutableStateOf(false)
     var chromeNavBarEnabled by mutableStateOf(false)
     var uiScale by mutableStateOf(1.0f)
     var wallpaperDim by mutableStateOf(-1f)
@@ -2563,6 +2565,7 @@ class BrowserViewModel : ViewModel() {
                     dailyWallpaperSeed = prefs[DAILY_WALLPAPER_SEED_KEY] ?: 0
                     showDiscoverFeed = prefs[SHOW_DISCOVER_FEED_KEY] ?: false
                     showBottomNavBar = prefs[SHOW_BOTTOM_NAV_BAR_KEY] ?: true
+                    hideHomeBottomNav = prefs[HIDE_HOME_BOTTOM_NAV_KEY] ?: false
                     chromeNavBarEnabled = prefs[CHROME_NAV_BAR_KEY] ?: false
                     showHomeLogo = prefs[SHOW_HOME_LOGO_KEY] ?: true
                     showHomeShortcuts = prefs[SHOW_HOME_SHORTCUTS_KEY] ?: true
@@ -3748,6 +3751,13 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[SHOW_BOTTOM_NAV_BAR_KEY] = show }
             showBottomNavBar = show
+        }
+    }
+
+    fun saveHideHomeBottomNav(context: Context, hide: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[HIDE_HOME_BOTTOM_NAV_KEY] = hide }
+            hideHomeBottomNav = hide
         }
     }
 

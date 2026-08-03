@@ -967,6 +967,23 @@ fun omnimenuDropdown(
                 )
             }
 
+            if (isHome) {
+                MinimalMenuItem(
+                    text = "Extensions",
+                    icon = Icons.Rounded.Extension,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
+                    onClick = { onDismissRequest(); onShowExtensions() }
+                )
+                MinimalMenuItem(
+                    text = if (viewModel.hideHomeBottomNav) "Show Home Nav Bar" else "Hide Home Nav Bar",
+                    icon = if (viewModel.hideHomeBottomNav) Icons.Rounded.ViewAgenda else Icons.Rounded.HideSource,
+                    iconTint = iconTint,
+                    textColor = textPrimary,
+                    onClick = { onDismissRequest(); viewModel.saveHideHomeBottomNav(context, !viewModel.hideHomeBottomNav) }
+                )
+            }
+
             MinimalMenuItem(
                 text = "Player Settings",
                 icon = Icons.Rounded.PlayCircle,

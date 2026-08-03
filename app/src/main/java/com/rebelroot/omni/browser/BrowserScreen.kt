@@ -1356,8 +1356,8 @@ fun BrowserScreen(
                         }
                     }
                 }
-                if ((!viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Bottom") && viewModel.addressBarPosition != "Top" && viewModel.addressBarPosition != "Split" && !isTablet && !showHomeScreen && !viewModel.isFullscreen) {
-                    val isBottomNavBarVisible = !viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused
+                if ((!viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Bottom") && viewModel.addressBarPosition != "Top" && viewModel.addressBarPosition != "Split" && !showHomeScreen && !viewModel.isFullscreen) {
+                    val isBottomNavBarVisible = !viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1427,7 +1427,7 @@ fun BrowserScreen(
                     }
                 }
 
-                if ((!viewModel.chromeNavBarEnabled || showHomeScreen) && viewModel.showBottomNavBar && !isTablet && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused) {
+                if ((!viewModel.chromeNavBarEnabled || showHomeScreen) && viewModel.showBottomNavBar && !(showHomeScreen && viewModel.hideHomeBottomNav) && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused) {
                     // Flat minimal bottom bar: transparent and seamlessly blended on Home Screen, contoured on Webpages
                 val isDark = viewModel.isDarkThemeEnabled
                 val navBg = if (showHomeScreen) Color.Transparent else if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
