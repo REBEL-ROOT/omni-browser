@@ -967,14 +967,80 @@
     <string name="menu_add_tab_to_new_group">Ajouter l\'onglet à un nouveau groupe</string>
     <string name="menu_recent_tabs">Onglets récents</string>
     <string name="toast_group_created">Groupe créé avec l\'onglet actif</string>
+    <!-- Download Manager Screen -->
+    <string name="download_category_all">All</string>
+    <string name="download_category_videos">Videos</string>
+    <string name="download_category_audio">Audio</string>
+    <string name="download_category_images">Images</string>
+    <string name="download_category_documents">Documents</string>
+    <string name="download_category_apks">APKs</string>
+    <string name="download_category_other">Other</string>
+    <string name="downloads_search_placeholder">Search downloads...</string>
+    <string name="downloads_storage_usage">%1$s of %2$s used</string>
+    <string name="downloads_close_search">Close search</string>
+    <string name="downloads_search">Search</string>
+    <string name="downloads_no_matching">No matching files found</string>
+    <string name="download_rename_file">Rename File</string>
+    <string name="download_filename_label">Filename</string>
+    <string name="download_rename_failed">Failed to rename file</string>
+    <string name="download_rename">Rename</string>
+    <string name="download_delete_title">Delete File</string>
+    <string name="download_delete_confirm">Delete %1$s?</string>
+    <string name="download_delete_from_storage">Also delete file from storage</string>
+    <string name="download_delete">Delete</string>
+    <string name="downloads_downloading_percent">%1$d%%</string>
+    <string name="downloads_downloading">Downloading...</string>
+    <string name="downloads_failed_prefix">Failed: %1$s</string>
+    <string name="download_more_options">More options</string>
+    <string name="download_share">Share</string>
+    <string name="download_open_with">Open with</string>
+    <string name="download_open_file_using">Open file using</string>
+    <string name="download_open_failed">Could not open %1$s</string>
+    <string name="download_share_file_via">Share file via</string>
+    <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Tab Group Enhancements -->
-    <string name="tab_group_auto_group">Grouper auto</string>
-    <string name="tab_group_auto_grouped_toast">%1$d onglets regroupés dans %2$d groupes</string>
-    <string name="tab_group_ungroup">Dissocier les onglets</string>
-    <string name="tab_group_close_group_and_tabs">Fermer le groupe et les onglets</string>
-    <string name="tab_group_save_bookmarks">Enregistrer le groupe dans les favoris</string>
-    <string name="tab_group_share_links">Partager les liens du groupe</string>
-    <string name="tab_group_saved_bookmarks_toast">Groupe enregistré dans les favoris</string>
-    <string name="tab_group_copied_links_toast">Liens du groupe copiés dans le presse-papiers</string>
+    <!-- Download Notifications & Progress -->
+    <string name="download_notification_complete">Download complete</string>
+    <string name="download_notification_failed">Download failed</string>
+    <string name="download_progress_starting">Starting download...</string>
+    <string name="download_progress_completed">%1$d%%</string>
+    <string name="download_progress_downloading">Downloading...</string>
+    <string name="download_saved_successfully">Saved successfully</string>
+    <string name="download_unknown_error">An unknown error occurred</string>
+    <string name="download_server_code_error">Server returned error code %1$d</string>
+    <string name="download_progress_encrypting_locker">Encrypting for Private Locker...</string>
+    <string name="download_progress_saving_downloads_folder">Saving to Downloads folder...</string>
+    <string name="download_progress_saving_public_downloads">Saving to public Downloads...</string>
+    <string name="download_progress_merging_av">Merging audio and video tracks...</string>
+    <string name="download_progress_ffmpeg">Processing with FFmpeg...</string>
+
+    <!-- HLS Download Progress -->
+    <string name="download_progress_fetching_hls">Fetching HLS manifest...</string>
+    <string name="download_error_empty_manifest">Empty HLS manifest</string>
+    <string name="download_progress_resolving_hls_master">Resolving HLS master playlist...</string>
+    <string name="download_error_variant_playlist">Failed to fetch variant playlist</string>
+    <string name="download_error_no_hls_segments">No HLS segments found</string>
+    <string name="download_error_hls_chunks">Downloaded %1$d of %2$d segments</string>
+    <string name="download_progress_stitching_hls">Stitching HLS segments into a single file...</string>
+    <string name="download_error_no_segments_to_stitch">No segments available to stitch</string>
+    <string name="download_progress_stitching_percent">Stitching segments... %1$d%%</string>
+    <string name="download_progress_remuxing_mp4">Remuxing to MP4...</string>
+    <string name="download_progress_converting_hls_mp4">Converting HLS stream to MP4...</string>
+    <string name="download_progress_saving_raw_ts">Saving raw TS file...</string>
+    <string name="download_error_stitching_conversion">Failed to stitch or convert HLS stream</string>
+
+
+    <!-- Download Quality Labels -->
+    <string name="download_quality_source_hd">Source HD</string>
+    <string name="download_quality_auto_source">Auto / Source</string>
+    <string name="download_quality_auto">Auto Quality</string>
+    <string name="download_quality_unknown">Unknown Quality</string>
+    <string name="download_quality_source_hd_original">Source HD (Original)</string>
+    <string name="download_quality_auto_source_only">Only Auto / Source quality available</string>
+    <string name="download_quality_auto_source_fallback">Auto/Source</string>
+    <string name="download_server_label">Server #%1$d</string>
+    <string name="download_quality_label">Quality: %1$s</string>
+    <string name="download_quality_extract_audio">Extract Audio (MP3)</string>
+    <string name="download_quality_source_stream">Source Stream (Auto)</string>
+
 </resources>

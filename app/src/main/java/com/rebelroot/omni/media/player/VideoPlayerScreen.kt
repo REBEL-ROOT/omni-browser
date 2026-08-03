@@ -1151,15 +1151,18 @@ fun VideoPlayerScreen(
                         }
 
                         if (isOnline && downloadEngine != null && currentJob == null) {
+                            val sourceHdLabel = stringResource(R.string.download_quality_source_hd_original)
+                            val sourceStreamLabel = stringResource(R.string.download_quality_source_stream)
+                            val extractAudioLabel = stringResource(R.string.download_quality_extract_audio)
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(
                                 onClick = {
                                     coroutineScope.launch {
                                         isFetchingQualities = true
-                                        val parsed = fetchVideoQualities(decodedPath, viewModel?.activeVideoCookies)
+                                        val parsed = fetchVideoQualities(decodedPath, viewModel?.activeVideoCookies, sourceHdLabel, sourceStreamLabel, extractAudioLabel)
                                         isFetchingQualities = false
                                         
-                                        if (decodedPath.contains(".m3u8") && parsed.size <= 2 && parsed.any { it.label.contains("Source Stream") }) {
+                                        if (decodedPath.contains(".m3u8") && parsed.count { !it.isAudioOnly } <= 1) {
                                             Toast.makeText(context, context.getString(R.string.video_player_m3u8_fallback), Toast.LENGTH_SHORT).show()
                                         }
                                         
@@ -1467,7 +1470,7 @@ fun VideoPlayerScreen(
                                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 4.dp))
 
                                         if (videoTracks.isEmpty()) {
-                                            Text("Only Auto / Source quality available", color = textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                                            Text(stringResource(R.string.download_quality_auto_source_only), color = textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                                         } else {
                                             videoTracks.forEach { track ->
                                                 Row(
@@ -1698,7 +1701,7 @@ fun VideoPlayerScreen(
                                                 ) {
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
-                                                            text = "Server #${idx + 1} (${media.quality ?: "Auto Quality"})",
+                                                            text = stringResource(R.string.download_server_label, idx + 1) + " (${translateQualityLabel(media.quality)})",
                                                             color = if (isSelected) MaterialTheme.colorScheme.primary else textPrimary,
                                                             fontSize = 14.sp,
                                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
@@ -2142,6 +2145,17 @@ private fun formatDuration(millis: Long): String {
     }
 }
 
+@Composable
+private fun translateQualityLabel(quality: String?): String {
+    return when (quality) {
+        "Source HD" -> stringResource(R.string.download_quality_source_hd)
+        "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
+        "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
+        null -> stringResource(R.string.download_quality_auto)
+        else -> quality
+    }
+}
+
 private fun isDirectVideoUrl(url: String): Boolean {
     val clean = url.trim().lowercase()
     return clean.endsWith(".mp4") ||
@@ -2164,12 +2178,12 @@ data class VideoQualityOption(
     val isAudioOnly: Boolean = false
 )
 
-private suspend fun fetchVideoQualities(streamUrl: String, cookies: String?): List<VideoQualityOption> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+private suspend fun fetchVideoQualities(streamUrl: String, cookies: String?, sourceHdLabel: String, sourceStreamLabel: String, extractAudioLabel: String): List<VideoQualityOption> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val options = mutableListOf<VideoQualityOption>()
     
     if (!streamUrl.contains(".m3u8")) {
-        options.add(VideoQualityOption("Source HD (Original)", streamUrl))
-        options.add(VideoQualityOption("Extract Audio (MP3)", streamUrl, isAudioOnly = true))
+        options.add(VideoQualityOption(sourceHdLabel, streamUrl))
+        options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true))
         return@withContext options
     }
     
@@ -2212,9 +2226,9 @@ private suspend fun fetchVideoQualities(streamUrl: String, cookies: String?): Li
     }
     
     if (options.isEmpty()) {
-        options.add(VideoQualityOption("Source Stream (Auto)", streamUrl))
+        options.add(VideoQualityOption(sourceStreamLabel, streamUrl))
     }
-    options.add(VideoQualityOption("Extract Audio (MP3)", streamUrl, isAudioOnly = true))
+    options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true))
     
     return@withContext options.distinctBy { it.label }
 }
