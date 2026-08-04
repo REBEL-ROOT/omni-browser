@@ -116,49 +116,6 @@ class BrowserViewModel : ViewModel() {
         // route on GeckoView/Android). Always-on; treated as a protected core id.
         internal const val PROXY_ROUTER_ID = "omni-proxy-router@omnibrowser.app"
 
-        /** Known ad popup / pop-under network domains.
-         *  Popups opening any of these URLs are silently blocked regardless of user gesture. */
-        /** Known ad popup / pop-under network domains and suspicious host keywords.
-         *  Checked via String.contains() so subdomains are covered automatically. */
-        internal val POPUP_AD_DOMAINS = setOf(
-            // Pop-under networks
-            "popads.net", "popcash.net", "popunder.net", "popmyads.com",
-            "pop.network", "popmagic.com", "trafficshop.com",
-            // Push / redirect ad networks
-            "exoclick.com", "trafficjunky.net", "juicyads.com",
-            "adsterra.com", "propellerads.com", "hilltopads.net",
-            "clickadu.com", "evadav.com", "megapush.com",
-            "push.house", "richpush.co", "pushground.com",
-            "mgpusher.com", "pu.sh",
-            // URL shorteners / cloakers used by ads
-            "adf.ly", "j.gs", "link.tl", "linkvertise.com", "hrefli.com",
-            "exe.io", "za.gl", "fc.lc", "shrinke.me",
-            // Traffic / redirect brokers
-            "trafficfactory.biz", "tsyndicate.com", "doublelift.net",
-            "adskeeper.com", "voluumtrk.com", "atominik.com",
-            "mondoagency.net", "traffik.io", "traffective.com",
-            // Ad infrastructure
-            "adnxs.com", "openx.net", "rubiconproject.com",
-            "doubleclick.net", "googlesyndication.com", "adtech.de",
-            "bidswitch.net", "contextweb.com", "casalemedia.com",
-            "pubmatic.com", "quantserve.com", "scorecardresearch.com",
-            // Malvertising / fake-update / browser-hijacker patterns
-            "cdn77.org/ad", "go2cloud.org", "bestads.com",
-            "clickfunnel.net", "adclickfunnels.com", "cpmrevenuegate.com",
-            "revcontent.com", "taboola.com", "outbrain.com",
-            "zergnet.com", "mgid.com", "shareaholic.com"
-        )
-
-        /** Suspicious sub-strings found in popup/redirect hostnames. */
-        internal val POPUP_HOST_KEYWORDS = listOf(
-            "adserver", "adsystem", "adservice", "adnserver",
-            "clicksmart", "fastclick", "popunder", "popads",
-            "redirector", "onclick", "adcash", "adclick",
-            "track.", "trk.", "clk.", "redir.", "go.", "exit."
-        )
-        
-
-        val POPUP_BLOCKER_ENABLED_KEY = booleanPreferencesKey("popup_blocker_enabled")
         val OPEN_EXTERNAL_APP_ALLOWED_KEY = booleanPreferencesKey("open_external_app_allowed")
         val UNIVERSAL_COPY_ENABLED_KEY = booleanPreferencesKey("universal_copy_enabled")
         val AI_BLOCKER_ENABLED_KEY = booleanPreferencesKey("ai_blocker_enabled")
@@ -395,8 +352,6 @@ class BrowserViewModel : ViewModel() {
     var isVideoPlayingInPage by mutableStateOf(false)
     var isInnerScrolled by mutableStateOf(false)
 
-    /** When true (default), popup windows not triggered by a real user tap are blocked. */
-    var isPopupBlockerEnabled by mutableStateOf(true)
     /** When true (default), user-initiated link taps can open external apps. Automatic redirects are always blocked. */
     var isOpenExternalAppAllowed by mutableStateOf(true)
     var isUniversalCopyEnabled by mutableStateOf(false)
@@ -514,7 +469,10 @@ class BrowserViewModel : ViewModel() {
     var addressBarPosition by mutableStateOf("Split")
     var appIconState by mutableStateOf("Default")
     var customIconPath by mutableStateOf<String?>(null)
-    var browserWallpaperUri by mutableStateOf<String?>(null)
+    // Wallpaper and UI scale fields are pre-seeded from UiStateHolder, which is
+    // populated synchronously in OmniApplication.onCreate() before the first
+    // Compose frame — this eliminates the visible layout jump and wallpaper pop-in.
+    var browserWallpaperUri by mutableStateOf<String?>(com.rebelroot.omni.UiStateHolder.browserWallpaperUri)
     var changeWallpaperDaily by mutableStateOf(false)
     var showDiscoverFeed by mutableStateOf(false)
     var showHomeLogo by mutableStateOf(true)
@@ -522,18 +480,18 @@ class BrowserViewModel : ViewModel() {
     var showBottomNavBar by mutableStateOf(true)
     var hideHomeBottomNav by mutableStateOf(false)
     var chromeNavBarEnabled by mutableStateOf(false)
-    var uiScale by mutableStateOf(1.0f)
-    var wallpaperDim by mutableStateOf(-1f)
-    var wallpaperBlur by mutableStateOf(0f)
-    var wallpaperScale by mutableStateOf(1.0f)
-    var wallpaperOffsetX by mutableStateOf(0f)
-    var wallpaperOffsetY by mutableStateOf(0f)
+    var uiScale by mutableStateOf(com.rebelroot.omni.UiStateHolder.uiScale)
+    var wallpaperDim by mutableStateOf(com.rebelroot.omni.UiStateHolder.wallpaperDim)
+    var wallpaperBlur by mutableStateOf(com.rebelroot.omni.UiStateHolder.wallpaperBlur)
+    var wallpaperScale by mutableStateOf(com.rebelroot.omni.UiStateHolder.wallpaperScale)
+    var wallpaperOffsetX by mutableStateOf(com.rebelroot.omni.UiStateHolder.wallpaperOffsetX)
+    var wallpaperOffsetY by mutableStateOf(com.rebelroot.omni.UiStateHolder.wallpaperOffsetY)
     var lastDailyWallpaperDate by mutableStateOf<String?>(null)
     var dailyWallpaperSeed by mutableStateOf(0)
     var shouldOpenTabsSheetOnLaunch by mutableStateOf(false)
     var shortcutTileStyle by mutableStateOf("Circle")
-    var homeUiScale by mutableStateOf(0.90f)
-    var bottomNavScale by mutableStateOf(1.0f)
+    var homeUiScale by mutableStateOf(com.rebelroot.omni.UiStateHolder.homeUiScale)
+    var bottomNavScale by mutableStateOf(com.rebelroot.omni.UiStateHolder.bottomNavScale)
     var showPrivacyStatsWidget by mutableStateOf(true)
     var isMinimalistFocusMode by mutableStateOf(false)
     var trackersBlockedCount by androidx.compose.runtime.mutableIntStateOf(0)
@@ -2353,10 +2311,6 @@ class BrowserViewModel : ViewModel() {
             loadSavedPasswords(appCtx)
 
             viewModelScope.launch {
-                isPopupBlockerEnabled = getPopupBlockerPreference(appCtx).first()
-            }
-
-            viewModelScope.launch {
                 isOpenExternalAppAllowed = getOpenExternalAppAllowedPreference(appCtx).first()
             }
 
@@ -2935,25 +2889,6 @@ class BrowserViewModel : ViewModel() {
 
 
 
-    fun togglePopupBlocker(context: Context) {
-        viewModelScope.launch {
-            val newState = !isPopupBlockerEnabled
-            isPopupBlockerEnabled = newState
-            context.dataStore.edit { preferences ->
-                preferences[POPUP_BLOCKER_ENABLED_KEY] = newState
-            }
-        }
-    }
-
-    fun updatePopupBlockerEnabled(enabled: Boolean, context: Context) {
-        viewModelScope.launch {
-            isPopupBlockerEnabled = enabled
-            context.dataStore.edit { preferences ->
-                preferences[POPUP_BLOCKER_ENABLED_KEY] = enabled
-            }
-        }
-    }
-
     fun toggleOpenExternalAppAllowed(context: Context) {
         viewModelScope.launch {
             val newState = !isOpenExternalAppAllowed
@@ -3060,12 +2995,6 @@ class BrowserViewModel : ViewModel() {
     }
 
 
-
-    private fun getPopupBlockerPreference(context: Context): Flow<Boolean> {
-        return context.dataStore.data.map { preferences ->
-            preferences[POPUP_BLOCKER_ENABLED_KEY] ?: true  // Default ON
-        }
-    }
 
     private fun getOpenExternalAppAllowedPreference(context: Context): Flow<Boolean> {
         return context.dataStore.data.map { preferences ->
@@ -3310,6 +3239,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[UI_SCALE_KEY] = scale }
             uiScale = scale
+            com.rebelroot.omni.UiStateHolder.uiScale = scale
         }
     }
 
@@ -3584,12 +3514,18 @@ class BrowserViewModel : ViewModel() {
                 }
             }
             browserWallpaperUri = uri
+            com.rebelroot.omni.UiStateHolder.browserWallpaperUri = uri
             if (uri == null) {
                 wallpaperScale = 1.0f
                 wallpaperOffsetX = 0f
                 wallpaperOffsetY = 0f
                 wallpaperDim = -1f
                 wallpaperBlur = 0f
+                com.rebelroot.omni.UiStateHolder.wallpaperScale = 1.0f
+                com.rebelroot.omni.UiStateHolder.wallpaperOffsetX = 0f
+                com.rebelroot.omni.UiStateHolder.wallpaperOffsetY = 0f
+                com.rebelroot.omni.UiStateHolder.wallpaperDim = -1f
+                com.rebelroot.omni.UiStateHolder.wallpaperBlur = 0f
             }
         }
     }
@@ -3617,6 +3553,12 @@ class BrowserViewModel : ViewModel() {
             wallpaperScale = scale
             wallpaperOffsetX = offsetX
             wallpaperOffsetY = offsetY
+            com.rebelroot.omni.UiStateHolder.browserWallpaperUri = uri
+            com.rebelroot.omni.UiStateHolder.wallpaperDim = dim
+            com.rebelroot.omni.UiStateHolder.wallpaperBlur = blur
+            com.rebelroot.omni.UiStateHolder.wallpaperScale = scale
+            com.rebelroot.omni.UiStateHolder.wallpaperOffsetX = offsetX
+            com.rebelroot.omni.UiStateHolder.wallpaperOffsetY = offsetY
         }
     }
 
@@ -3660,6 +3602,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[WALLPAPER_DIM_KEY] = value }
             wallpaperDim = value
+            com.rebelroot.omni.UiStateHolder.wallpaperDim = value
         }
     }
 
@@ -3667,6 +3610,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[WALLPAPER_BLUR_KEY] = value }
             wallpaperBlur = value
+            com.rebelroot.omni.UiStateHolder.wallpaperBlur = value
         }
     }
 
@@ -3680,6 +3624,9 @@ class BrowserViewModel : ViewModel() {
             wallpaperScale = scale
             wallpaperOffsetX = offsetX
             wallpaperOffsetY = offsetY
+            com.rebelroot.omni.UiStateHolder.wallpaperScale = scale
+            com.rebelroot.omni.UiStateHolder.wallpaperOffsetX = offsetX
+            com.rebelroot.omni.UiStateHolder.wallpaperOffsetY = offsetY
         }
     }
 
@@ -3708,6 +3655,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[HOME_UI_SCALE_KEY] = scale }
             homeUiScale = scale
+            com.rebelroot.omni.UiStateHolder.homeUiScale = scale
         }
     }
 
@@ -3715,6 +3663,7 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[BOTTOM_NAV_SCALE_KEY] = scale }
             bottomNavScale = scale
+            com.rebelroot.omni.UiStateHolder.bottomNavScale = scale
         }
     }
 

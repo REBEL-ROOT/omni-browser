@@ -136,7 +136,14 @@ fun SettingsScreen(
     var importSummary by remember { mutableStateOf("") }
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        // CreateDocument(mimeType) crashes on some API 26-28 OEM ROMs (Samsung/Xiaomi) because
+        // their system file pickers don't handle the MIME filter and return a null intent.
+        // Fall back to the no-arg constructor on those versions — the file is still written
+        // as JSON; the user just won't see a MIME-filtered file picker.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q)
+            ActivityResultContracts.CreateDocument("application/json")
+        else
+            ActivityResultContracts.CreateDocument()
     ) { uri ->
         if (uri != null) coroutineScope.launch(Dispatchers.IO) {
             runCatching {

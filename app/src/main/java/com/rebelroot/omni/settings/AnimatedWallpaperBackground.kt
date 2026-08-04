@@ -219,7 +219,9 @@ fun AnimatedWallpaperBackground(
                                 translationY = offsetY
                             }
                             .then(
-                                if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
+                                if (blur > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                                    Modifier.blur(blur.dp).graphicsLayer()
+                                else Modifier
                             )
                     )
                 }
@@ -259,7 +261,9 @@ fun AnimatedWallpaperBackground(
                             translationY = offsetY
                         }
                         .then(
-                            if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
+                            if (blur > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                                Modifier.blur(blur.dp).graphicsLayer()
+                            else Modifier
                         )
                 )
             }
@@ -278,7 +282,9 @@ fun AnimatedWallpaperBackground(
                             translationY = offsetY
                         }
                         .then(
-                            if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
+                            if (blur > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                                Modifier.blur(blur.dp).graphicsLayer()
+                            else Modifier
                         )
                 )
             }
@@ -387,7 +393,9 @@ private fun VideoWallpaperPlayer(
                 translationY = offsetY
             }
             .then(
-                if (blur > 0f) Modifier.blur(blur.dp).graphicsLayer() else Modifier
+                if (blur > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                    Modifier.blur(blur.dp).graphicsLayer()
+                else Modifier
             )
     )
 }

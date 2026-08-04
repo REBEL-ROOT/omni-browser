@@ -51,7 +51,7 @@ fun SiteSettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     var currentSubView by remember { mutableStateOf(SiteSettingsSubView.HOME) }
-    var selectedPermissionType by remember { mutableStateOf("location") } // location, camera, microphone, notifications, javascript, autoplay, popups
+    var selectedPermissionType by remember { mutableStateOf("location") } // location, camera, microphone, notifications, javascript, autoplay
     var searchQuery by remember { mutableStateOf("") }
     
     // Site Details Dialog State
@@ -83,7 +83,6 @@ fun SiteSettingsScreen(
                                 "notifications" -> stringResource(id = R.string.perm_notifications)
                                 "javascript" -> stringResource(id = R.string.perm_javascript)
                                 "autoplay" -> stringResource(id = R.string.perm_autoplay)
-                                "popups" -> stringResource(id = R.string.perm_popups)
                                 else -> stringResource(id = R.string.site_settings_title)
                             }
                         },
@@ -193,15 +192,13 @@ fun SiteSettingsScreen(
                                     Triple("microphone", stringResource(id = R.string.perm_microphone), Icons.Rounded.Mic),
                                     Triple("notifications", stringResource(id = R.string.perm_notifications), Icons.Rounded.Notifications),
                                     Triple("javascript", stringResource(id = R.string.perm_javascript), Icons.Rounded.Code),
-                                    Triple("autoplay", stringResource(id = R.string.perm_autoplay), Icons.Rounded.PlayCircle),
-                                    Triple("popups", stringResource(id = R.string.perm_popups), Icons.Rounded.OpenInNew)
+                                    Triple("autoplay", stringResource(id = R.string.perm_autoplay), Icons.Rounded.PlayCircle)
                                 )
 
                                 permissionsList.forEachIndexed { index, (type, label, icon) ->
                                     val subtitle = when (type) {
                                         "javascript" -> if (viewModel.defaultJavascriptAllowed) stringResource(id = R.string.perm_allowed) else stringResource(id = R.string.perm_blocked)
                                         "autoplay" -> if (viewModel.defaultAutoplayAllowed) stringResource(id = R.string.perm_allowed) else stringResource(id = R.string.perm_blocked)
-                                        "popups" -> if (viewModel.isPopupBlockerEnabled) stringResource(id = R.string.perm_blocked) else stringResource(id = R.string.perm_allowed)
                                         else -> stringResource(id = R.string.perm_allowed)
                                     }
 
@@ -415,7 +412,7 @@ fun SiteSettingsScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        val isBinary = selectedPermissionType == "javascript" || selectedPermissionType == "autoplay" || selectedPermissionType == "popups"
+                        val isBinary = selectedPermissionType == "javascript" || selectedPermissionType == "autoplay"
                         
                         // Option Descriptions
                         Surface(
@@ -432,7 +429,6 @@ fun SiteSettingsScreen(
                                     "notifications" -> "Control whether websites can send push notifications to your device."
                                     "javascript" -> "Choose whether websites are allowed to execute JavaScript code. Blocking JS improves security but breaks many websites."
                                     "autoplay" -> "Choose whether audio or video can play automatically when you visit a webpage."
-                                    "popups" -> "Block website pop-up windows and redirects from opening without clicking."
                                     else -> ""
                                 }
                                 Text("About this feature", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -449,18 +445,16 @@ fun SiteSettingsScreen(
                         ) {
                             Column {
                                 if (isBinary) {
-                                    // Binary options (JavaScript, Autoplay, Popups)
+                                    // Binary options (JavaScript, Autoplay)
                                     val (allowedText, blockedText) = when (selectedPermissionType) {
                                         "javascript" -> "Allowed (Recommended)" to "Blocked"
                                         "autoplay" -> "Allowed" to "Blocked"
-                                        "popups" -> "Allowed (Not Recommended)" to "Blocked (Recommended)"
                                         else -> "" to ""
                                     }
 
                                     val isAllowed = when (selectedPermissionType) {
                                         "javascript" -> viewModel.defaultJavascriptAllowed
                                         "autoplay" -> viewModel.defaultAutoplayAllowed
-                                        "popups" -> !viewModel.isPopupBlockerEnabled
                                         else -> true
                                     }
 
@@ -471,7 +465,6 @@ fun SiteSettingsScreen(
                                                 when (selectedPermissionType) {
                                                     "javascript" -> viewModel.updateGlobalJavascriptAllowed(true)
                                                     "autoplay" -> viewModel.updateGlobalAutoplayAllowed(true)
-                                                    "popups" -> viewModel.updatePopupBlockerEnabled(false, viewModel.appContext ?: return@clickable)
                                                 }
                                             }
                                             .padding(16.dp),
@@ -482,7 +475,6 @@ fun SiteSettingsScreen(
                                             when (selectedPermissionType) {
                                                 "javascript" -> viewModel.updateGlobalJavascriptAllowed(true)
                                                 "autoplay" -> viewModel.updateGlobalAutoplayAllowed(true)
-                                                "popups" -> viewModel.updatePopupBlockerEnabled(false, viewModel.appContext ?: return@RadioButton)
                                             }
                                         }, colors = RadioButtonDefaults.colors(selectedColor = accentColor))
                                         Text(allowedText, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -497,7 +489,6 @@ fun SiteSettingsScreen(
                                                 when (selectedPermissionType) {
                                                     "javascript" -> viewModel.updateGlobalJavascriptAllowed(false)
                                                     "autoplay" -> viewModel.updateGlobalAutoplayAllowed(false)
-                                                    "popups" -> viewModel.updatePopupBlockerEnabled(true, viewModel.appContext ?: return@clickable)
                                                 }
                                             }
                                             .padding(16.dp),
@@ -508,7 +499,6 @@ fun SiteSettingsScreen(
                                             when (selectedPermissionType) {
                                                 "javascript" -> viewModel.updateGlobalJavascriptAllowed(false)
                                                 "autoplay" -> viewModel.updateGlobalAutoplayAllowed(false)
-                                                "popups" -> viewModel.updatePopupBlockerEnabled(true, viewModel.appContext ?: return@RadioButton)
                                             }
                                         }, colors = RadioButtonDefaults.colors(selectedColor = accentColor))
                                         Text(blockedText, color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

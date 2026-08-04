@@ -5838,8 +5838,6 @@ fun BrowserScreen(
                         }
 
                         val extTeamAuthor = stringResource(R.string.ext_team_author)
-                        val extPopupBlocker = stringResource(R.string.ext_builtin_popup_blocker)
-                        val extPopupBlockerDesc = stringResource(R.string.ext_builtin_popup_blocker_desc)
                         val extUniversalCopy = stringResource(R.string.ext_builtin_universal_copy)
                         val extUniversalCopyDesc = stringResource(R.string.ext_builtin_universal_copy_desc)
                         val extMediaSniffer = stringResource(R.string.ext_builtin_media_sniffer)
@@ -5849,17 +5847,12 @@ fun BrowserScreen(
                         val extForceDark = stringResource(R.string.appearance_force_dark_websites)
                         val extForceDarkDesc = stringResource(R.string.appearance_force_dark_websites_desc)
                         val builtInExts = remember(
-                            viewModel.isPopupBlockerEnabled,
                             viewModel.isUniversalCopyEnabled, viewModel.isUniversalCopyToggling,
                             viewModel.isMediaGrabberEnabled, viewModel.isMediaGrabberToggling,
                             viewModel.isAiBlockerEnabled, viewModel.isAiBlockerToggling,
                             viewModel.forceDarkWebsites
                         ) {
                             listOf(
-                                BuiltInExt(Icons.Rounded.Block, extPopupBlocker, extTeamAuthor,
-                                    extPopupBlockerDesc,
-                                    viewModel.isPopupBlockerEnabled, true,
-                                    { viewModel.togglePopupBlocker(context) }),
                                 BuiltInExt(Icons.Rounded.FileCopy, extUniversalCopy, extTeamAuthor,
                                     extUniversalCopyDesc,
                                     viewModel.isUniversalCopyEnabled, !viewModel.isUniversalCopyToggling,

@@ -1047,7 +1047,7 @@ fun WallpaperEditorView(
                     Box(
                         modifier = Modifier.fillMaxSize()
                             .graphicsLayer { scaleX = tempScale; scaleY = tempScale; translationX = tempOffsetX; translationY = tempOffsetY }
-                            .then(if (tempBlur > 0f) Modifier.blur(tempBlur.dp).graphicsLayer() else Modifier)
+                            .then(if (tempBlur > 0f && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) Modifier.blur(tempBlur.dp).graphicsLayer() else Modifier)
                     ) {
                         when {
                             isVid -> {

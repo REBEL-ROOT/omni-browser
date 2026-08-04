@@ -564,35 +564,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
 
             if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
-                if (isPopupBlockerEnabled) {
-                    if (!request.hasUserGesture) {
-                        Log.w(TAG, "🚫 onLoadRequest: Blocked auto-popup (no user gesture) to $uri")
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
-
-                    if (request.uri.isEmpty() || lowerUri == "about:blank" ||
-                        lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
-                        Log.w(TAG, "🚫 onLoadRequest: Blocked blank/script popup")
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
-
-                    val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
-                    if (host.isNotEmpty() && adBlockManager.isHostBlocked(host)) {
-                        Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker host: $uri")
-                        incrementTrackersBlocked(context, 1)
-                        try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
-
-                    val isAdPopup = BrowserViewModel.POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
-                        BrowserViewModel.POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
-                    if (isAdPopup) {
-                        Log.w(TAG, "🚫 onLoadRequest: Blocked ad popup to $uri")
-                        incrementTrackersBlocked(context, 1)
-                        try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
-                }
+                // No built-in popup blocker — all new-window navigations fall through to tab creation below.
             }
 
             val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
@@ -901,36 +873,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
             try {
                 val lowerUri = uri.lowercase().trim()
-
-                if (isPopupBlockerEnabled) {
-                    if (uri.isEmpty() || lowerUri == "about:blank" ||
-                        lowerUri.startsWith("data:") || lowerUri.startsWith("javascript:")) {
-                        Log.w(TAG, "🚫 onNewSession: Blocked blank/script popup")
-                        return GeckoResult.fromValue(null)
-                    }
-
-                    val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
-                    val isAdPopup = BrowserViewModel.POPUP_AD_DOMAINS.any { domain -> lowerUri.contains(domain) } ||
-                        BrowserViewModel.POPUP_HOST_KEYWORDS.any { kw -> host.contains(kw) }
-                    if (isAdPopup) {
-                        Log.w(TAG, "🚫 onNewSession: Blocked ad popup — $uri")
-                        return GeckoResult.fromValue(null)
-                    }
-
-                    val isOAuthLogin = lowerUri.contains("accounts.google") ||
-                                       lowerUri.contains("facebook.com/dialog") ||
-                                       lowerUri.contains("api.twitter") ||
-                                       lowerUri.contains("github.com/login/oauth") ||
-                                       lowerUri.contains("appleid.apple.com") ||
-                                       lowerUri.contains("login.microsoftonline.com")
-                    if (!isOAuthLogin && lowerUri.startsWith("http")) {
-                        Log.i(TAG, "🔀 onNewSession: reusing active tab for target_blank: $uri")
-                        viewModelScope.launch(Dispatchers.Main) {
-                            loadUrl(uri)
-                        }
-                        return GeckoResult.fromValue(null)
-                    }
-                }
 
                 Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                 val runtime = getGeckoRuntime(context)

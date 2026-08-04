@@ -405,16 +405,6 @@ internal fun BrowserViewModel.syncMediaGrabberState(shouldReload: Boolean = fals
     )
 }
 
-fun BrowserViewModel.togglePopupBlocker(context: Context) {
-    viewModelScope.launch {
-        val newState = !isPopupBlockerEnabled
-        isPopupBlockerEnabled = newState
-        context.dataStore.edit { preferences ->
-            preferences[BrowserViewModel.POPUP_BLOCKER_ENABLED_KEY] = newState
-        }
-    }
-}
-
 fun BrowserViewModel.toggleUniversalCopy(context: Context) {
     if (isUniversalCopyToggling) return
     isUniversalCopyToggling = true
@@ -496,12 +486,6 @@ internal fun BrowserViewModel.syncAiBlockerState(shouldReload: Boolean = false) 
 internal fun BrowserViewModel.getAiBlockerPreference(context: Context): Flow<Boolean> {
     return context.dataStore.data.map { preferences ->
         preferences[BrowserViewModel.AI_BLOCKER_ENABLED_KEY] ?: false
-    }
-}
-
-internal fun BrowserViewModel.getPopupBlockerPreference(context: Context): Flow<Boolean> {
-    return context.dataStore.data.map { preferences ->
-        preferences[BrowserViewModel.POPUP_BLOCKER_ENABLED_KEY] ?: true  // Default ON
     }
 }
 
