@@ -6693,39 +6693,9 @@ class BrowserViewModel : ViewModel() {
             }
             val currentVersionName = pInfo?.versionName ?: "1.0.0"
 
-            // 1. Try checking raw GitHub version.json first
-            try {
-                val url = java.net.URL("https://raw.githubusercontent.com/REBEL-ROOT/omni-browser/main/version.json")
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                connection.connect()
-
-                if (connection.responseCode == 200) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val json = org.json.JSONObject(response)
-                    val serverVersionName = json.getString("versionName")
-                    val serverVersionCode = json.optLong("versionCode", 0L)
-                    val updateUrl = json.optString("updateUrl", "https://github.com/REBEL-ROOT/omni-browser/releases/latest")
-
-                    if (serverVersionCode > currentVersionCode) {
-                        withContext(Dispatchers.Main) {
-                            onResult(UpdateCheckResult.NewUpdateAvailable(serverVersionName, updateUrl))
-                        }
-                        return@launch
-                    } else {
-                        withContext(Dispatchers.Main) {
-                            onResult(UpdateCheckResult.NoUpdateAvailable)
-                        }
-                        return@launch
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "version.json fetch failed, falling back directly to GitHub Releases API", e)
-            }
-
-            // 2. Direct GitHub Releases API Fallback
+            // Always use GitHub Releases API as the single source of truth.
+            // This means no separate version.json to forget updating, and the
+            // download path already fetches the latest release assets anyway.
             try {
                 val apiUrl = java.net.URL("https://api.github.com/repos/REBEL-ROOT/omni-browser/releases/latest")
                 val apiConn = apiUrl.openConnection() as java.net.HttpURLConnection
@@ -6742,17 +6712,14 @@ class BrowserViewModel : ViewModel() {
                     val tagName = json.optString("tag_name", "").removePrefix("v").trim()
                     val htmlUrl = json.optString("html_url", "https://github.com/REBEL-ROOT/omni-browser/releases/latest")
 
-                    var hasNewerVersion = false
-                    if (tagName.isNotEmpty() && tagName != currentVersionName) {
-                        hasNewerVersion = compareVersionNames(tagName, currentVersionName) > 0
-                    }
+                    // Compare by version name — compareVersionNames handles 4-part versions
+                    val hasNewerVersion = tagName.isNotEmpty() &&
+                        compareVersionNames(tagName, currentVersionName) > 0
 
-                    if (hasNewerVersion) {
-                        withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
+                        if (hasNewerVersion) {
                             onResult(UpdateCheckResult.NewUpdateAvailable(tagName, htmlUrl))
-                        }
-                    } else {
-                        withContext(Dispatchers.Main) {
+                        } else {
                             onResult(UpdateCheckResult.NoUpdateAvailable)
                         }
                     }
