@@ -20,9 +20,9 @@
     <img src="https://img.shields.io/badge/⬇%20Download%20APK-Latest%20Release-0a84ff?style=for-the-badge" />
   </a>
  <br /><br />
-  <a href="https://play.google.com/store/apps/details?id=com.rebelroot.omni">
-    <img src="https://img.shields.io/badge/Google%20Play-34A853?style=flat&logo=google-play&logoColor=white" />
-  </a>
+<a href="https://play.google.com/store/apps/details?id=com.rebelroot.omni">
+  <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80" />
+</a>
  
 
 </div>
