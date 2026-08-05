@@ -19,6 +19,11 @@
   <a href="https://github.com/REBEL-ROOT/omni-browser/releases/latest">
     <img src="https://img.shields.io/badge/⬇%20Download%20APK-Latest%20Release-0a84ff?style=for-the-badge" />
   </a>
+ <br /><br />
+  <a href="https://play.google.com/store/apps/details?id=com.rebelroot.omni">
+    <img src="https://img.shields.io/badge/Google%20Play-34A853?style=flat&logo=google-play&logoColor=white" />
+  </a>
+ 
 
 </div>
 
