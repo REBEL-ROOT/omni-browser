@@ -2,6 +2,21 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.8.1] - 2026-08-06
+
+### Added
+- **App Lifecycle & Browser Optimizations**: Private tab creation no longer modifies global incognito state in the background. UI scale, wallpaper URI, and navigation params pre-load synchronously to prevent layout flash on app start.
+- **Enhanced Permission UX & Security**: Brave/Chrome-style rationale pre-permission sheets with 3-button permission choices (Allow, Allow once, Don't allow). Biometric vault key cryptographically bound to Android Keystore (AES-256-GCM).
+- **YouTube Media Stream Extractor**: Multi-client fallback chain (Android, Android VR, TVHTML5) for YouTube video and audio stream extraction using InnerTube API.
+- **Android RoleManager Helper**: System RoleManager helper for Android Q+ to manage default browser prompt and role verification.
+- **Redesigned Onboarding & Proxy Hub**: Material 3 Expressive onboarding UI with dedicated Proxy Hub selection (Direct, Built-in Tor, Custom SOCKS5).
+
+### Fixed
+- **Direct GitHub OTA Update Checking**: Single authoritative call to GitHub Releases API with ABI-aware APK asset parsing for reliable update checks.
+- **Safari-Style Context Menu & Page Menu**: Live WebView preview in context menu, copy clean link, open in private tab, Google Lens, and refined 3-dot dropdown for Top/Split navigation bars.
+
+---
+
 ## [1.2.7.1] - 2026-08-02
 
 ### Added
