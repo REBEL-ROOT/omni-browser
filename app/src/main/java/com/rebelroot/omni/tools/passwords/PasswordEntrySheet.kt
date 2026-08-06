@@ -44,6 +44,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import com.rebelroot.omni.R
+import androidx.compose.ui.res.stringResource
 import java.util.UUID
 
 // ─── Password generator helpers ────────────────────────────────────────────
@@ -135,7 +137,7 @@ fun PasswordGeneratorSheet(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Password Generator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.pm_generator_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
 
             // Generated password display
             OutlinedTextField(
@@ -143,17 +145,17 @@ fun PasswordGeneratorSheet(
                 onValueChange = {},
                 readOnly = true,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Generated password") },
+                label = { Text(stringResource(R.string.pm_generated_label)) },
                 trailingIcon = {
                     IconButton(onClick = ::regenerate) {
-                        Icon(Icons.Filled.Casino, contentDescription = "Regenerate")
+                        Icon(Icons.Filled.Casino, contentDescription = stringResource(R.string.pm_regenerate_cd))
                     }
                 }
             )
 
             // Length slider
             Column {
-                Text("Length: ${length.toInt()}", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.pm_length, length.toInt()), style = MaterialTheme.typography.bodyMedium)
                 Slider(
                     value = length,
                     onValueChange = { length = it; regenerate() },
@@ -164,10 +166,10 @@ fun PasswordGeneratorSheet(
             }
 
             // Character class toggles
-            CharToggleRow("Uppercase (A–Z)", useUpper) { useUpper = it; regenerate() }
-            CharToggleRow("Lowercase (a–z)", useLower) { useLower = it; regenerate() }
-            CharToggleRow("Numbers (0–9)", useDigits) { useDigits = it; regenerate() }
-            CharToggleRow("Symbols (!@#…)", useSymbols) { useSymbols = it; regenerate() }
+            CharToggleRow(stringResource(R.string.pm_uppercase), useUpper) { useUpper = it; regenerate() }
+            CharToggleRow(stringResource(R.string.pm_lowercase), useLower) { useLower = it; regenerate() }
+            CharToggleRow(stringResource(R.string.pm_numbers), useDigits) { useDigits = it; regenerate() }
+            CharToggleRow(stringResource(R.string.pm_symbols), useSymbols) { useSymbols = it; regenerate() }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -180,7 +182,7 @@ fun PasswordGeneratorSheet(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Use This Password")
+                Text(stringResource(R.string.pm_use_password))
             }
         }
     }
@@ -247,7 +249,7 @@ fun PasswordEntrySheet(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                if (existing == null) "Add Password" else "Edit Password",
+                if (existing == null) stringResource(R.string.pm_add_password_title) else stringResource(R.string.pm_edit_password_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
@@ -257,7 +259,7 @@ fun PasswordEntrySheet(
                 value = label,
                 onValueChange = { label = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Label (optional)") },
+                label = { Text(stringResource(R.string.pm_label_optional)) },
                 singleLine = true
             )
 
@@ -266,10 +268,10 @@ fun PasswordEntrySheet(
                 value = domain,
                 onValueChange = { domain = it; domainError = false },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Domain / Website") },
+                label = { Text(stringResource(R.string.pm_domain_website)) },
                 singleLine = true,
                 isError = domainError,
-                supportingText = if (domainError) {{ Text("Domain is required") }} else null
+                supportingText = if (domainError) {{ Text(stringResource(R.string.pm_domain_required)) }} else null
             )
 
             // Username / email
@@ -277,10 +279,10 @@ fun PasswordEntrySheet(
                 value = username,
                 onValueChange = { username = it; usernameError = false },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Username / Email") },
+                label = { Text(stringResource(R.string.pm_username_email)) },
                 singleLine = true,
                 isError = usernameError,
-                supportingText = if (usernameError) {{ Text("Username is required") }} else null
+                supportingText = if (usernameError) {{ Text(stringResource(R.string.pm_username_required)) }} else null
             )
 
             // Password field + generate button
@@ -288,21 +290,21 @@ fun PasswordEntrySheet(
                 value = password,
                 onValueChange = { password = it; passwordError = false },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Password") },
+                label = { Text(stringResource(R.string.pm_password_label)) },
                 singleLine = true,
                 isError = passwordError,
-                supportingText = if (passwordError) {{ Text("Password is required") }} else null,
+                supportingText = if (passwordError) {{ Text(stringResource(R.string.pm_password_required)) }} else null,
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     Row {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
                                 imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                                contentDescription = if (passwordVisible) stringResource(R.string.pm_hide_password_cd) else stringResource(R.string.pm_show_password_cd)
                             )
                         }
                         IconButton(onClick = { showGenerator = true }) {
-                            Icon(Icons.Filled.Casino, contentDescription = "Generate password")
+                            Icon(Icons.Filled.Casino, contentDescription = stringResource(R.string.pm_generate_password_cd))
                         }
                     }
                 }
@@ -316,13 +318,18 @@ fun PasswordEntrySheet(
                         "Fair" -> 0.65f
                         else -> 0.3f
                     }
+                    val strengthDisplay = when (strengthLabel) {
+                        "Strong" -> stringResource(R.string.pm_strength_strong)
+                        "Fair" -> stringResource(R.string.pm_strength_fair)
+                        else -> stringResource(R.string.pm_strength_weak)
+                    }
                     LinearProgressIndicator(
                         progress = { progress },
                         modifier = Modifier.fillMaxWidth(),
                         color = strengthColor,
                         trackColor = strengthColor.copy(alpha = 0.2f)
                     )
-                    Text(strengthLabel, color = strengthColor, style = MaterialTheme.typography.bodySmall)
+                    Text(strengthDisplay, color = strengthColor, style = MaterialTheme.typography.bodySmall)
                 }
             }
 
@@ -353,7 +360,7 @@ fun PasswordEntrySheet(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (existing == null) "Save" else "Update")
+                Text(if (existing == null) stringResource(R.string.pm_save) else stringResource(R.string.pm_update))
             }
         }
     }
@@ -369,17 +376,17 @@ fun DeletePasswordDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete password?") },
+        title = { Text(stringResource(R.string.pm_delete_title)) },
         text = {
-            Text("Remove the saved credentials for ${entry.domain.ifBlank { "this entry" }}? This cannot be undone.")
+            Text(stringResource(R.string.pm_delete_msg, entry.domain.ifBlank { stringResource(R.string.pm_delete_this_entry) }))
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Delete", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.pm_delete), color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_text)) }
         }
     )
 }

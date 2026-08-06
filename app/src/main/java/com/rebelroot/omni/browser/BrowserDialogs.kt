@@ -123,114 +123,173 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 
 
+// ── Android OS permission rationale dialog ────────────────────────────────────
+// Shown BEFORE the Android system permission dialog to explain why access
+// is needed — matches Chrome/Firefox "pre-permission prompt" UX pattern.
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SystemPermissionRationaleDialog(
+    request: com.rebelroot.omni.browser.SystemPermissionRequest,
+    onProceed: () -> Unit,
+    onDeny: () -> Unit
+) {
+    val accent     = MaterialTheme.colorScheme.primary
+    val errorColor = MaterialTheme.colorScheme.error
+    val onSurface  = MaterialTheme.colorScheme.onSurface
+    val warnColor  = Color(0xFFF59E0B)
+
+    val icon = when {
+        request.rationaleTitle.contains("Camera") && request.rationaleTitle.contains("Micro") -> Icons.Rounded.Videocam
+        request.rationaleTitle.contains("Camera")     -> Icons.Rounded.CameraAlt
+        request.rationaleTitle.contains("Micro")      -> Icons.Rounded.Mic
+        request.rationaleTitle.contains("Location")   -> Icons.Rounded.LocationOn
+        else                                          -> Icons.Rounded.Security
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDeny,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = MaterialTheme.colorScheme.outlineVariant,
+                width = 32.dp, height = 3.dp
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = request.rationaleTitle,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = onSurface,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = request.rationaleBody,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            // Risk note
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = warnColor.copy(alpha = 0.10f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Rounded.Warning, null, tint = warnColor, modifier = Modifier.size(16.dp).padding(top = 1.dp))
+                    Text(
+                        "Android will ask you to grant this permission. You can revoke it anytime in System Settings → Apps.",
+                        fontSize = 12.sp, color = warnColor, lineHeight = 17.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onProceed,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+            ) {
+                Icon(Icons.Rounded.Check, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Continue", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onDeny,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, errorColor.copy(alpha = 0.4f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = errorColor)
+            ) {
+                Icon(Icons.Rounded.Block, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Don't allow", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+        }
+    }
+}
+
 @Composable
 fun PermissionPromptDialog(
     prompt: com.rebelroot.omni.browser.ContentPermissionPrompt,
     isDarkThemeEnabled: Boolean
 ) {
+    val GEO  = org.mozilla.geckoview.GeckoSession.PermissionDelegate.PERMISSION_GEOLOCATION
+    val NOTIF= org.mozilla.geckoview.GeckoSession.PermissionDelegate.PERMISSION_DESKTOP_NOTIFICATION
+    val DRM  = org.mozilla.geckoview.GeckoSession.PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS
+
     val icon = when (prompt.permissionType) {
-        1 -> Icons.Rounded.LocationOn // PERMISSION_GEOLOCATION
-        3 -> Icons.Rounded.CameraAlt  // PERMISSION_CAMERA
-        4 -> Icons.Rounded.Mic        // PERMISSION_MICROPHONE
-        5 -> Icons.Rounded.VpnKey     // PERMISSION_MEDIA_KEY_SYSTEM
-        8 -> Icons.Rounded.Storage    // PERMISSION_STORAGE_ACCESS
-        else -> Icons.Rounded.Info
+        GEO   -> Icons.Rounded.LocationOn
+        NOTIF -> Icons.Rounded.NotificationsActive
+        DRM   -> Icons.Rounded.VpnKey
+        8     -> Icons.Rounded.Storage
+        else  -> Icons.Rounded.Info
     }
-    
     val title = when (prompt.permissionType) {
-        1 -> "Location Access"
-        3 -> "Camera Access"
-        4 -> "Microphone Access"
-        5 -> "DRM Media Access"
-        8 -> "Storage Access"
-        else -> "Permission Request"
+        GEO   -> "Location Access"
+        NOTIF -> "Notification Access"
+        DRM   -> "DRM Media Access"
+        8     -> "Storage Access"
+        else  -> "Permission Request"
     }
-
     val description = when (prompt.permissionType) {
-        1 -> "wants to access your physical location to provide localized services and content."
-        3 -> "wants to use your camera for video streaming or recording."
-        4 -> "wants to use your microphone for voice recording or calling."
-        5 -> "wants to verify your device DRM keys for secure high-definition playback."
-        8 -> "wants to read/write storage for managing site offline cache or local files."
-        else -> "is requesting access to permissions."
+        GEO   -> "wants to access your precise physical location."
+        NOTIF -> "wants to send you push notifications."
+        DRM   -> "wants to verify device DRM keys for secure HD playback."
+        8     -> "wants to access local storage for offline content."
+        else  -> "is requesting a browser permission."
+    }
+    val risk = when (prompt.permissionType) {
+        GEO   -> "Your location reveals where you are physically. Only allow trusted sites."
+        NOTIF -> "Notifications can be used for spam. Only allow sites you actively use."
+        else  -> null
     }
 
-    val textPrimary = MaterialTheme.colorScheme.onSurface
-    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val cardColor = MaterialTheme.colorScheme.surface
-    val borderCol = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    // Extract clean hostname for display
+    val host = try {
+        android.net.Uri.parse(prompt.siteUri).host?.removePrefix("www.") ?: prompt.siteUri
+    } catch (_: Exception) { prompt.siteUri }
 
-    AlertDialog(
-        onDismissRequest = { prompt.onDeny() },
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Text(
-                    text = title,
-                    color = textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = prompt.siteUri,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = description,
-                    color = textSecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { prompt.onAllow() },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text("Allow", color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = { prompt.onDeny() },
-                border = BorderStroke(0.5.dp, borderCol),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = textSecondary
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text("Deny", fontWeight = FontWeight.SemiBold)
-            }
-        },
-        containerColor = cardColor,
-        shape = RoundedCornerShape(32.dp),
-        modifier = Modifier
+    PermissionSheet(
+        icon = icon,
+        title = title,
+        host = host,
+        description = description,
+        riskNote = risk,
+        onAllow    = prompt.onAllow,
+        onAllowOnce = prompt.onAllowOnce,
+        onDeny     = prompt.onDeny
     )
 }
 
@@ -242,98 +301,190 @@ fun MediaPermissionPromptDialog(
     val title = when {
         prompt.hasVideo && prompt.hasAudio -> "Camera & Microphone"
         prompt.hasVideo -> "Camera Access"
-        else -> "Microphone Access"
+        else            -> "Microphone Access"
     }
-
     val description = when {
-        prompt.hasVideo && prompt.hasAudio -> "wants to use your camera and microphone for video capture or calling."
-        prompt.hasVideo -> "wants to use your camera for video capture or streaming."
-        else -> "wants to use your microphone for voice recording or calling."
+        prompt.hasVideo && prompt.hasAudio -> "wants to use your camera and microphone."
+        prompt.hasVideo -> "wants to use your camera."
+        else            -> "wants to use your microphone."
     }
-
     val icon = when {
         prompt.hasVideo && prompt.hasAudio -> Icons.Rounded.Videocam
         prompt.hasVideo -> Icons.Rounded.CameraAlt
-        else -> Icons.Rounded.Mic
+        else            -> Icons.Rounded.Mic
     }
+    val risk = "Audio/video capture is sensitive. Only allow trusted sites like video-calling services."
 
-    val textPrimary = MaterialTheme.colorScheme.onSurface
-    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val cardColor = MaterialTheme.colorScheme.surface
-    val borderCol = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    val host = try {
+        android.net.Uri.parse(prompt.siteUri).host?.removePrefix("www.") ?: prompt.siteUri
+    } catch (_: Exception) { prompt.siteUri }
 
-    AlertDialog(
-        onDismissRequest = { prompt.onDeny() },
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Text(
-                    text = title,
-                    color = textPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = prompt.siteUri,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = description,
-                    color = textSecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { prompt.onAllow(null, null) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text("Allow", color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = { prompt.onDeny() },
-                border = BorderStroke(0.5.dp, borderCol),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = textSecondary
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text("Deny", fontWeight = FontWeight.SemiBold)
-            }
-        },
-        containerColor = cardColor,
-        shape = RoundedCornerShape(32.dp),
-        modifier = Modifier
+    val bestVideo = prompt.videoSources?.firstOrNull()
+    val bestAudio = prompt.audioSources?.firstOrNull()
+
+    PermissionSheet(
+        icon = icon,
+        title = title,
+        host = host,
+        description = description,
+        riskNote = risk,
+        onAllow     = { prompt.onAllow(bestVideo, bestAudio) },
+        onAllowOnce = { prompt.onAllowOnce(bestVideo, bestAudio) },
+        onDeny      = prompt.onDeny
     )
+}
+
+// ── Shared permission bottom-sheet UI ────────────────────────────────────────
+// Matches Chrome/Brave design: site origin at top, permission icon + description,
+// risk note in amber, three clear actions: Allow / Allow Once / Deny.
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PermissionSheet(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    host: String,
+    description: String,
+    riskNote: String?,
+    onAllow: () -> Unit,
+    onAllowOnce: () -> Unit,
+    onDeny: () -> Unit
+) {
+    val accent      = MaterialTheme.colorScheme.primary
+    val errorColor  = MaterialTheme.colorScheme.error
+    val surfaceVar  = MaterialTheme.colorScheme.surfaceVariant
+    val onSurface   = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVar= MaterialTheme.colorScheme.onSurfaceVariant
+    val warnColor   = Color(0xFFF59E0B)
+
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDeny,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = MaterialTheme.colorScheme.outlineVariant,
+                width = 32.dp, height = 3.dp
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Permission icon in tonal circle
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(26.dp))
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Site origin — prominent, styled like Chrome
+            Text(
+                text = host,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "$description",
+                fontSize = 14.sp,
+                color = onSurface,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+
+            // Risk note — amber warning like Brave
+            if (riskNote != null) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = warnColor.copy(alpha = 0.10f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Warning, null,
+                            tint = warnColor,
+                            modifier = Modifier.size(16.dp).padding(top = 1.dp)
+                        )
+                        Text(
+                            text = riskNote,
+                            fontSize = 12.sp,
+                            color = warnColor,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // Allow (remember)
+            Button(
+                onClick = onAllow,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+            ) {
+                Icon(Icons.Rounded.Check, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Allow", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Allow once (session only) — tonal
+            FilledTonalButton(
+                onClick = onAllowOnce,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = accent.copy(alpha = 0.10f),
+                    contentColor = accent
+                ),
+                elevation = ButtonDefaults.filledTonalButtonElevation(defaultElevation = 0.dp)
+            ) {
+                Icon(Icons.Rounded.Timer, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Allow this time only", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Deny (remember)
+            OutlinedButton(
+                onClick = onDeny,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, errorColor.copy(alpha = 0.4f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = errorColor)
+            ) {
+                Icon(Icons.Rounded.Block, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Don't allow", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            }
+        }
+    }
 }
 
 @Composable

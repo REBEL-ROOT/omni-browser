@@ -71,6 +71,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
+import javax.crypto.Cipher
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 
@@ -128,11 +131,16 @@ fun MasterPasswordScreen(
         ) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    launchBiometricPrompt(
+                    val unlockCipher = masterPasswordManager.getUnlockCipher()
+                    if (unlockCipher == null) {
+                        showPasswordFallback = true
+                        return@LifecycleEventObserver
+                    }
+                    launchBiometricWithCrypto(
                         activity = context as FragmentActivity,
-                        onSuccess = {
-                            // Biometric success — derive key from stored hash directly
-                            val keyBytes = masterPasswordManager.getStoredKeyBytes()
+                        cipher = unlockCipher,
+                        onSuccess = { authCipher ->
+                            val keyBytes = masterPasswordManager.unwrapWithAuthCipher(authCipher)
                             if (keyBytes != null) onUnlockSuccess(keyBytes)
                             else showPasswordFallback = true
                         },
@@ -178,7 +186,7 @@ fun MasterPasswordScreen(
                         errorMessage = errorMessage,
                         onContinue = {
                             if (createPassword.length < 5) {
-                                errorMessage = "Use at least 5 characters"
+                                errorMessage = context.getString(R.string.pm_error_min_chars)
                                 return@CreatePasswordStep
                             }
                             errorMessage = null
@@ -195,7 +203,7 @@ fun MasterPasswordScreen(
                         errorMessage = errorMessage,
                         onConfirm = {
                             if (confirmPassword != createPassword) {
-                                errorMessage = "Passwords do not match"
+                                errorMessage = context.getString(R.string.pm_error_passwords_mismatch)
                                 return@ConfirmPasswordStep
                             }
                             masterPasswordManager.createVault(createPassword)
@@ -215,8 +223,38 @@ fun MasterPasswordScreen(
                     // ── Step 3: enable biometric ────────────────────────────
                     VaultAuthStep.ENABLE_BIOMETRIC -> EnableBiometricStep(
                         onEnable = {
-                            masterPasswordManager.setBiometricEnabled(true)
-                            step = VaultAuthStep.UNLOCK
+                            // 1. Create Keystore key bound to biometric
+                            masterPasswordManager.createOrReplaceKeystoreKey()
+                            // 2. Get encrypt cipher and launch biometric to authorise it
+                            val enrollCipher = masterPasswordManager.getEnrollCipher()
+                            if (enrollCipher == null) {
+                                // Keystore unavailable — skip biometric, go straight to unlock
+                                masterPasswordManager.setBiometricEnabled(false)
+                                step = VaultAuthStep.UNLOCK
+                                return@EnableBiometricStep
+                            }
+                            // Retrieve the vault key bytes created in step 2
+                            val vaultKey = masterPasswordManager.getStoredKeyBytes()
+                                ?: run {
+                                    masterPasswordManager.setBiometricEnabled(false)
+                                    step = VaultAuthStep.UNLOCK
+                                    return@EnableBiometricStep
+                                }
+                            launchBiometricWithCrypto(
+                                activity = context as FragmentActivity,
+                                cipher = enrollCipher,
+                                onSuccess = { authCipher ->
+                                    masterPasswordManager.enrollWithAuthCipher(authCipher, vaultKey)
+                                    masterPasswordManager.setBiometricEnabled(true)
+                                    step = VaultAuthStep.UNLOCK
+                                },
+                                onFallback = {
+                                    // User declined — disable biometric silently
+                                    masterPasswordManager.setBiometricEnabled(false)
+                                    masterPasswordManager.deleteKeystoreKeyPublic()
+                                    step = VaultAuthStep.UNLOCK
+                                }
+                            )
                         },
                         onSkip = {
                             masterPasswordManager.setBiometricEnabled(false)
@@ -237,20 +275,28 @@ fun MasterPasswordScreen(
                             errorMessage = errorMessage,
                             onUseBiometric = {
                                 showPasswordFallback = false
-                                launchBiometricPrompt(
-                                    activity = context as FragmentActivity,
-                                    onSuccess = {
-                                        val keyBytes = masterPasswordManager.getStoredKeyBytes()
-                                        if (keyBytes != null) onUnlockSuccess(keyBytes)
-                                        else { showPasswordFallback = true; errorMessage = "Biometric key error — use password" }
-                                    },
-                                    onFallback = { showPasswordFallback = true }
-                                )
+                                val unlockCipher = masterPasswordManager.getUnlockCipher()
+                                if (unlockCipher == null) {
+                                    // No wrapped key — fall back to password
+                                    showPasswordFallback = true
+                                    errorMessage = context.getString(R.string.pm_error_biometric_key)
+                                } else {
+                                    launchBiometricWithCrypto(
+                                        activity = context as FragmentActivity,
+                                        cipher = unlockCipher,
+                                        onSuccess = { authCipher ->
+                                            val keyBytes = masterPasswordManager.unwrapWithAuthCipher(authCipher)
+                                            if (keyBytes != null) onUnlockSuccess(keyBytes)
+                                            else { showPasswordFallback = true; errorMessage = context.getString(R.string.pm_error_biometric_key) }
+                                        },
+                                        onFallback = { showPasswordFallback = true }
+                                    )
+                                }
                             },
                             onUnlockWithPassword = {
                                 val keyBytes = masterPasswordManager.verifyMasterPassword(unlockPassword)
                                 if (keyBytes == null) {
-                                    errorMessage = "Incorrect password"
+                                    errorMessage = context.getString(R.string.pm_error_incorrect_password)
                                     return@UnlockStep
                                 }
                                 onUnlockSuccess(keyBytes)
@@ -279,8 +325,8 @@ private fun CreatePasswordStep(
 ) {
     StepHeader(
         icon = Icons.Rounded.ShieldMoon,
-        title = "Create master password",
-        subtitle = "This password encrypts your vault.\nChoose something strong and memorable."
+        title = stringResource(R.string.pm_create_master_title),
+        subtitle = stringResource(R.string.pm_create_master_subtitle)
     )
     Spacer(Modifier.height(28.dp))
     PasswordField(
@@ -288,7 +334,7 @@ private fun CreatePasswordStep(
         onValueChange = onPasswordChange,
         visible = visible,
         onVisibilityToggle = onVisibilityToggle,
-        label = "Master password"
+        label = stringResource(R.string.pm_master_password_label)
     )
     Spacer(Modifier.height(10.dp))
     StrengthMeter(password = password)
@@ -302,7 +348,7 @@ private fun CreatePasswordStep(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp)
     ) {
-        Text("Continue", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(stringResource(R.string.pm_continue), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
 }
 
@@ -318,8 +364,8 @@ private fun ConfirmPasswordStep(
 ) {
     StepHeader(
         icon = Icons.Rounded.Key,
-        title = "Confirm password",
-        subtitle = "Re-enter your master password\nto confirm it's correct."
+        title = stringResource(R.string.pm_confirm_title),
+        subtitle = stringResource(R.string.pm_confirm_subtitle)
     )
     Spacer(Modifier.height(28.dp))
     PasswordField(
@@ -327,7 +373,7 @@ private fun ConfirmPasswordStep(
         onValueChange = onPasswordChange,
         visible = visible,
         onVisibilityToggle = onVisibilityToggle,
-        label = "Re-enter password"
+        label = stringResource(R.string.pm_reenter_label)
     )
     if (errorMessage != null) {
         Spacer(Modifier.height(6.dp))
@@ -339,11 +385,11 @@ private fun ConfirmPasswordStep(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp)
     ) {
-        Text("Create vault", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(stringResource(R.string.pm_create_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
     Spacer(Modifier.height(8.dp))
     TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-        Text("Back", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.pm_back), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -354,8 +400,8 @@ private fun EnableBiometricStep(
 ) {
     StepHeader(
         icon = Icons.Filled.Fingerprint,
-        title = "Enable fingerprint unlock",
-        subtitle = "Use your fingerprint to unlock\nyour vault quickly and securely."
+        title = stringResource(R.string.pm_biometric_title),
+        subtitle = stringResource(R.string.pm_biometric_subtitle)
     )
     Spacer(Modifier.height(32.dp))
 
@@ -371,15 +417,15 @@ private fun EnableBiometricStep(
         ) {
             FeatureBullet(
                 icon = Icons.Filled.Fingerprint,
-                text = "Unlock instantly with your fingerprint"
+                text = stringResource(R.string.pm_biometric_bullet1)
             )
             FeatureBullet(
                 icon = Icons.Rounded.Lock,
-                text = "Your password is still required as backup"
+                text = stringResource(R.string.pm_biometric_bullet2)
             )
             FeatureBullet(
                 icon = Icons.Rounded.ShieldMoon,
-                text = "Biometric data never leaves your device"
+                text = stringResource(R.string.pm_biometric_bullet3)
             )
         }
     }
@@ -393,16 +439,14 @@ private fun EnableBiometricStep(
         Icon(
             Icons.Filled.Fingerprint,
             contentDescription = null,
-            modifier = Modifier
-                .size(18.dp)
-                .padding(end = 0.dp)
+            modifier = Modifier.size(18.dp).padding(end = 0.dp)
         )
         Spacer(Modifier.size(8.dp))
-        Text("Enable fingerprint", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(stringResource(R.string.pm_enable_fingerprint), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
     Spacer(Modifier.height(8.dp))
     TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
-        Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.pm_skip_for_now), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -423,12 +467,11 @@ private fun UnlockStep(
         // ── Biometric primary UI ──────────────────────────────────────────
         StepHeader(
             icon = Icons.Rounded.Lock,
-            title = "Unlock vault",
-            subtitle = "Use your fingerprint to access\nyour saved passwords."
+            title = stringResource(R.string.pm_unlock_biometric_title),
+            subtitle = stringResource(R.string.pm_unlock_biometric_subtitle)
         )
         Spacer(Modifier.height(36.dp))
 
-        // Large fingerprint tap target
         Surface(
             onClick = onUseBiometric,
             shape = CircleShape,
@@ -438,7 +481,7 @@ private fun UnlockStep(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Filled.Fingerprint,
-                    contentDescription = "Tap to use fingerprint",
+                    contentDescription = stringResource(R.string.pm_tap_to_authenticate_cd),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(52.dp)
                 )
@@ -446,7 +489,7 @@ private fun UnlockStep(
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Tap to authenticate",
+            text = stringResource(R.string.pm_tap_to_authenticate),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -459,7 +502,6 @@ private fun UnlockStep(
 
         Spacer(Modifier.height(40.dp))
 
-        // "Use password instead" label — subtle, placed at bottom
         Surface(
             onClick = onShowPasswordFallback,
             shape = RoundedCornerShape(12.dp),
@@ -481,7 +523,7 @@ private fun UnlockStep(
                 )
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    text = "Use password instead",
+                    text = stringResource(R.string.pm_use_password_instead),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.primary
@@ -493,8 +535,8 @@ private fun UnlockStep(
         // ── Password fallback UI ──────────────────────────────────────────
         StepHeader(
             icon = Icons.Rounded.Lock,
-            title = "Enter master password",
-            subtitle = "Enter your master password\nto access your saved passwords."
+            title = stringResource(R.string.pm_unlock_password_title),
+            subtitle = stringResource(R.string.pm_unlock_password_subtitle)
         )
         Spacer(Modifier.height(28.dp))
         PasswordField(
@@ -502,7 +544,7 @@ private fun UnlockStep(
             onValueChange = onPasswordChange,
             visible = visible,
             onVisibilityToggle = onVisibilityToggle,
-            label = "Master password"
+            label = stringResource(R.string.pm_master_password_label)
         )
         if (errorMessage != null) {
             Spacer(Modifier.height(6.dp))
@@ -514,9 +556,8 @@ private fun UnlockStep(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Text("Unlock", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(stringResource(R.string.pm_unlock), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
-        // Show "use fingerprint" back option if biometric is still enabled
         if (biometricEnabled) {
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onUseBiometric, modifier = Modifier.fillMaxWidth()) {
@@ -526,7 +567,7 @@ private fun UnlockStep(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.size(6.dp))
-                Text("Use fingerprint", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.pm_use_fingerprint), color = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -647,7 +688,11 @@ private fun StrengthMeter(password: String) {
             }
         }
         Text(
-            text = strength.label,
+            text = when (strength.label) {
+                "Strong" -> stringResource(R.string.pm_strength_strong)
+                "Fair"   -> stringResource(R.string.pm_strength_fair)
+                else     -> stringResource(R.string.pm_strength_weak)
+            },
             color = strength.color,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold
@@ -676,9 +721,15 @@ private fun calculateStrength(password: String): PasswordStrength {
 
 // ─── Biometric prompt helper ─────────────────────────────────────────────────
 
-private fun launchBiometricPrompt(
+/**
+ * Launches a BiometricPrompt with a CryptoObject wrapping [cipher].
+ * The authenticated cipher is returned in [onSuccess] — use it immediately
+ * to encrypt or decrypt; it is only valid within the callback.
+ */
+private fun launchBiometricWithCrypto(
     activity: FragmentActivity,
-    onSuccess: () -> Unit,
+    cipher: Cipher,
+    onSuccess: (Cipher) -> Unit,
     onFallback: () -> Unit
 ) {
     val canAuthenticate = BiometricManager.from(activity)
@@ -689,9 +740,9 @@ private fun launchBiometricPrompt(
     }
     try {
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock vault")
+            .setTitle(activity.getString(R.string.pm_biometric_prompt_title))
             .setSubtitle("Confirm your fingerprint to continue")
-            .setNegativeButtonText("Use password")
+            .setNegativeButtonText(activity.getString(R.string.pm_biometric_prompt_negative))
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             .build()
 
@@ -700,10 +751,11 @@ private fun launchBiometricPrompt(
             ContextCompat.getMainExecutor(activity),
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    onSuccess()
+                    val authCipher = result.cryptoObject?.cipher
+                    if (authCipher != null) onSuccess(authCipher)
+                    else onFallback()
                 }
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    // User pressed "Use password" or dismissed
                     onFallback()
                 }
                 override fun onAuthenticationFailed() {
@@ -711,7 +763,7 @@ private fun launchBiometricPrompt(
                 }
             }
         )
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
     } catch (e: Exception) {
         onFallback()
     }

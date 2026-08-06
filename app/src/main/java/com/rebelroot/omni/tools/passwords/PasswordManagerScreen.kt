@@ -76,6 +76,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.browser.attachPasswordVault
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -222,7 +224,7 @@ private fun VaultScreen(
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            "Imported ${preview.toImport.size} passwords",
+                            context.getString(R.string.pm_import_success, preview.toImport.size),
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -249,28 +251,28 @@ private fun VaultScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Password Manager") },
+                title = { Text(stringResource(R.string.pm_title)) },
                 actions = {
                     IconButton(onClick = { searchVisible = !searchVisible }) {
-                        Icon(Icons.Filled.Search, contentDescription = "Search")
+                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.pm_search_cd))
                     }
                     Box {
                         IconButton(onClick = { overflowExpanded = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.pm_more_options_cd))
                         }
                         DropdownMenu(
                             expanded = overflowExpanded,
                             onDismissRequest = { overflowExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Import from CSV") },
+                                text = { Text(stringResource(R.string.pm_import_csv)) },
                                 onClick = {
                                     overflowExpanded = false
                                     importLauncher.launch("text/csv")
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Export to CSV") },
+                                text = { Text(stringResource(R.string.pm_export_csv)) },
                                 onClick = {
                                     overflowExpanded = false
                                     showExportWarning = true
@@ -283,7 +285,7 @@ private fun VaultScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddSheet = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add password")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.pm_add_password_cd))
             }
         }
     ) { paddingValues ->
@@ -304,7 +306,7 @@ private fun VaultScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    label = { Text("Search passwords") },
+                    label = { Text(stringResource(R.string.pm_search_label)) },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     singleLine = true
                 )
@@ -325,10 +327,10 @@ private fun VaultScreen(
                             onEdit = { editTarget = entry },
                             onDelete = { deleteTarget = entry },
                             onCopyUsername = {
-                                copyToClipboard(context, "Username", entry.username)
+                                copyToClipboard(context, context.getString(R.string.pm_detail_username), entry.username)
                             },
                             onCopyPassword = {
-                                copyToClipboard(context, "Password", entry.password)
+                                copyToClipboard(context, context.getString(R.string.pm_detail_password), entry.password)
                             }
                         )
                     }
@@ -404,21 +406,21 @@ private fun PasswordEntryCard(
                     IconButton(onClick = onCopyUsername) {
                         Icon(
                             Icons.Filled.ContentCopy,
-                            contentDescription = "Copy username",
+                            contentDescription = stringResource(R.string.pm_copy_username_cd),
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     IconButton(onClick = onCopyPassword) {
                         Icon(
                             Icons.Filled.Lock,
-                            contentDescription = "Copy password",
+                            contentDescription = stringResource(R.string.pm_copy_password_cd),
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(
                             imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = if (expanded) "Collapse" else "Expand"
+                            contentDescription = if (expanded) stringResource(R.string.pm_collapse_cd) else stringResource(R.string.pm_expand_cd)
                         )
                     }
                 }
@@ -444,10 +446,10 @@ private fun PasswordEntryCard(
                     modifier = Modifier.padding(top = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    DetailRow(label = "Username", value = entry.username)
-                    DetailRow(label = "Password", value = "••••••••")
+                    DetailRow(label = stringResource(R.string.pm_detail_username), value = entry.username)
+                    DetailRow(label = stringResource(R.string.pm_detail_password), value = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022")
                     if (entry.notes.isNotBlank()) {
-                        DetailRow(label = "Notes", value = entry.notes)
+                        DetailRow(label = stringResource(R.string.pm_detail_notes), value = entry.notes)
                     }
 
                     Row(
@@ -464,7 +466,7 @@ private fun PasswordEntryCard(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Edit")
+                            Text(stringResource(R.string.pm_edit))
                         }
                         TextButton(onClick = onDelete) {
                             Icon(
@@ -474,7 +476,7 @@ private fun PasswordEntryCard(
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.pm_delete), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -512,12 +514,12 @@ private fun EmptyVaultState(modifier: Modifier) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
         )
         Text(
-            text = "No passwords saved yet",
+            text = stringResource(R.string.pm_empty_title),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 16.dp)
         )
         Text(
-            text = "Tap + to add your first entry.",
+            text = stringResource(R.string.pm_empty_hint),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -639,25 +641,31 @@ private fun ImportPreviewDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val foundStr = if (preview.total == 1)
+        stringResource(R.string.pm_import_found, preview.total)
+    else
+        stringResource(R.string.pm_import_found_plural, preview.total)
+    val skipStr = if (preview.duplicates == 1)
+        " " + stringResource(R.string.pm_import_skip, preview.duplicates)
+    else if (preview.duplicates > 1)
+        " " + stringResource(R.string.pm_import_skip_plural, preview.duplicates)
+    else ""
+    val confirmStr = stringResource(R.string.pm_import_confirm, preview.toImport.size)
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import passwords") },
-        text = {
-            val skipText = if (preview.duplicates > 0)
-                " ${preview.duplicates} duplicate${if (preview.duplicates == 1) "" else "s"} will be skipped."
-            else ""
-            Text("Found ${preview.total} password${if (preview.total == 1) "" else "s"}.$skipText Import ${preview.toImport.size}?")
-        },
+        title = { Text(stringResource(R.string.pm_import_title)) },
+        text = { Text("$foundStr.$skipStr $confirmStr") },
         confirmButton = {
             Button(
                 onClick = onConfirm,
                 enabled = preview.toImport.isNotEmpty()
             ) {
-                Text("Import ${preview.toImport.size}")
+                Text(stringResource(R.string.pm_import_btn, preview.toImport.size))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_text)) }
         }
     )
 }
@@ -668,26 +676,18 @@ private fun ImportPreviewDialog(
 private fun ExportWarningDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Export passwords?") },
-        text = {
-            Text(
-                "The exported CSV will contain all your passwords in plain text. " +
-                    "Only save it to a secure, trusted location. " +
-                    "Delete the file when you are done with it."
-            )
-        },
+        title = { Text(stringResource(R.string.pm_export_title)) },
+        text = { Text(stringResource(R.string.pm_export_warning)) },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) {
-                Text("Export anyway")
+                Text(stringResource(R.string.pm_export_anyway))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel_text)) }
         }
     )
 }
@@ -723,7 +723,7 @@ private suspend fun exportPasswordsCsv(context: Context, vaultManager: PasswordV
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        val chooser = Intent.createChooser(shareIntent, "Save passwords CSV via").apply {
+        val chooser = Intent.createChooser(shareIntent, context.getString(R.string.pm_export_csv)).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -751,7 +751,7 @@ private suspend fun exportPasswordsCsv(context: Context, vaultManager: PasswordV
         file.delete()
     } catch (e: Exception) {
         withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Export failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.pm_export_failed, e.localizedMessage), Toast.LENGTH_LONG).show()
         }
     }
 }

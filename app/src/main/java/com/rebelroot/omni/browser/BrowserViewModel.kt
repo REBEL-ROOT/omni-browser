@@ -107,7 +107,15 @@ class BrowserViewModel : ViewModel() {
         internal const val TAG = "BrowserViewModel"
 
         /** Default maximum number of background tabs with live GeckoSessions. */
-        internal const val DEFAULT_MAX_LIVE_TABS = 6
+        internal const val DEFAULT_MAX_LIVE_TABS = 24
+
+        /**
+         * Maximum number of background tabs that may be soft-suspended (session open
+         * but inactive). Once this is exceeded, the oldest soft-suspended tabs are
+         * hard-suspended (session closed). Keeping sessions open preserves JS/DOM state
+         * for dynamic sites (YouTube, Instagram, etc.) so switching never shows a blank page.
+         */
+        internal const val MAX_SOFT_SUSPENDED_TABS = 8
 
         internal const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
         internal const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
@@ -127,7 +135,6 @@ class BrowserViewModel : ViewModel() {
         // StreamDownloadEngine so external managers see the same identity as the browser).
         const val CHROME_UA =
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-        val CUSTOM_VPN_CONFIG_KEY = stringPreferencesKey("custom_vpn_config")
         val PROXY_PROVIDER_KEY = stringPreferencesKey("proxy_provider")
         val TOR_USE_BRIDGES_KEY = booleanPreferencesKey("tor_use_bridges")
         val TOR_AUTO_CONNECT_KEY = booleanPreferencesKey("tor_auto_connect")
@@ -375,7 +382,7 @@ class BrowserViewModel : ViewModel() {
     )
     var pendingExternalAppRequest by mutableStateOf<PendingExternalAppRequest?>(null)
     var activeVideoCookies by mutableStateOf<String?>(null)
-    var customVpnConfig by mutableStateOf<String?>(null)
+    val customVpnConfig: String? = null
     var proxyProvider by mutableStateOf("direct")
     var isTorUseBridges by mutableStateOf(false)
     var isTorAutoConnect by mutableStateOf(false)
@@ -634,18 +641,29 @@ class BrowserViewModel : ViewModel() {
         val noFrag = lower.substringBeforeLast("#")
         val pathAndQuery = noFrag.substringBeforeLast("?")
 
+        // SAFETY: Check if there is any path component after the authority/domain host.
+        // For bare domain URLs (e.g. https://example.pk or https://sub.domain.pk/),
+        // path is empty or "/", which must NEVER be treated as a downloadable file.
+        val parsedUri = runCatching { Uri.parse(lower) }.getOrNull()
+        val path = parsedUri?.path
+        if (path.isNullOrBlank() || path == "/") {
+            return false
+        }
+
+        val afterScheme = pathAndQuery.substringAfter("://", "")
+        if (!afterScheme.contains("/")) {
+            return false
+        }
+        val pathPart = afterScheme.substringAfter("/", "")
+        if (pathPart.isBlank()) {
+            return false
+        }
+
         // The final path segment (everything after the last '/').
         val lastSegment = pathAndQuery.substringAfterLast("/")
         if (lastSegment.isBlank() || lastSegment.contains(" ")) {
             // URL ends in '/' (e.g. https://example.com/) or has no filename
             // at all — it is a directory/domain, not a downloadable file.
-            return false
-        }
-
-        // SAFETY: if the URL has no path at all (bare domain like catbox.moe),
-        // the lastSegment is the domain itself — never a downloadable file.
-        val pathPart = pathAndQuery.substringAfter("://", "").substringAfter("/")
-        if (pathPart.isBlank()) {
             return false
         }
 
@@ -663,13 +681,12 @@ class BrowserViewModel : ViewModel() {
         if (ext in htmlExtensions) return false
 
         // CRITICAL FIX: if the "extension" is actually a top-level domain
-        // (e.g. example.com, site.io, my.app), this is a *bare domain*, not a
-        // file. Previously the TLD was mistaken for a file extension, so every
-        // ".com" site was wrongly intercepted as a download (download.bin) and
-        // the main navigation was DENYed, leaving pages blank.
+        // (e.g. example.com, site.io, my.app, example.pk), this is a *bare domain*, not a
+        // file. Previously the TLD was mistaken for a file extension if missing from commonTlds.
         val commonTlds = setOf(
             "com","net","org","io","co","ai","app","dev","xyz","info","biz","me","tv",
             "us","uk","de","fr","ru","jp","cn","in","ca","au","gov","edu","mil","int",
+            "pk","com.pk","edu.pk","gov.pk","net.pk","org.pk",
             "name","pro","mobi","tech","online","store","site","website","blog","cloud",
             "live","news","shop","email","press","wiki","design","game","gg","sh","top",
             "vip","work","space","fun","club","world","cyou","bid","trade","wang","ren",
@@ -782,6 +799,14 @@ class BrowserViewModel : ViewModel() {
         val headers = response.headers
         val disposition = headers["Content-Disposition"] ?: headers["content-disposition"]
         val contentType = headers["Content-Type"] ?: headers["content-type"]
+        val cleanContentType = contentType?.lowercase()?.trim() ?: ""
+
+        // Ignore external file downloads if the server responds with HTML or XHTML content
+        if (cleanContentType.contains("text/html") || cleanContentType.contains("application/xhtml+xml")) {
+            Log.i(TAG, "Ignoring external download response for HTML content: ${response.uri}")
+            return
+        }
+
         val isAttachment = disposition?.contains("attachment", true) == true
         // Only treat this as a download when the server explicitly marks it as an
         // attachment OR the URL clearly points at a downloadable file. This prevents
@@ -1587,11 +1612,11 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    fun createNewTab(context: Context, url: String, groupId: String? = null) {
+    fun createNewTab(context: Context, url: String, groupId: String? = null, isIncognito: Boolean = isIncognitoMode) {
         val runtime = getGeckoRuntime(context)
         val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
-            .usePrivateMode(isIncognitoMode)
+            .usePrivateMode(isIncognito)
             .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
             .viewportMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
             .allowJavascript(isJsAllowed)
@@ -1603,7 +1628,7 @@ class BrowserViewModel : ViewModel() {
             session = session,
             title = "New Tab",
             url = url,
-            isIncognito = isIncognitoMode,
+            isIncognito = isIncognito,
             settingsVersion = currentSettingsVersion
         )
         
@@ -1637,6 +1662,29 @@ class BrowserViewModel : ViewModel() {
     fun selectTab(tabId: String) {
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
+
+        // Capture a small thumbnail of the outgoing tab while its GeckoView is
+        // still live. Scale to 200×112 (16:9, ~87 KB RGB_565) — enough for a
+        // preview in the tab strip, cheap enough to hold in memory per tab.
+        val outgoingId = activeTabId
+        if (outgoingId != null && outgoingId != tabId) {
+            activeGeckoViewRef?.get()?.capturePixels()?.then { bmp ->
+                if (bmp != null) {
+                    val thumbW = 200
+                    val thumbH = 112
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, thumbW, thumbH, true)
+                    if (scaled !== bmp) bmp.recycle()
+                    // Store as RGB_565 to halve memory (no alpha needed for screenshots).
+                    val thumb = scaled.copy(android.graphics.Bitmap.Config.RGB_565, false)
+                    if (thumb !== scaled) scaled.recycle()
+                    val outIdx = tabs.indexOfFirst { it.id == outgoingId }
+                    if (outIdx != -1) {
+                        tabs[outIdx] = tabs[outIdx].copy(suspendThumbnail = thumb)
+                    }
+                }
+                org.mozilla.geckoview.GeckoResult.fromValue(null)
+            }
+        }
 
         // If the target tab is suspended, restore its GeckoSession before switching.
         // resumeTab uses the stored appContext; it's a no-op if already live.
@@ -2331,10 +2379,6 @@ class BrowserViewModel : ViewModel() {
                 }
             }
 
-
-            viewModelScope.launch {
-                customVpnConfig = getCustomVpnConfig(appCtx).first()
-            }
 
             viewModelScope.launch {
                 proxyProvider = getProxyProvider(appCtx).first()
@@ -3033,18 +3077,11 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun getCustomVpnConfig(context: Context): Flow<String?> {
-        return context.dataStore.data.map { preferences ->
-            preferences[CUSTOM_VPN_CONFIG_KEY]
-        }
+        return context.dataStore.data.map { _ -> null }
     }
 
     fun saveCustomVpnConfig(context: Context, config: String) {
-        viewModelScope.launch {
-            context.dataStore.edit { preferences ->
-                preferences[CUSTOM_VPN_CONFIG_KEY] = config
-            }
-            customVpnConfig = config
-        }
+        // no-op — WireGuard removed
     }
 
     fun getSearchEnginePreference(context: Context): Flow<String> {
@@ -4066,16 +4103,15 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun connectVpn(context: Context, serverIp: String, clientKey: String, serverKey: String) {
-        vpnManager.connectContaboVps(serverIp, clientKey, serverKey)
+        // no-op — WireGuard removed
     }
 
     fun connectCustomVpn() {
-        val config = customVpnConfig ?: return
-        vpnManager.connect(config)
+        // no-op — WireGuard removed
     }
 
     fun disconnectVpn() {
-        vpnManager.disconnect()
+        // no-op — WireGuard removed
     }
 
     // Tor proxy methods
@@ -6436,7 +6472,16 @@ class BrowserViewModel : ViewModel() {
                     .allowHardware(false) // Must be false to convert to Bitmap safely
                     .build()
                 val result = loader.execute(request)
-                bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                val raw = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                // Scale to exactly 96×96 for the launcher shortcut icon.
+                // The source is at most 128×128 (sz=128) so this is a cheap
+                // downscale; it reduces the Bitmap memory held by ShortcutManager
+                // from ~65 KB (128×128 ARGB_8888) to ~18 KB (96×96 ARGB_8888).
+                bitmap = if (raw != null) {
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(raw, 96, 96, true)
+                    if (scaled !== raw) raw.recycle()
+                    scaled
+                } else null
             } catch (e: Exception) {
                 Log.e(TAG, "Error fetching favicon for webapp shortcut", e)
             }
@@ -6824,8 +6869,6 @@ class BrowserViewModel : ViewModel() {
             }
         }
     }
-
-
 
     fun sendFeedbackToTelegram(
         name: String,
@@ -7788,63 +7831,110 @@ class BrowserViewModel : ViewModel() {
     }
 
     // -------------------------------------------------------------------------
-    // Tab suspension / LRU eviction (TIER 1 — biggest RAM win)
+    // Tab suspension / LRU eviction — two-tier strategy (Chrome/Brave parity)
+    //
+    //  SOFT suspend  → session.setActive(false): Gecko renderer paused, session
+    //                  stays open.  JS/DOM state preserved → no blank pages on
+    //                  YouTube / Instagram / other SPAs.  Very cheap to resume.
+    //
+    //  HARD suspend  → session.close(): frees the full Gecko content process.
+    //                  Used only when soft-suspended tab count exceeds
+    //                  MAX_SOFT_SUSPENDED_TABS or under critical memory pressure.
+    //                  Tab restores via restoreState() or URL reload.
     // -------------------------------------------------------------------------
 
     /** Maximum number of tabs that keep a live GeckoSession at any time.
      *  The active tab is always live; the (maxLiveTabs - 1) most-recently-used
-     *  background tabs stay live; all others are suspended (session closed).
+     *  background tabs stay live; all others are soft-suspended.
      *  Exposed as a var so MainActivity.onTrimMemory can temporarily tighten
      *  the cap under low-memory pressure, then restore the default. */
     var maxLiveTabs: Int = DEFAULT_MAX_LIVE_TABS
 
     /**
-     * Closes the GeckoSession of background tabs that exceed [MAX_LIVE_TABS],
-     * keeping the LRU order. The active tab is never suspended.
-     * Safe to call at any time; already-suspended tabs are skipped.
+     * Enforces the live-tab cap using soft suspension first.
+     * Background tabs beyond [maxLiveTabs] are soft-suspended (session open,
+     * renderer paused). When soft-suspended tabs exceed [MAX_SOFT_SUSPENDED_TABS],
+     * the oldest ones are hard-suspended (session closed) to free RAM.
+     * The active tab is never touched.
      */
     fun enforceSuspendLimit() {
         try {
             val currentActiveId = activeTabId ?: return
-            val backgroundTabs = tabs
+
+            // Soft-suspend background tabs that exceed the live cap
+            val liveBackground = tabs
                 .filter { !it.isSuspended && it.id != currentActiveId }
                 .sortedByDescending { it.lastActiveTime }
-
             val allowedLive = (maxLiveTabs - 1).coerceAtLeast(0)
-            val toSuspend = backgroundTabs.drop(allowedLive)
-            toSuspend.forEach { suspendTab(it.id) }
+            liveBackground.drop(allowedLive).forEach { softSuspendTab(it.id) }
+
+            // Hard-suspend the oldest soft-suspended tabs if they exceed the cap
+            val softSuspended = tabs
+                .filter { it.isSuspended && it.session.isOpen }
+                .sortedBy { it.lastActiveTime }  // oldest first
+            softSuspended.drop(MAX_SOFT_SUSPENDED_TABS).forEach { hardSuspendTab(it.id) }
         } catch (e: Exception) {
             Log.w(TAG, "enforceSuspendLimit: ${e.message}")
         }
     }
 
     /**
-     * Suspends a single tab by id: deactivates and closes its GeckoSession
-     * while preserving all metadata so it can be resumed later.
+     * SOFT suspend: pauses the Gecko renderer without destroying the session.
+     * JS/DOM state is preserved — tab switches are instant with no blank page.
+     * Safe for all sites including SPAs (YouTube, Instagram, etc.).
      */
-    fun suspendTab(tabId: String) {
+    fun softSuspendTab(tabId: String) {
         try {
             val idx = tabs.indexOfFirst { it.id == tabId }
             if (idx == -1) return
             val tab = tabs[idx]
             if (tab.isSuspended) return
-            if (tab.id == activeTabId) return  // never suspend the active tab
-
-            runCatching {
-                tab.session.setActive(false)
-                if (tab.session.isOpen) tab.session.close()
-            }
+            if (tab.id == activeTabId) return
             tabs[idx] = tab.copy(isSuspended = true)
-            Log.d(TAG, "Suspended tab ${tab.id} (${tab.url})")
+            Log.d(TAG, "Soft-suspended tab ${tab.id} (${tab.url})")
         } catch (e: Exception) {
-            Log.w(TAG, "suspendTab($tabId): ${e.message}")
+            Log.w(TAG, "softSuspendTab($tabId): ${e.message}")
         }
     }
 
     /**
-     * Resumes a suspended tab: creates a fresh GeckoSession, wires all
-     * listeners, opens it, and reloads the tab's URL.
-     * Must be called with a valid [context] before [selectTab].
+     * HARD suspend: closes the GeckoSession entirely to free the content process.
+     * Used only when soft-suspended tab count is too high or memory is critical.
+     * The SessionState captured by onSessionStateChange() is used for restoration.
+     */
+    fun hardSuspendTab(tabId: String) {
+        try {
+            val idx = tabs.indexOfFirst { it.id == tabId }
+            if (idx == -1) return
+            val tab = tabs[idx]
+            if (tab.id == activeTabId) return
+            runCatching {
+                tab.session.setActive(false)
+                if (tab.session.isOpen) tab.session.close()
+            }
+            // Keep isSuspended = true (already set by soft-suspend or fresh hard-suspend)
+            tabs[idx] = tab.copy(isSuspended = true)
+            Log.d(TAG, "Hard-suspended tab ${tab.id} (${tab.url}), has state=${tab.savedSessionState != null}")
+        } catch (e: Exception) {
+            Log.w(TAG, "hardSuspendTab($tabId): ${e.message}")
+        }
+    }
+
+    /**
+     * Legacy entry point — routes to soft suspend by default.
+     * Hard suspend is only triggered by [hardSuspendTab] or [onCriticalMemory].
+     */
+    fun suspendTab(tabId: String) = softSuspendTab(tabId)
+
+    /**
+     * Resumes a suspended tab.
+     *
+     * SOFT resume: session was never closed — just call setActive(true) and the
+     *   page reappears instantly with full JS/DOM state. No reload needed.
+     *   This covers YouTube, Instagram, and all SPAs.
+     *
+     * HARD resume: session was closed (extreme memory pressure) — create a new
+     *   GeckoSession and restore from saved SessionState or fall back to URL.
      */
     fun resumeTab(tabId: String, context: Context) {
         try {
@@ -7853,6 +7943,15 @@ class BrowserViewModel : ViewModel() {
             val tab = tabs[idx]
             if (!tab.isSuspended) return
 
+            if (tab.session.isOpen) {
+                // ── SOFT resume ── session is still alive, just wake it up
+                runCatching { tab.session.setActive(true) }
+                tabs[idx] = tab.copy(isSuspended = false)
+                Log.d(TAG, "Soft-resumed tab ${tab.id} (${tab.url}) — session was kept open")
+                return
+            }
+
+            // ── HARD resume ── session was closed; reconstruct it
             val runtime = getGeckoRuntime(context)
             val isJsAllowed = getSitePermissionValue(tab.url, "javascript") == "allow"
             val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -7869,15 +7968,23 @@ class BrowserViewModel : ViewModel() {
                 .build()
 
             val newSession = org.mozilla.geckoview.GeckoSession(settings)
+            val savedState = tab.savedSessionState
             val resumedTab = tab.copy(
                 session = newSession,
                 isSuspended = false,
-                isUriLoaded = false   // triggers lazy load on selectTab
+                isUriLoaded = true
             )
             setupTabSessionListeners(resumedTab, context)
             tabs[idx] = resumedTab
             newSession.open(runtime)
-            Log.d(TAG, "Resumed tab ${tab.id} (${tab.url})")
+
+            if (savedState != null) {
+                newSession.restoreState(savedState)
+                Log.d(TAG, "Hard-resumed tab ${tab.id} (${tab.url}) with restored SessionState")
+            } else if (tab.url != "about:blank" && tab.url.isNotEmpty()) {
+                newSession.loadUri(tab.url)
+                Log.d(TAG, "Hard-resumed tab ${tab.id} (${tab.url}) by URL reload")
+            }
         } catch (e: Exception) {
             Log.w(TAG, "resumeTab($tabId): ${e.message}")
         }
@@ -7885,17 +7992,21 @@ class BrowserViewModel : ViewModel() {
 
     /**
      * Called from [MainActivity.onTrimMemory] on RUNNING_CRITICAL / COMPLETE.
-     * Suspends ALL background tabs immediately to free Gecko content processes.
+     * Hard-suspends ALL background tabs immediately to free every Gecko content process.
      */
     fun onCriticalMemory() {
         try {
             val currentActiveId = activeTabId
+            // First soft-suspend any still-live background tabs
             tabs.filter { !it.isSuspended && it.id != currentActiveId }
-                .forEach { suspendTab(it.id) }
+                .forEach { softSuspendTab(it.id) }
+            // Then hard-suspend every soft-suspended tab (close all sessions)
+            tabs.filter { it.isSuspended && it.session.isOpen && it.id != currentActiveId }
+                .forEach { hardSuspendTab(it.id) }
             adBlockManager.trimBlockedDomains()
             categoryNewsCache.clear()
             extensionIcons.clear()
-            Log.i(TAG, "onCriticalMemory: all background tabs suspended, caches cleared")
+            Log.i(TAG, "onCriticalMemory: all background tabs hard-suspended, caches cleared")
         } catch (e: Exception) {
             Log.w(TAG, "onCriticalMemory: ${e.message}")
         }
@@ -7906,9 +8017,10 @@ class BrowserViewModel : ViewModel() {
     override fun onCleared() {
         // Close every live GeckoSession before the ViewModel is destroyed so
         // Gecko content processes are not leaked across the ViewModel lifecycle.
+        // Both soft-suspended (session open) and live sessions must be closed.
         tabs.forEach { tab ->
             runCatching {
-                if (!tab.isSuspended && tab.session.isOpen) {
+                if (tab.session.isOpen) {
                     tab.session.setActive(false)
                     tab.session.close()
                 }

@@ -572,7 +572,7 @@ fun PhoneAddressBar(
                 Box {
                     Icon(
                         imageVector = Icons.Rounded.Extension,
-                        contentDescription = "Extensions",
+                        contentDescription = stringResource(R.string.menu_extensions),
                         tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(config.innerIconSize)
                     )
@@ -663,7 +663,7 @@ fun PhoneAddressBar(
                             val runtime = viewModel.getGeckoRuntime(context)
                             FireButton(runtime, context).burn()
                             viewModel.burnAllData(context)
-                            Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.toast_burn_data), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onOpenDownloads = onOpenDownloads,
@@ -884,14 +884,14 @@ fun omnimenuDropdown(
 
             // ── Section 2: Browse & Data ───────────────────────────
             MinimalMenuItem(
-                text = "History",
+                text = stringResource(R.string.menu_history),
                 icon = Icons.Rounded.History,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onOpenHistory() }
             )
             MinimalMenuItem(
-                text = "Clear Browsing Data",
+                text = stringResource(R.string.menu_clear_browsing_data),
                 icon = Icons.Rounded.DeleteOutline,
                 iconTint = Color(0xFFFF453A),
                 textColor = Color(0xFFFF453A),
@@ -902,14 +902,14 @@ fun omnimenuDropdown(
 
             // ── Section 3: Library & Page Tools ────────────────────
             MinimalMenuItem(
-                text = "Downloads",
+                text = stringResource(R.string.menu_downloads),
                 icon = Icons.Rounded.FileDownload,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onOpenDownloads() }
             )
             MinimalMenuItem(
-                text = "Bookmarks",
+                text = stringResource(R.string.menu_bookmarks),
                 icon = Icons.Rounded.StarBorder,
                 iconTint = iconTint,
                 textColor = textPrimary,
@@ -925,7 +925,7 @@ fun omnimenuDropdown(
 
             if (!isHome) {
                 MinimalMenuItem(
-                    text = "Desktop Site",
+                    text = stringResource(R.string.menu_desktop_site_item),
                     icon = Icons.Rounded.Computer,
                     iconTint = iconTint,
                     textColor = textPrimary,
@@ -940,14 +940,14 @@ fun omnimenuDropdown(
                     }
                 )
                 MinimalMenuItem(
-                    text = "Find in Page",
+                    text = stringResource(R.string.menu_find_in_page_item),
                     icon = Icons.Rounded.Search,
                     iconTint = iconTint,
                     textColor = textPrimary,
                     onClick = { onDismissRequest(); onFindInPage() }
                 )
                 MinimalMenuItem(
-                    text = "Add to Shortcuts",
+                    text = stringResource(R.string.menu_add_to_shortcuts),
                     icon = Icons.Rounded.AddCircle,
                     iconTint = iconTint,
                     textColor = textPrimary,
@@ -959,7 +959,7 @@ fun omnimenuDropdown(
                     }
                 )
                 MinimalMenuItem(
-                    text = "Extensions",
+                    text = stringResource(R.string.menu_extensions),
                     icon = Icons.Rounded.Extension,
                     iconTint = iconTint,
                     textColor = textPrimary,
@@ -969,14 +969,14 @@ fun omnimenuDropdown(
 
             if (isHome) {
                 MinimalMenuItem(
-                    text = "Extensions",
+                    text = stringResource(R.string.menu_extensions),
                     icon = Icons.Rounded.Extension,
                     iconTint = iconTint,
                     textColor = textPrimary,
                     onClick = { onDismissRequest(); onShowExtensions() }
                 )
                 MinimalMenuItem(
-                    text = if (viewModel.hideHomeBottomNav) "Show Home Nav Bar" else "Hide Home Nav Bar",
+                    text = if (viewModel.hideHomeBottomNav) stringResource(R.string.menu_show_home_nav_bar) else stringResource(R.string.menu_hide_home_nav_bar),
                     icon = if (viewModel.hideHomeBottomNav) Icons.Rounded.ViewAgenda else Icons.Rounded.HideSource,
                     iconTint = iconTint,
                     textColor = textPrimary,
@@ -985,7 +985,7 @@ fun omnimenuDropdown(
             }
 
             MinimalMenuItem(
-                text = "Player Settings",
+                text = stringResource(R.string.menu_player_settings),
                 icon = Icons.Rounded.PlayCircle,
                 iconTint = iconTint,
                 textColor = textPrimary,
@@ -996,28 +996,28 @@ fun omnimenuDropdown(
 
             // ── Section 4: App Settings ────────────────────────────
             MinimalMenuItem(
-                text = "Theme",
+                text = stringResource(R.string.menu_theme),
                 icon = Icons.Rounded.Palette,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onShowThemeSheet() }
             )
             MinimalMenuItem(
-                text = "Settings",
+                text = stringResource(R.string.menu_settings),
                 icon = Icons.Rounded.Settings,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onOpenSettings() }
             )
             MinimalMenuItem(
-                text = "Password Manager",
+                text = stringResource(R.string.menu_password_manager),
                 icon = Icons.Rounded.Lock,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 onClick = { onDismissRequest(); onOpenPasswordManager() }
             )
             MinimalMenuItem(
-                text = "Help & feedback",
+                text = stringResource(R.string.menu_help_feedback),
                 icon = Icons.AutoMirrored.Rounded.HelpOutline,
                 iconTint = iconTint,
                 textColor = textPrimary,
@@ -1261,7 +1261,7 @@ fun FindInPageBar(
                         Box {
                             if (viewModel.findQuery.isEmpty()) {
                                 Text(
-                                    text = "Find in page…",
+                                    text = stringResource(R.string.menu_find_in_page_hint),
                                     color = mutedColor,
                                     fontSize = 15.sp
                                 )

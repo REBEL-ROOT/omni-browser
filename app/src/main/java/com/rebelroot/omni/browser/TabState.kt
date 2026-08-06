@@ -26,5 +26,8 @@ data class TabState(
     val isSuspended: Boolean = false,
     /** Optional low-resolution thumbnail captured just before suspension,
      *  used to show a preview in the tab strip while the tab is suspended. */
-    val suspendThumbnail: android.graphics.Bitmap? = null
+    val suspendThumbnail: android.graphics.Bitmap? = null,
+    /** Serialized GeckoSession state preserved during suspension to restore
+     *  exact page state, form inputs, scroll position, and history stack. */
+    val savedSessionState: GeckoSession.SessionState? = null
 )

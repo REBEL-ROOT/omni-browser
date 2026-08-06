@@ -521,7 +521,7 @@
     <string name="onboarding_skip">スキップ</string>
     <string name="onboarding_next">次へ</string>
     <string name="onboarding_start_browsing">ブラウジングを開始</string>
-    <string name="onboarding_title_browse">自由に、\nプライベートに閲覧</string>
+    <string name="onboarding_title_browse">自由に、 プライベートに閲覧</string>
     <string name="onboarding_tagline_browse">トラッカーゼロ · 完全オンデバイス · 超高速</string>
     <string name="onboarding_feature_smart_bar_title">スマートアドレスバー</string>
     <string name="onboarding_feature_smart_bar_desc">音声、テキスト、カメラ検索を検索バーに統合</string>
@@ -531,7 +531,7 @@
     <string name="onboarding_feature_incognito_desc">履歴・クッキー・追跡なし — 1タップ切り替え</string>
     <string name="onboarding_feature_copy_title">ユニバーサルコピー</string>
     <string name="onboarding_feature_copy_desc">コピー保護を回避して任意のWebページからテキストをコピー</string>
-    <string name="onboarding_title_theme">ビジュアル体験を\nカスタマイズ</string>
+    <string name="onboarding_title_theme">ビジュアル体験を カスタマイズ</string>
     <string name="onboarding_tagline_theme">ダークモード · AMOLEDブラック · クリーミーライト</string>
     <string name="onboarding_theme_selection_title">テーマモードを選択</string>
     <string name="onboarding_theme_dark_slate">ダークスレート</string>
@@ -540,7 +540,7 @@
     <string name="onboarding_tagline_dark_active">ダークテーマ有効</string>
     <string name="onboarding_tagline_creamy_active">クリーミーライト有効</string>
     <string name="onboarding_tagline_pure_active">ピュアライト有効</string>
-    <string name="onboarding_title_extensions">本物の拡張機能、\n本物の保護</string>
+    <string name="onboarding_title_extensions">本物の拡張機能、 本物の保護</string>
     <string name="onboarding_tagline_extensions">uBlock Origin · Firefoxアドオン · 安全な金庫</string>
     <string name="onboarding_feature_ublock_title">ネイティブuBlock Origin</string>
     <string name="onboarding_feature_ublock_desc">公式デスクトップ広告ブロッカー — 広告とトラッカーを自動ブロック</string>
@@ -553,11 +553,11 @@
     <string name="onboarding_install_ublock_title">uBlock Originをインストール</string>
     <string name="onboarding_install_ublock_desc">1タップでバックグラウンド自動インストール</string>
     <string name="onboarding_install_button">インストール</string>
-    <string name="onboarding_title_search">お気に入りの\n検索エンジンを選択</string>
+    <string name="onboarding_title_search">お気に入りの 検索エンジンを選択</string>
     <string name="onboarding_tagline_search">Google · Yahoo · Yandex · DuckDuckGo · Brave · Bing · Ecosia · Startpage · Qwant</string>
     <string name="onboarding_search_selection_title">デフォルト検索エンジンを選択</string>
     <string name="onboarding_selected_search">選択中: %1$s</string>
-    <string name="onboarding_title_navbar">ナビゲーションの\nレイアウトを選択</string>
+    <string name="onboarding_title_navbar">ナビゲーションの レイアウトを選択</string>
     <string name="onboarding_tagline_navbar">1. 分割 · 2. 上部 · 3. 下部</string>
     <string name="onboarding_navbar_selection_title">優先レイアウトを選択</string>
     <string name="onboarding_nav_split">1. 分割</string>
@@ -565,7 +565,7 @@
     <string name="onboarding_nav_bottom">3. 下部</string>
     <string name="onboarding_active_layout">有効: %1$s レイアウト</string>
     <string name="onboarding_layout_toast">レイアウトを%1$sに設定しました</string>
-    <string name="onboarding_title_default_browser">Omniをデフォルトの\nブラウザに設定</string>
+    <string name="onboarding_title_default_browser">Omniをデフォルトの ブラウザに設定</string>
     <string name="onboarding_tagline_default_browser">高速 · プライベート · 毎日安全</string>
     <string name="onboarding_feature_auto_protection_title">自動保護</string>
     <string name="onboarding_feature_auto_protection_desc">追跡スクリプト、ポップアップ、有害広告をブロック</string>
@@ -687,7 +687,7 @@
     <string name="ext_loading_extension">拡張機能を読み込み中…</string>
     <string name="ext_overview_title">Firefoxデスクトップ拡張機能</string>
     <string name="ext_overview_subtitle">広告ブロッカー＆開発者ツール</string>
-    <string name="ext_overview_desc">Omni Browserはデスクトップ版Firefoxの拡張機能に対応しています。uBlock Originなどのツールを拡張機能パネルから直接インストールして、広告やトラッカーをブロックできます。\n\nすべての拡張機能の処理は、お使いのデバイス上で完全にローカルに実行されます。</string>
+    <string name="ext_overview_desc">Omni Browserはデスクトップ版Firefoxの拡張機能に対応しています。uBlock Originなどのツールを拡張機能パネルから直接インストールして、広告やトラッカーをブロックできます。  すべての拡張機能の処理は、お使いのデバイス上で完全にローカルに実行されます。</string>
     <string name="ext_by_author">%1$s 作</string>
     <string name="ext_curated_meta">%1$s 作 · ★ %2$s</string>
     <string name="ext_options">オプション</string>
@@ -926,19 +926,19 @@
     <string name="overview_got_it">了解</string>
     <string name="overview_qr_title">QRスキャナー＆生成</string>
     <string name="overview_qr_subtitle">完全ローカル＆安全</string>
-    <string name="overview_qr_desc">Omni Browserは完全オフラインで動作するローカルQR機能を搭載。\n\n• ページのQRスキャン: 現在のタブ画面のQRコードを自動検出・解読。\n• QR生成: アクティブなURLを共有用QRコードに即変換。テキスト/URLはリアルタイム編集可能。</string>
+    <string name="overview_qr_desc">Omni Browserは完全オフラインで動作するローカルQR機能を搭載。  • ページのQRスキャン: 現在のタブ画面のQRコードを自動検出・解読。 • QR生成: アクティブなURLを共有用QRコードに即変換。テキスト/URLはリアルタイム編集可能。</string>
     <string name="overview_pdf_title">ウェブページをPDFに</string>
     <string name="overview_pdf_subtitle">クリーンなオフライン保存</string>
-    <string name="overview_pdf_desc">任意のウェブページや記事を、端末上で読みやすいクリーンなPDFに変換。\n\nニュースや資料、学習教材をトラッカーなしでオフライン保存するのに最適。</string>
+    <string name="overview_pdf_desc">任意のウェブページや記事を、端末上で読みやすいクリーンなPDFに変換。  ニュースや資料、学習教材をトラッカーなしでオフライン保存するのに最適。</string>
     <string name="overview_edit_title">ウェブページエディタ</string>
     <string name="overview_edit_subtitle">ライブDOM操作</string>
-    <string name="overview_edit_desc">Omni Browserで任意のページのテキストや要素をリアルタイムに編集できます。\n\n要素をタップしてテキスト変更・削除・レイアウト変更。もう一度タップで保存または終了。</string>
+    <string name="overview_edit_desc">Omni Browserで任意のページのテキストや要素をリアルタイムに編集できます。  要素をタップしてテキスト変更・削除・レイアウト変更。もう一度タップで保存または終了。</string>
     <string name="overview_console_title">開発者コンソール</string>
     <string name="overview_console_subtitle">JSログ＆診断</string>
-    <string name="overview_console_desc">アクティブページが出力するコンソールメッセージ・警告・エラーを検査。\n\nスクリプトのデバッグ、ネットワーク追跡、ページ動作のリアルタイム解析に最適。</string>
+    <string name="overview_console_desc">アクティブページが出力するコンソールメッセージ・警告・エラーを検査。  スクリプトのデバッグ、ネットワーク追跡、ページ動作のリアルタイム解析に最適。</string>
     <string name="overview_devnotes_title">開発メモ＆保管庫</string>
     <string name="overview_devnotes_subtitle">安全なオフライン認証情報＆スニペット</string>
-    <string name="overview_devnotes_desc" formatted="false">パスワード・APIキー・コードスニペット・URLをアプリサンドボックス内に100%オフラインで安全に保存。\n\n記号挿入(`{}`, `[]`, `=&gt;`, `;`)・コピー/貼り付け・パスワード自動コピー付きURL移動のためのヘルパー行を搭載。</string>
+    <string name="overview_devnotes_desc" formatted="false">パスワード・APIキー・コードスニペット・URLをアプリサンドボックス内に100%オフラインで安全に保存。  記号挿入(`{}`, `[]`, `=&gt;`, `;`)・コピー/貼り付け・パスワード自動コピー付きURL移動のためのヘルパー行を搭載。</string>
     <string name="autoscroll_speed">スクロール %1$dx</string>
 
     <!-- Tabs Ecosystem -->
@@ -1085,4 +1085,161 @@
     <string name="media_sniffer_banner_audio_playing">音声を再生中</string>
     <string name="media_sniffer_banner_audio_detected">音声を検出しました</string>
     <string name="media_sniffer_banner_media_detected">メディアを検出しました</string>
+
+    <!-- 3-dot menu (omnimenuDropdown) -->
+    <string name="menu_history">History</string>
+    <string name="menu_clear_browsing_data">Clear Browsing Data</string>
+    <string name="menu_downloads">Downloads</string>
+    <string name="menu_bookmarks">Bookmarks</string>
+    <string name="menu_desktop_site_item">Desktop Site</string>
+    <string name="menu_find_in_page_item">Find in Page</string>
+    <string name="menu_show_home_nav_bar">Show Home Nav Bar</string>
+    <string name="menu_hide_home_nav_bar">Hide Home Nav Bar</string>
+    <string name="menu_player_settings">Player Settings</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_password_manager">Password Manager</string>
+    <string name="menu_help_feedback">Help &amp; feedback</string>
+    <string name="menu_find_in_page_hint">Find in page…</string>
+    <string name="toast_burn_data">🔥 All history and tabs burned</string>
+
+    <!-- Password Manager - vault screen -->
+    <string name="pm_title">Password Manager</string>
+    <string name="pm_search_cd">Search</string>
+    <string name="pm_more_options_cd">More options</string>
+    <string name="pm_import_csv">Import from CSV</string>
+    <string name="pm_export_csv">Export to CSV</string>
+    <string name="pm_add_password_cd">Add password</string>
+    <string name="pm_search_label">Search passwords</string>
+    <string name="pm_empty_title">No passwords saved yet</string>
+    <string name="pm_empty_hint">Tap + to add your first entry.</string>
+    <string name="pm_copy_username_cd">Copy username</string>
+    <string name="pm_copy_password_cd">Copy password</string>
+    <string name="pm_collapse_cd">Collapse</string>
+    <string name="pm_expand_cd">Expand</string>
+    <string name="pm_detail_username">Username</string>
+    <string name="pm_detail_password">Password</string>
+    <string name="pm_detail_notes">Notes</string>
+    <string name="pm_edit">Edit</string>
+    <string name="pm_delete">Delete</string>
+    <string name="pm_import_title">Import passwords</string>
+    <string name="pm_import_found">Found %1$d password</string>
+    <string name="pm_import_found_plural">Found %1$d passwords</string>
+    <string name="pm_import_skip">%1$d duplicate will be skipped.</string>
+    <string name="pm_import_skip_plural">%1$d duplicates will be skipped.</string>
+    <string name="pm_import_confirm">Import %1$d?</string>
+    <string name="pm_import_btn">Import %1$d</string>
+    <string name="pm_import_success">Imported %1$d passwords</string>
+    <string name="pm_export_title">Export passwords?</string>
+    <string name="pm_export_warning">The exported CSV will contain all your passwords in plain text. Only save it to a secure, trusted location. Delete the file when you are done with it.</string>
+    <string name="pm_export_anyway">Export anyway</string>
+    <string name="pm_export_failed">Export failed: %1$s</string>
+    <string name="pm_delete_title">Delete password?</string>
+    <string name="pm_delete_msg">Remove the saved credentials for %1$s? This cannot be undone.</string>
+    <string name="pm_delete_this_entry">this entry</string>
+    <string name="pm_copied">%1$s copied</string>
+
+    <!-- Password Manager - entry sheet -->
+    <string name="pm_add_password_title">Add Password</string>
+    <string name="pm_edit_password_title">Edit Password</string>
+    <string name="pm_label_optional">Label (optional)</string>
+    <string name="pm_domain_website">Domain / Website</string>
+    <string name="pm_domain_required">Domain is required</string>
+    <string name="pm_username_email">Username / Email</string>
+    <string name="pm_username_required">Username is required</string>
+    <string name="pm_password_label">Password</string>
+    <string name="pm_password_required">Password is required</string>
+    <string name="pm_hide_password_cd">Hide password</string>
+    <string name="pm_show_password_cd">Show password</string>
+    <string name="pm_generate_password_cd">Generate password</string>
+    <string name="pm_save">Save</string>
+    <string name="pm_update">Update</string>
+
+    <!-- Password Manager - generator sheet -->
+    <string name="pm_generator_title">Password Generator</string>
+    <string name="pm_generated_label">Generated password</string>
+    <string name="pm_regenerate_cd">Regenerate</string>
+    <string name="pm_length">Length: %1$d</string>
+    <string name="pm_uppercase">Uppercase (A–Z)</string>
+    <string name="pm_lowercase">Lowercase (a–z)</string>
+    <string name="pm_numbers">Numbers (0–9)</string>
+    <string name="pm_symbols">Symbols (!@#…)</string>
+    <string name="pm_use_password">Use This Password</string>
+
+    <!-- Password Manager - master password screen -->
+    <string name="pm_create_master_title">Create master password</string>
+    <string name="pm_create_master_subtitle">This password encrypts your vault. Choose something strong and memorable.</string>
+    <string name="pm_master_password_label">Master password</string>
+    <string name="pm_continue">Continue</string>
+    <string name="pm_confirm_title">Confirm password</string>
+    <string name="pm_confirm_subtitle">Re-enter your master password to confirm it\'s correct.</string>
+    <string name="pm_reenter_label">Re-enter password</string>
+    <string name="pm_create_vault">Create vault</string>
+    <string name="pm_back">Back</string>
+    <string name="pm_biometric_title">Enable fingerprint unlock</string>
+    <string name="pm_biometric_subtitle">Use your fingerprint to unlock your vault quickly and securely.</string>
+    <string name="pm_biometric_bullet1">Unlock instantly with your fingerprint</string>
+    <string name="pm_biometric_bullet2">Your password is still required as backup</string>
+    <string name="pm_biometric_bullet3">Biometric data never leaves your device</string>
+    <string name="pm_enable_fingerprint">Enable fingerprint</string>
+    <string name="pm_skip_for_now">Skip for now</string>
+    <string name="pm_unlock_biometric_title">Unlock vault</string>
+    <string name="pm_unlock_biometric_subtitle">Use your fingerprint to access your saved passwords.</string>
+    <string name="pm_tap_to_authenticate_cd">Tap to use fingerprint</string>
+    <string name="pm_tap_to_authenticate">Tap to authenticate</string>
+    <string name="pm_use_password_instead">Use password instead</string>
+    <string name="pm_unlock_password_title">Enter master password</string>
+    <string name="pm_unlock_password_subtitle">Enter your master password to access your saved passwords.</string>
+    <string name="pm_unlock">Unlock</string>
+    <string name="pm_use_fingerprint">Use fingerprint</string>
+    <string name="pm_biometric_prompt_title">Unlock vault</string>
+    <string name="pm_biometric_prompt_negative">Use password</string>
+    <string name="pm_error_min_chars">Use at least 5 characters</string>
+    <string name="pm_error_passwords_mismatch">Passwords do not match</string>
+    <string name="pm_error_biometric_key">Biometric key error — use password</string>
+    <string name="pm_error_incorrect_password">Incorrect password</string>
+
+    <!-- Password strength labels -->
+    <string name="pm_strength_weak">Weak</string>
+    <string name="pm_strength_fair">Fair</string>
+    <string name="pm_strength_strong">Strong</string>
+
+    <!-- Safari-style link/image context menu -->
+    <string name="ctx_open_new_tab">Open in New Tab</string>
+    <string name="ctx_open_new_tab_group">Open in New Tab in Group</string>
+    <string name="ctx_open_private_tab">Open in Private Tab</string>
+    <string name="ctx_copy_link_address">Copy Link Address</string>
+    <string name="ctx_copy_image_link">Copy Image Link</string>
+    <string name="ctx_copy_clean_link">Copy Clean Link</string>
+    <string name="ctx_copy_link_text">Copy Link Text</string>
+    <string name="ctx_download_link">Download Link</string>
+    <string name="ctx_add_to_bookmarks">Add to Bookmarks</string>
+    <string name="ctx_share_link">Share Link</string>
+    <string name="ctx_search_image_lens">Search Image with Google Lens</string>
+    <string name="ctx_search_image_lens_app">Search with Google Lens App</string>
+    <string name="ctx_link_copied">Link copied</string>
+    <string name="ctx_link_text_copied">Link text copied</string>
+    <string name="ctx_image_link_copied">Image link copied</string>
+    <string name="ctx_clean_link_copied">Clean link copied</string>
+    <string name="ctx_download_queued">Download queued</string>
+    <string name="ctx_bookmark_saved">Saved to Bookmarks</string>
+    <string name="ctx_lens_not_installed">Google Lens app not installed</string>
+    <string name="ctx_loading_preview">Loading preview…</string>
+    <string name="ctx_image_option">Image</string>
+    <string name="ctx_link_option">Link</string>
+
+    <!-- Onboarding - Proxy Hub page -->
+    <string name="onboarding_title_proxy">Choose Your Privacy Mode</string>
+    <string name="onboarding_tagline_proxy">Direct is fastest. Tor hides your identity.</string>
+    <string name="onboarding_proxy_section_title">Network Routing</string>
+    <string name="onboarding_proxy_section_desc">Choose how Omni Browser connects to the internet. You can always change this later in Proxy Hub settings.</string>
+    <string name="onboarding_proxy_direct_title">Direct Connection</string>
+    <string name="onboarding_proxy_direct_desc">Fastest speed, no routing overhead. Your ISP can see which sites you visit.</string>
+    <string name="onboarding_proxy_tor_title">Built-in Tor</string>
+    <string name="onboarding_proxy_tor_desc">Routes traffic through the Tor network. Hides your IP and location. Slower than direct.</string>
+    <string name="onboarding_proxy_custom_title">Custom SOCKS5 Proxy</string>
+    <string name="onboarding_proxy_custom_desc">Use your own proxy server or VPN SOCKS5 port. Configure host and port in settings.</string>
+    <string name="onboarding_proxy_badge_recommended">Recommended</string>
+    <string name="onboarding_proxy_badge_private">Private</string>
+    <string name="onboarding_proxy_badge_advanced">Advanced</string>
+    <string name="onboarding_proxy_footer">You can switch between modes anytime in Settings → Proxy Hub.</string>
 </resources>

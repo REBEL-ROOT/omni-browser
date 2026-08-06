@@ -41,8 +41,32 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 callback.reject()
                 return
             }
+            val hasCamera = permissions?.any { it == android.Manifest.permission.CAMERA } == true
+            val hasMic    = permissions?.any { it == android.Manifest.permission.RECORD_AUDIO } == true
+            val hasLoc    = permissions?.any {
+                it == android.Manifest.permission.ACCESS_FINE_LOCATION ||
+                it == android.Manifest.permission.ACCESS_COARSE_LOCATION
+            } == true
+
+            val title = when {
+                hasCamera && hasMic -> "Camera & Microphone"
+                hasCamera          -> "Camera"
+                hasMic             -> "Microphone"
+                hasLoc             -> "Location"
+                else               -> "System Permission"
+            }
+            val body = when {
+                hasCamera && hasMic -> "This site needs camera and microphone access. Grant only if you trust the site."
+                hasCamera          -> "This site needs your camera. Grant only if you trust the site."
+                hasMic             -> "This site needs your microphone. Grant only if you trust the site."
+                hasLoc             -> "This site needs your precise location. Grant only if you trust the site."
+                else               -> "This site is requesting a system permission."
+            }
+
             activeSystemPermissionRequest = SystemPermissionRequest(
                 permissions = permissions,
+                rationaleTitle = title,
+                rationaleBody = body,
                 onGranted = { callback.grant() },
                 onDenied = { callback.reject() }
             )
@@ -92,16 +116,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 permissionType = permission.permission,
                 onAllow = {
                     activePermissionPrompt = null
-                    if (permissionTypeStr != null) {
-                        updateSitePermission(permission.uri, permissionTypeStr, "allow")
-                    }
+                    if (permissionTypeStr != null) updateSitePermission(permission.uri, permissionTypeStr, "allow")
+                    result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                },
+                onAllowOnce = {
+                    // Grant for this session only — do NOT persist to site permissions
+                    activePermissionPrompt = null
                     result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
                 },
                 onDeny = {
                     activePermissionPrompt = null
-                    if (permissionTypeStr != null) {
-                        updateSitePermission(permission.uri, permissionTypeStr, "block")
-                    }
+                    if (permissionTypeStr != null) updateSitePermission(permission.uri, permissionTypeStr, "block")
                     result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
                 }
             )
@@ -152,10 +177,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 siteUri = uri,
                 hasVideo = hasVideo,
                 hasAudio = hasAudio,
+                videoSources = video,
+                audioSources = audio,
                 onAllow = { selectedVideo, selectedAudio ->
                     activeMediaPermissionPrompt = null
                     if (hasVideo) updateSitePermission(uri, "camera", "allow")
                     if (hasAudio) updateSitePermission(uri, "microphone", "allow")
+                    callback.grant(selectedVideo, selectedAudio)
+                },
+                onAllowOnce = { selectedVideo, selectedAudio ->
+                    // Grant for this session only — do NOT persist
+                    activeMediaPermissionPrompt = null
                     callback.grant(selectedVideo, selectedAudio)
                 },
                 onDeny = {
@@ -963,6 +995,15 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         override fun onProgressChange(session: GeckoSession, progress: Int) {
             if (tab.id == activeTabId) {
                 loadingProgress = (progress / 100f).coerceIn(0.05f, 1f)
+            }
+        }
+
+        // Continuously capture session state so it's always available for suspension.
+        // GeckoView delivers the serializable SessionState here after every navigation.
+        override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
+            val idx = tabs.indexOfFirst { it.id == tab.id }
+            if (idx != -1) {
+                tabs[idx] = tabs[idx].copy(savedSessionState = sessionState)
             }
         }
     }

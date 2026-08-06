@@ -128,6 +128,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.pointer.PointerEventPass
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -220,12 +222,34 @@ fun BrowserScreen(
     // Video detection states
     val detectedMedia by viewModel.mediaInterceptor.detectedMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
+    var isYtExtracting by remember { mutableStateOf(false) }
+    var ytExtractionResult by remember { mutableStateOf<com.rebelroot.omni.media.YouTubeExtractor.ExtractionResult?>(null) }
+    var ytExtractionError by remember { mutableStateOf<String?>(null) }
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
     val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
     val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled
+
+    LaunchedEffect(showDownloadSheet) {
+        if (showDownloadSheet) {
+            val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
+            if (isYouTubePage) {
+                isYtExtracting = true
+                ytExtractionError = null
+                ytExtractionResult = null
+                val result = com.rebelroot.omni.media.YouTubeExtractor.extractStreams(viewModel.currentUrl)
+                isYtExtracting = false
+                if (result != null) {
+                    ytExtractionResult = result
+                } else {
+                    ytExtractionError = "Could not extract streaming URLs for this video. YouTube might have restricted the player."
+                }
+            }
+        }
+    }
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var measuredTopBarHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val isKeyboardVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
 
     val isEditMode = activeTab?.isEditModeEnabled == true
@@ -436,9 +460,8 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(viewModel.activeSystemPermissionRequest) {
-        viewModel.activeSystemPermissionRequest?.let { request ->
-            systemPermissionLauncher.launch(request.permissions ?: emptyArray())
-        }
+        // Do NOT auto-launch — the rationale dialog handles showing the
+        // in-app rationale first, then calls systemPermissionLauncher.launch().
     }
 
     // ── File / Photo picker for web <input type="file"> ────────────────
@@ -481,20 +504,6 @@ fun BrowserScreen(
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to read JS file", Toast.LENGTH_SHORT).show()
             }
-        }
-    }
-
-    val vpnPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val config = viewModel.customVpnConfig
-            if (!config.isNullOrBlank()) {
-                viewModel.connectCustomVpn()
-                Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(context, "VPN permission denied", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -802,7 +811,7 @@ fun BrowserScreen(
                 (!viewModel.chromeNavBarEnabled && !(viewModel.addressBarPosition == "Bottom" && !isTablet)))) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val statusBarHeightDp = with(density) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }
-            val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
+            val topBarHeight = (if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))) + 36.dp
 
             // Top bar: always rendered; graphicsLayer slides it out without removing from composition
             Box(
@@ -813,13 +822,19 @@ fun BrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = statusBarHeightDp)
-                            .graphicsLayer { translationY = -topBarHeight.toPx() * topBarFraction },
+                            .graphicsLayer { translationY = -(topBarHeight + statusBarHeightDp).toPx() * topBarFraction },
                         shape = androidx.compose.ui.graphics.RectangleShape,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         shadowElevation = 8.dp,
                         tonalElevation = 2.dp
                     ) {
-                        Column {
+                        Column(
+                            modifier = Modifier.onGloballyPositioned { coords ->
+                                if (coords.size.height > 0 && coords.size.height != measuredTopBarHeightPx) {
+                                    measuredTopBarHeightPx = coords.size.height
+                                }
+                            }
+                        ) {
                             if (isTablet) {
                                 // Tablet Tab Strip
                                 Row(
@@ -1358,21 +1373,23 @@ fun BrowserScreen(
                 }
                 if ((!viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Bottom") && viewModel.addressBarPosition != "Top" && viewModel.addressBarPosition != "Split" && !showHomeScreen && !viewModel.isFullscreen) {
                     val isBottomNavBarVisible = !viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused
+                    val addrBarBorderColor = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .run {
                                 if (isBottomNavBarVisible) this else navigationBarsPadding()
                             }
-                            // When the URL field is focused, the soft keyboard opens.
-                            // The window automatically resizes to accommodate the IME,
-                            // which already lifts the Scaffold's bottom bar.
-                            // Applying Modifier.imePadding() here would add the IME
-                            // inset twice, pushing the edit bar to the top of the screen.
-                            // Thus, we apply no additional IME padding.
-                            ,
+                            .drawBehind {
+                                drawLine(
+                                    color = addrBarBorderColor,
+                                    start = Offset(0f, 0f),
+                                    end = Offset(size.width, 0f),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            },
                         color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-                        shadowElevation = 12.dp,
+                        shadowElevation = 0.dp,
                         tonalElevation = 2.dp
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1765,12 +1782,12 @@ fun BrowserScreen(
                                 val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
                                 
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
-                                val topBarHeight = if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
+                                val topBarHeight = (if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))) + 36.dp
                                 
                                 val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
                                 val geckoBottomPad = if (!viewModel.isFullscreen && !isLandscape) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
                                 
-                                val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen && !isLandscape) (statusBarHeightDp - 24.dp).coerceAtLeast(0.dp) else 0.dp
+                                val geckoTopPad = 0.dp
                                 
                                 Box(
                                     modifier = Modifier
@@ -1961,22 +1978,31 @@ fun BrowserScreen(
                                         }
                                     }
 
-                                    DisposableEffect(activeTab.id) {
-                                        onDispose {
-                                            viewModel.tabs.find { it.id == activeTab.id }?.session?.setActive(false)
-                                        }
-                                    }
-
                                     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
                                     DisposableEffect(activeTab.id, lifecycleOwner) {
                                         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                                             val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session
                                             when (event) {
                                                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
-                                                    currentSession?.setActive(true)
+                                                    // Re-bind GeckoView surface to session after Android surface
+                                                    // recreation (e.g. returning from another app / app drawer).
+                                                    // If we skip setSession here, the surface stays blank because
+                                                    // Gecko's compositor lost its native window reference.
+                                                    currentSession?.let { session ->
+                                                        val geckoView = viewModel.activeGeckoViewRef?.get()
+                                                        if (geckoView != null && geckoView.session != session) {
+                                                            geckoView.setSession(session)
+                                                        }
+                                                        session.setActive(true)
+                                                    }
                                                 }
                                                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
-                                                    currentSession?.setActive(false)
+                                                    // Do NOT call setActive(false) here.
+                                                    // Android OS automatically pauses the GeckoView SurfaceView
+                                                    // when the Activity pauses. Manually calling setActive(false)
+                                                    // detaches Gecko's compositor from the native window so that
+                                                    // when the user returns, GeckoView has no surface to draw on
+                                                    // and the screen is completely blank.
                                                 }
                                                 else -> {}
                                             }
@@ -2934,7 +2960,11 @@ fun BrowserScreen(
             // • Fullscreen: fades while playing, stays / reappears while paused or on tap
             val nonDrmMedia = detectedMedia.filter { !it.isDrmProtected }
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
+            val isYouTubeVideo = isYouTubePage && com.rebelroot.omni.media.YouTubeExtractor.extractVideoId(viewModel.currentUrl) != null
+            val shouldShowDownloadButton = (!showHomeScreen && !viewModel.isReaderModeActive && viewModel.isNativePlayerEnabled) &&
+                (nonDrmMedia.isNotEmpty() && !isYouTubePage || isYouTubeVideo)
+
+            if (shouldShowDownloadButton) {
                 if (viewModel.isFullscreen) {
                     // Fullscreen mode — overlay with auto-fade controls
                     // Transparent tap-catcher; restores controls on any tap
@@ -3056,167 +3086,9 @@ fun BrowserScreen(
             }
             // ───────────────────────────────────────────────────────────────────────
 
-            // Context Menu Bottom Sheet
-            val activeContextMenu = viewModel.activeContextMenu
-            if (activeContextMenu != null) {
-                ModalBottomSheet(
-                    onDismissRequest = { viewModel.dismissContextMenu() },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color.White,
-                    contentColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
-                    dragHandle = { BottomSheetDefaults.DragHandle(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFE0E0E0)) }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(bottom = 24.dp)
-                    ) {
-                        // Header
-                        val titleText = when {
-                            !activeContextMenu.srcUri.isNullOrEmpty() -> "Image Option"
-                            !activeContextMenu.linkUri.isNullOrEmpty() -> "Link Option"
-                            else -> "Page Option"
-                        }
-                        val subtitleText = activeContextMenu.srcUri ?: activeContextMenu.linkUri ?: ""
-                        
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = titleText,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
-                            )
-                            if (subtitleText.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = subtitleText,
-                                    fontSize = 12.sp,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.6f) else Color(0xFF606266)
-                                )
-                            }
-                        }
-                        
-                        HorizontalDivider(
-                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFF0F0F0),
-                            thickness = 0.5.dp,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-
-                        // Options
-                        if (!activeContextMenu.srcUri.isNullOrEmpty()) {
-                            val imageUrl = activeContextMenu.srcUri
-                            // Google Lens Search Option
-                            ContextMenuItem(
-                                icon = Icons.Rounded.CameraAlt,
-                                title = "Search image with Google Lens",
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    val encodedUrl = android.net.Uri.encode(imageUrl)
-                                    val lensUrl = "https://lens.google.com/uploadbyurl?url=$encodedUrl"
-                                    viewModel.createNewTab(context, lensUrl)
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                            
-                            // Google Lens App Intent
-                            ContextMenuItem(
-                                icon = Icons.Rounded.CameraAlt,
-                                title = "Search with Google Lens App",
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    try {
-                                        val intent = android.content.Intent("com.google.lens.intent.action.LENS_INPUT").apply {
-                                            setPackage("com.google.android.googlequicksearchbox")
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "Google Lens app not installed", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                            
-                            // Open in New Tab
-                            ContextMenuItem(
-                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                                title = stringResource(R.string.menu_open_image_new_tab),
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    viewModel.createNewTab(context, imageUrl)
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                            
-                            // Copy Image Link
-                            ContextMenuItem(
-                                icon = Icons.Rounded.ContentCopy,
-                                title = "Copy image link",
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Image Link", imageUrl)
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Image link copied to clipboard", Toast.LENGTH_SHORT).show()
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                        }
-
-                        if (!activeContextMenu.linkUri.isNullOrEmpty()) {
-                            val linkUrl = activeContextMenu.linkUri
-                            // Open Link in New Tab
-                            ContextMenuItem(
-                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                                title = stringResource(R.string.menu_open_link_new_tab),
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    viewModel.createNewTab(context, linkUrl)
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                            
-                            // Copy Link Address
-                            ContextMenuItem(
-                                icon = Icons.Rounded.ContentCopy,
-                                title = "Copy link address",
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Link Address", linkUrl)
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Link address copied to clipboard", Toast.LENGTH_SHORT).show()
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-
-                            // Share Link
-                            ContextMenuItem(
-                                icon = Icons.Rounded.Share,
-                                title = "Share link",
-                                onClick = {
-                                    viewModel.dismissContextMenu()
-                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, linkUrl)
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    val chooserIntent = Intent.createChooser(shareIntent, "Share link").apply {
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(chooserIntent)
-                                },
-                                isDark = viewModel.isDarkThemeEnabled
-                            )
-                        }
-                    }
-                }
+            // Safari-style Context Menu Bottom Sheet
+            if (viewModel.activeContextMenu != null) {
+                SafariContextMenuSheet(viewModel = viewModel, context = context)
             }
 
 
@@ -3240,212 +3112,457 @@ fun BrowserScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         
-                        androidx.compose.foundation.lazy.LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(nonDrmMedia) { item ->
-                                Surface(
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.fillMaxWidth()
+                        val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
+                        
+                        if (isYouTubePage) {
+                            if (isYtExtracting) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        CircularProgressIndicator()
+                                        Text("Extracting YouTube streams...", fontSize = 14.sp)
+                                    }
+                                }
+                            } else if (ytExtractionResult != null) {
+                                val ytResult = ytExtractionResult!!
+                                Text(
+                                    text = ytResult.title,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                                androidx.compose.foundation.lazy.LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(ytResult.streams) { stream ->
+                                        Surface(
+                                            shape = RoundedCornerShape(24.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = stringResource(R.string.download_quality_label, when (item.quality) {
-                                                        "Source HD" -> stringResource(R.string.download_quality_source_hd)
-                                                        "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
-                                                        "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
-                                                        null -> stringResource(R.string.download_quality_auto_source_fallback)
-                                                        else -> item.quality
-                                                    }),
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp
-                                                )
-                                            }
-                                            Text(
-                                                text = item.type.name,
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
+                                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = if (stream.isAudio) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = stream.quality,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 15.sp
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = if (stream.isAudio) "AUDIO" else if (stream.isVideoOnly) "VIDEO ONLY" else "VIDEO",
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
 
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    showDownloadSheet = false
-                                                    onPlayOnlineStream(item.url, viewModel.currentUrl)
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            }
-                                            OutlinedButton(
-                                                onClick = {
-                                                    showDownloadSheet = false
-                                                    coroutineScope.launch {
-                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                        val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
-                                                            nonDrmMedia.find { 
-                                                                it.url.contains("googlevideo.com") && 
-                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                            }?.url
-                                                        } else null
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Button(
+                                                        onClick = {
+                                                            showDownloadSheet = false
+                                                            onPlayOnlineStream(stream.url, viewModel.currentUrl)
+                                                        },
+                                                        modifier = Modifier.weight(1f),
+                                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                    ) {
+                                                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    }
 
-                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                        val rawTitle = activeTab?.title ?: "Video"
-                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                        } else "Video"
-                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            showDownloadSheet = false
+                                                            coroutineScope.launch {
+                                                                val cleanTitle = ytResult.title.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                                val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+                                                                
+                                                                // Find best audio URL if it's video-only
+                                                                val bestAudioUrl = if (stream.isVideoOnly) {
+                                                                    ytResult.streams.find { it.isAudio }?.url
+                                                                } else null
 
-                                                        if (viewModel.isExternalDownloadManagerEnabled && viewModel.canHandOffMedia(item.type, audioUrl)) {
-                                                            viewModel.handOffToExternalDownloadManager(
-                                                                context = context,
-                                                                url = item.url,
-                                                                filename = suggestedName,
-                                                                contentType = when (item.type) {
-                                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO -> "audio/*"
-                                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> "video/webm"
-                                                                    else -> "video/mp4"
-                                                                }
-                                                            )
-                                                            Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
-                                                        } else {
-                                                            if (viewModel.isExternalDownloadManagerEnabled) {
-                                                                Toast.makeText(context, context.getString(R.string.download_toast_no_handoff), Toast.LENGTH_LONG).show()
-                                                            } else {
+                                                                viewModel.streamDownloadEngine.startDownload(
+                                                                    url = stream.url,
+                                                                    suggestedName = suggestedName,
+                                                                    type = if (stream.isAudio) com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO else com.rebelroot.omni.media.MediaInterceptor.MediaType.MP4,
+                                                                    saveToLocker = false,
+                                                                    referrerUrl = viewModel.currentUrl,
+                                                                    cookies = null,
+                                                                    audioUrl = bestAudioUrl
+                                                                )
                                                                 Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
                                                             }
+                                                        },
+                                                        modifier = Modifier.weight(1f),
+                                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                    ) {
+                                                        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // If programmatic extractor failed/not available, list media streams grabbed by the browser extension
+                                val youtubeMedia = nonDrmMedia.filter { it.url.contains("googlevideo.com") || it.url.contains("videoplayback") }
+                                if (youtubeMedia.isNotEmpty()) {
+                                    Text(
+                                        text = "Sniffed Streams (Play video to refresh list)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    )
+                                    androidx.compose.foundation.lazy.LazyColumn(
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        items(youtubeMedia) { item ->
+                                            Surface(
+                                                shape = RoundedCornerShape(24.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(
+                                                                imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
+                                                                contentDescription = null,
+                                                                tint = MaterialTheme.colorScheme.primary
+                                                            )
+                                                            Spacer(modifier = Modifier.width(8.dp))
+                                                            Text(
+                                                                text = stringResource(R.string.download_quality_label, when (item.quality) {
+                                                                    "Source HD" -> stringResource(R.string.download_quality_source_hd)
+                                                                    "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
+                                                                    "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
+                                                                    null -> stringResource(R.string.download_quality_auto_source_fallback)
+                                                                    else -> item.quality
+                                                                }),
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 15.sp
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = item.type.name,
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        Button(
+                                                            onClick = {
+                                                                showDownloadSheet = false
+                                                                onPlayOnlineStream(item.url, viewModel.currentUrl)
+                                                            },
+                                                            modifier = Modifier.weight(1f),
+                                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                        ) {
+                                                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                        }
+                                                        OutlinedButton(
+                                                            onClick = {
+                                                                showDownloadSheet = false
+                                                                coroutineScope.launch {
+                                                                    val audioUrl = if (item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                                        youtubeMedia.find { 
+                                                                            it.url.contains("googlevideo.com") && 
+                                                                            (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                                        }?.url
+                                                                    } else null
+
+                                                                    val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                                    val rawTitle = activeTab?.title ?: "Video"
+                                                                    val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                                        rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                                    } else "Video"
+                                                                    val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
+                                                                    viewModel.streamDownloadEngine.startDownload(
+                                                                        url = item.url,
+                                                                        suggestedName = suggestedName,
+                                                                        type = item.type,
+                                                                        saveToLocker = false,
+                                                                        referrerUrl = viewModel.currentUrl,
+                                                                        cookies = viewModel.activeVideoCookies,
+                                                                        audioUrl = audioUrl
+                                                                    )
+                                                                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            },
+                                                            modifier = Modifier.weight(1f),
+                                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                        ) {
+                                                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().height(150.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Could not extract streaming URLs. Please play the video first to let the sniffer capture the stream.",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 14.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            modifier = Modifier.padding(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            androidx.compose.foundation.lazy.LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(nonDrmMedia) { item ->
+                                    Surface(
+                                        shape = RoundedCornerShape(24.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = stringResource(R.string.download_quality_label, when (item.quality) {
+                                                            "Source HD" -> stringResource(R.string.download_quality_source_hd)
+                                                            "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
+                                                            "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
+                                                            null -> stringResource(R.string.download_quality_auto_source_fallback)
+                                                            else -> item.quality
+                                                        }),
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 15.sp
+                                                    )
+                                                }
+                                                Text(
+                                                    text = item.type.name,
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Button(
+                                                    onClick = {
+                                                        showDownloadSheet = false
+                                                        onPlayOnlineStream(item.url, viewModel.currentUrl)
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                ) {
+                                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        showDownloadSheet = false
+                                                        coroutineScope.launch {
+                                                            val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                            val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                                nonDrmMedia.find { 
+                                                                    it.url.contains("googlevideo.com") && 
+                                                                    (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                                }?.url
+                                                            } else null
+
+                                                            val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                            val rawTitle = activeTab?.title ?: "Video"
+                                                            val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                                rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                            } else "Video"
+                                                            val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
+                                                            if (viewModel.isExternalDownloadManagerEnabled && viewModel.canHandOffMedia(item.type, audioUrl)) {
+                                                                viewModel.handOffToExternalDownloadManager(
+                                                                    context = context,
+                                                                    url = item.url,
+                                                                    filename = suggestedName,
+                                                                    contentType = when (item.type) {
+                                                                        com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO -> "audio/*"
+                                                                        com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> "video/webm"
+                                                                        else -> "video/mp4"
+                                                                    }
+                                                                )
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                if (viewModel.isExternalDownloadManagerEnabled) {
+                                                                    Toast.makeText(context, context.getString(R.string.download_toast_no_handoff), Toast.LENGTH_LONG).show()
+                                                                } else {
+                                                                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
+                                                                }
+                                                                viewModel.streamDownloadEngine.startDownload(
+                                                                    url = item.url,
+                                                                    suggestedName = suggestedName,
+                                                                    type = item.type,
+                                                                    saveToLocker = false,
+                                                                    referrerUrl = viewModel.currentUrl,
+                                                                    cookies = viewModel.activeVideoCookies,
+                                                                    audioUrl = audioUrl
+                                                                )
+                                                            }
+                                                        }
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                ) {
+                                                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        showDownloadSheet = false
+                                                        coroutineScope.launch {
+                                                            val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                            val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                                nonDrmMedia.find { 
+                                                                    it.url.contains("googlevideo.com") && 
+                                                                    (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                                }?.url
+                                                            } else null
+
+                                                            val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                            val rawTitle = activeTab?.title ?: "Video"
+                                                            val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                                rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                            } else "Video"
+                                                            val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
                                                             viewModel.streamDownloadEngine.startDownload(
                                                                 url = item.url,
                                                                 suggestedName = suggestedName,
                                                                 type = item.type,
-                                                                saveToLocker = false,
+                                                                saveToLocker = true,
                                                                 referrerUrl = viewModel.currentUrl,
                                                                 cookies = viewModel.activeVideoCookies,
                                                                 audioUrl = audioUrl
                                                             )
+                                                            Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
                                                         }
-                                                    }
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            }
-                                            OutlinedButton(
-                                                onClick = {
-                                                    showDownloadSheet = false
-                                                    coroutineScope.launch {
-                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                        val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
-                                                            nonDrmMedia.find { 
-                                                                it.url.contains("googlevideo.com") && 
-                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                            }?.url
-                                                        } else null
-
-                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                        val rawTitle = activeTab?.title ?: "Video"
-                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                        } else "Video"
-                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
-
-                                                        viewModel.streamDownloadEngine.startDownload(
-                                                            url = item.url,
-                                                            suggestedName = suggestedName,
-                                                            type = item.type,
-                                                            saveToLocker = true,
-                                                            referrerUrl = viewModel.currentUrl,
-                                                            cookies = viewModel.activeVideoCookies,
-                                                            audioUrl = audioUrl
-                                                        )
-                                                        Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
-                                                    }
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(stringResource(R.string.locker_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            }
-                                            OutlinedButton(
-                                                onClick = {
-                                                    showDownloadSheet = false
-                                                    coroutineScope.launch {
-                                                        // For YouTube/googlevideo, find the audio-only stream
-                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                        val mp3Url = if (isYouTubeUrl) {
-                                                            nonDrmMedia.find {
-                                                                it.url.contains("googlevideo.com") &&
-                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                            }?.url ?: item.url
-                                                        } else {
-                                                            item.url
-                                                        }
-
-                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                        val rawTitle = activeTab?.title ?: "Audio"
-                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                        } else "Audio"
-                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
-
-                                                        if (viewModel.isExternalDownloadManagerEnabled && !isYouTubeUrl) {
-                                                            viewModel.handOffToExternalDownloadManager(
-                                                                context = context,
-                                                                url = mp3Url,
-                                                                filename = suggestedName,
-                                                                contentType = "audio/mpeg"
-                                                            )
-                                                            Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
-                                                        } else {
-                                                            if (viewModel.isExternalDownloadManagerEnabled) {
-                                                                Toast.makeText(context, context.getString(R.string.download_toast_mp3_no_handoff), Toast.LENGTH_LONG).show()
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                ) {
+                                                    Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(stringResource(R.string.locker_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        showDownloadSheet = false
+                                                        coroutineScope.launch {
+                                                            // For YouTube/googlevideo, find the audio-only stream
+                                                            val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                            val mp3Url = if (isYouTubeUrl) {
+                                                                nonDrmMedia.find {
+                                                                    it.url.contains("googlevideo.com") &&
+                                                                    (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                                }?.url ?: item.url
                                                             } else {
-                                                                Toast.makeText(context, context.getString(R.string.download_toast_mp3_started), Toast.LENGTH_SHORT).show()
+                                                                item.url
                                                             }
-                                                            viewModel.streamDownloadEngine.startDownload(
-                                                                url = mp3Url,
-                                                                suggestedName = suggestedName,
-                                                                type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
-                                                                saveToLocker = false,
-                                                                referrerUrl = viewModel.currentUrl,
-                                                                cookies = viewModel.activeVideoCookies
-                                                            )
+
+                                                            val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                            val rawTitle = activeTab?.title ?: "Audio"
+                                                            val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                                rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                            } else "Audio"
+                                                            val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
+                                                            if (viewModel.isExternalDownloadManagerEnabled && !isYouTubeUrl) {
+                                                                viewModel.handOffToExternalDownloadManager(
+                                                                    context = context,
+                                                                    url = mp3Url,
+                                                                    filename = suggestedName,
+                                                                    contentType = "audio/mpeg"
+                                                                )
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                                if (viewModel.isExternalDownloadManagerEnabled) {
+                                                                    Toast.makeText(context, context.getString(R.string.download_toast_mp3_no_handoff), Toast.LENGTH_LONG).show()
+                                                                } else {
+                                                                    Toast.makeText(context, context.getString(R.string.download_toast_mp3_started), Toast.LENGTH_SHORT).show()
+                                                                }
+                                                                viewModel.streamDownloadEngine.startDownload(
+                                                                    url = mp3Url,
+                                                                    suggestedName = suggestedName,
+                                                                    type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
+                                                                    saveToLocker = false,
+                                                                    referrerUrl = viewModel.currentUrl,
+                                                                    cookies = viewModel.activeVideoCookies
+                                                                )
+                                                            }
                                                         }
-                                                    }
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(stringResource(R.string.download_sheet_mp3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                                ) {
+                                                    Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(stringResource(R.string.download_sheet_mp3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                }
                                             }
                                         }
                                     }
@@ -5429,8 +5546,11 @@ fun BrowserScreen(
             }
 
             // ── Menu Bottom Sheet (Unified with All-In-One Menu Sheet) ──────────────────
+            // Only redirect to the grid sheet when address bar is Bottom — in that
+            // layout the menu button is in the bottom nav bar which has no room for
+            // a popup. For Top/Split the omnimenuDropdown popup is used instead.
             LaunchedEffect(showMenu) {
-                if (showMenu) {
+                if (showMenu && (viewModel.addressBarPosition == "Bottom" || viewModel.chromeNavBarEnabled)) {
                     showMenu = false
                     showAllInOneMenuSheet = true
                 }
@@ -6277,10 +6397,6 @@ fun BrowserScreen(
                                     val state = viewModel.activeTorState().value
                                     if (state is com.rebelroot.omni.privacy.TorState.Connected) context.getString(R.string.tool_vpn_tor_on) else context.getString(R.string.tool_vpn_tor)
                                 }
-                                "wireguard" -> {
-                                    val state = viewModel.vpnManager.state.value
-                                    if (state is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) context.getString(R.string.tool_vpn_on) else context.getString(R.string.tool_vpn)
-                                }
                                 else -> context.getString(R.string.tool_network)
                             }
                             "qr_scanner"     -> context.getString(R.string.tool_qr_scanner)
@@ -6303,7 +6419,6 @@ fun BrowserScreen(
                             "force_zoom"     -> Icons.Rounded.ZoomIn
                             "vpn"            -> when (viewModel.proxyProvider) {
                                 "tor" -> Icons.Rounded.Security
-                                "wireguard" -> Icons.Rounded.VpnKey
                                 else -> Icons.Rounded.Public
                             }
                             "qr_scanner"     -> Icons.Rounded.QrCodeScanner
@@ -6353,26 +6468,6 @@ fun BrowserScreen(
                                         } else {
                                             viewModel.connectTor()
                                             Toast.makeText(context, "🧅 " + context.getString(R.string.toast_tor_connecting), Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                    "wireguard" -> {
-                                        if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
-                                            viewModel.disconnectVpn()
-                                            Toast.makeText(context, "🛡️ " + context.getString(R.string.toast_vpn_disconnected), Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            val config = viewModel.customVpnConfig
-                                            if (!config.isNullOrBlank()) {
-                                                val vpnIntent = android.net.VpnService.prepare(context)
-                                                if (vpnIntent != null) {
-                                                    vpnPermissionLauncher.launch(vpnIntent)
-                                                } else {
-                                                    viewModel.connectCustomVpn()
-                                                    Toast.makeText(context, "🛡️ " + context.getString(R.string.toast_vpn_connecting), Toast.LENGTH_SHORT).show()
-                                                }
-                                            } else {
-                                                onOpenSettings()
-                                                Toast.makeText(context, context.getString(R.string.toast_vpn_setup_required), Toast.LENGTH_LONG).show()
-                                            }
                                         }
                                     }
                                     else -> {
@@ -6687,7 +6782,7 @@ fun BrowserScreen(
 
             // iOS-style Capsule Scrollbar Overlay
             if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
-                // Fetch page dimensions once when active tab changes (or on page load / drag start)
+                // Fetch page dimensions when tab changes
                 LaunchedEffect(activeTab.id) {
                     activeTab.session.loadUri(
                         "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
@@ -6697,24 +6792,27 @@ fun BrowserScreen(
                 val pageSH = viewModel.pageScrollHeight
                 val pageVH = viewModel.pageViewportHeight
 
+                val maxScroll: Float
                 val scrollFraction: Float
                 val thumbFraction: Float
 
                 if (pageSH > 0f && pageVH > 0f && pageSH > pageVH) {
-                    val maxScroll = pageSH - pageVH
+                    maxScroll = pageSH - pageVH
                     scrollFraction = (currentScrollPos.toFloat() / maxScroll).coerceIn(0f, 1f)
-                    thumbFraction = (pageVH / pageSH).coerceIn(0.04f, 0.18f)
+                    thumbFraction = (pageVH / pageSH).coerceIn(0.06f, 0.25f)
                 } else {
-                    val scrollRange = viewModel.currentScrollRange
-                    val scrollExtent = viewModel.currentScrollExtent
-                    val maxPhysicalScroll = (scrollRange - scrollExtent).coerceAtLeast(1)
-                    val physicalOffset = viewModel.currentScrollOffset
-                    scrollFraction = if (maxPhysicalScroll > 1) {
-                        (physicalOffset.toFloat() / maxPhysicalScroll.toFloat()).coerceIn(0f, 1f)
-                    } else 0f
-                    thumbFraction = if (scrollRange > 0) {
-                        (scrollExtent.toFloat() / scrollRange.toFloat()).coerceIn(0.04f, 0.18f)
-                    } else 0.08f
+                    val sRange = viewModel.currentScrollRange.toFloat()
+                    val sExtent = viewModel.currentScrollExtent.toFloat()
+                    if (sRange > 0f && sExtent > 0f && sRange > sExtent) {
+                        maxScroll = sRange - sExtent
+                        val sOffset = maxOf(currentScrollPos, viewModel.currentScrollOffset).toFloat()
+                        scrollFraction = (sOffset / maxScroll).coerceIn(0f, 1f)
+                        thumbFraction = (sExtent / sRange).coerceIn(0.06f, 0.25f)
+                    } else {
+                        maxScroll = 0f
+                        scrollFraction = 0f
+                        thumbFraction = 0.08f
+                    }
                 }
 
                 var isDragging by remember { mutableStateOf(false) }
@@ -6723,8 +6821,9 @@ fun BrowserScreen(
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
                 // Auto show/hide
-                LaunchedEffect(currentScrollPos, isDragging) {
-                    if (currentScrollPos > 0 || isDragging) {
+                LaunchedEffect(currentScrollPos, viewModel.currentScrollOffset, isDragging) {
+                    val activeOffset = maxOf(currentScrollPos, viewModel.currentScrollOffset)
+                    if (activeOffset > 0 || isDragging) {
                         showScrollbar = true
                         if (!isDragging) {
                             kotlinx.coroutines.delay(1200)
@@ -6749,46 +6848,85 @@ fun BrowserScreen(
                 )
 
                 // Touch strip width: thin (14.dp) when idle so it hugs the screen edge
-                // and does NOT overlap right-edge buttons (download FAB at end=20.dp,
-                // search, reader card, etc.). Expands to 44.dp while actively dragging
-                // to give a comfortable grab area — "extend" behavior on grab only.
                 val touchStripWidth by animateDpAsState(
                     targetValue = if (isDragging) 44.dp else 14.dp,
                     animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
                     label = "touchStripWidth"
                 )
 
-                // Touch target is present on the right edge ONLY as a thin strip.
-                // The outer fillMaxSize Box is NOT a pointer target — it only positions
-                // the strip — so taps on right-edge buttons are never stolen.
+                // Track top/bottom offsets to exclude nav-bar dead zones from the scroll pill track.
+                val pillBottomNavHeight = if (viewModel.addressBarPosition == "Bottom" && !isTablet && !viewModel.isFullscreen && !isLandscape) {
+                    val searchH = config.searchBoxHeight + (config.paddingVertical * 2)
+                    if (viewModel.chromeNavBarEnabled) searchH else searchH + config.bottomNavBarHeight
+                } else 0.dp
+                val topTrackOffset = with(androidx.compose.ui.platform.LocalDensity.current) {
+                    val statusBarDp = with(this) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }
+                    (statusBarDp + (if (measuredTopBarHeightPx > 0) with(this) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2)))) * (1f - topBarFraction)
+                }
+                val bottomTrackOffset = pillBottomNavHeight * (1f - bottomBarFraction)
+
+                // rememberUpdatedState lets the pointerInput coroutine always read the
+                // CURRENT animated value of these Dp/Float fields even though a coroutine
+                // captures them by value at lambda-creation time.
+                val updatedTopTrackOffset by rememberUpdatedState(topTrackOffset)
+                val updatedBotTrackOffset by rememberUpdatedState(bottomTrackOffset)
+                val updatedThumbFraction   by rememberUpdatedState(thumbFraction)
+
+                val pillLocalView = LocalView.current
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(touchStripWidth)
                             .align(Alignment.CenterEnd)
-                            .pointerInput(Unit) {
-                                // Custom gesture handling so the strip intercepts ONLY
-                                // deliberate vertical drags, never taps. This lets taps
-                                // fall through to underlying right-edge buttons (search,
-                                // media fetcher download FAB, reader card, etc.).
+                            // Tell Android ≥ Q to exclude this right-edge strip from the
+                            // system back-gesture zone.  Without this, gesture nav on API 29+
+                            // injects competing synthetic pointer events alongside the real
+                            // drag — producing the "two fingers together" sensation on API 37.
+                            .onGloballyPositioned { coords ->
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                    val bounds = coords.boundsInWindow()
+                                    pillLocalView.post {
+                                        try {
+                                            pillLocalView.systemGestureExclusionRects = listOf(
+                                                android.graphics.Rect(
+                                                    bounds.left.toInt(),
+                                                    0,
+                                                    bounds.right.toInt(),
+                                                    pillLocalView.height
+                                                )
+                                            )
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            }
+                            .pointerInput(activeTab.id) {
                                 awaitPointerEventScope {
                                     while (true) {
-                                        // Wait for the first finger down on the strip.
                                         val down = awaitFirstDown(requireUnconsumed = false)
                                         val downPos = down.position
                                         var dragStarted = false
                                         var pointerReleased = false
 
+                                        // Snapshot track geometry at touch-down so animated
+                                        // nav-bar offsets don't shift the thumb position mid-drag.
+                                        var snapTopOff  = updatedTopTrackOffset.toPx()
+                                        var snapBotOff  = updatedBotTrackOffset.toPx()
+                                        var snapThumbFr = updatedThumbFraction
+
+                                        // Refresh page height on touch down
+                                        activeTab.session.loadUri(
+                                            "javascript:(function(){try{var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}}catch(e){}})();"
+                                        )
+
                                         while (!pointerReleased) {
-                                            val event = awaitPointerEvent()
-                                            val change = event.changes.firstOrNull() { it.id == down.id }
+                                            // PointerEventPass.Initial lets us intercept before
+                                            // the system gesture recognizer claims the event.
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull { it.id == down.id }
                                                 ?: break
                                             if (!change.pressed) {
-                                                // Finger lifted — if we never started a drag,
-                                                // this was a tap: do nothing so underlying
-                                                // buttons (if any under the thin idle strip)
-                                                // are unaffected. We never consumed the event.
                                                 pointerReleased = true
                                                 if (dragStarted) isDragging = false
                                                 continue
@@ -6797,37 +6935,33 @@ fun BrowserScreen(
                                             val dy = change.position.y - downPos.y
                                             val dx = change.position.x - downPos.x
 
-                                            // Begin scrolling only after deliberate vertical
-                                            // movement clearly exceeding slop, and only when
-                                            // the motion is more vertical than horizontal
-                                            // (so horizontal swipes on the edge stay page swipes).
                                             if (!dragStarted &&
-                                                abs(dy) > viewConfiguration.touchSlop &&
-                                                abs(dy) > abs(dx) * 1.5f
+                                                abs(dy) > (viewConfiguration.touchSlop * 0.5f) &&
+                                                abs(dy) >= abs(dx)
                                             ) {
                                                 dragStarted = true
                                                 isDragging = true
+                                                // Re-snapshot when drag officially begins
+                                                snapTopOff  = updatedTopTrackOffset.toPx()
+                                                snapBotOff  = updatedBotTrackOffset.toPx()
+                                                snapThumbFr = updatedThumbFraction
                                                 haptic.performHapticFeedback(
                                                     androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
-                                                )
-                                                activeTab.session.loadUri(
-                                                    "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
                                                 )
                                             }
 
                                             if (dragStarted) {
-                                                val h = size.height.toFloat()
-                                                if (h > 0f) {
-                                                    val frac = (change.position.y / h).coerceIn(0f, 1f)
-                                                    activeTab.session.loadUri(
-                                                        "javascript:void(window.scrollTo(0,$frac*(document.documentElement.scrollHeight-window.innerHeight)))"
-                                                    )
-                                                }
+                                                val fullH  = size.height.toFloat()
+                                                val trackH = (fullH - snapTopOff - snapBotOff).coerceAtLeast(1f)
+                                                val thumbH = (trackH * snapThumbFr).coerceIn(36.dp.toPx(), 90.dp.toPx())
+                                                val maxThumbY = (trackH - thumbH).coerceAtLeast(1f)
+                                                val relY = (change.position.y - snapTopOff - thumbH / 2f).coerceIn(0f, maxThumbY)
+                                                val frac = relY / maxThumbY
+                                                activeTab.session.loadUri(
+                                                    "javascript:(function(){try{var el=document.scrollingElement||document.documentElement||document.body;var max=el?(el.scrollHeight-window.innerHeight):0;if(max<=0&&document.body)max=document.body.scrollHeight-window.innerHeight;var t=Math.round($frac*max);if(t>=0){window.scrollTo(0,t);if(el)el.scrollTop=t;}}catch(e){}})();"
+                                                )
                                                 change.consume()
                                             }
-                                            // While not yet dragging, we intentionally do NOT
-                                            // consume — so a plain tap (no movement) reaches
-                                            // anything underneath and registers as a click.
                                         }
                                     }
                                 }
@@ -6840,12 +6974,14 @@ fun BrowserScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer { alpha = alphaAnim }
-                                    .padding(end = 2.dp, top = 2.dp, bottom = 2.dp)
+                                    .padding(end = 2.dp)
                             ) {
-                                val trackH = size.height
-                                val thumbH = (trackH * thumbHeightFraction).coerceIn(32.dp.toPx(), 84.dp.toPx())
-                                val maxThumbY = trackH - thumbH
-                                val thumbY = scrollFraction * maxThumbY
+                                val topOff = topTrackOffset.toPx()
+                                val botOff = bottomTrackOffset.toPx()
+                                val trackH = (size.height - topOff - botOff).coerceAtLeast(1f)
+                                val thumbH = (trackH * thumbHeightFraction).coerceIn(36.dp.toPx(), 90.dp.toPx())
+                                val maxThumbY = (trackH - thumbH).coerceAtLeast(0f)
+                                val thumbY = topOff + scrollFraction * maxThumbY
                                 val w = capsuleWidth.toPx()
                                 val x = size.width - w
 
@@ -7058,6 +7194,20 @@ fun BrowserScreen(
                 )
             }
             
+            // Android OS permission rationale — shown BEFORE the system dialog
+            viewModel.activeSystemPermissionRequest?.let { request ->
+                SystemPermissionRationaleDialog(
+                    request = request,
+                    onProceed = {
+                        systemPermissionLauncher.launch(request.permissions ?: emptyArray())
+                    },
+                    onDeny = {
+                        request.onDenied()
+                        viewModel.clearActiveSystemPermissionRequest()
+                    }
+                )
+            }
+
             // Site permission prompt overlay
             viewModel.activePermissionPrompt?.let { prompt ->
                 PermissionPromptDialog(prompt = prompt, isDarkThemeEnabled = viewModel.isDarkThemeEnabled)

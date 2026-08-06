@@ -54,6 +54,7 @@ import com.rebelroot.omni.ui.theme.AccentThemesLight
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BackupImportResult
+import com.rebelroot.omni.utils.RoleManagerHelper
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -203,18 +204,10 @@ fun SettingsScreen(
 
     val currentLangName = languages.find { it.first == viewModel.selectedLanguageCode }?.second ?: "English"
 
-    val roleManager = remember {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            context.getSystemService(android.content.Context.ROLE_SERVICE) as? android.app.role.RoleManager
-        } else {
-            null
-        }
-    }
-
     var isDefaultBrowser by remember {
         mutableStateOf(
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                roleManager?.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER) == true
+                RoleManagerHelper.isDefaultBrowser(context)
             } else {
                 val defaultBrowserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com"))
                 val resolveInfo = context.packageManager.resolveActivity(defaultBrowserIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
@@ -227,7 +220,7 @@ fun SettingsScreen(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         isDefaultBrowser = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            roleManager?.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER) == true
+            RoleManagerHelper.isDefaultBrowser(context)
         } else {
             val defaultBrowserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com"))
             val resolveInfo = context.packageManager.resolveActivity(defaultBrowserIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
@@ -484,10 +477,9 @@ fun SettingsScreen(
                         SettingSearchResult(context.getString(R.string.default_browser_title), "Set Omni Browser as system default browser", "BROWSING", Icons.Rounded.OpenInBrowser, {
                             if (!isDefaultBrowser) {
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                    roleManager?.let { rm ->
-                                        if (rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)) {
-                                            defaultBrowserLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER))
-                                        }
+                                    val intent = RoleManagerHelper.createRequestRoleIntent(context)
+                                    if (intent != null) {
+                                        defaultBrowserLauncher.launch(intent)
                                     }
                                 } else {
                                     try { defaultBrowserLauncher.launch(android.content.Intent("android.intent.action.SET_DEFAULT").apply { addCategory(android.content.Intent.CATEGORY_DEFAULT); type = "text/html" }) }
@@ -588,10 +580,9 @@ fun SettingsScreen(
                             .clickable {
                                 if (!isDefaultBrowser) {
                                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                        roleManager?.let { rm ->
-                                            if (rm.isRoleAvailable(android.app.role.RoleManager.ROLE_BROWSER) && !rm.isRoleHeld(android.app.role.RoleManager.ROLE_BROWSER)) {
-                                                defaultBrowserLauncher.launch(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_BROWSER))
-                                            }
+                                        val intent = RoleManagerHelper.createRequestRoleIntent(context)
+                                        if (intent != null) {
+                                            defaultBrowserLauncher.launch(intent)
                                         }
                                     } else {
                                         try {

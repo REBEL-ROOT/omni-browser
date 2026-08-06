@@ -2845,7 +2845,11 @@ fun downloadMangaImagesAndPdf(
                                 if (referer.isNotEmpty()) addHeader("Referer", referer)
                                 addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
                             }
-                            .allowHardware(false)
+                            // Only disable hardware bitmaps for PNG — hardware bitmaps
+                            // cannot be read by BitmapDrawable.bitmap for CPU access.
+                            // JPEG pages use hardware-backed bitmaps where possible;
+                            // Bitmap.compress() copies to software internally when needed.
+                            .allowHardware(!url.contains(".png", ignoreCase = true))
                             .size(coil.size.Size.ORIGINAL) // Full original resolution — no downsampling
                             .build()
 
@@ -2902,6 +2906,10 @@ fun downloadMangaImagesAndPdf(
                                     }
                                 }
                             }
+                            // Recycle the decoded bitmap immediately after writing —
+                            // each manga page can be several MB and there are up to 4
+                            // concurrent downloads; holding them all would spike RSS.
+                            if (!bitmap.isRecycled) bitmap.recycle()
                         }
 
                         val done = downloadedCount.incrementAndGet()
@@ -3076,11 +3084,16 @@ fun AllInOneMenuSheet(
                         tint = textColor,
                         onClick = { onDismissRequest(); onAddTabToNewGroup() }
                     )
+                    val isHideNavActive = viewModel.navBarHideTop || viewModel.navBarHideBottom
                     AllInOneGridItem(
-                        icon = Icons.Rounded.Devices,
-                        label = stringResource(id = R.string.menu_recent),
-                        tint = textColor,
-                        onClick = { onDismissRequest(); onOpenHistory() }
+                        icon = if (isHideNavActive) Icons.Rounded.UnfoldLess else Icons.Rounded.UnfoldMore,
+                        label = stringResource(id = R.string.menu_hide_nav),
+                        tint = if (isHideNavActive) MaterialTheme.colorScheme.primary else textColor,
+                        onClick = {
+                            val newHideState = !isHideNavActive
+                            viewModel.saveNavBarHideTop(context, newHideState)
+                            viewModel.saveNavBarHideBottom(context, newHideState)
+                        }
                     )
                 }
             }
@@ -3091,20 +3104,19 @@ fun AllInOneMenuSheet(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column {
-                    // Bookmark Page
+                    // Bookmark Page — only shown when a webpage is active
+                    if (!showHomeScreen) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 onDismissRequest()
-                                if (activeTab != null && !showHomeScreen) {
+                                if (activeTab != null) {
                                     if (isBookmarked) {
                                         viewModel.removeBookmark(viewModel.currentUrl)
                                     } else {
                                         viewModel.addToBookmarks(activeTab.title ?: "Page", viewModel.currentUrl)
                                     }
-                                } else {
-                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
@@ -3133,11 +3145,9 @@ fun AllInOneMenuSheet(
                             .fillMaxWidth()
                             .clickable {
                                 onDismissRequest()
-                                if (activeTab != null && !showHomeScreen) {
+                                if (activeTab != null) {
                                     viewModel.addShortcut(activeTab.title ?: "Page", viewModel.currentUrl)
                                     Toast.makeText(context, context.getString(R.string.toast_added_to_shortcuts), Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
@@ -3159,14 +3169,7 @@ fun AllInOneMenuSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                onDismissRequest()
-                                if (activeTab != null && !showHomeScreen) {
-                                    onFindInPage()
-                                } else {
-                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
-                                }
-                            }
+                            .clickable { onDismissRequest(); onFindInPage() }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -3186,14 +3189,7 @@ fun AllInOneMenuSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                onDismissRequest()
-                                if (activeTab != null && !showHomeScreen) {
-                                    viewModel.toggleDesktopMode(context)
-                                } else {
-                                    Toast.makeText(context, context.getString(R.string.toast_open_webpage_first), Toast.LENGTH_SHORT).show()
-                                }
-                            }
+                            .clickable { onDismissRequest(); viewModel.toggleDesktopMode(context) }
                             .padding(horizontal = 14.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -3205,8 +3201,6 @@ fun AllInOneMenuSheet(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(stringResource(id = R.string.menu_desktop_site), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        
-                        // Badge for On/Off
                         Box(
                             modifier = Modifier
                                 .background(if (viewModel.isDesktopMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else dividerColor, RoundedCornerShape(10.dp))
@@ -3222,6 +3216,7 @@ fun AllInOneMenuSheet(
                     }
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
+                    } // end !showHomeScreen
 
                     // Extensions
                     Row(
