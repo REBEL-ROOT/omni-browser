@@ -125,22 +125,11 @@
 }
 -dontwarn kotlin.coroutines.jvm.internal.SpillingKt
 
-# 8. R8 optimization passes — toned down for stability
-# Removed -allowaccessmodification (breaks GeckoView reflection internals)
-# Removed -repackageclasses '' (breaks GeckoView classpath assumptions)
+# 8. R8 optimization passes
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
 -optimizationpasses 3
--dontobfuscate
 
-# 9. Compose — keep internal classes loaded via reflection
--keep class androidx.compose.** { *; }
--keepclassmembers class androidx.compose.** { *; }
--keepclassmembers class androidx.compose.ui.** { *; }
--keep class androidx.compose.runtime.** { *; }
--keep class androidx.compose.animation.** { *; }
--keep class androidx.compose.foundation.** { *; }
--keep class androidx.compose.material3.** { *; }
--keep class androidx.compose.material.** { *; }
+# 9. Compose — consumer rules handled by Compose runtime & AGP
 -dontwarn androidx.compose.**
 
 # 9b. AndroidX Activity Compose — used by CompositionLocalProvider in MainActivity
@@ -181,9 +170,7 @@
 -dontwarn org.openjsse.**
 -dontwarn org.codehaus.mojo.animalsniffer.IgnoreJRERequirement
 
-# 14. Kotlin coroutines — GeckoView async APIs depend on these
--keep class kotlinx.coroutines.** { *; }
--keepclassmembers class kotlinx.coroutines.** { *; }
+# 14. Kotlin coroutines — consumer rules handled by kotlinx-coroutines-core
 -dontwarn kotlinx.coroutines.**
 
 # 15. App entry points & Compose UI singletons — R8 can strip the static

@@ -131,6 +131,10 @@ android {
             // alignment compatibility on Android 15+ (API 35+) and avoids native load crashes.
             useLegacyPackaging = false
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
+            excludes.addAll(listOf(
+                "**/libminidump_analyzer.so",
+                "**/libcrashhelper.so"
+            ))
         }
         resources {
             excludes += listOf(
@@ -278,7 +282,7 @@ tasks.register("checkStringParity") {
         val baseKeys = extractKeys(mainStringsFile)
         var missingFound = false
 
-        resDir.listFiles()?.filter { it.isDirectory && it.name.startsWith("values-") }?.forEach { dir ->
+        resDir.listFiles()?.filter { it.isDirectory && it.name.startsWith("values-") && !it.name.contains("night") && !it.name.contains("v31") }?.forEach { dir ->
             val stringsFile = File(dir, "strings.xml")
             if (stringsFile.exists()) {
                 val localeKeys = extractKeys(stringsFile)

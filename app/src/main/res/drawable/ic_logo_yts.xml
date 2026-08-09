@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#2E7D32"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- Film Reel Circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,22 A22,22 0,1 1,47.9,22 Z M48,38 A6,6 0,1 0,48.1,38 Z M36,36 A4,4 0,1 0,36.1,36 Z M60,36 A4,4 0,1 0,60.1,36 Z M48,52 A4,4 0,1 0,48.1,52 Z"/>
+    <!-- YTS Text -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,68 L30,58 L34,58 L29,66 L29,74 L25,74 L25,66 Z M36,58 L48,58 L48,62 L44,62 L44,74 L40,74 L40,62 L36,62 Z M50,58 L62,58 L62,62 L54,62 L54,64 L62,64 L62,74 L50,74 L50,70 L58,70 L58,68 L50,68 Z"/>
+</vector>

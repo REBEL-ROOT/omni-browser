@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#E65100"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- RuTracker Magnet Arc -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,24 L42,24 L42,48 C42,52 44,54 48,54 C52,54 54,52 54,48 L54,24 L64,24 L64,48 C64,58 58,66 48,66 C38,66 32,58 32,48 Z"/>
+    <!-- Magnet Poles -->
+    <path
+        android:fillColor="#FFE0B2"
+        android:pathData="M32,24 L42,24 L42,32 L32,32 Z M54,24 L64,24 L64,32 L54,32 Z"/>
+    <!-- Down Arrow in Center -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,32 L40,42 L45,42 L45,50 L51,50 L51,42 L56,42 Z"/>
+</vector>

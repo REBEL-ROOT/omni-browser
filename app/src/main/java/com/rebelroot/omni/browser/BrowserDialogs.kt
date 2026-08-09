@@ -22,6 +22,7 @@ import android.app.Activity
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.Toast
+import com.rebelroot.omni.browser.useragent.UserAgentPreset
 import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,6 +37,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
@@ -45,6 +47,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -587,6 +591,7 @@ fun PlayerSettingsDialog(
     onDismissRequest: () -> Unit
 ) {
     val context = LocalContext.current
+    var showSnifferSubDialog by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
@@ -628,14 +633,26 @@ fun PlayerSettingsDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f).clickable { showSnifferSubDialog = true }
+                    ) {
                         Text("Media Sniffer / Fetcher", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                         Text("Detect web page videos and display sniffer banner at top of site", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(
-                        checked = viewModel.isMediaGrabberEnabled,
-                        onCheckedChange = { viewModel.toggleMediaGrabber(context) }
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { showSnifferSubDialog = true }) {
+                            Icon(
+                                Icons.Rounded.Tune,
+                                contentDescription = "Sniffer Settings",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.isMediaGrabberEnabled,
+                            onCheckedChange = { viewModel.toggleMediaGrabber(context) }
+                        )
+                    }
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -782,6 +799,283 @@ fun PlayerSettingsDialog(
                                         expandedQuality = false
                                     }
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Done", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface
+    )
+
+    if (showSnifferSubDialog) {
+        MediaSnifferSettingsDialog(
+            viewModel = viewModel,
+            onDismissRequest = { showSnifferSubDialog = false }
+        )
+    }
+}
+
+@Composable
+fun MediaSnifferSettingsDialog(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit
+) {
+    val context = LocalContext.current
+    var newDomainInput by remember { mutableStateOf("") }
+    val currentHost = remember(viewModel.currentUrl) {
+        try {
+            android.net.Uri.parse(viewModel.currentUrl).host?.lowercase()
+                ?.removePrefix("www.") ?: ""
+        } catch (_: Exception) { "" }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.VideoLibrary,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = stringResource(R.string.media_sniffer_settings_title),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Switch 1: Enable Media Sniffer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.media_sniffer_title),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.media_sniffer_desc),
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = viewModel.isMediaGrabberEnabled,
+                        onCheckedChange = { viewModel.toggleMediaGrabber(context) }
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Switch 2: Enable on YouTube
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Enable on YouTube",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Capture video streams on YouTube and Google domains",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = viewModel.isYouTubeEnabled,
+                        onCheckedChange = { viewModel.toggleYouTube(context) }
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Minimum Detection Size
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.media_sniffer_min_size_title),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.media_sniffer_min_size_desc),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val durations = listOf(
+                        0 to stringResource(R.string.media_sniffer_min_size_off),
+                        15 to "15 sec+",
+                        30 to "30 sec+",
+                        60 to "1 min+",
+                        900 to "15 min+",
+                        1800 to "30 min+"
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        durations.forEach { (durSec, label) ->
+                            val isSelected = viewModel.mediaSnifferMinDurationSec == durSec
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.setMediaSnifferMinDurationSec(context, durSec) },
+                                label = { Text(label, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Website Blocklist
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = stringResource(R.string.media_sniffer_blocklist_title),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.media_sniffer_blocklist_desc),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Add current site chip if available and not blocked
+                    if (currentHost.isNotEmpty() && !viewModel.mediaSnifferBlocklist.contains(currentHost)) {
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                viewModel.addDomainToMediaSnifferBlocklist(context, currentHost)
+                            },
+                            label = {
+                                Text(
+                                    stringResource(R.string.media_sniffer_add_current_site, currentHost),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        )
+                    }
+
+                    // Domain input row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newDomainInput,
+                            onValueChange = { newDomainInput = it },
+                            placeholder = { Text(stringResource(R.string.media_sniffer_add_domain_hint), fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                if (newDomainInput.isNotBlank()) {
+                                    viewModel.addDomainToMediaSnifferBlocklist(context, newDomainInput)
+                                    newDomainInput = ""
+                                }
+                            },
+                            enabled = newDomainInput.isNotBlank()
+                        ) {
+                            Text(stringResource(R.string.media_sniffer_add_domain_btn), fontSize = 12.sp)
+                        }
+                    }
+
+                    // Blocked domains list
+                    if (viewModel.mediaSnifferBlocklist.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.media_sniffer_no_blocked_sites),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            viewModel.mediaSnifferBlocklist.forEach { domain ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Block,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                        Text(
+                                            text = domain,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.removeDomainFromMediaSnifferBlocklist(context, domain) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Close,
+                                            contentDescription = "Remove",
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1639,6 +1933,216 @@ fun TabGroupDialog(
 }
 
 @Composable
+
+fun CreateNewGroupComposerDialog(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit,
+    onGroupCreated: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    var groupTitle by remember { mutableStateOf("") }
+    var selectedColorIndex by remember { mutableIntStateOf(0) }
+    val groupColors = remember {
+        listOf(
+            0xFF4285F4L, 0xFF34A853L, 0xFFFBBC05L, 0xFFEA4335L,
+            0xFF8AB4F8L, 0xFF81C995L, 0xFFFDE293L, 0xFFF28B82L,
+            0xFF9AA0A6L, 0xFF607D8BL, 0xFFFF9800L, 0xFF9C27B0L,
+            0xFFE91E63L, 0xFF795548L, 0xFF009688L, 0xFF3F51B5L
+        )
+    }
+
+    val ungroupedTabs = remember(viewModel.tabs.toList(), viewModel.tabGroups.toList(), viewModel.isIncognitoMode) {
+        val currentModeTabs = viewModel.tabs.filter { it.isIncognito == viewModel.isIncognitoMode }
+        val groupedTabIds = viewModel.tabGroups.flatMap { it.tabIds }.toSet()
+        currentModeTabs.filter { it.id !in groupedTabIds }
+    }
+
+    val selectedTabIds = remember { mutableStateListOf<String>() }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.FolderCopy,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.create_new_group).removeSuffix(":"),
+                    color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    stringResource(R.string.group_name_simple_placeholder),
+                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                androidx.compose.material3.OutlinedTextField(
+                    value = groupTitle,
+                    onValueChange = { groupTitle = it },
+                    placeholder = { Text(stringResource(R.string.group_name_placeholder), fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(groupColors[selectedColorIndex]),
+                        unfocusedBorderColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                )
+
+                Text(
+                    "Color Theme",
+                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    itemsIndexed(groupColors) { i, colorLong ->
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(Color(colorLong))
+                                .border(
+                                    if (i == selectedColorIndex) BorderStroke(2.dp, Color.White) else BorderStroke(0.dp, Color.Transparent),
+                                    CircleShape
+                                )
+                                .clickable { selectedColorIndex = i },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (i == selectedColorIndex) {
+                                Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
+
+                if (ungroupedTabs.isNotEmpty()) {
+                    HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+                    Text(
+                        "Include Open Tabs",
+                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 140.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        ungroupedTabs.forEach { tab ->
+                            val isChecked = tab.id in selectedTabIds
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isChecked) Color(groupColors[selectedColorIndex]).copy(alpha = 0.15f)
+                                        else (if (viewModel.isDarkThemeEnabled) Color(0xFF1E2D3F) else Color(0xFFF2F4F7))
+                                    )
+                                    .clickable {
+                                        if (isChecked) selectedTabIds.remove(tab.id) else selectedTabIds.add(tab.id)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        if (checked) selectedTabIds.add(tab.id) else selectedTabIds.remove(tab.id)
+                                    },
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(groupColors[selectedColorIndex]))
+                                )
+                                Text(
+                                    text = if (tab.title == "about:blank" || tab.title.isBlank()) stringResource(R.string.new_tab_title) else tab.title,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val finalTitle = groupTitle.trim().ifBlank {
+                        "Group ${viewModel.tabGroups.size + 1}"
+                    }
+                    val newGroupId = java.util.UUID.randomUUID().toString()
+                    val chosenColor = groupColors[selectedColorIndex]
+
+                    if (selectedTabIds.isNotEmpty()) {
+                        val group = TabGroup(
+                            id = newGroupId,
+                            title = finalTitle,
+                            color = chosenColor,
+                            tabIds = selectedTabIds.toList()
+                        )
+                        viewModel.tabGroups.add(group)
+                        viewModel.saveTabGroups()
+                    } else {
+                        val newTabId = java.util.UUID.randomUUID().toString()
+                        val group = TabGroup(
+                            id = newGroupId,
+                            title = finalTitle,
+                            color = chosenColor,
+                            tabIds = listOf(newTabId)
+                        )
+                        viewModel.tabGroups.add(group)
+                        viewModel.saveTabGroups()
+                        viewModel.createNewTab(context, "about:blank", groupId = newGroupId)
+                    }
+                    onGroupCreated()
+                    onDismissRequest()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(groupColors[selectedColorIndex])),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(
+                    stringResource(R.string.create_new_group).removeSuffix(":"),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = Color.White
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(
+                    stringResource(R.string.cancel_text),
+                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    )
+}
+
+@Composable
 fun RenameTabGroupDialog(
     viewModel: BrowserViewModel,
     renameGroupTarget: TabGroup,
@@ -1648,6 +2152,7 @@ fun RenameTabGroupDialog(
     onDismissRequest: () -> Unit,
     onRenameGroupTargetChange: (TabGroup) -> Unit
 ) {
+
     AlertDialog(
         onDismissRequest = onDismissRequest,
         containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF0F1B26) else MaterialTheme.colorScheme.surface,
@@ -1871,3 +2376,527 @@ fun ExternalAppRedirectDialog(
         dismissButton = {}
     )
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SpoofIdentityChooserDialog(
+    viewModel: BrowserViewModel,
+    onDismiss: () -> Unit,
+    onOpenUserAgentSettings: () -> Unit
+) {
+    val context = LocalContext.current
+    val userAgentManager = viewModel.userAgentManager
+    val globalPreset by userAgentManager.globalPreset.collectAsState()
+    val globalCustomUa by userAgentManager.globalCustomUa.collectAsState()
+    val siteRules by userAgentManager.siteRules.collectAsState()
+
+    val activeTab = viewModel.activeTab
+    val currentUrl = viewModel.currentUrl
+
+    // Extract domain from active URL if available
+    val currentDomain = remember(currentUrl, activeTab) {
+        val urlToParse = when {
+            activeTab != null && activeTab.url.isNotBlank() && activeTab.url != "about:blank" -> activeTab.url
+            currentUrl.isNotBlank() && currentUrl != "about:blank" -> currentUrl
+            else -> ""
+        }
+        if (urlToParse.startsWith("http://") || urlToParse.startsWith("https://")) {
+            try {
+                val host = android.net.Uri.parse(urlToParse).host?.trim()?.lowercase()?.removePrefix("www.")
+                host?.split("/")?.firstOrNull() ?: ""
+            } catch (_: Exception) { "" }
+        } else {
+            ""
+        }
+    }
+
+    val hasSiteDomain = currentDomain.isNotBlank()
+    var selectedScope by remember(currentDomain) { mutableStateOf(if (hasSiteDomain) "site" else "global") }
+
+    val existingSiteRule = remember(siteRules, currentDomain) {
+        if (currentDomain.isBlank()) null
+        else siteRules.firstOrNull { rule ->
+            val rDomain = rule.domain.trim().lowercase().removePrefix("www.")
+            rDomain == currentDomain || currentDomain.endsWith(".$rDomain") || rDomain.endsWith(".$currentDomain")
+        }
+    }
+
+    val selectedPresetId = if (selectedScope == "site") {
+        existingSiteRule?.presetId ?: UserAgentPreset.DEFAULT.id
+    } else {
+        globalPreset.id
+    }
+
+    var customUaInput by remember { mutableStateOf(if (selectedScope == "site") (existingSiteRule?.customUaString ?: "") else globalCustomUa) }
+    var showCustomUaInput by remember { mutableStateOf(false) }
+
+    val accentColor = MaterialTheme.colorScheme.primary
+    val containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+    val cardColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+    val cardBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    val textPrimary = MaterialTheme.colorScheme.onSurface
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = containerColor,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(accentColor.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Devices,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Spoof Identity",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary
+                        )
+                        Text(
+                            text = if (hasSiteDomain && selectedScope == "site") "Set rule for $currentDomain" else "Set default browser identity",
+                            fontSize = 12.sp,
+                            color = textSecondary
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenUserAgentSettings()
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "User Agent Settings",
+                        tint = textSecondary
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 440.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (hasSiteDomain) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(cardColor)
+                            .padding(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (selectedScope == "site") accentColor else Color.Transparent)
+                                .clickable { selectedScope = "site" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "This Site",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selectedScope == "site") Color.White else textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (selectedScope == "global") accentColor else Color.Transparent)
+                                .clickable { selectedScope = "global" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "All Sites (Global)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selectedScope == "global") Color.White else textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    if (selectedScope == "site" && existingSiteRule != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Site rule active for $currentDomain",
+                                fontSize = 11.sp,
+                                color = accentColor,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                                modifier = Modifier.clickable {
+                                    userAgentManager.removeSiteRulesForDomain(currentDomain)
+                                    viewModel.applyUserAgentForTab(activeTab)
+                                    activeTab?.session?.reload()
+                                    Toast.makeText(context, "Site rule removed for $currentDomain", Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                }
+                            ) {
+                                Text(
+                                    text = "Remove Site Rule",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    UserAgentPreset.entries.forEach { preset ->
+                        val isSelected = (preset.id == selectedPresetId)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) accentColor.copy(alpha = 0.12f) else cardColor,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) accentColor else cardBorderColor
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (preset == UserAgentPreset.CUSTOM) {
+                                        showCustomUaInput = true
+                                    } else {
+                                        if (selectedScope == "site" && hasSiteDomain) {
+                                            userAgentManager.addOrUpdateSiteRule(currentDomain, preset)
+                                            Toast.makeText(context, "Saved site identity for $currentDomain", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            userAgentManager.setGlobalPreset(preset)
+                                            Toast.makeText(context, "Global identity updated", Toast.LENGTH_SHORT).show()
+                                        }
+                                        viewModel.applyUserAgentForTab(activeTab)
+                                        activeTab?.session?.reload()
+                                        onDismiss()
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        if (preset == UserAgentPreset.CUSTOM) {
+                                            showCustomUaInput = true
+                                        } else {
+                                            if (selectedScope == "site" && hasSiteDomain) {
+                                                userAgentManager.addOrUpdateSiteRule(currentDomain, preset)
+                                                Toast.makeText(context, "Saved site identity for $currentDomain", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                userAgentManager.setGlobalPreset(preset)
+                                                Toast.makeText(context, "Global identity updated", Toast.LENGTH_SHORT).show()
+                                            }
+                                            viewModel.applyUserAgentForTab(activeTab)
+                                            activeTab?.session?.reload()
+                                            onDismiss()
+                                        }
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = preset.displayName,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) accentColor else textPrimary
+                                    )
+                                    if (preset.userAgentString.isNotBlank()) {
+                                        Text(
+                                            text = preset.userAgentString,
+                                            fontSize = 10.sp,
+                                            color = textSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (showCustomUaInput) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = customUaInput,
+                            onValueChange = { customUaInput = it },
+                            label = { Text("Custom User Agent String", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { showCustomUaInput = false }) {
+                                Text("Cancel")
+                            }
+                            Button(
+                                onClick = {
+                                    val trimmed = customUaInput.trim()
+                                    if (trimmed.isNotBlank()) {
+                                        if (selectedScope == "site" && hasSiteDomain) {
+                                            userAgentManager.addOrUpdateSiteRule(currentDomain, UserAgentPreset.CUSTOM, trimmed)
+                                            Toast.makeText(context, "Custom identity saved for $currentDomain", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            userAgentManager.setGlobalPreset(UserAgentPreset.CUSTOM, trimmed)
+                                            Toast.makeText(context, "Global custom identity updated", Toast.LENGTH_SHORT).show()
+                                        }
+                                        viewModel.applyUserAgentForTab(activeTab)
+                                        activeTab?.session?.reload()
+                                        onDismiss()
+                                    }
+                                }
+                            ) {
+                                Text("Save & Apply")
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onOpenUserAgentSettings()
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = accentColor
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Full Settings",
+                        color = accentColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(
+                    onClick = onDismiss
+                ) {
+                    Text("Close", color = textSecondary)
+                }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TorrentDownloaderDialog(
+    viewModel: BrowserViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var magnetInput by remember { mutableStateOf("") }
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    LaunchedEffect(Unit) {
+        val clipText = clipboardManager.getText()?.text?.trim()
+        if (!clipText.isNullOrEmpty() && (clipText.startsWith("magnet:") || clipText.endsWith(".torrent"))) {
+            magnetInput = clipText
+        }
+    }
+
+    val parsedInfo = remember(magnetInput) {
+        val trimmed = magnetInput.trim()
+        if (trimmed.startsWith("magnet:")) {
+            val dnMatch = Regex("""dn=([^&]+)""").find(trimmed)?.groupValues?.get(1)?.let {
+                runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)
+            }
+            val hashMatch = Regex("""xt=urn:btih:([^&]+)""").find(trimmed)?.groupValues?.get(1)
+            val trackers = Regex("""tr=([^&]+)""").findAll(trimmed).map {
+                runCatching { java.net.URLDecoder.decode(it.groupValues[1], "UTF-8") }.getOrDefault(it.groupValues[1])
+            }.toList()
+            Triple(dnMatch ?: "Torrent Download", hashMatch ?: "Unknown Hash", trackers)
+        } else {
+            Triple(trimmed.substringAfterLast("/").ifBlank { "Torrent Download" }, "", emptyList())
+        }
+    }
+
+    val accentColor = MaterialTheme.colorScheme.primary
+    val containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+    val cardColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+    val textPrimary = MaterialTheme.colorScheme.onSurface
+    val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = containerColor,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(accentColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Download,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column {
+                    Text("Torrent & Magnet Downloader", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                    Text("High-Speed Packet Torrent Engine", fontSize = 11.sp, color = textSecondary)
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = magnetInput,
+                    onValueChange = { magnetInput = it },
+                    label = { Text("Paste Magnet Link or Torrent URL", fontSize = 12.sp) },
+                    placeholder = { Text("magnet:?xt=urn:btih:...", fontSize = 11.sp) },
+                    singleLine = false,
+                    maxLines = 3,
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                val text = clipboardManager.getText()?.text?.trim()
+                                if (!text.isNullOrEmpty()) magnetInput = text
+                            }
+                        ) {
+                            Text("Paste", fontSize = 11.sp)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (magnetInput.trim().isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = cardColor,
+                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(text = "Parsed Torrent Metadata", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accentColor)
+                            Text(text = "Name: ${parsedInfo.first}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textPrimary)
+                            if (parsedInfo.second.isNotBlank()) {
+                                Text(text = "InfoHash: ${parsedInfo.second}", fontSize = 10.sp, color = textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (parsedInfo.third.isNotEmpty()) {
+                                Text(text = "Trackers (${parsedInfo.third.size}): ${parsedInfo.third.take(2).joinToString(", ")}", fontSize = 10.sp, color = textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val urlToDownload = magnetInput.trim()
+                    if (urlToDownload.isNotBlank()) {
+                        viewModel.startGenericDownload(context, urlToDownload, parsedInfo.first, false)
+                        Toast.makeText(context, "Added torrent download to high-speed queue", Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    }
+                },
+                enabled = magnetInput.trim().isNotBlank(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Start High-Speed Download")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = textSecondary)
+            }
+        }
+    )
+}
+
+

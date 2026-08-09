@@ -556,10 +556,10 @@ class StreamDownloadEngine(
             }
 
             val totalLength = connection.contentLengthLong
-            val input = BufferedInputStream(connection.inputStream, 8192)
+            val input = BufferedInputStream(connection.inputStream, 65536)
             val output = FileOutputStream(targetFile)
 
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(65536)
             var count = 0
             var totalBytes = 0L
 
@@ -694,10 +694,10 @@ class StreamDownloadEngine(
             }
 
             val totalLength = connection.contentLengthLong
-            val input = BufferedInputStream(connection.inputStream, 8192)
+            val input = BufferedInputStream(connection.inputStream, 65536)
             val output = FileOutputStream(targetFile)
 
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(65536)
             var count = 0
             var totalBytes = 0L
 
@@ -783,9 +783,9 @@ class StreamDownloadEngine(
                 return@withContext
             }
             val videoLength = videoConn.contentLengthLong
-            val videoInput = BufferedInputStream(videoConn.inputStream, 8192)
+            val videoInput = BufferedInputStream(videoConn.inputStream, 65536)
             val videoOutput = FileOutputStream(tempVideoFile)
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(65536)
             var count = 0
             while (isActive && videoInput.read(buffer).also { count = it } != -1) {
                 videoOutput.write(buffer, 0, count)
@@ -811,7 +811,7 @@ class StreamDownloadEngine(
                 return@withContext
             }
             val audioLength = audioConn.contentLengthLong
-            val audioInput = BufferedInputStream(audioConn.inputStream, 8192)
+            val audioInput = BufferedInputStream(audioConn.inputStream, 65536)
             val audioOutput = FileOutputStream(tempAudioFile)
             while (isActive && audioInput.read(buffer).also { count = it } != -1) {
                 audioOutput.write(buffer, 0, count)
@@ -1226,6 +1226,8 @@ class StreamDownloadEngine(
             val url = URL(currentUrl)
             val currentConn = url.openConnection() as HttpURLConnection
             currentConn.instanceFollowRedirects = false // Manual handling to support protocol changes (http <-> https)
+            currentConn.connectTimeout = 15000
+            currentConn.readTimeout = 30000
             
             // Set headers
             headers.forEach { (key, value) ->

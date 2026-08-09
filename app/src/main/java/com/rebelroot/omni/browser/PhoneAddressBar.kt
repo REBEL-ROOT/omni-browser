@@ -24,6 +24,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import android.content.Intent
 import android.speech.RecognizerIntent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -103,7 +104,6 @@ import kotlinx.coroutines.delay
 import org.mozilla.geckoview.GeckoView
 import com.rebelroot.omni.R
 import com.rebelroot.omni.media.MediaInterceptor
-import com.rebelroot.omni.privacy.FireButton
 import com.rebelroot.omni.tools.qrcode.BarcodeGenerator
 import android.graphics.Bitmap
 import androidx.compose.ui.draw.rotate
@@ -159,7 +159,6 @@ fun PhoneAddressBar(
     onShowAllInOneMenuSheet: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
@@ -589,7 +588,7 @@ fun PhoneAddressBar(
             }
         }
 
-        AnimatedVisibility(visible = !isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
+        AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             val infiniteTransition = rememberInfiniteTransition(label = "tabPulse")
             val pulseScale by infiniteTransition.animateFloat(
                 initialValue = 1f,
@@ -624,17 +623,13 @@ fun PhoneAddressBar(
             }
         }
 
-        AnimatedVisibility(visible = !isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
-            Box {
+        AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
+            Box(
+                modifier = Modifier.size(config.barIconSize)
+            ) {
                 IconButton(
-                    onClick = {
-                        if (viewModel.addressBarPosition == "Bottom") {
-                            onShowAllInOneMenuSheet()
-                        } else {
-                            onShowMenuChange(true)
-                        }
-                    },
-                    modifier = Modifier.size(config.barIconSize)
+                    onClick = { onShowAllInOneMenuSheet() },
+                    modifier = Modifier.matchParentSize()
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Menu,
@@ -643,49 +638,13 @@ fun PhoneAddressBar(
                         modifier = Modifier.size(config.innerIconSize)
                     )
                 }
-
-                omnimenuDropdown(
-                    expanded = showMenu,
-                    onDismissRequest = { onShowMenuChange(false) },
-                    viewModel = viewModel,
-                    onNewTab = {
-                        viewModel.createNewTab(context, "about:blank")
-                    },
-                    onNewIncognitoTab = {
-                        if (!viewModel.isIncognitoMode) {
-                            viewModel.toggleIncognitoMode(context)
-                        }
-                        viewModel.createNewTab(context, "about:blank")
-                    },
-                    onOpenHistory = onOpenHistory,
-                    onBurnData = {
-                        coroutineScope.launch {
-                            val runtime = viewModel.getGeckoRuntime(context)
-                            FireButton(runtime, context).burn()
-                            viewModel.burnAllData(context)
-                            Toast.makeText(context, context.getString(R.string.toast_burn_data), Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onOpenDownloads = onOpenDownloads,
-                    onOpenBookmarks = onOpenBookmarks,
-                    onOpenSettings = onOpenSettings,
-                    onOpenPasswordManager = onOpenPasswordManager,
-                    onShowThemeSheet = onShowThemeSheet,
-                    onShowQuickTools = onShowQuickTools,
-                    onShowFeedbackDialog = onShowFeedbackDialog,
-                    onShowCustomizationSheet = onShowCustomizationSheet,
-                    onShowExtensions = onShowExtensionsSheet,
-                    onShowPlayerSettings = onShowPlayerSettings,
-                    onShowSiteInfo = onShowSiteInfo,
-                    onFindInPage = { viewModel.openFindInPage() }
-                )
             }
         }
     }
 }
 
 @Composable
-fun omnimenuDropdown(
+fun omnimenuDropdownCard(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     viewModel: BrowserViewModel,
@@ -700,10 +659,10 @@ fun omnimenuDropdown(
     onShowThemeSheet: () -> Unit = {},
     onShowQuickTools: () -> Unit = {},
     onShowFeedbackDialog: () -> Unit = {},
-    onShowCustomizationSheet: () -> Unit,
-    onShowExtensions: () -> Unit,
-    onShowPlayerSettings: () -> Unit,
-    onShowSiteInfo: () -> Unit,
+    onShowCustomizationSheet: () -> Unit = {},
+    onShowExtensions: () -> Unit = {},
+    onShowPlayerSettings: () -> Unit = {},
+    onShowSiteInfo: () -> Unit = {},
     onFindInPage: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -719,143 +678,95 @@ fun omnimenuDropdown(
     val circleBg = if (isDark) Color(0xFF2C2E38) else Color(0xFFE5E7EB)
     val accentColor = MaterialTheme.colorScheme.primary
 
-    if (!expanded) return
-
     val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
-    val maxHeight = (screenHeightDp - 70.dp).coerceAtLeast(300.dp)
+    val maxHeight = (screenHeightDp - 145.dp).coerceAtLeast(250.dp)
 
-    androidx.compose.ui.window.Popup(
-        onDismissRequest = onDismissRequest,
-        popupPositionProvider = remember {
-            object : androidx.compose.ui.window.PopupPositionProvider {
-                override fun calculatePosition(
-                    anchorBounds: androidx.compose.ui.unit.IntRect,
-                    windowSize: androidx.compose.ui.unit.IntSize,
-                    layoutDirection: androidx.compose.ui.unit.LayoutDirection,
-                    popupContentSize: androidx.compose.ui.unit.IntSize
-                ): androidx.compose.ui.unit.IntOffset {
-                    val isBottom = anchorBounds.top > windowSize.height / 2
-
-                    // Horizontal: right align with anchor button
-                    val x = (anchorBounds.right - popupContentSize.width).coerceIn(
-                        12,
-                        (windowSize.width - popupContentSize.width - 12).coerceAtLeast(0)
-                    )
-
-                    // Vertical:
-                    // If bottom nav: bottom of popup sits directly on top of anchor bounds (top of bottom bar)
-                    // If top nav: top of popup sits directly below anchor bounds (bottom of top bar)
-                    val y = if (isBottom) {
-                        anchorBounds.top - popupContentSize.height - 4
-                    } else {
-                        anchorBounds.bottom + 4
-                    }
-
-                    val clampedY = y.coerceIn(
-                        12,
-                        (windowSize.height - popupContentSize.height - 12).coerceAtLeast(0)
-                    )
-
-                    return androidx.compose.ui.unit.IntOffset(x, clampedY)
-                }
-            }
-        },
-        properties = androidx.compose.ui.window.PopupProperties(
-            focusable = true,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
-        )
+    Surface(
+        modifier = Modifier
+            .width(270.dp)
+            .heightIn(max = maxHeight),
+        shape = RoundedCornerShape(26.dp),
+        color = cardBg,
+        shadowElevation = 14.dp,
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF333746) else Color(0xFFE2E4E9))
     ) {
-        Card(
+        Column(
             modifier = Modifier
-                .width(260.dp)
-                .heightIn(max = maxHeight),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBg),
-            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
-            border = BorderStroke(1.dp, if (isDark) Color(0xFF2D303C) else Color(0xFFE5E7EB))
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 6.dp, horizontal = 4.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp)
-            ) {
             // ── Top 6 Circular Quick Navigation Row ──────────────────
             val canBack = activeTab?.canGoBack == true
             val canForward = activeTab?.canGoForward == true
             val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
 
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                    .background(
+                        color = if (isDark) Color(0xFF161820) else Color(0xFFE8EAF0),
+                        shape = RoundedCornerShape(18.dp)
+                    )
+                    .border(
+                        width = 0.5.dp,
+                        color = if (isDark) Color(0xFF2C2F3E) else Color(0xFFD8DCE5),
+                        shape = RoundedCornerShape(18.dp)
+                    )
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
-                // Back
-                CircleMenuIconButton(
-                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    enabled = canBack,
-                    tint = if (canBack) iconTint else iconTint.copy(alpha = 0.3f),
-                    bg = circleBg,
-                    onClick = { onDismissRequest(); viewModel.goBack() }
-                )
-                // Forward
-                CircleMenuIconButton(
-                    icon = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = "Forward",
-                    enabled = canForward,
-                    tint = if (canForward) iconTint else iconTint.copy(alpha = 0.3f),
-                    bg = circleBg,
-                    onClick = { onDismissRequest(); viewModel.goForward() }
-                )
-                // Save / Bookmark
-                CircleMenuIconButton(
-                    icon = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                    contentDescription = "Bookmark",
-                    enabled = !isHome,
-                    tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else iconTint.copy(alpha = 0.3f),
-                    bg = if (isBookmarked) accentColor.copy(alpha = 0.2f) else circleBg,
-                    onClick = {
-                        onDismissRequest()
-                        if (!isHome) {
-                            if (isBookmarked) viewModel.removeBookmark(viewModel.currentUrl)
-                            else viewModel.addToBookmarks(activeTab?.title ?: "Webpage", viewModel.currentUrl)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Back
+                    CircleMenuIconButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        enabled = canBack,
+                        tint = if (canBack) iconTint else iconTint.copy(alpha = 0.3f),
+                        bg = Color.Transparent,
+                        onClick = { onDismissRequest(); viewModel.goBack() }
+                    )
+                    // Forward
+                    CircleMenuIconButton(
+                        icon = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = "Forward",
+                        enabled = canForward,
+                        tint = if (canForward) iconTint else iconTint.copy(alpha = 0.3f),
+                        bg = Color.Transparent,
+                        onClick = { onDismissRequest(); viewModel.goForward() }
+                    )
+                    // Save / Bookmark
+                    CircleMenuIconButton(
+                        icon = if (isBookmarked) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        contentDescription = "Bookmark",
+                        enabled = !isHome,
+                        tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else iconTint.copy(alpha = 0.3f),
+                        bg = if (isBookmarked) accentColor.copy(alpha = 0.2f) else Color.Transparent,
+                        onClick = {
+                            onDismissRequest()
+                            if (!isHome) {
+                                if (isBookmarked) viewModel.removeBookmark(viewModel.currentUrl)
+                                else viewModel.addToBookmarks(activeTab?.title ?: "Webpage", viewModel.currentUrl)
+                            }
                         }
-                    }
-                )
-                // Save PDF
-                CircleMenuIconButton(
-                    icon = Icons.Rounded.Download,
-                    contentDescription = "Save PDF",
-                    enabled = !isHome,
-                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                    bg = circleBg,
-                    onClick = { onDismissRequest(); if (!isHome) viewModel.printCurrentPage(context) }
-                )
-                // Info
-                CircleMenuIconButton(
-                    icon = Icons.Rounded.Info,
-                    contentDescription = "Info",
-                    enabled = !isHome,
-                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                    bg = circleBg,
-                    onClick = { onDismissRequest(); if (!isHome) onShowSiteInfo() }
-                )
-                // Reload
-                CircleMenuIconButton(
-                    icon = Icons.Rounded.Refresh,
-                    contentDescription = "Reload",
-                    enabled = !isHome,
-                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                    bg = circleBg,
-                    onClick = { onDismissRequest(); if (!isHome) viewModel.reload() }
-                )
+                    )
+                    // Reload
+                    CircleMenuIconButton(
+                        icon = Icons.Rounded.Refresh,
+                        contentDescription = "Reload",
+                        enabled = !isHome,
+                        tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
+                        bg = Color.Transparent,
+                        onClick = { onDismissRequest(); if (!isHome) viewModel.reload() }
+                    )
+                }
             }
 
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp, horizontal = 8.dp))
 
             // ── Section 1: Tabs ────────────────────────────────────
             MinimalMenuItem(
@@ -880,7 +791,7 @@ fun omnimenuDropdown(
                 onClick = { onDismissRequest(); Toast.makeText(context, context.getString(R.string.toast_group_created), Toast.LENGTH_SHORT).show() }
             )
 
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp, horizontal = 8.dp))
 
             // ── Section 2: Browse & Data ───────────────────────────
             MinimalMenuItem(
@@ -898,7 +809,7 @@ fun omnimenuDropdown(
                 onClick = { onDismissRequest(); onBurnData() }
             )
 
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp, horizontal = 8.dp))
 
             // ── Section 3: Library & Page Tools ────────────────────
             MinimalMenuItem(
@@ -946,18 +857,20 @@ fun omnimenuDropdown(
                     textColor = textPrimary,
                     onClick = { onDismissRequest(); onFindInPage() }
                 )
-                MinimalMenuItem(
-                    text = stringResource(R.string.menu_add_to_shortcuts),
-                    icon = Icons.Rounded.AddCircle,
-                    iconTint = iconTint,
-                    textColor = textPrimary,
-                    onClick = {
-                        onDismissRequest()
-                        val currentUrl = viewModel.currentUrl
-                        val currentTitle = activeTab?.title ?: "Webpage"
-                        viewModel.addShortcut(currentTitle, currentUrl)
-                    }
-                )
+                if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
+                    MinimalMenuItem(
+                        text = stringResource(R.string.menu_add_to_shortcuts),
+                        icon = Icons.Rounded.AddCircle,
+                        iconTint = iconTint,
+                        textColor = textPrimary,
+                        onClick = {
+                            onDismissRequest()
+                            val currentUrl = viewModel.currentUrl
+                            val currentTitle = activeTab?.title ?: "Webpage"
+                            viewModel.addShortcut(currentTitle, currentUrl)
+                        }
+                    )
+                }
                 MinimalMenuItem(
                     text = stringResource(R.string.menu_extensions),
                     icon = Icons.Rounded.Extension,
@@ -992,7 +905,7 @@ fun omnimenuDropdown(
                 onClick = { onDismissRequest(); onShowPlayerSettings() }
             )
 
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp, horizontal = 8.dp))
 
             // ── Section 4: App Settings ────────────────────────────
             MinimalMenuItem(
@@ -1028,6 +941,64 @@ fun omnimenuDropdown(
         }
     }
 }
+
+@Composable
+fun omnimenuDropdown(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    viewModel: BrowserViewModel,
+    onNewTab: () -> Unit,
+    onNewIncognitoTab: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onBurnData: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenPasswordManager: () -> Unit,
+    onShowThemeSheet: () -> Unit = {},
+    onShowQuickTools: () -> Unit = {},
+    onShowFeedbackDialog: () -> Unit = {},
+    onShowCustomizationSheet: () -> Unit = {},
+    onShowExtensions: () -> Unit = {},
+    onShowPlayerSettings: () -> Unit = {},
+    onShowSiteInfo: () -> Unit = {},
+    onFindInPage: () -> Unit = {}
+) {
+    val isDark = viewModel.isDarkThemeEnabled
+    val cardBg = if (isDark && viewModel.isAmoledMode) Color(0xFF0C0D10) else if (isDark) Color(0xFF20222A) else Color(0xFFF6F7F9)
+    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+    val maxHeight = (screenHeightDp - 145.dp).coerceAtLeast(250.dp)
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier.background(Color.Transparent),
+        containerColor = Color.Transparent,
+        shadowElevation = 0.dp,
+        border = null
+    ) {
+        omnimenuDropdownCard(
+            expanded = expanded,
+            onDismissRequest = onDismissRequest,
+            viewModel = viewModel,
+            onNewTab = onNewTab,
+            onNewIncognitoTab = onNewIncognitoTab,
+            onOpenHistory = onOpenHistory,
+            onBurnData = onBurnData,
+            onOpenDownloads = onOpenDownloads,
+            onOpenBookmarks = onOpenBookmarks,
+            onOpenSettings = onOpenSettings,
+            onOpenPasswordManager = onOpenPasswordManager,
+            onShowThemeSheet = onShowThemeSheet,
+            onShowQuickTools = onShowQuickTools,
+            onShowFeedbackDialog = onShowFeedbackDialog,
+            onShowCustomizationSheet = onShowCustomizationSheet,
+            onShowExtensions = onShowExtensions,
+            onShowPlayerSettings = onShowPlayerSettings,
+            onShowSiteInfo = onShowSiteInfo,
+            onFindInPage = onFindInPage
+        )
+    }
 }
 
 @Composable
@@ -1067,22 +1038,31 @@ private fun MinimalMenuItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 0.5.dp)
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 4.5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(17.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .background(iconTint.copy(alpha = 0.10f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(16.dp)
+            )
+        }
         Text(
             text = text,
             color = textColor,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Normal,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f)
         )
         if (trailingContent != null) {

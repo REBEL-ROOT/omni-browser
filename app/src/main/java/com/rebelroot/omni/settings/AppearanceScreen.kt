@@ -268,6 +268,24 @@ fun AppearanceScreen(
                             colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
                         )
                     }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(id = R.string.hide_refresh_indicator), color = textPrimaryColor, fontSize = 16.sp)
+                            Text(stringResource(id = R.string.hide_refresh_indicator_desc), color = textSecondaryColor, fontSize = 12.sp)
+                        }
+                        Switch(
+                            checked = viewModel.hideRefreshIndicator,
+                            onCheckedChange = { viewModel.saveHideRefreshIndicator(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
                 }
             }
 

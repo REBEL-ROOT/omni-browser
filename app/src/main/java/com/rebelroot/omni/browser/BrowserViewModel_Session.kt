@@ -13,15 +13,6 @@ import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSession
 
-internal fun BrowserViewModel.applyUserAgentForTab(tab: TabState) {
-    val ua = if (isDesktopMode) {
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
-    } else {
-        "Mozilla/5.0 (Android 13; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"
-    }
-    tab.session.settings.setUserAgentOverride(ua)
-}
-
 internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: Context) {
     applyUserAgentForTab(tab)
     tab.session.contentBlockingDelegate = object : org.mozilla.geckoview.ContentBlocking.Delegate {
@@ -77,6 +68,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             permission: GeckoSession.PermissionDelegate.ContentPermission
         ): GeckoResult<Int>? {
             Log.d(TAG, "onContentPermissionRequest: type=${permission.permission}, uri=${permission.uri}")
+
+            // Auto-approve Storage Access and Identity permissions for Google Auth & standard login origins
+            val lowerUri = permission.uri.lowercase()
+            val isAuthOrigin = lowerUri.contains("accounts.google.com") ||
+                               lowerUri.contains("google.com") ||
+                               lowerUri.contains("appleid.apple.com") ||
+                               lowerUri.contains("facebook.com")
+            if (isAuthOrigin || permission.permission == 6 || permission.permission == 7 || permission.permission == 8) {
+                Log.i(TAG, "Auto-granting auth/storage permission (${permission.permission}) for ${permission.uri}")
+                return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+            }
             
             if (permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE ||
                 permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE) {
@@ -226,6 +228,43 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             prompt: GeckoSession.PromptDelegate.AlertPrompt
         ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
             val message = prompt.message ?: ""
+            if (message.startsWith("OMNI_VISUAL_BLOCK_ADD:")) {
+                val jsonStr = message.removePrefix("OMNI_VISUAL_BLOCK_ADD:")
+                try {
+                    val obj = org.json.JSONObject(jsonStr)
+                    val selector = obj.optString("selector", "")
+                    val preview = obj.optString("preview", "")
+                    val payloadDomain = obj.optString("domain", "").lowercase().removePrefix("www.")
+                    val rawDomain = if (payloadDomain.isNotBlank() && payloadDomain != "about:blank") payloadDomain else {
+                        try { android.net.Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.") ?: "*" } catch(_: Exception) { "*" }
+                    }
+                    val cleanDomain = if (rawDomain.isBlank() || rawDomain == "about:blank") "*" else rawDomain
+                    if (selector.isNotBlank()) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            visualBlockManager.addRule(cleanDomain, selector, preview)
+                            isVisualBlockModeActive = false
+                            applyVisualBlockRulesToActiveTab()
+                            Toast.makeText(context, "Element blocked & rule saved!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error adding visual block rule", e)
+                }
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
+            if (message.startsWith("OMNI_VISUAL_BLOCK_CANCEL:")) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    isVisualBlockModeActive = false
+                }
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
+            if (message.startsWith("OMNI_VISUAL_BLOCK_SETTINGS:")) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    isVisualBlockModeActive = false
+                    navigateToVisualBlockSettingsTrigger = true
+                }
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
             if (message.startsWith("OMNI_IMAGES:")) {
                 val json = message.removePrefix("OMNI_IMAGES:")
                 try {
@@ -352,6 +391,30 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             return null
         }
 
+        override fun onChoicePrompt(
+            session: GeckoSession,
+            prompt: GeckoSession.PromptDelegate.ChoicePrompt
+        ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            if (tab.id != activeTabId) return GeckoResult.fromValue(prompt.dismiss())
+            val choices = prompt.choices ?: return GeckoResult.fromValue(prompt.dismiss())
+            if (choices.isEmpty()) return GeckoResult.fromValue(prompt.dismiss())
+
+            // Auto-confirm the preselected/default choice (e.g. Google Sign-In account selector)
+            Log.i(TAG, "onChoicePrompt: auto-confirming choice from ${choices.size} options")
+            val defaultChoice = choices.firstOrNull { it.selected } ?: choices.first()
+            return GeckoResult.fromValue(prompt.confirm(defaultChoice))
+        }
+
+        override fun onLoginSelect(
+            session: GeckoSession,
+            prompt: GeckoSession.PromptDelegate.AutocompleteRequest<org.mozilla.geckoview.Autocomplete.LoginSelectOption>
+        ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            // Dismiss Gecko's native auto-fill prompt so it doesn't automatically overwrite 
+            // input fields when the user types or edits text (e.g. backspacing).
+            // Password autofill is handled explicitly via our Compose UI.
+            return GeckoResult.fromValue(prompt.dismiss())
+        }
+
         override fun onLoginSave(
             session: GeckoSession,
             prompt: GeckoSession.PromptDelegate.AutocompleteRequest<org.mozilla.geckoview.Autocomplete.LoginSaveOption>
@@ -361,12 +424,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             val host = try {
                 val originHost = java.net.URI(entry.origin ?: "").host
                 if (!originHost.isNullOrBlank()) {
-                    originHost.removePrefix("www.")
+                    originHost.removePrefix("www.").lowercase()
                 } else {
-                    java.net.URI(tab.url).host?.removePrefix("www.") ?: ""
+                    java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: ""
                 }
             } catch (e: Exception) {
-                try { java.net.URI(tab.url).host?.removePrefix("www.") ?: "" } catch (ex: Exception) { "" }
+                try { java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: "" } catch (ex: Exception) { "" }
+            }
+            if (neverSavePasswordDomains.contains(host)) {
+                Log.i(TAG, "Suppression rule active for $host — ignoring password save prompt")
+                return GeckoResult.fromValue(prompt.dismiss())
             }
             if (host.isNotBlank() && entry.username.isNotEmpty() && entry.password.isNotEmpty()) {
                 pendingSaveCredential = BrowserViewModel.SavedPassword(
@@ -488,6 +555,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     checkAutofillForUrl(it)
                     mediaInterceptor.clear()
                     isVideoPlayingInPage = false
+                    applyUserAgentForTab(tab, it)
+                    injectStealthDefuserScriptlet(tab)
                     // Re-suppress the translate badge on SPA navigations within translate.goog
                     if (it.contains(".translate.goog")) {
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -908,7 +977,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
                 Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                 val runtime = getGeckoRuntime(context)
-                val isJsAllowed = getSitePermissionValue(uri, "javascript") == "allow"
+                val isAuthUri = lowerUri.contains("accounts.google.com") || lowerUri.contains("oauth") || lowerUri.contains("gsi")
+                val isJsAllowed = isAuthUri || getSitePermissionValue(uri, "javascript") == "allow"
                 val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                     .usePrivateMode(isIncognitoMode)
                     .userAgentMode(if (isDesktopMode) org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_DESKTOP else org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
@@ -952,6 +1022,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (idx != -1) {
                 tabs[idx] = tabs[idx].copy(loadError = null)
             }
+            applyUserAgentForTab(tab, url)
             if (forceDarkWebsites || isDarkThemeEnabled) {
                 injectForceDarkCssIfNeeded(tab)
             }
@@ -970,6 +1041,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     injectForceDarkCssIfNeeded(tab)
                 }
                 if (tab.id == activeTabId) {
+                    injectStealthDefuserScriptlet(tab)
                     if (accessibilityForceZoom) {
                         injectZoomEnabler()
                     }
@@ -988,11 +1060,15 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     if (siteStyleAppliedGlobally) {
                         applySiteStyleToActiveTab()
                     }
+                    applyVisualBlockRulesToTab(tab)
                 }
             }
         }
 
         override fun onProgressChange(session: GeckoSession, progress: Int) {
+            if (progress in 5..25) {
+                injectStealthDefuserScriptlet(tab)
+            }
             if (tab.id == activeTabId) {
                 loadingProgress = (progress / 100f).coerceIn(0.05f, 1f)
             }
@@ -1006,5 +1082,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 tabs[idx] = tabs[idx].copy(savedSessionState = sessionState)
             }
         }
+    }
+}
+
+internal fun BrowserViewModel.injectStealthDefuserScriptlet(tab: TabState) {
+    try {
+        val defuserJs = adBlockManager.getStealthDefuserJs()
+        if (defuserJs.isNotBlank()) {
+            val cleanJs = defuserJs.replace("\n", " ")
+            tab.session.loadUri("javascript:(function(){$cleanJs})();")
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Error injecting stealth defuser scriptlet", e)
     }
 }

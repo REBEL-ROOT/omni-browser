@@ -55,6 +55,50 @@ class MediaInterceptor {
      */
     var isYouTubeEnabled = false
 
+    /**
+     * Minimum video/audio duration in seconds. Media shorter than this threshold is ignored.
+     * Only applies when a duration can be extracted from the URL params (e.g. YouTube/CDN URLs).
+     * Set to 0 to disable duration filtering (default).
+     */
+    var minDurationSeconds: Int = 0
+
+    /**
+     * Tries to extract video duration in seconds from common URL query parameters.
+     * Returns null if the duration cannot be determined (unknown = pass-through).
+     */
+    private fun getDurationSecondsFromUrl(url: String): Double? {
+        return try {
+            val uri = android.net.Uri.parse(url)
+            val durStr = uri.getQueryParameter("dur")
+                ?: uri.getQueryParameter("duration")
+                ?: uri.getQueryParameter("dur_raw")
+                ?: uri.getQueryParameter("d")
+            durStr?.toDoubleOrNull()
+        } catch (_: Exception) { null }
+    }
+
+    /**
+     * Set of domain names on which Media Sniffer is completely disabled.
+     */
+    var blockedDomains: Set<String> = emptySet()
+
+    fun isDomainBlocked(url: String): Boolean {
+        if (blockedDomains.isEmpty()) return false
+        val host = try {
+            android.net.Uri.parse(url).host?.lowercase()
+        } catch (_: Exception) { null } ?: return false
+
+        return blockedDomains.any { blocked ->
+            val clean = blocked.trim().lowercase()
+                .removePrefix("http://")
+                .removePrefix("https://")
+                .removePrefix("www.")
+                .trimEnd('/')
+            if (clean.isEmpty()) return@any false
+            host == clean || host.endsWith(".${clean}")
+        }
+    }
+
     private fun isYouTubeUrl(url: String): Boolean {
         val lower = url.lowercase()
         return lower.contains("youtube.com") || lower.contains("youtu.be") || lower.contains("googlevideo.com")
@@ -119,11 +163,22 @@ class MediaInterceptor {
      * Called when the network interceptor detects a media asset request.
      */
     fun onMediaRequestDetected(url: String, headers: Map<String, String>? = null) {
+        if (isDomainBlocked(url)) return
         if (isTrackingOrStaticResource(url)) return
         if (isAdVideo(url)) {
             Log.i("MediaInterceptor", "🚫 Skipping ad video: $url")
             return
         }
+        if (minDurationSeconds > 0) {
+            val dur = getDurationSecondsFromUrl(url)
+            if (dur != null && dur < minDurationSeconds) {
+                Log.i("MediaInterceptor", "🚫 Skipping short media (${dur}s < min ${minDurationSeconds}s): $url")
+                return
+            }
+        }
+        val sizeBytes = headers?.get("Content-Length")?.toLongOrNull()
+            ?: headers?.get("content-length")?.toLongOrNull()
+
         val type = classifyUrl(url) ?: return
         val isDrm = url.contains("drm") || url.contains("widevine") || url.contains("license")
         val cookies = headers?.get("Cookie") ?: headers?.get("cookie")
@@ -136,7 +191,7 @@ class MediaInterceptor {
                 type = type,
                 quality = extractQuality(url) ?: "Source HD",
                 isDrmProtected = isDrm,
-                sizeBytes = headers?.get("Content-Length")?.toLongOrNull(),
+                sizeBytes = sizeBytes,
                 cookies = cookies
             )
             addMedia(media)
@@ -149,6 +204,7 @@ class MediaInterceptor {
      * Triggered by our injected WebExtension page script.
      */
     fun onAggressiveMediaGrabbed(url: String, mimeType: String, cookies: String? = null) {
+        if (isDomainBlocked(url)) return
         if (isTrackingOrStaticResource(url)) return
         if (isAdVideo(url)) {
             Log.i("MediaInterceptor", "🚫 Skipping ad video (aggressive): $url")

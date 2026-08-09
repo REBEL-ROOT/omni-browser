@@ -207,7 +207,9 @@ fun HomeScreenContent(
     onOpenAppearance: () -> Unit = {},
     onShowThemeSheet: () -> Unit = {},
     onShowQuickTools: () -> Unit = {},
-    onShowFeedbackDialog: () -> Unit = {}
+    onShowFeedbackDialog: () -> Unit = {},
+    onShowPlayerSettings: () -> Unit = {},
+    onBurnData: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -217,6 +219,7 @@ fun HomeScreenContent(
     LaunchedEffect(searchText.text) {
         viewModel.fetchSearchSuggestions(searchText.text)
     }
+    var showHomeMenu by remember { mutableStateOf(false) }
     var showAddShortcutSheet by remember { mutableStateOf(false) }
     var shortcutsExpanded by remember { mutableStateOf(false) }
     var selectedShortcutForMenu by remember { mutableStateOf<HomeShortcut?>(null) }
@@ -241,8 +244,6 @@ fun HomeScreenContent(
             }
         }
     )
-
-    var showHomeMenu by remember { mutableStateOf(false) }
 
     val baseDensity = androidx.compose.ui.platform.LocalDensity.current
     val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
@@ -384,7 +385,6 @@ fun HomeScreenContent(
                         }
                     }
 
-                    // 3-Dot Options Menu
                     Box {
                         IconButton(
                             onClick = { showHomeMenu = true },
@@ -397,40 +397,31 @@ fun HomeScreenContent(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
-
                         omnimenuDropdown(
                             expanded = showHomeMenu,
                             onDismissRequest = { showHomeMenu = false },
                             viewModel = viewModel,
-                            onNewTab = {
-                                viewModel.createNewTab(context, "about:blank")
-                            },
+                            onNewTab = { showHomeMenu = false; viewModel.createNewTab(context, "about:blank") },
                             onNewIncognitoTab = {
+                                showHomeMenu = false
                                 if (!viewModel.isIncognitoMode) {
                                     viewModel.toggleIncognitoMode(context)
                                 }
                                 viewModel.createNewTab(context, "about:blank")
                             },
-                            onOpenHistory = onOpenHistory,
-                            onBurnData = {
-                                coroutineScope.launch {
-                                    val runtime = viewModel.getGeckoRuntime(context)
-                                    FireButton(runtime, context).burn()
-                                    viewModel.burnAllData(context)
-                                    Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            onOpenDownloads = onOpenDownloads,
-                            onOpenBookmarks = onOpenBookmarks,
-                            onOpenSettings = onOpenSettings,
-                            onOpenPasswordManager = onOpenPasswordManager,
-                            onShowThemeSheet = onShowThemeSheet,
-                            onShowQuickTools = onShowQuickTools,
-                            onShowFeedbackDialog = onShowFeedbackDialog,
-                            onShowCustomizationSheet = { onShowCustomizationSheetChange(true) },
-                            onShowExtensions = { onOpenExtensions() },
-                            onShowPlayerSettings = {},
-                            onShowSiteInfo = {}
+                            onOpenHistory = { showHomeMenu = false; onOpenHistory() },
+                            onBurnData = { showHomeMenu = false; onBurnData() },
+                            onOpenDownloads = { showHomeMenu = false; onOpenDownloads() },
+                            onOpenBookmarks = { showHomeMenu = false; onOpenBookmarks() },
+                            onOpenSettings = { showHomeMenu = false; onOpenSettings() },
+                            onOpenPasswordManager = { showHomeMenu = false; onOpenPasswordManager() },
+                            onShowThemeSheet = { showHomeMenu = false; onShowThemeSheet() },
+                            onShowFeedbackDialog = { showHomeMenu = false; onShowFeedbackDialog() },
+                            onShowCustomizationSheet = { showHomeMenu = false; onShowCustomizationSheetChange(true) },
+                            onShowExtensions = { showHomeMenu = false; onOpenExtensions() },
+                            onShowPlayerSettings = { showHomeMenu = false; onShowPlayerSettings() },
+                            onShowSiteInfo = { showHomeMenu = false },
+                            onFindInPage = {}
                         )
                     }
                 }
@@ -520,29 +511,51 @@ fun HomeScreenContent(
             leadingIcon = {
                 var expanded by remember { mutableStateOf(false) }
                 val currentEngine = viewModel.selectedSearchEngine
-                
+                val currentIconUrl = when (currentEngine) {
+                    "Google" -> "https://icons.duckduckgo.com/ip3/google.com.ico"
+                    "Yahoo" -> "https://icons.duckduckgo.com/ip3/yahoo.com.ico"
+                    "Yandex" -> "https://icons.duckduckgo.com/ip3/yandex.com.ico"
+                    "DuckDuckGo" -> "https://icons.duckduckgo.com/ip3/duckduckgo.com.ico"
+                    "Brave" -> "https://icons.duckduckgo.com/ip3/brave.com.ico"
+                    "Bing" -> "https://icons.duckduckgo.com/ip3/bing.com.ico"
+                    "Ecosia" -> "https://icons.duckduckgo.com/ip3/ecosia.org.ico"
+                    "Startpage" -> "https://icons.duckduckgo.com/ip3/startpage.com.ico"
+                    "Qwant" -> "https://icons.duckduckgo.com/ip3/qwant.com.ico"
+                    else -> null
+                }
+
                 Box {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(26.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .clickable { expanded = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        val (char, color) = when (currentEngine) {
-                            "DuckDuckGo" -> "D" to Color(0xFFDE5833)
-                            "Brave" -> "B" to Color(0xFFFF1A1A)
-                            "Bing" -> "b" to Color(0xFF00A4EF)
-                            "Custom" -> "C" to Color(0xFF8E9AA8)
-                            else -> "G" to MaterialTheme.colorScheme.primary
+                        if (currentIconUrl != null) {
+                            coil.compose.AsyncImage(
+                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                    .data(currentIconUrl)
+                                    .size(48, 48)
+                                    .crossfade(true)
+                                    .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                    .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                    .build(),
+                                contentDescription = currentEngine,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape),
+                                error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_search)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = currentEngine,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
-                        Text(
-                            text = char,
-                            color = color,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
                     }
 
                     DropdownMenu(
@@ -550,12 +563,49 @@ fun HomeScreenContent(
                         onDismissRequest = { expanded = false },
                         modifier = Modifier
                             .background(if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface)
-                            
                     ) {
                         val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom")
                         engines.forEach { engine ->
+                            val itemIconUrl = when (engine) {
+                                "Google" -> "https://icons.duckduckgo.com/ip3/google.com.ico"
+                                "Yahoo" -> "https://icons.duckduckgo.com/ip3/yahoo.com.ico"
+                                "Yandex" -> "https://icons.duckduckgo.com/ip3/yandex.com.ico"
+                                "DuckDuckGo" -> "https://icons.duckduckgo.com/ip3/duckduckgo.com.ico"
+                                "Brave" -> "https://icons.duckduckgo.com/ip3/brave.com.ico"
+                                "Bing" -> "https://icons.duckduckgo.com/ip3/bing.com.ico"
+                                "Ecosia" -> "https://icons.duckduckgo.com/ip3/ecosia.org.ico"
+                                "Startpage" -> "https://icons.duckduckgo.com/ip3/startpage.com.ico"
+                                "Qwant" -> "https://icons.duckduckgo.com/ip3/qwant.com.ico"
+                                else -> null
+                            }
+
                             DropdownMenuItem(
-                                text = { Text(engine, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp) },
+                                leadingIcon = {
+                                    if (itemIconUrl != null) {
+                                        coil.compose.AsyncImage(
+                                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                .data(itemIconUrl)
+                                                .size(48, 48)
+                                                .crossfade(true)
+                                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                                .build(),
+                                            contentDescription = engine,
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape),
+                                            error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_search)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Search,
+                                            contentDescription = engine,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                },
+                                text = { Text(engine, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
                                 onClick = {
                                     viewModel.saveSearchEngine(context, engine)
                                     expanded = false
@@ -2259,7 +2309,7 @@ fun CompactShortcutItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
         modifier = Modifier
-            .width(56.dp)
+            .width(62.dp)
             .clickable(
                 indication = null,
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
@@ -2286,8 +2336,11 @@ fun CompactShortcutItem(
         }
         Text(
             text = title,
-            color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp,
+            color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurface,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+            letterSpacing = (-0.25).sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -2338,7 +2391,7 @@ fun CompactDynamicShortcutItem(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
-        modifier = Modifier.width(56.dp)
+        modifier = Modifier.width(62.dp)
     ) {
         Box(
             modifier = Modifier
@@ -2366,8 +2419,11 @@ fun CompactDynamicShortcutItem(
         }
         Text(
             text = title,
-            color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp,
+            color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurface,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+            letterSpacing = (-0.25).sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,

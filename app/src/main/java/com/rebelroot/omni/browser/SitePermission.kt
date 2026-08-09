@@ -13,5 +13,5 @@ data class SitePermission(
     val notifications: String = "ask",  // "allow", "block", "ask"
     val javascript: String = "allow",   // "allow", "block"
     val autoplay: String = "allow",     // "allow", "block"
-    val externalApp: String = "ask"     // "allow", "block", "ask"
+    val externalApp: String = "allow"     // "allow", "block", "ask"
 )

@@ -44,7 +44,9 @@ import com.rebelroot.omni.browser.BrowserViewModel
 fun PrivacySecurityScreen(
     viewModel: BrowserViewModel,
     onNavigateBack: () -> Unit,
-    onOpenAdBlockConfig: () -> Unit = {}
+    onOpenAdBlockConfig: () -> Unit = {},
+    onOpenVisualBlockConfig: () -> Unit = {},
+    onOpenUserAgentConfig: () -> Unit = {}
 ) {
     BackHandler {
         onNavigateBack()
@@ -111,6 +113,30 @@ fun PrivacySecurityScreen(
                         title = stringResource(id = R.string.adblock_filter_providers),
                         subtitle = stringResource(id = R.string.adblock_filter_providers_desc),
                         onClick = onOpenAdBlockConfig,
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Item 0.1: Block Area Rules (Tap-to-Hide)
+                    SettingsRow(
+                        icon = Icons.Rounded.LayersClear,
+                        title = stringResource(id = R.string.visual_block_settings_title),
+                        subtitle = stringResource(id = R.string.visual_block_settings_desc),
+                        onClick = onOpenVisualBlockConfig,
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Item 0.2: Custom User Agent (Global & Site-Specific)
+                    SettingsRow(
+                        icon = Icons.Rounded.Devices,
+                        title = "Custom User Agent",
+                        subtitle = "Global default & site-specific User Agent overrides",
+                        onClick = onOpenUserAgentConfig,
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor

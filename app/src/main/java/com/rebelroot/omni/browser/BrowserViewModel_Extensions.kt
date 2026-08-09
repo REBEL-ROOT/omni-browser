@@ -512,3 +512,15 @@ internal fun BrowserViewModel.getYouTubePreference(context: Context): Flow<Boole
         preferences[BrowserViewModel.YOUTUBE_ENABLED_KEY] ?: false // Default OFF
     }
 }
+
+internal fun BrowserViewModel.getMediaSnifferBlocklistPreference(context: Context): Flow<Set<String>> {
+    return context.dataStore.data.map { preferences ->
+        preferences[BrowserViewModel.MEDIA_SNIFFER_BLOCKLIST_KEY] ?: emptySet()
+    }
+}
+
+internal fun BrowserViewModel.getMediaSnifferMinDurationSecPreference(context: Context): Flow<Int> {
+    return context.dataStore.data.map { preferences ->
+        preferences[BrowserViewModel.MEDIA_SNIFFER_MIN_DURATION_SEC_KEY] ?: 0
+    }
+}

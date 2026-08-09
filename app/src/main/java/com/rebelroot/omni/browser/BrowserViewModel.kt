@@ -24,6 +24,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.Keep
@@ -131,6 +132,13 @@ class BrowserViewModel : ViewModel() {
         val YOUTUBE_ENABLED_KEY = booleanPreferencesKey("youtube_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
         val EXTERNAL_DOWNLOAD_MANAGER_KEY = booleanPreferencesKey("external_download_manager_enabled")
+        val DEFAULT_DOWNLOADER_KEY = stringPreferencesKey("default_downloader")
+        val ASK_BEFORE_DOWNLOAD_KEY = booleanPreferencesKey("ask_before_download")
+        val DOWNLOAD_WIFI_ONLY_KEY = booleanPreferencesKey("download_wifi_only")
+        val MAX_CONCURRENT_DOWNLOADS_KEY = intPreferencesKey("max_concurrent_downloads")
+        val DOWNLOAD_NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("download_notifications_enabled")
+        val DOWNLOAD_SOUND_ENABLED_KEY = booleanPreferencesKey("download_sound_enabled")
+        val DOWNLOAD_VIBRATE_ENABLED_KEY = booleanPreferencesKey("download_vibrate_enabled")
         // Chrome-on-Android UA shared by the download hand-off (matches the one used by
         // StreamDownloadEngine so external managers see the same identity as the browser).
         const val CHROME_UA =
@@ -174,6 +182,7 @@ class BrowserViewModel : ViewModel() {
         val SHOW_SCROLL_BUTTONS_KEY = booleanPreferencesKey("show_scroll_buttons")
         val NAV_BAR_HIDE_TOP_KEY = booleanPreferencesKey("nav_bar_hide_top")
         val NAV_BAR_HIDE_BOTTOM_KEY = booleanPreferencesKey("nav_bar_hide_bottom")
+        val HIDE_REFRESH_INDICATOR_KEY = booleanPreferencesKey("hide_refresh_indicator")
         val ADDRESS_BAR_POSITION_KEY = stringPreferencesKey("address_bar_position")
         val APP_ICON_STATE_KEY = stringPreferencesKey("app_icon_state")
         val CUSTOM_ICON_PATH_KEY = stringPreferencesKey("custom_icon_path")
@@ -199,6 +208,9 @@ class BrowserViewModel : ViewModel() {
         val MINIMALIST_FOCUS_MODE_KEY = booleanPreferencesKey("minimalist_focus_mode")
         val TRACKERS_BLOCKED_COUNT_KEY = intPreferencesKey("trackers_blocked_count")
         val QUICK_TOOLS_ORDER_KEY = stringPreferencesKey("quick_tools_order")
+        val MEDIA_SNIFFER_BLOCKLIST_KEY = stringSetPreferencesKey("media_sniffer_blocklist")
+        val MEDIA_SNIFFER_MIN_DURATION_SEC_KEY = intPreferencesKey("media_sniffer_min_duration_sec")
+        val NEVER_SAVE_PASSWORD_DOMAINS_KEY = stringSetPreferencesKey("never_save_password_domains")
 
 
 
@@ -222,6 +234,9 @@ class BrowserViewModel : ViewModel() {
         val LOCK_INCOGNITO_KEY = booleanPreferencesKey("lock_incognito")
         val COMPROMISED_PASSWORD_WARNING_KEY = booleanPreferencesKey("compromised_password_warning")
         val HTTPS_ONLY_MODE_KEY = booleanPreferencesKey("https_only_mode")
+        val WEBRENDER_ALL_KEY = booleanPreferencesKey("gfx_webrender_all")
+        val LAYERS_ACCELERATION_KEY = booleanPreferencesKey("layers_acceleration_force_enabled")
+        val FORCE_HIGH_REFRESH_RATE_KEY = booleanPreferencesKey("layout_frame_rate_120")
         val DEV_NOTES_OVERVIEW_SEEN_KEY = booleanPreferencesKey("dev_notes_overview_seen")
         val PASSWORD_MIGRATION_DONE_KEY = booleanPreferencesKey("password_migration_done")
         val DEVNOTES_PASSWORD_MIGRATION_KEY = booleanPreferencesKey("devnotes_password_migration_done")
@@ -313,6 +328,11 @@ class BrowserViewModel : ViewModel() {
     lateinit var torManager: TorManager
     lateinit var embeddedTorManager: EmbeddedTorManager
     lateinit var adBlockManager: com.rebelroot.omni.browser.adblock.AdBlockManager
+    lateinit var visualBlockManager: com.rebelroot.omni.browser.adblock.VisualBlockManager
+    lateinit var userAgentManager: com.rebelroot.omni.browser.useragent.UserAgentManager
+    var isVisualBlockModeActive by mutableStateOf(false)
+    var navigateToVisualBlockSettingsTrigger by mutableStateOf(false)
+    var navigateToUserAgentSettingsTrigger by mutableStateOf(false)
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
     internal var copyManager: UniversalCopyManager? = null
     internal var aiBlockerManager: BuiltInExtensionManager? = null
@@ -364,10 +384,26 @@ class BrowserViewModel : ViewModel() {
     var isUniversalCopyEnabled by mutableStateOf(false)
     var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
+    data class ExternalDownloaderApp(
+        val name: String,
+        val packageName: String,
+        val icon: android.graphics.drawable.Drawable? = null
+    )
+
     /** When true, downloads are handed off to an external download manager (ADM / 1DM / …) via a chooser. Default OFF. */
     var isExternalDownloadManagerEnabled by mutableStateOf(false)
+    var defaultDownloader by mutableStateOf("internal") // "internal", "system", "external_chooser", or "package:<pkg_name>"
+    var askBeforeDownload by mutableStateOf(false)
+    var downloadWifiOnly by mutableStateOf(false)
+    var maxConcurrentDownloads by mutableStateOf(3)
+    var downloadNotificationsEnabled by mutableStateOf(true)
+    var downloadSoundEnabled by mutableStateOf(true)
+    var downloadVibrateEnabled by mutableStateOf(false)
     var isNativePlayerEnabled by mutableStateOf(true)
     var isYouTubeEnabled by mutableStateOf(false)
+    var mediaSnifferBlocklist by mutableStateOf<Set<String>>(emptySet())
+    var mediaSnifferMinDurationSec by mutableStateOf(0)
+    var neverSavePasswordDomains by mutableStateOf<Set<String>>(emptySet())
     var pendingVideoUrl: String? = null
     internal var passwordVaultManager: PasswordVaultManager? = null
     internal var passwordVaultSyncJob: Job? = null
@@ -417,6 +453,9 @@ class BrowserViewModel : ViewModel() {
     var lockIncognito by mutableStateOf(false)
     var compromisedPasswordWarning by mutableStateOf(true)
     var httpsOnlyMode by mutableStateOf(false)
+    var isWebRenderEnabled by mutableStateOf(true)
+    var isGpuAccelerationEnabled by mutableStateOf(true)
+    var isForceHighRefreshRate by mutableStateOf(true)
     var tabLayoutMode by mutableStateOf("Grid")
     var autoCloseTabsDays by mutableStateOf(0)
     var openTabsInBackground by mutableStateOf(false)
@@ -473,6 +512,7 @@ class BrowserViewModel : ViewModel() {
     var pageViewportHeight by mutableStateOf(0f)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
+    var hideRefreshIndicator by mutableStateOf(false)
     var addressBarPosition by mutableStateOf("Split")
     var appIconState by mutableStateOf("Default")
     var customIconPath by mutableStateOf<String?>(null)
@@ -714,24 +754,128 @@ class BrowserViewModel : ViewModel() {
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
 
+    fun startSystemDownload(
+        context: Context,
+        url: String,
+        filename: String,
+        mimeType: String? = null,
+        cookies: String? = activeVideoCookies,
+        referrerUrl: String? = currentUrl
+    ): Boolean {
+        return runCatching {
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+            val request = android.app.DownloadManager.Request(Uri.parse(url)).apply {
+                setTitle(filename)
+                setDescription(url)
+                setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                mimeType?.takeIf { it.isNotBlank() }?.let { setMimeType(it) }
+                if (downloadWifiOnly) {
+                    setAllowedNetworkTypes(android.app.DownloadManager.Request.NETWORK_WIFI)
+                }
+                referrerUrl?.takeIf { it.isNotBlank() }?.let { addRequestHeader("Referer", it) }
+                cookies?.takeIf { it.isNotBlank() }?.let { addRequestHeader("Cookie", it) }
+                addRequestHeader("User-Agent", CHROME_UA)
+            }
+            dm.enqueue(request)
+            Toast.makeText(context, "Download started via System DownloadManager", Toast.LENGTH_SHORT).show()
+            true
+        }.getOrElse { e ->
+            Log.e(TAG, "Failed to enqueue system download", e)
+            false
+        }
+    }
+
     fun startGenericDownload(download: PendingGenericDownload, saveToLocker: Boolean, context: Context) {
         pendingGenericDownload = null
-        // "Save to Private Vault" never hands off: external apps cannot write into Omni's
-        // encrypted locker, so the file must come through the internal engine.
-        if (!saveToLocker && isExternalDownloadManagerEnabled) {
-            val handedOff = handOffToExternalDownloadManager(
-                context = context,
+        if (saveToLocker) {
+            streamDownloadEngine.startGenericFileDownload(
                 url = download.url,
                 filename = download.filename,
-                contentType = download.contentType
+                contentType = download.contentType,
+                saveToLocker = true,
+                cookies = activeVideoCookies,
+                referrerUrl = currentUrl
             )
-            if (handedOff) return
-            // No external handler installed — fall through to the internal engine.
+            return
         }
+
+        val mode = defaultDownloader
+        when {
+            mode == "system" -> {
+                val success = startSystemDownload(
+                    context = context,
+                    url = download.url,
+                    filename = download.filename,
+                    mimeType = download.contentType
+                )
+                if (!success) {
+                    streamDownloadEngine.startGenericFileDownload(
+                        url = download.url,
+                        filename = download.filename,
+                        contentType = download.contentType,
+                        saveToLocker = false,
+                        cookies = activeVideoCookies,
+                        referrerUrl = currentUrl
+                    )
+                }
+            }
+            mode == "external_chooser" -> {
+                val handedOff = handOffToExternalDownloadManager(
+                    context = context,
+                    url = download.url,
+                    filename = download.filename,
+                    contentType = download.contentType
+                )
+                if (!handedOff) {
+                    streamDownloadEngine.startGenericFileDownload(
+                        url = download.url,
+                        filename = download.filename,
+                        contentType = download.contentType,
+                        saveToLocker = false,
+                        cookies = activeVideoCookies,
+                        referrerUrl = currentUrl
+                    )
+                }
+            }
+            mode.startsWith("package:") -> {
+                val pkg = mode.substringAfter("package:")
+                val handedOff = handOffToExternalDownloadManager(
+                    context = context,
+                    url = download.url,
+                    filename = download.filename,
+                    contentType = download.contentType,
+                    targetPackage = pkg
+                )
+                if (!handedOff) {
+                    streamDownloadEngine.startGenericFileDownload(
+                        url = download.url,
+                        filename = download.filename,
+                        contentType = download.contentType,
+                        saveToLocker = false,
+                        cookies = activeVideoCookies,
+                        referrerUrl = currentUrl
+                    )
+                }
+            }
+            else -> { // "internal"
+                streamDownloadEngine.startGenericFileDownload(
+                    url = download.url,
+                    filename = download.filename,
+                    contentType = download.contentType,
+                    saveToLocker = false,
+                    cookies = activeVideoCookies,
+                    referrerUrl = currentUrl
+                )
+            }
+        }
+    }
+
+    fun startGenericDownload(context: Context, url: String, filename: String, saveToLocker: Boolean = false) {
         streamDownloadEngine.startGenericFileDownload(
-            url = download.url,
-            filename = download.filename,
-            contentType = download.contentType,
+            url = url,
+            filename = filename,
+            contentType = null,
             saveToLocker = saveToLocker,
             cookies = activeVideoCookies,
             referrerUrl = currentUrl
@@ -740,12 +884,7 @@ class BrowserViewModel : ViewModel() {
 
     /**
      * Hands a download URL to an external download manager (ADM, 1DM, …) via the system
-     * chooser. Cookies, Referer and a Chrome User-Agent are passed through
-     * [Intent.EXTRA_HEADERS] so downloads behind logins or Referer/UA checks still
-     * succeed with managers that honour them (ADM and 1DM both do).
-     *
-     * @return true if the chooser was launched, false if [url] was not an http(s) URL
-     *         or no app could handle the intent.
+     * chooser or directly to a target package.
      */
     fun handOffToExternalDownloadManager(
         context: Context,
@@ -753,7 +892,8 @@ class BrowserViewModel : ViewModel() {
         filename: String? = null,
         contentType: String? = null,
         referrerUrl: String? = currentUrl,
-        cookies: String? = activeVideoCookies
+        cookies: String? = activeVideoCookies,
+        targetPackage: String? = null
     ): Boolean {
         val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return false
         val scheme = parsed.scheme?.lowercase()
@@ -770,17 +910,158 @@ class BrowserViewModel : ViewModel() {
             }
             putExtra(android.provider.Browser.EXTRA_HEADERS, headers)
             filename?.takeIf { it.isNotBlank() }?.let { putExtra("title", it) }
+            if (!targetPackage.isNullOrEmpty()) {
+                setPackage(targetPackage)
+            }
         }
 
-        val chooser = Intent.createChooser(intent, "Download with…").apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
         return try {
-            context.startActivity(chooser)
+            if (!targetPackage.isNullOrEmpty()) {
+                context.startActivity(intent)
+            } else {
+                val chooser = Intent.createChooser(intent, "Download with…").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+            }
             true
-        } catch (e: ActivityNotFoundException) {
-            false
+        } catch (e: Exception) {
+            if (!targetPackage.isNullOrEmpty()) {
+                runCatching {
+                    intent.setPackage(null)
+                    val chooser = Intent.createChooser(intent, "Download with…").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(chooser)
+                    true
+                }.getOrDefault(false)
+            } else {
+                false
+            }
         }
+    }
+
+    fun setDefaultDownloader(context: Context, downloader: String) {
+        defaultDownloader = downloader
+        isExternalDownloadManagerEnabled = (downloader != "internal" && downloader != "system")
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[DEFAULT_DOWNLOADER_KEY] = downloader
+                preferences[EXTERNAL_DOWNLOAD_MANAGER_KEY] = isExternalDownloadManagerEnabled
+            }
+        }
+    }
+
+    fun toggleAskBeforeDownload(context: Context) {
+        val newState = !askBeforeDownload
+        askBeforeDownload = newState
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[ASK_BEFORE_DOWNLOAD_KEY] = newState
+            }
+        }
+    }
+
+    fun toggleDownloadWifiOnly(context: Context) {
+        val newState = !downloadWifiOnly
+        downloadWifiOnly = newState
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[DOWNLOAD_WIFI_ONLY_KEY] = newState
+            }
+        }
+    }
+
+    fun setMaxConcurrentDownloads(context: Context, limit: Int) {
+        maxConcurrentDownloads = limit
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[MAX_CONCURRENT_DOWNLOADS_KEY] = limit
+            }
+        }
+    }
+
+    fun toggleDownloadNotificationsEnabled(context: Context) {
+        val newState = !downloadNotificationsEnabled
+        downloadNotificationsEnabled = newState
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[DOWNLOAD_NOTIFICATIONS_ENABLED_KEY] = newState
+            }
+        }
+    }
+
+    fun toggleDownloadSoundEnabled(context: Context) {
+        val newState = !downloadSoundEnabled
+        downloadSoundEnabled = newState
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[DOWNLOAD_SOUND_ENABLED_KEY] = newState
+            }
+        }
+    }
+
+    fun toggleDownloadVibrateEnabled(context: Context) {
+        val newState = !downloadVibrateEnabled
+        downloadVibrateEnabled = newState
+        viewModelScope.launch(Dispatchers.IO) {
+            context.dataStore.edit { preferences ->
+                preferences[DOWNLOAD_VIBRATE_ENABLED_KEY] = newState
+            }
+        }
+    }
+
+    fun getAvailableExternalDownloaders(context: Context): List<ExternalDownloaderApp> {
+        val pm = context.packageManager
+        val result = mutableMapOf<String, ExternalDownloaderApp>()
+
+        val knownPackages = listOf(
+            "com.dv.adm" to "ADM (Advanced Download Manager)",
+            "com.dv.adm.pay" to "ADM Pro",
+            "idm.internet.download.manager" to "1DM",
+            "idm.internet.download.manager.lite" to "1DM Lite",
+            "idm.internet.download.manager.adm" to "1DM+",
+            "com.al.ndm" to "NDM (Download Manager)",
+            "com.delphicoder.flud" to "Flud Torrent",
+            "com.delphicoder.flud.paid" to "Flud Torrent Pro",
+            "com.tt.android.dm" to "Download Navigator",
+            "org.mrb.downloadmanager" to "Download Manager"
+        )
+
+        for ((pkg, label) in knownPackages) {
+            try {
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                val appName = pm.getApplicationLabel(appInfo).toString().ifBlank { label }
+                val icon = pm.getApplicationIcon(appInfo)
+                result[pkg] = ExternalDownloaderApp(appName, pkg, icon)
+            } catch (_: Exception) {}
+        }
+
+        runCatching {
+            val testUri = Uri.parse("https://example.com/file.bin")
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(testUri, "*/*")
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            }
+            val resolveInfos = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(intent, android.content.pm.PackageManager.ResolveInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(intent, 0)
+            }
+            for (info in resolveInfos) {
+                val pkg = info.activityInfo.packageName
+                if (pkg != context.packageName && !pkg.contains("browser") && !pkg.contains("chrome") && !pkg.contains("firefox")) {
+                    if (!result.containsKey(pkg)) {
+                        val appName = info.loadLabel(pm).toString()
+                        val icon = info.loadIcon(pm)
+                        result[pkg] = ExternalDownloaderApp(appName, pkg, icon)
+                    }
+                }
+            }
+        }
+
+        return result.values.toList()
     }
 
     /**
@@ -1100,6 +1381,11 @@ class BrowserViewModel : ViewModel() {
     var showAutofillBottomSheet by mutableStateOf(false)
     var autofillMatches by mutableStateOf<List<SavedPassword>>(emptyList())
 
+    /** The credential that was most recently injected — used to show "Switch account" chip */
+    var autofillLastUsed by mutableStateOf<SavedPassword?>(null)
+    /** True after an autofill was performed on the current page, reset on navigation */
+    var autofillWasPerformed by mutableStateOf(false)
+
     /** True while DevNotes or Toolbox sheet is open — extensions are gated from opening their UI */
     var isNativeSheetOpen by mutableStateOf(false)
 
@@ -1205,6 +1491,35 @@ class BrowserViewModel : ViewModel() {
         tabGroups.add(group)
         saveTabGroups()
     }
+
+    fun createNewTabInNewGroup(context: Context, url: String = "about:blank", isIncognito: Boolean = isIncognitoMode) {
+        val newGroupId = UUID.randomUUID().toString()
+        val groupColors = listOf(
+            0xFF4285F4L, // Google Blue
+            0xFF34A853L, // Google Green
+            0xFFEA4335L, // Google Red
+            0xFFFBBC05L, // Google Yellow
+            0xFF9C27B0L, // Purple
+            0xFFFF6D00L, // Orange
+            0xFF00BCD4L, // Cyan
+            0xFFE91E63L  // Pink
+        )
+        val chosenColor = groupColors[tabGroups.size % groupColors.size]
+        val groupNumber = tabGroups.size + 1
+        val groupTitle = "Group $groupNumber"
+
+        val newGroup = TabGroup(
+            id = newGroupId,
+            title = groupTitle,
+            color = chosenColor,
+            tabIds = emptyList()
+        )
+        tabGroups.add(newGroup)
+        saveTabGroups()
+
+        createNewTab(context, url, groupId = newGroupId, isIncognito = isIncognito)
+    }
+
 
     fun addTabToGroup(tabId: String, groupId: String) {
         // Remove from any existing group first
@@ -1345,7 +1660,7 @@ class BrowserViewModel : ViewModel() {
             "notifications" -> perm?.notifications ?: defaultNotifications
             "javascript" -> perm?.javascript ?: (if (defaultJavascriptAllowed) "allow" else "block")
             "autoplay" -> perm?.autoplay ?: (if (defaultAutoplayAllowed) "allow" else "block")
-            "externalApp" -> perm?.externalApp ?: "ask"
+            "externalApp" -> perm?.externalApp ?: "allow"
             else -> "ask"
         }
     }
@@ -1855,7 +2170,12 @@ class BrowserViewModel : ViewModel() {
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
 
-        if (formattedUrl.startsWith("about:")) {
+        val lowerInTab = formattedUrl.lowercase()
+        if (lowerInTab == "omni:config" || lowerInTab == "omni://config" || lowerInTab == "about:config") {
+            formattedUrl = "omni:config"
+        }
+
+        if (formattedUrl.startsWith("about:") || formattedUrl.startsWith("omni:")) {
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
                 tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl, isUriLoaded = true)
@@ -2336,6 +2656,8 @@ class BrowserViewModel : ViewModel() {
             torManager = TorManager(appCtx)
             embeddedTorManager = EmbeddedTorManager(appCtx)
             adBlockManager = com.rebelroot.omni.browser.adblock.AdBlockManager(appCtx)
+            visualBlockManager = com.rebelroot.omni.browser.adblock.VisualBlockManager(appCtx)
+            userAgentManager = com.rebelroot.omni.browser.useragent.UserAgentManager(appCtx)
             copyManager = UniversalCopyManager(geckoRuntime!!)
             aiBlockerManager = BuiltInExtensionManager(
                 runtime = geckoRuntime!!,
@@ -2491,6 +2813,9 @@ class BrowserViewModel : ViewModel() {
                 lockIncognito = prefs[LOCK_INCOGNITO_KEY] ?: false
                 compromisedPasswordWarning = prefs[COMPROMISED_PASSWORD_WARNING_KEY] ?: true
                 httpsOnlyMode = prefs[HTTPS_ONLY_MODE_KEY] ?: false
+                isWebRenderEnabled = prefs[WEBRENDER_ALL_KEY] ?: true
+                isGpuAccelerationEnabled = prefs[LAYERS_ACCELERATION_KEY] ?: true
+                isForceHighRefreshRate = prefs[FORCE_HIGH_REFRESH_RATE_KEY] ?: true
                 
                 tabLayoutMode = prefs[TAB_LAYOUT_MODE_KEY] ?: "Grid"
                 autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
@@ -2554,6 +2879,7 @@ class BrowserViewModel : ViewModel() {
                     showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: true
                     navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
                     navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
+                    hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: false
                     addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Split"
                     appIconState = prefs[APP_ICON_STATE_KEY] ?: "Default"
                     customIconPath = prefs[CUSTOM_ICON_PATH_KEY]
@@ -2615,6 +2941,13 @@ class BrowserViewModel : ViewModel() {
         val runtime = geckoRuntime ?: return
         viewModelScope.launch {
             isMediaGrabberEnabled = getMediaGrabberPreference(context).first()
+            val blocklist = getMediaSnifferBlocklistPreference(context).first()
+            mediaSnifferBlocklist = blocklist
+            mediaInterceptor.blockedDomains = blocklist
+            val minDur = getMediaSnifferMinDurationSecPreference(context).first()
+            mediaSnifferMinDurationSec = minDur
+            mediaInterceptor.minDurationSeconds = minDur
+            neverSavePasswordDomains = context.dataStore.data.map { it[NEVER_SAVE_PASSWORD_DOMAINS_KEY] ?: emptySet() }.first()
             installGrabberExtension(runtime)
 
             // Always-on: routes traffic through the active Tor / SOCKS proxy via
@@ -2630,6 +2963,14 @@ class BrowserViewModel : ViewModel() {
             forceDarkManager?.installAndSync(forceDarkWebsites, onComplete = null)
 
             isExternalDownloadManagerEnabled = getExternalDownloadManagerPreference(context).first()
+            defaultDownloader = context.dataStore.data.map { it[DEFAULT_DOWNLOADER_KEY] ?: if (isExternalDownloadManagerEnabled) "external_chooser" else "internal" }.first()
+            askBeforeDownload = context.dataStore.data.map { it[ASK_BEFORE_DOWNLOAD_KEY] ?: false }.first()
+            downloadWifiOnly = context.dataStore.data.map { it[DOWNLOAD_WIFI_ONLY_KEY] ?: false }.first()
+            maxConcurrentDownloads = context.dataStore.data.map { it[MAX_CONCURRENT_DOWNLOADS_KEY] ?: 3 }.first()
+            downloadNotificationsEnabled = context.dataStore.data.map { it[DOWNLOAD_NOTIFICATIONS_ENABLED_KEY] ?: true }.first()
+            downloadSoundEnabled = context.dataStore.data.map { it[DOWNLOAD_SOUND_ENABLED_KEY] ?: true }.first()
+            downloadVibrateEnabled = context.dataStore.data.map { it[DOWNLOAD_VIBRATE_ENABLED_KEY] ?: false }.first()
+            isExternalDownloadManagerEnabled = (defaultDownloader != "internal" && defaultDownloader != "system")
         }
     }
 
@@ -3347,6 +3688,13 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[NAV_BAR_HIDE_BOTTOM_KEY] = hideBottom }
             navBarHideBottom = hideBottom
+        }
+    }
+
+    fun saveHideRefreshIndicator(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[HIDE_REFRESH_INDICATOR_KEY] = value }
+            hideRefreshIndicator = value
         }
     }
 
@@ -4102,6 +4450,55 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun isUrlBlockedByMediaSniffer(url: String): Boolean {
+        return mediaInterceptor.isDomainBlocked(url)
+    }
+
+    fun addDomainToMediaSnifferBlocklist(context: Context, domain: String) {
+        val clean = domain.trim().lowercase()
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .removePrefix("www.")
+            .trimEnd('/')
+        if (clean.isEmpty()) return
+        val updated = mediaSnifferBlocklist + clean
+        mediaSnifferBlocklist = updated
+        mediaInterceptor.blockedDomains = updated
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { it[MEDIA_SNIFFER_BLOCKLIST_KEY] = updated }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving media sniffer blocklist", e)
+            }
+        }
+    }
+
+    fun removeDomainFromMediaSnifferBlocklist(context: Context, domain: String) {
+        val updated = mediaSnifferBlocklist - domain
+        mediaSnifferBlocklist = updated
+        mediaInterceptor.blockedDomains = updated
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { it[MEDIA_SNIFFER_BLOCKLIST_KEY] = updated }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving media sniffer blocklist", e)
+            }
+        }
+    }
+
+    fun setMediaSnifferMinDurationSec(context: Context, durationSec: Int) {
+        val validDur = durationSec.coerceAtLeast(0)
+        mediaSnifferMinDurationSec = validDur
+        mediaInterceptor.minDurationSeconds = validDur
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { it[MEDIA_SNIFFER_MIN_DURATION_SEC_KEY] = validDur }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving media sniffer min duration", e)
+            }
+        }
+    }
+
     fun connectVpn(context: Context, serverIp: String, clientKey: String, serverKey: String) {
         // no-op — WireGuard removed
     }
@@ -4732,6 +5129,11 @@ class BrowserViewModel : ViewModel() {
             sb.append("pref:\n")
             sb.append("  dom.ipc.processCount: 1\n")
             sb.append("  dom.ipc.processCount.webIsolated: 1\n")
+            sb.append("  gfx.webrender.all: ${isWebRenderEnabled}\n")
+            sb.append("  layers.acceleration.force-enabled: ${isGpuAccelerationEnabled}\n")
+            if (isForceHighRefreshRate) {
+                sb.append("  layout.frame_rate: 120\n")
+            }
             sb.append("  privacy.donottrackheader.enabled: ${doNotTrack}\n")
             sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2}\n")
             if (preloadPages == 0) {
@@ -4986,7 +5388,12 @@ class BrowserViewModel : ViewModel() {
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
 
-        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://") && !formattedUrl.startsWith("about:") && !formattedUrl.startsWith("javascript:") && !formattedUrl.startsWith("moz-extension://")) {
+        val lower = formattedUrl.lowercase()
+        if (lower == "omni:config" || lower == "omni://config" || lower == "about:config") {
+            formattedUrl = "omni:config"
+        }
+
+        if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://") && !formattedUrl.startsWith("about:") && !formattedUrl.startsWith("omni:") && !formattedUrl.startsWith("javascript:") && !formattedUrl.startsWith("moz-extension://")) {
             formattedUrl = if (formattedUrl.contains(".") && !formattedUrl.contains(" ")) {
                 "https://$formattedUrl"
             } else {
@@ -5022,11 +5429,11 @@ class BrowserViewModel : ViewModel() {
             return
         }
 
-        if (formattedUrl.startsWith("about:") || formattedUrl.startsWith("javascript:")) {
+        if (formattedUrl.startsWith("about:") || formattedUrl.startsWith("omni:") || formattedUrl.startsWith("javascript:")) {
             val activeId = activeTabId
             if (activeId != null) {
                 val idx = tabs.indexOfFirst { it.id == activeId }
-                if (idx != -1 && formattedUrl.startsWith("about:")) {
+                if (idx != -1 && (formattedUrl.startsWith("about:") || formattedUrl.startsWith("omni:"))) {
                     tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl, isUriLoaded = true)
                     currentUrl = formattedUrl
                 }
@@ -5689,19 +6096,34 @@ class BrowserViewModel : ViewModel() {
     
     private fun loadShortcuts(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
+            val torrentShortcuts = listOf(
+                HomeShortcut("1337x", "1337x", "https://1337x.to"),
+                HomeShortcut("piratebay", "The Pirate Bay", "https://thepiratebay.org"),
+                HomeShortcut("yts", "YTS Movies", "https://yts.mx"),
+                HomeShortcut("torrentgalaxy", "TorrentGalaxy", "https://torrentgalaxy.mx"),
+                HomeShortcut("eztv", "EZTV Series", "https://eztv.re"),
+                HomeShortcut("fitgirl", "FitGirl Repacks", "https://fitgirl-repacks.site"),
+                HomeShortcut("limetorrents", "LimeTorrents", "https://www.limetorrents.lol"),
+                HomeShortcut("nyaa", "Nyaa Anime", "https://nyaa.si"),
+                HomeShortcut("rutracker", "RuTracker", "https://rutracker.org"),
+                HomeShortcut("academictorrents", "Academic Torrents", "https://academictorrents.com")
+            )
             val file = File(context.filesDir, "browser_shortcuts.json")
             if (!file.exists()) {
-                val defaultList = listOf(
+                val defaultList = mutableListOf(
                     HomeShortcut("rebelroot", "RebelRoot", "https://www.rebelroot.xyz/omnibrowser", isPermanent = true),
                     HomeShortcut("twitter", "Twitter", "https://twitter.com"),
                     HomeShortcut("spotify", "Spotify", "https://spotify.com"),
                     HomeShortcut("amazon", "Amazon", "https://amazon.com"),
-                    HomeShortcut("pinterest", "Pinterest", "https://pinterest.com"),
+                    HomeShortcut("pinterest", "Pinterest", "https://pinterest.com")
+                )
+                defaultList.addAll(torrentShortcuts)
+                defaultList.addAll(listOf(
                     HomeShortcut("downloads", "Downloads", "downloads", isFeature = true),
                     HomeShortcut("history", "History", "history", isFeature = true),
                     HomeShortcut("bookmarks", "Bookmarks", "bookmarks", isFeature = true),
                     HomeShortcut("incognito", "Incognito", "incognito", isFeature = true)
-                )
+                ))
                 withContext(Dispatchers.Main) {
                     shortcutsList.clear()
                     shortcutsList.addAll(defaultList)
@@ -5722,22 +6144,59 @@ class BrowserViewModel : ViewModel() {
                     val title = obj.optString("title", "")
                     val url = obj.optString("url", "")
                     
-                    // Skip duplicate/old RebelRoot entries
-                    if (id == "rebelroot" || url == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true)) {
+                    // Skip duplicate/old RebelRoot entries and about:blank
+                    if (id == "rebelroot" || url == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true) || url.isBlank() || url == "about:blank" || url.contains("about:blank")) {
                         continue
                     }
                     
+                    // Migrate old/outdated torrent domains to official active ones
+                    var migratedUrl = url
+                    if (url.contains("torrentgalaxy.to") || url.contains("tgx.rs")) {
+                        migratedUrl = url.replace("torrentgalaxy.to", "torrentgalaxy.mx").replace("tgx.rs", "torrentgalaxy.mx")
+                    } else if (url.contains("eztvx.to") || url.contains("eztv.ag")) {
+                        migratedUrl = url.replace("eztvx.to", "eztv.re").replace("eztv.ag", "eztv.re")
+                    } else if (url.contains("limetorrents.co") || url.contains("limetorrents.info") || url.contains("limetorrents.cc")) {
+                        migratedUrl = url.replace("www.limetorrents.co", "www.limetorrents.lol")
+                            .replace("limetorrents.co", "limetorrents.lol")
+                            .replace("limetorrents.info", "limetorrents.lol")
+                            .replace("limetorrents.cc", "limetorrents.lol")
+                    } else if (url.contains("thepiratebay.se")) {
+                        migratedUrl = url.replace("thepiratebay.se", "thepiratebay.org")
+                    } else if (url.contains("yts.am") || url.contains("yts.ag")) {
+                        migratedUrl = url.replace("yts.am", "yts.mx").replace("yts.ag", "yts.mx")
+                    }
+
                     temp.add(HomeShortcut(
                         id = id,
                         title = title,
-                        url = url,
+                        url = migratedUrl,
                         isFeature = obj.optBoolean("isFeature", false),
                         isPermanent = obj.optBoolean("isPermanent", false)
                     ))
                 }
+
+                // Ensure popular torrent shortcuts are present if missing and updated if outdated
+                for (ts in torrentShortcuts) {
+                    val existingIndex = temp.indexOfFirst { it.id == ts.id }
+                    if (existingIndex != -1) {
+                        val existing = temp[existingIndex]
+                        if (existing.url != ts.url) {
+                            temp[existingIndex] = existing.copy(url = ts.url)
+                        }
+                    } else if (temp.none { it.url == ts.url }) {
+                        val featureIndex = temp.indexOfFirst { it.isFeature }
+                        if (featureIndex != -1) {
+                            temp.add(featureIndex, ts)
+                        } else {
+                            temp.add(ts)
+                        }
+                    }
+                }
+
+                val cleanTemp = temp.filter { !it.url.isBlank() && it.url != "about:blank" && !it.url.contains("about:blank") }
                 withContext(Dispatchers.Main) {
                     shortcutsList.clear()
-                    shortcutsList.addAll(temp)
+                    shortcutsList.addAll(cleanTemp)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading shortcuts", e)
@@ -5751,7 +6210,7 @@ class BrowserViewModel : ViewModel() {
             val file = File(context.filesDir, "browser_shortcuts.json")
             try {
                 val jsonArray = JSONArray()
-                shortcutsSnapshot.forEach { shortcut ->
+                shortcutsSnapshot.filter { !it.url.isBlank() && it.url != "about:blank" && !it.url.contains("about:blank") }.forEach { shortcut ->
                     jsonArray.put(JSONObject().apply {
                         put("id", shortcut.id)
                         put("title", shortcut.title)
@@ -5775,6 +6234,12 @@ class BrowserViewModel : ViewModel() {
             formattedUrl = "https://$formattedUrl"
         }
         
+        // Prevent adding blank pages or about:blank to shortcuts
+        if (formattedUrl.isBlank() || formattedUrl == "about:blank" || formattedUrl.contains("about:blank")) {
+            Toast.makeText(context, "Cannot add blank page to shortcuts", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         // Prevent adding custom shortcuts that point to RebelRoot or have the title RebelRoot
         if (formattedUrl == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true)) {
             return
@@ -5794,6 +6259,32 @@ class BrowserViewModel : ViewModel() {
         }
         saveShortcuts(context)
         Toast.makeText(context, "Added to Home Shortcuts", Toast.LENGTH_SHORT).show()
+    }
+
+    fun getTorrentMirrorFallback(url: String): String? {
+        val lower = url.lowercase()
+        return when {
+            lower.contains("1337x.to") -> url.replace("1337x.to", "1337x.st")
+            lower.contains("1337x.st") -> url.replace("1337x.st", "x1337x.ws")
+            lower.contains("x1337x.ws") -> url.replace("x1337x.ws", "1337x.so")
+            lower.contains("thepiratebay.org") -> url.replace("thepiratebay.org", "tpb.party")
+            lower.contains("tpb.party") -> url.replace("tpb.party", "thepiratebay10.org")
+            lower.contains("tgx.rs") -> url.replace("tgx.rs", "torrentgalaxy.mx")
+            lower.contains("torrentgalaxy.to") -> url.replace("torrentgalaxy.to", "torrentgalaxy.mx")
+            lower.contains("torrentgalaxy.mx") -> url.replace("torrentgalaxy.mx", "torrentgalaxy.one")
+            lower.contains("eztvx.to") -> url.replace("eztvx.to", "eztv.re")
+            lower.contains("eztv.re") -> url.replace("eztv.re", "eztv.tf")
+            lower.contains("eztv.tf") -> url.replace("eztv.tf", "eztv.wf")
+            lower.contains("limetorrents.co") -> url.replace("limetorrents.co", "www.limetorrents.lol")
+            lower.contains("limetorrents.lol") -> url.replace("limetorrents.lol", "www.limetorrents.fun")
+            lower.contains("limetorrents.fun") -> url.replace("limetorrents.fun", "www.limetorrents.info")
+            lower.contains("rutracker.org") -> url.replace("rutracker.org", "rutracker.net")
+            lower.contains("rutracker.net") -> url.replace("rutracker.net", "rutracker.nl")
+            lower.contains("yts.mx") -> url.replace("yts.mx", "yts.lt")
+            lower.contains("yts.lt") -> url.replace("yts.lt", "yts.do")
+            lower.contains("nyaa.si") -> url.replace("nyaa.si", "nyaa.land")
+            else -> null
+        }
     }
 
     fun editShortcut(shortcut: HomeShortcut, newTitle: String, newUrl: String) {
@@ -6769,18 +7260,38 @@ class BrowserViewModel : ViewModel() {
                             val apiJson = org.json.JSONObject(apiResponse)
                             val assets = apiJson.optJSONArray("assets")
                             if (assets != null) {
-                                var bestAssetUrl: String? = null
-                                val deviceAbi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: ""
+                                // Map Android ABI names → keywords used in our APK filenames.
+                                // e.g. arm64-v8a → aarch64, armeabi-v7a → arm, x86_64 → x86_64
+                                val abiKeywordMap = mapOf(
+                                    "arm64-v8a" to "aarch64",
+                                    "armeabi-v7a" to "arm",
+                                    "x86_64" to "x86_64",
+                                    "x86" to "x86"
+                                )
+                                val supportedAbis = android.os.Build.SUPPORTED_ABIS.toList()
+                                var universalUrl: String? = null
+                                var abiSpecificUrl: String? = null
                                 for (i in 0 until assets.length()) {
                                     val asset = assets.getJSONObject(i)
                                     val name = asset.getString("name").lowercase()
                                     if (name.endsWith(".apk")) {
                                         val assetDownloadUrl = asset.getString("browser_download_url")
-                                        if (bestAssetUrl == null || name.contains("universal") || (deviceAbi.isNotEmpty() && name.contains(deviceAbi.lowercase()))) {
-                                            bestAssetUrl = assetDownloadUrl
+                                        if (name.contains("universal")) {
+                                            universalUrl = assetDownloadUrl
+                                        } else {
+                                            // Check if this asset matches any of the device's supported ABIs
+                                            val matched = supportedAbis.any { abi ->
+                                                val keyword = abiKeywordMap[abi] ?: abi.lowercase()
+                                                name.contains(keyword)
+                                            }
+                                            if (matched && abiSpecificUrl == null) {
+                                                abiSpecificUrl = assetDownloadUrl
+                                            }
                                         }
                                     }
                                 }
+                                // Prefer ABI-specific APK; fall back to universal
+                                val bestAssetUrl = abiSpecificUrl ?: universalUrl
                                 if (bestAssetUrl != null) {
                                     targetUrl = bestAssetUrl
                                 }
@@ -6793,8 +7304,8 @@ class BrowserViewModel : ViewModel() {
 
                 val url = java.net.URL(targetUrl)
                 var connection = url.openConnection() as java.net.HttpURLConnection
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
+                connection.connectTimeout = 15000
+                connection.readTimeout = 0 // No read timeout for large APK streaming downloads
                 connection.connect()
 
                 var responseCode = connection.responseCode
@@ -6802,8 +7313,8 @@ class BrowserViewModel : ViewModel() {
                 while ((responseCode == 301 || responseCode == 302 || responseCode == 303 || responseCode == 307 || responseCode == 308) && tries < 5) {
                     val redirectUrl = connection.getHeaderField("Location")
                     connection = java.net.URL(redirectUrl).openConnection() as java.net.HttpURLConnection
-                    connection.connectTimeout = 10000
-                    connection.readTimeout = 10000
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 0 // No read timeout for large APK streaming downloads
                     connection.connect()
                     responseCode = connection.responseCode
                     tries++
@@ -6837,6 +7348,22 @@ class BrowserViewModel : ViewModel() {
                         try {
                             val apkFile = java.io.File(context.cacheDir, "omni-browser-update.apk")
                             if (apkFile.exists() && apkFile.length() > 0) {
+                                // Android 8+ requires the app to have "Install Unknown Apps" permission
+                                val canInstall = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    context.packageManager.canRequestPackageInstalls()
+                                } else {
+                                    true
+                                }
+                                if (!canInstall) {
+                                    // Send user to system settings to grant permission, then they can retry
+                                    val settingsIntent = android.content.Intent(
+                                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        android.net.Uri.parse("package:${context.packageName}")
+                                    ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+                                    context.startActivity(settingsIntent)
+                                    updateDownloadError = "Please enable 'Install Unknown Apps' for Omni Browser in settings, then try again."
+                                    return@withContext
+                                }
                                 val apkUri = androidx.core.content.FileProvider.getUriForFile(
                                     context,
                                     "${context.packageName}.fileprovider",
@@ -6979,6 +7506,30 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.applicationContext.dataStore.edit { it[HTTPS_ONLY_MODE_KEY] = value }
             httpsOnlyMode = value
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+
+    fun saveWebRenderEnabled(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[WEBRENDER_ALL_KEY] = value }
+            isWebRenderEnabled = value
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+
+    fun saveGpuAccelerationEnabled(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[LAYERS_ACCELERATION_KEY] = value }
+            isGpuAccelerationEnabled = value
+            writeGeckoConfigFile(context.applicationContext)
+        }
+    }
+
+    fun saveForceHighRefreshRate(context: Context, value: Boolean) {
+        viewModelScope.launch {
+            context.applicationContext.dataStore.edit { it[FORCE_HIGH_REFRESH_RATE_KEY] = value }
+            isForceHighRefreshRate = value
             writeGeckoConfigFile(context.applicationContext)
         }
     }
@@ -7803,6 +8354,7 @@ class BrowserViewModel : ViewModel() {
         tabLayoutMode = prefs[TAB_LAYOUT_MODE_KEY] ?: "Grid"
         autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
         openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
+        hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: false
         accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
         accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
         accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false

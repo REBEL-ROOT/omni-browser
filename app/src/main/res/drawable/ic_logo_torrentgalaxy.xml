@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#6A1B9A"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- Planet Center -->
+    <path
+        android:fillColor="#E1BEE7"
+        android:pathData="M48,28A18,18 0,1 0,66,46A18,18 0,0 0,48,28Z"/>
+    <!-- Galaxy Ring -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,52 C22,42 64,30 76,40 C80,44 68,56 46,58 C30,59 18,56 20,52 Z M26,52 C28,54 36,55 46,54 C64,52 72,44 70,42 C68,40 54,46 38,50 C30,52 25,52 26,52 Z"/>
+    <!-- Stars -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,24 L32,28 L36,30 L32,32 L30,36 L28,32 L24,30 L28,28 Z M68,20 L69,23 L72,24 L69,25 L68,28 L67,25 L64,24 L67,23 Z M70,62 L71,64 L73,65 L71,66 L70,68 L69,66 L67,65 L69,64 Z"/>
+</vector>

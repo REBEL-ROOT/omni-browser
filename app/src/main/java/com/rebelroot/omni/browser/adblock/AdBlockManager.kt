@@ -57,6 +57,20 @@ class AdBlockManager(private val context: Context) {
                 isEnabled = true
             ),
             AdBlockProvider(
+                id = "adguard_anti_adblock",
+                name = "AdGuard Anti-AdBlock Defusers",
+                url = "https://filters.adtidy.org/extension/ublock/filters/14.txt",
+                isPreset = true,
+                isEnabled = true
+            ),
+            AdBlockProvider(
+                id = "ublock_unbreak",
+                name = "uBlock Origin Unbreak & Anti-Block",
+                url = "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/unbreak.txt",
+                isPreset = true,
+                isEnabled = true
+            ),
+            AdBlockProvider(
                 id = "peter_lowe",
                 name = "Peter Lowe's Ad & Tracker List",
                 url = "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
@@ -347,11 +361,151 @@ class AdBlockManager(private val context: Context) {
     fun getCosmeticAdBlockCss(): String {
         if (!isMasterEnabled) return ""
         return """
-            .ad, .ads, .ad-container, .ad-box, .ad-banner, .ad-wrapper, .ad-slot,
             [id*="google_ads"], [class*="google-auto-placed"], [id*="taboola"], [id*="outbrain"],
-            [class*="ad-slot"], [class*="sponsored"], [src*="doubleclick.net"], [src*="googlesyndication.com"],
-            iframe[src*="ad"], .outbrain, .taboola, .adsbygoogle, .a-ad, .ad-header
+            [class*="ad-slot"], [class*="sponsored-post"], [src*="doubleclick.net"], [src*="googlesyndication.com"],
+            iframe[src*="doubleclick"], .outbrain_widget, .taboola-container, .adsbygoogle
             { display: none !important; visibility: hidden !important; opacity: 0 !important; height: 0 !important; max-height: 0 !important; overflow: hidden !important; pointer-events: none !important; }
+        """.trimIndent()
+    }
+
+    fun getStealthDefuserJs(): String {
+        if (!isMasterEnabled) return ""
+        return """
+            (function() {
+                if (window.__omniStealthDefuserActive) return;
+                window.__omniStealthDefuserActive = true;
+
+                // 1. Stub common ad network globals expected by site scripts
+                window.google_ad_client = true;
+                window.google_ad_status = 1;
+                window.canRunAds = true;
+                window.isAdBlockActive = false;
+                window.fuckAdBlock = false;
+                window.BlockAdBlock = false;
+                window.SniffAdBlock = false;
+                window.adBlockDetected = false;
+
+                if (!window.googletag) {
+                    var noop = function() {};
+                    window.googletag = {
+                        cmd: [],
+                        flag: {},
+                        display: noop,
+                        openConsole: noop,
+                        enableServices: noop,
+                        pubads: function() {
+                            return {
+                                addEventListener: noop,
+                                clear: noop,
+                                clearTargeting: noop,
+                                collapseEmptyDivs: noop,
+                                definePassback: function() { return { display: noop, set: noop }; },
+                                enableLazyLoad: noop,
+                                enableSingleRequest: noop,
+                                getSlots: function() { return []; },
+                                refresh: noop,
+                                set: noop,
+                                setTargeting: noop
+                            };
+                        }
+                    };
+                }
+
+                if (!window.ga) window.ga = function() {};
+                if (!window._gaq) window._gaq = [];
+
+                // 2. Define traps for window properties probed by FuckAdBlock / BlockAdBlock / Admiral / CMPs
+                try {
+                    var trueProps = ['canRunAds', 'google_ad_client', 'google_ad_status', 'pubads'];
+                    var falseProps = ['isAdBlockActive', 'fuckAdBlock', 'BlockAdBlock', 'SniffAdBlock', 'adBlockDetected'];
+
+                    trueProps.forEach(function(p) {
+                        try {
+                            Object.defineProperty(window, p, {
+                                get: function() { return true; },
+                                set: function() {},
+                                configurable: true,
+                                enumerable: true
+                            });
+                        } catch(e) {}
+                    });
+
+                    falseProps.forEach(function(p) {
+                        try {
+                            Object.defineProperty(window, p, {
+                                get: function() { return false; },
+                                set: function() {},
+                                configurable: true,
+                                enumerable: true
+                            });
+                        } catch(e) {}
+                    });
+                } catch(e) {}
+
+                // 3. OffsetHeight & ClientHeight Proxy Spoofing for Bait Elements
+                try {
+                    var origOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+                    if (origOffsetHeight && origOffsetHeight.get) {
+                        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+                            get: function() {
+                                var h = origOffsetHeight.get.call(this);
+                                if (h === 0 && (this.className || this.id)) {
+                                    var cls = (this.className || '').toString().toLowerCase();
+                                    var id = (this.id || '').toString().toLowerCase();
+                                    if (cls.indexOf('ad') !== -1 || cls.indexOf('banner') !== -1 || cls.indexOf('sponsor') !== -1 ||
+                                        id.indexOf('ad') !== -1 || id.indexOf('banner') !== -1 || id.indexOf('sponsor') !== -1) {
+                                        return 250;
+                                    }
+                                }
+                                return h;
+                            },
+                            configurable: true,
+                            enumerable: true
+                        });
+                    }
+                } catch(e) {}
+
+                // 4. MutationObserver Anti-Adblock Overlay Defuser
+                try {
+                    var removeAntiAdblockOverlays = function() {
+                        var selectors = [
+                            '.fc-ab-root', '.tp-backdrop', '.tp-modal', '#ab-overlay',
+                            '.adblock-overlay', '.adblock-modal', '[class*="anti-adblock"]',
+                            '[id*="anti-adblock"]', '[class*="adblock-warning"]',
+                            '#adblock-notice', '.adblock-notice'
+                        ];
+                        selectors.forEach(function(sel) {
+                            var elems = document.querySelectorAll(sel);
+                            for (var i = 0; i < elems.length; i++) {
+                                var el = elems[i];
+                                if (el) {
+                                    el.style.setProperty('display', 'none', 'important');
+                                    el.style.setProperty('visibility', 'hidden', 'important');
+                                }
+                            }
+                        });
+                        if (document.body) {
+                            document.body.style.setProperty('overflow', 'auto', 'important');
+                        }
+                        if (document.documentElement) {
+                            document.documentElement.style.setProperty('overflow', 'auto', 'important');
+                        }
+                    };
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', removeAntiAdblockOverlays);
+                    } else {
+                        removeAntiAdblockOverlays();
+                    }
+
+                    var observer = new MutationObserver(function() {
+                        removeAntiAdblockOverlays();
+                    });
+                    if (document.documentElement) {
+                        observer.observe(document.documentElement, { childList: true, subtree: true });
+                    }
+                } catch(e) {}
+            })();
         """.trimIndent()
     }
 }

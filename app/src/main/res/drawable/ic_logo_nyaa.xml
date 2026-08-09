@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#0288D1"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- Cat Ears Outline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,48 L32,22 L46,38 C47,38 49,38 50,38 L64,22 L72,48 C74,58 66,70 48,70 C30,70 22,58 24,48 Z M34,32 L29,48 C30,56 40,64 48,64 C56,64 66,56 67,48 L62,32 L53,42 L43,42 Z"/>
+    <!-- Cat Eyes & Whiskers -->
+    <path
+        android:fillColor="#E0F7FA"
+        android:pathData="M36,46 A4,4 0,1 0,36.1,46 Z M60,46 A4,4 0,1 0,60.1,46 Z M48,54 L44,51 L52,51 Z"/>
+</vector>

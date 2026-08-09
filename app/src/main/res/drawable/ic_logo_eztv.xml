@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- TV Monitor Screen -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,28 L72,28 A6,6 0,0 1,78,34 L78,60 A6,6 0,0 1,72,66 L24,66 A6,6 0,0 1,18,60 L18,34 A6,6 0,0 1,24,28 Z M36,70 L60,70 L60,74 L36,74 Z"/>
+    <!-- EZ Text inside TV -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M26,38 L42,38 L42,43 L33,43 L33,46 L40,46 L40,51 L33,51 L33,53 L42,53 L42,58 L26,58 Z M46,38 L62,38 L52,51 L62,51 L62,58 L44,58 L54,45 L46,45 Z"/>
+</vector>

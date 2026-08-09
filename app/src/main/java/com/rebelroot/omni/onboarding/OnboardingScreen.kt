@@ -52,18 +52,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
-// ── M3 Expressive Design Tokens ──────────────────────────────────────────────
-// No gloss, no heavy borders — clean surfaces with subtle elevation and tonal
-// color fills, matching the Firefox/Google Pixel setup flow aesthetic.
+// ── Minimal Matte Design Tokens ─────────────────────────────────────────────
+// Clean, simple matte surfaces with subtle neutral slate tones — no gloss, no vibrant cyan/purple.
 private val SurfaceLight     = Color(0xFFF8F9FA)
-private val SurfaceDark      = Color(0xFF1A1C1E)
+private val SurfaceDark      = Color(0xFF121316)
 private val CardLight        = Color(0xFFFFFFFF)
-private val CardDark         = Color(0xFF2A2D30)
-private val TitleLight       = Color(0xFF1A1C1E)
-private val TitleDark        = Color(0xFFE3E2E6)
-private val BodyLight        = Color(0xFF44474E)
-private val BodyDark         = Color(0xFF9BA2AB)
+private val CardDark         = Color(0xFF1E2024)
+private val TitleLight       = Color(0xFF1E293B)
+private val TitleDark        = Color(0xFFF1F5F9)
+private val BodyLight        = Color(0xFF475569)
+private val BodyDark         = Color(0xFF94A3B8)
 private val CreamyBg         = Color(0xFFFAF8F5)
+private val MatteSlateAccent = Color(0xFF475569)
+private val MatteSlateDarkAccent = Color(0xFF94A3B8)
 
 data class OnboardingPage(
     val id: String,
@@ -331,11 +332,11 @@ private fun PageContent(
     onSetDefault: () -> Unit,
     context: Context
 ) {
-    // Image / illustration
+    // Image / illustration — prominent full-size mockup
     if (pageData.id == "navbar_position") {
         AnimatedNavbarShowcase(
             selectedPos = selectedNavbarPos,
-            modifier = Modifier.height(300.dp).fillMaxWidth()
+            modifier = Modifier.height(280.dp).fillMaxWidth()
         )
     } else {
         val imageRes = if (pageData.id == "theme_setup") {
@@ -348,7 +349,7 @@ private fun PageContent(
         )
     }
 
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(16.dp))
 
     // Title
     Text(
@@ -678,16 +679,30 @@ private fun DefaultBrowserContent(
                 fontSize = 13.sp, color = bodyColor, textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(4.dp))
+            val btnContainerColor = if (isDarkTheme) Color(0xFF475569) else Color(0xFF334155)
             Button(
                 onClick = onSetDefault,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = accent),
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = btnContainerColor,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth().height(46.dp),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             ) {
-                Icon(Icons.Rounded.OpenInNew, null, modifier = Modifier.size(16.dp))
+                Icon(
+                    imageVector = Icons.Rounded.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.White
+                )
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.onboarding_set_default_button), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(
+                    text = stringResource(R.string.onboarding_set_default_button),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = Color.White
+                )
             }
         }
     }
@@ -922,78 +937,81 @@ private fun TabCountBadge(
 
 // ── Pages data ────────────────────────────────────────────────────────────────
 
-private fun buildPages(context: Context) = listOf(
-    OnboardingPage(
-        id = "browse",
-        imageRes = R.drawable.ob_secure_browser,
-        title = context.getString(R.string.onboarding_title_browse),
-        accentColor = Color(0xFF1A73E8),
-        tagline = context.getString(R.string.onboarding_tagline_browse),
-        features = listOf(
-            FeatureItem(Icons.Rounded.Search,        context.getString(R.string.onboarding_feature_smart_bar_title),  context.getString(R.string.onboarding_feature_smart_bar_desc)),
-            FeatureItem(Icons.Rounded.Newspaper,     context.getString(R.string.onboarding_feature_discover_title),   context.getString(R.string.onboarding_feature_discover_desc)),
-            FeatureItem(Icons.Rounded.VisibilityOff, context.getString(R.string.onboarding_feature_incognito_title),  context.getString(R.string.onboarding_feature_incognito_desc)),
-            FeatureItem(Icons.Rounded.ContentCopy,   context.getString(R.string.onboarding_feature_copy_title),       context.getString(R.string.onboarding_feature_copy_desc))
-        )
-    ),
-    OnboardingPage(
-        id = "theme_setup",
-        imageRes = R.drawable.ob_quick_tools,
-        title = context.getString(R.string.onboarding_title_theme),
-        accentColor = Color(0xFF7C3AED),
-        tagline = context.getString(R.string.onboarding_tagline_theme),
-        features = emptyList()
-    ),
-    OnboardingPage(
-        id = "extensions",
-        imageRes = R.drawable.ob_extensions_vault,
-        title = context.getString(R.string.onboarding_title_extensions),
-        accentColor = Color(0xFFDC2626),
-        tagline = context.getString(R.string.onboarding_tagline_extensions),
-        features = listOf(
-            FeatureItem(Icons.Rounded.Shield,           context.getString(R.string.onboarding_feature_ublock_title),      context.getString(R.string.onboarding_feature_ublock_desc)),
-            FeatureItem(Icons.Rounded.AddCircleOutline, context.getString(R.string.onboarding_feature_store_title),       context.getString(R.string.onboarding_feature_store_desc)),
-            FeatureItem(Icons.Rounded.Block,            context.getString(R.string.onboarding_feature_ai_blocker_title),  context.getString(R.string.onboarding_feature_ai_blocker_desc)),
-            FeatureItem(Icons.Rounded.Lock,             context.getString(R.string.onboarding_feature_vault_title),       context.getString(R.string.onboarding_feature_vault_desc))
-        )
-    ),
-    OnboardingPage(
-        id = "search_setup",
-        imageRes = R.drawable.ob_search_selector,
-        title = context.getString(R.string.onboarding_title_search),
-        accentColor = Color(0xFF059669),
-        tagline = context.getString(R.string.onboarding_tagline_search),
-        features = emptyList()
-    ),
-    OnboardingPage(
-        id = "navbar_position",
-        imageRes = R.drawable.ob_nav_split,
-        title = context.getString(R.string.onboarding_title_navbar),
-        accentColor = Color(0xFF4F46E5),
-        tagline = context.getString(R.string.onboarding_tagline_navbar),
-        features = emptyList()
-    ),
-    OnboardingPage(
-        id = "proxy_hub",
-        imageRes = R.drawable.ob_secure_browser,
-        title = context.getString(R.string.onboarding_title_proxy),
-        accentColor = Color(0xFF0891B2),
-        tagline = context.getString(R.string.onboarding_tagline_proxy),
-        features = emptyList()
-    ),
-    OnboardingPage(
-        id = "default_browser",
-        imageRes = R.drawable.ob_secure_browser,
-        title = context.getString(R.string.onboarding_title_default_browser),
-        accentColor = Color(0xFF2563EB),
-        tagline = context.getString(R.string.onboarding_tagline_default_browser),
-        features = listOf(
-            FeatureItem(Icons.Rounded.Shield, context.getString(R.string.onboarding_feature_auto_protection_title), context.getString(R.string.onboarding_feature_auto_protection_desc)),
-            FeatureItem(Icons.Rounded.Bolt,   context.getString(R.string.onboarding_feature_lightning_title),       context.getString(R.string.onboarding_feature_lightning_desc)),
-            FeatureItem(Icons.Rounded.Lock,   context.getString(R.string.onboarding_feature_encrypted_title),       context.getString(R.string.onboarding_feature_encrypted_desc))
+private fun buildPages(context: Context): List<OnboardingPage> {
+    val matteAccent = Color(0xFF475569)
+    return listOf(
+        OnboardingPage(
+            id = "browse",
+            imageRes = R.drawable.ob_secure_browser,
+            title = context.getString(R.string.onboarding_title_browse),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_browse),
+            features = listOf(
+                FeatureItem(Icons.Rounded.Search,        context.getString(R.string.onboarding_feature_smart_bar_title),  context.getString(R.string.onboarding_feature_smart_bar_desc)),
+                FeatureItem(Icons.Rounded.Newspaper,     context.getString(R.string.onboarding_feature_discover_title),   context.getString(R.string.onboarding_feature_discover_desc)),
+                FeatureItem(Icons.Rounded.VisibilityOff, context.getString(R.string.onboarding_feature_incognito_title),  context.getString(R.string.onboarding_feature_incognito_desc)),
+                FeatureItem(Icons.Rounded.ContentCopy,   context.getString(R.string.onboarding_feature_copy_title),       context.getString(R.string.onboarding_feature_copy_desc))
+            )
+        ),
+        OnboardingPage(
+            id = "theme_setup",
+            imageRes = R.drawable.ob_quick_tools,
+            title = context.getString(R.string.onboarding_title_theme),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_theme),
+            features = emptyList()
+        ),
+        OnboardingPage(
+            id = "extensions",
+            imageRes = R.drawable.ob_extensions_vault,
+            title = context.getString(R.string.onboarding_title_extensions),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_extensions),
+            features = listOf(
+                FeatureItem(Icons.Rounded.Shield,           context.getString(R.string.onboarding_feature_ublock_title),      context.getString(R.string.onboarding_feature_ublock_desc)),
+                FeatureItem(Icons.Rounded.AddCircleOutline, context.getString(R.string.onboarding_feature_store_title),       context.getString(R.string.onboarding_feature_store_desc)),
+                FeatureItem(Icons.Rounded.Block,            context.getString(R.string.onboarding_feature_ai_blocker_title),  context.getString(R.string.onboarding_feature_ai_blocker_desc)),
+                FeatureItem(Icons.Rounded.Lock,             context.getString(R.string.onboarding_feature_vault_title),       context.getString(R.string.onboarding_feature_vault_desc))
+            )
+        ),
+        OnboardingPage(
+            id = "search_setup",
+            imageRes = R.drawable.ob_search_selector,
+            title = context.getString(R.string.onboarding_title_search),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_search),
+            features = emptyList()
+        ),
+        OnboardingPage(
+            id = "navbar_position",
+            imageRes = R.drawable.ob_nav_split,
+            title = context.getString(R.string.onboarding_title_navbar),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_navbar),
+            features = emptyList()
+        ),
+        OnboardingPage(
+            id = "proxy_hub",
+            imageRes = R.drawable.ob_secure_browser,
+            title = context.getString(R.string.onboarding_title_proxy),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_proxy),
+            features = emptyList()
+        ),
+        OnboardingPage(
+            id = "default_browser",
+            imageRes = R.drawable.ob_secure_browser,
+            title = context.getString(R.string.onboarding_title_default_browser),
+            accentColor = matteAccent,
+            tagline = context.getString(R.string.onboarding_tagline_default_browser),
+            features = listOf(
+                FeatureItem(Icons.Rounded.Shield, context.getString(R.string.onboarding_feature_auto_protection_title), context.getString(R.string.onboarding_feature_auto_protection_desc)),
+                FeatureItem(Icons.Rounded.Bolt,   context.getString(R.string.onboarding_feature_lightning_title),       context.getString(R.string.onboarding_feature_lightning_desc)),
+                FeatureItem(Icons.Rounded.Lock,   context.getString(R.string.onboarding_feature_encrypted_title),       context.getString(R.string.onboarding_feature_encrypted_desc))
+            )
         )
     )
-)
+}
 
 // ── Default browser intent ────────────────────────────────────────────────────
 
@@ -1034,7 +1052,8 @@ private fun ProxyHubContent(
     cardColor: Color,
     onSelect: (String) -> Unit
 ) {
-    val accent = Color(0xFF0891B2)
+    val accent = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569)
+    val badgeColor = if (isDarkTheme) Color(0xFFCBD5E1) else Color(0xFF475569)
 
     val options = listOf(
         ProxyOption(
@@ -1043,7 +1062,7 @@ private fun ProxyHubContent(
             title = stringResource(R.string.onboarding_proxy_direct_title),
             subtitle = stringResource(R.string.onboarding_proxy_direct_desc),
             badge = stringResource(R.string.onboarding_proxy_badge_recommended),
-            badgeColor = Color(0xFF059669)
+            badgeColor = badgeColor
         ),
         ProxyOption(
             id = "tor_builtin",
@@ -1051,7 +1070,7 @@ private fun ProxyHubContent(
             title = stringResource(R.string.onboarding_proxy_tor_title),
             subtitle = stringResource(R.string.onboarding_proxy_tor_desc),
             badge = stringResource(R.string.onboarding_proxy_badge_private),
-            badgeColor = Color(0xFF7C3AED)
+            badgeColor = badgeColor
         ),
         ProxyOption(
             id = "custom_proxy",
@@ -1059,7 +1078,7 @@ private fun ProxyHubContent(
             title = stringResource(R.string.onboarding_proxy_custom_title),
             subtitle = stringResource(R.string.onboarding_proxy_custom_desc),
             badge = stringResource(R.string.onboarding_proxy_badge_advanced),
-            badgeColor = Color(0xFFB45309)
+            badgeColor = badgeColor
         )
     )
 
@@ -1070,7 +1089,7 @@ private fun ProxyHubContent(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
@@ -1083,42 +1102,41 @@ private fun ProxyHubContent(
                 text = stringResource(R.string.onboarding_proxy_section_desc),
                 fontSize = 12.sp,
                 color = bodyColor,
-                lineHeight = 17.sp
+                lineHeight = 16.sp
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
 
             options.forEach { option ->
                 val isSelected = selectedProxy == option.id
                 Surface(
                     onClick = { onSelect(option.id) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isSelected) accent.copy(alpha = 0.12f) else Color.Transparent,
-                    tonalElevation = if (isSelected) 0.dp else 0.dp,
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) accent.copy(alpha = 0.10f) else Color.Transparent,
+                    tonalElevation = 0.dp,
                     border = if (isSelected)
                         androidx.compose.foundation.BorderStroke(1.5.dp, accent)
                     else
-                        androidx.compose.foundation.BorderStroke(1.dp, if (isDarkTheme) Color(0xFF3D4043) else Color(0xFFDADCE0)),
+                        androidx.compose.foundation.BorderStroke(1.dp, if (isDarkTheme) Color(0xFF334155) else Color(0xFFE2E8F0)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // Icon container
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) accent.copy(alpha = 0.18f)
-                                    else option.badgeColor.copy(alpha = 0.10f),
-                            modifier = Modifier.size(40.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            color = accent.copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
                                     option.icon, null,
-                                    tint = if (isSelected) accent else option.badgeColor,
-                                    modifier = Modifier.size(20.dp)
+                                    tint = accent,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -1126,13 +1144,17 @@ private fun ProxyHubContent(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
                                     text = option.title,
                                     color = titleColor,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 if (option.badge != null) {
                                     Surface(
@@ -1142,18 +1164,21 @@ private fun ProxyHubContent(
                                         Text(
                                             text = option.badge,
                                             color = option.badgeColor,
-                                            fontSize = 9.5.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(2.dp))
                             Text(
                                 text = option.subtitle,
                                 color = bodyColor,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
+                                fontSize = 11.5.sp,
+                                lineHeight = 15.sp
                             )
                         }
 
@@ -1161,20 +1186,20 @@ private fun ProxyHubContent(
                             Icon(
                                 Icons.Rounded.CheckCircle, null,
                                 tint = accent,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.onboarding_proxy_footer),
                 fontSize = 11.sp,
-                color = bodyColor.copy(alpha = 0.7f),
+                color = bodyColor.copy(alpha = 0.75f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
             )
         }
     }

@@ -72,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.zIndex
 import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -147,7 +148,9 @@ fun BrowserScreen(
     onOpenNewsCenter: () -> Unit = {},
     onOpenWallpapers: () -> Unit = {},
     onPlayOnlineStream: (String, String) -> Unit,
-    onExitBrowser: () -> Unit
+    onExitBrowser: () -> Unit,
+    onOpenVisualBlockSettings: () -> Unit = {},
+    onOpenUserAgentSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val keyguardManager = remember(context) { context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
@@ -178,6 +181,26 @@ fun BrowserScreen(
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    LaunchedEffect(viewModel.navigateToVisualBlockSettingsTrigger) {
+        if (viewModel.navigateToVisualBlockSettingsTrigger) {
+            viewModel.navigateToVisualBlockSettingsTrigger = false
+            onOpenVisualBlockSettings()
+        }
+    }
+
+    LaunchedEffect(viewModel.navigateToUserAgentSettingsTrigger) {
+        if (viewModel.navigateToUserAgentSettingsTrigger) {
+            viewModel.navigateToUserAgentSettingsTrigger = false
+            onOpenUserAgentSettings()
+        }
+    }
+
+    LaunchedEffect(viewModel.isIncognitoMode) {
+        if (viewModel.isIncognitoMode && viewModel.lockIncognito && !viewModel.isIncognitoUnlocked) {
+            tryUnlockIncognito()
+        }
+    }
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
@@ -206,7 +229,9 @@ fun BrowserScreen(
     var dragAmountAccumulated by remember { mutableStateOf(0f) }
     val haptic = LocalHapticFeedback.current
 
-    val showHomeScreen = viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()
+    val currentUrlLower = viewModel.currentUrl.lowercase()
+    val isConfig = currentUrlLower == "omni:config" || currentUrlLower == "omni://config" || currentUrlLower == "about:config"
+    val showHomeScreen = (viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()) && !isConfig
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
 
     
@@ -222,30 +247,9 @@ fun BrowserScreen(
     // Video detection states
     val detectedMedia by viewModel.mediaInterceptor.detectedMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
-    var isYtExtracting by remember { mutableStateOf(false) }
-    var ytExtractionResult by remember { mutableStateOf<com.rebelroot.omni.media.YouTubeExtractor.ExtractionResult?>(null) }
-    var ytExtractionError by remember { mutableStateOf<String?>(null) }
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
     val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
-    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled
-
-    LaunchedEffect(showDownloadSheet) {
-        if (showDownloadSheet) {
-            val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-            if (isYouTubePage) {
-                isYtExtracting = true
-                ytExtractionError = null
-                ytExtractionResult = null
-                val result = com.rebelroot.omni.media.YouTubeExtractor.extractStreams(viewModel.currentUrl)
-                isYtExtracting = false
-                if (result != null) {
-                    ytExtractionResult = result
-                } else {
-                    ytExtractionError = "Could not extract streaming URLs for this video. YouTube might have restricted the player."
-                }
-            }
-        }
-    }
+    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled && !viewModel.isUrlBlockedByMediaSniffer(viewModel.currentUrl)
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -273,16 +277,12 @@ fun BrowserScreen(
         isAlohaBannerDismissed = false
         isScrollNavBarVisible = true
     }
-    // Re-show the banner whenever a brand-new video URL is detected (e.g. next video starts)
-    // Observing the count via flow is the thread-safe Compose-idiomatic approach.
+    // Clear dismissal state only when media list is reset
     LaunchedEffect(viewModel.mediaInterceptor.detectedMedia) {
-        var lastKnownCount = 0
         viewModel.mediaInterceptor.detectedMedia.collect { mediaList ->
-            if (mediaList.size > lastKnownCount) {
-                // New media was added — re-show banner even if user dismissed it
+            if (mediaList.isEmpty()) {
                 isAlohaBannerDismissed = false
             }
-            lastKnownCount = mediaList.size
         }
     }
     LaunchedEffect(isNavHideEnabled) {
@@ -304,6 +304,7 @@ fun BrowserScreen(
     var isAutoScrollPaused by remember { mutableStateOf(false) }
     var autoScrollSpeed by remember { mutableStateOf(1) }
     var showPlayerSettingsDialog by remember { mutableStateOf(false) }
+    var showMediaSnifferSettingsDialog by remember { mutableStateOf(false) }
     var isReaderSettingsExpanded by remember { mutableStateOf(true) }
     var isAutoScrollHUDExpanded by remember { mutableStateOf(true) }
 
@@ -370,6 +371,7 @@ fun BrowserScreen(
 
     // Offline Translation states
     var showTranslationDialog by remember { mutableStateOf(false) }
+    var showSpoofIdentityDialog by remember { mutableStateOf(false) }
     var translationSourceText by remember { mutableStateOf("") }
     var translationResultText by remember { mutableStateOf("") }
     var translationProgress by remember { mutableStateOf(false) }
@@ -385,7 +387,9 @@ fun BrowserScreen(
     // Tab Switcher states
     var showTabGroupsSheet by remember { mutableStateOf(false) }
     var showGroupDialog by remember { mutableStateOf(false) }
+    var showCreateGroupComposer by remember { mutableStateOf(false) }
     var groupDialogTargetTabId by remember { mutableStateOf<String?>(null) }
+
     var newGroupTitle by remember { mutableStateOf("") }
     var newGroupColorIndex by remember { mutableStateOf(0) }
     var showRenameGroupDialog by remember { mutableStateOf(false) }
@@ -404,6 +408,8 @@ fun BrowserScreen(
     var showPageInspectorSheet by remember { mutableStateOf(false) }
     var showAllInOneMenuSheet by remember { mutableStateOf(false) }
     var showThemeSheet by remember { mutableStateOf(false) }
+    var showTorrentDownloaderDialog by remember { mutableStateOf(false) }
+    var showSpeedDialSheet by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
 
@@ -460,8 +466,9 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(viewModel.activeSystemPermissionRequest) {
-        // Do NOT auto-launch — the rationale dialog handles showing the
-        // in-app rationale first, then calls systemPermissionLauncher.launch().
+        viewModel.activeSystemPermissionRequest?.let { request ->
+            systemPermissionLauncher.launch(request.permissions ?: emptyArray())
+        }
     }
 
     // ── File / Photo picker for web <input type="file"> ────────────────
@@ -504,6 +511,20 @@ fun BrowserScreen(
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to read JS file", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    val vpnPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val config = viewModel.customVpnConfig
+            if (!config.isNullOrBlank()) {
+                viewModel.connectCustomVpn()
+                Toast.makeText(context, "🛡️ Connecting to custom VPN...", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "VPN permission denied", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -830,7 +851,7 @@ fun BrowserScreen(
                     ) {
                         Column(
                             modifier = Modifier.onGloballyPositioned { coords ->
-                                if (coords.size.height > 0 && coords.size.height != measuredTopBarHeightPx) {
+                                if (!showMenu && coords.size.height > 0 && (measuredTopBarHeightPx == 0 || kotlin.math.abs(coords.size.height - measuredTopBarHeightPx) > 4)) {
                                     measuredTopBarHeightPx = coords.size.height
                                 }
                             }
@@ -1177,41 +1198,6 @@ fun BrowserScreen(
                                             )
                                         }
 
-                                        omnimenuDropdown(
-                                            expanded = showMenu,
-                                            onDismissRequest = { showMenu = false },
-                                            viewModel = viewModel,
-                                            onNewTab = {
-                                                viewModel.createNewTab(context, "about:blank")
-                                            },
-                                            onNewIncognitoTab = {
-                                                if (!viewModel.isIncognitoMode) {
-                                                    viewModel.toggleIncognitoMode(context)
-                                                }
-                                                viewModel.createNewTab(context, "about:blank")
-                                            },
-                                            onOpenHistory = onOpenHistory,
-                                            onBurnData = {
-                                                coroutineScope.launch {
-                                                    val runtime = viewModel.getGeckoRuntime(context)
-                                                    FireButton(runtime, context).burn()
-                                                    viewModel.burnAllData(context)
-                                                    Toast.makeText(context, "🔥 All history and tabs burned", Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            onOpenDownloads = onOpenDownloads,
-                                            onOpenBookmarks = onOpenBookmarks,
-                                            onOpenSettings = onOpenSettings,
-                                            onShowThemeSheet = { showThemeSheet = true },
-                                            onShowQuickTools = { showQuickToolsSheet = true },
-                                            onShowFeedbackDialog = { showFeedbackDialog = true },
-                                            onShowCustomizationSheet = { showCustomizationSheet = true },
-                                            onShowExtensions = { showExtensionsSheet = true },
-                                            onShowPlayerSettings = { showPlayerSettingsDialog = true },
-                                            onShowSiteInfo = { showSiteInfoSheet = true },
-                                            onOpenPasswordManager = onOpenPasswordManager,
-                                            onFindInPage = { viewModel.openFindInPage() }
-                                        )
                                     }
                                 }
                             } else {
@@ -1287,7 +1273,8 @@ fun BrowserScreen(
                                         } else {
                                             showDownloadSheet = true
                                         }
-                                    }
+                                    },
+                                    onOpenSettings = { showMediaSnifferSettingsDialog = true }
                                 )
                             }
                         }
@@ -1373,23 +1360,21 @@ fun BrowserScreen(
                 }
                 if ((!viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Bottom") && viewModel.addressBarPosition != "Top" && viewModel.addressBarPosition != "Split" && !showHomeScreen && !viewModel.isFullscreen) {
                     val isBottomNavBarVisible = !viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused
-                    val addrBarBorderColor = if (viewModel.isAmoledMode) Color(0xFF1A1A1A) else if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .run {
                                 if (isBottomNavBarVisible) this else navigationBarsPadding()
                             }
-                            .drawBehind {
-                                drawLine(
-                                    color = addrBarBorderColor,
-                                    start = Offset(0f, 0f),
-                                    end = Offset(size.width, 0f),
-                                    strokeWidth = 1.dp.toPx()
-                                )
-                            },
+                            // When the URL field is focused, the soft keyboard opens.
+                            // The window automatically resizes to accommodate the IME,
+                            // which already lifts the Scaffold's bottom bar.
+                            // Applying Modifier.imePadding() here would add the IME
+                            // inset twice, pushing the edit bar to the top of the screen.
+                            // Thus, we apply no additional IME padding.
+                            ,
                         color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-                        shadowElevation = 0.dp,
+                        shadowElevation = 12.dp,
                         tonalElevation = 2.dp
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1730,7 +1715,8 @@ fun BrowserScreen(
                         onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
                         onDownloadClick = {
                             showDownloadSheet = true
-                        }
+                        },
+                        onOpenSettings = { showMediaSnifferSettingsDialog = true }
                     )
                 }
 
@@ -1962,16 +1948,36 @@ fun BrowserScreen(
                                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                                     )
                                                     Spacer(modifier = Modifier.height(24.dp))
-                                                    Button(
-                                                        onClick = { viewModel.reload() },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                                        shape = RoundedCornerShape(20.dp)
+                                                    val mirrorFallback = remember(viewModel.currentUrl) {
+                                                        viewModel.getTorrentMirrorFallback(viewModel.currentUrl)
+                                                    }
+
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Text(
-                                                            text = "Retry",
-                                                            color = Color.White,
-                                                            fontWeight = FontWeight.SemiBold
-                                                        )
+                                                        Button(
+                                                            onClick = { viewModel.reload() },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                            shape = RoundedCornerShape(20.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "Retry",
+                                                                color = Color.White,
+                                                                fontWeight = FontWeight.SemiBold
+                                                            )
+                                                        }
+                                                        if (mirrorFallback != null) {
+                                                            OutlinedButton(
+                                                                onClick = { viewModel.loadUrl(mirrorFallback) },
+                                                                shape = RoundedCornerShape(20.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Try Working Mirror",
+                                                                    fontWeight = FontWeight.SemiBold
+                                                                )
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2015,8 +2021,9 @@ fun BrowserScreen(
                                     
                                     val pullOffset = viewModel.pullToRefreshOffset
                                     val isRefreshing = viewModel.isLoading
-                                    
-                                    if (pullOffset > 0f || isRefreshing) {
+                                    val showIndicator = isRefreshing && !viewModel.hideRefreshIndicator
+
+                                    if (pullOffset > 0f || showIndicator) {
                                         val pullOffsetDp = with(density) { (pullOffset * 0.4f).toDp() }
                                         val thresholdDp = 80.dp
                                         val progress = (pullOffset * 0.4f) / with(density) { thresholdDp.toPx() }
@@ -2026,7 +2033,7 @@ fun BrowserScreen(
                                                 .fillMaxWidth()
                                                 .align(Alignment.TopCenter)
                                                 .padding(top = 16.dp)
-                                                .offset(y = if (isRefreshing) 40.dp else pullOffsetDp.coerceAtMost(120.dp)),
+                                                .offset(y = if (showIndicator) 40.dp else pullOffsetDp.coerceAtMost(120.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Surface(
@@ -2036,7 +2043,7 @@ fun BrowserScreen(
                                                 shadowElevation = 6.dp
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
-                                                    if (isRefreshing) {
+                                                    if (showIndicator) {
                                                         CircularProgressIndicator(
                                                             modifier = Modifier.size(24.dp),
                                                             color = MaterialTheme.colorScheme.primary,
@@ -2062,7 +2069,19 @@ fun BrowserScreen(
                                 RainbowScanBorder(isScanning = viewModel.isQrScanning)
                             }
 
-                            if (isHome) {
+                            if (isConfig) {
+                                val density = androidx.compose.ui.platform.LocalDensity.current
+                                val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
+                                val topBarHeightDp = (if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))) + 8.dp
+                                val configTopPad = if (hasTopBar && !viewModel.isFullscreen) topBarHeightDp else 0.dp
+                                val configBottomPad = if (!hasTopBar && !viewModel.isFullscreen) (config.searchBoxHeight + (config.paddingVertical * 2) + config.bottomNavBarHeight + 16.dp) else 16.dp
+
+                                OmniConfigContent(
+                                    viewModel = viewModel,
+                                    topPadding = configTopPad,
+                                    bottomPadding = configBottomPad
+                                )
+                            } else if (isHome) {
                                 HomeScreenContent(
                                     viewModel = viewModel,
                                     onOpenDownloads = onOpenDownloads,
@@ -2078,12 +2097,8 @@ fun BrowserScreen(
                                         }
                                     },
                                     onOpenExtensions = {
-                                        if (!viewModel.hasSeenExtensionsOverview) {
-                                            pendingExtensionsAction = { showExtensionsSheet = true }
-                                            showExtensionsOverviewDialog = true
-                                        } else {
-                                            showExtensionsSheet = true
-                                        }
+                                        viewModel.saveExtensionsOverviewSeen(context, true)
+                                        showExtensionsSheet = true
                                     },
                                     onOpenTranslator = {
                                         translationSourceText = ""
@@ -2112,7 +2127,8 @@ fun BrowserScreen(
                                     showCustomizationSheet = showCustomizationSheet,
                                     onShowCustomizationSheetChange = { showCustomizationSheet = it },
                                     onShowTabGroups = { showTabGroupsSheet = true },
-                                    onOpenWallpapers = onOpenWallpapers
+                                    onOpenWallpapers = onOpenWallpapers,
+                                    onShowPlayerSettings = { showPlayerSettingsDialog = true }
                                 )
                             }
                         }
@@ -2960,11 +2976,7 @@ fun BrowserScreen(
             // • Fullscreen: fades while playing, stays / reappears while paused or on tap
             val nonDrmMedia = detectedMedia.filter { !it.isDrmProtected }
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-            val isYouTubeVideo = isYouTubePage && com.rebelroot.omni.media.YouTubeExtractor.extractVideoId(viewModel.currentUrl) != null
-            val shouldShowDownloadButton = (!showHomeScreen && !viewModel.isReaderModeActive && viewModel.isNativePlayerEnabled) &&
-                (nonDrmMedia.isNotEmpty() && !isYouTubePage || isYouTubeVideo)
-
-            if (shouldShowDownloadButton) {
+            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
                 if (viewModel.isFullscreen) {
                     // Fullscreen mode — overlay with auto-fade controls
                     // Transparent tap-catcher; restores controls on any tap
@@ -3086,9 +3098,167 @@ fun BrowserScreen(
             }
             // ───────────────────────────────────────────────────────────────────────
 
-            // Safari-style Context Menu Bottom Sheet
-            if (viewModel.activeContextMenu != null) {
-                SafariContextMenuSheet(viewModel = viewModel, context = context)
+            // Context Menu Bottom Sheet
+            val activeContextMenu = viewModel.activeContextMenu
+            if (activeContextMenu != null) {
+                ModalBottomSheet(
+                    onDismissRequest = { viewModel.dismissContextMenu() },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF16222F) else Color.White,
+                    contentColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124),
+                    dragHandle = { BottomSheetDefaults.DragHandle(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFE0E0E0)) }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp)
+                    ) {
+                        // Header
+                        val titleText = when {
+                            !activeContextMenu.srcUri.isNullOrEmpty() -> "Image Option"
+                            !activeContextMenu.linkUri.isNullOrEmpty() -> "Link Option"
+                            else -> "Page Option"
+                        }
+                        val subtitleText = activeContextMenu.srcUri ?: activeContextMenu.linkUri ?: ""
+                        
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = titleText,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
+                            )
+                            if (subtitleText.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = subtitleText,
+                                    fontSize = 12.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.6f) else Color(0xFF606266)
+                                )
+                            }
+                        }
+                        
+                        HorizontalDivider(
+                            color = if (viewModel.isDarkThemeEnabled) Color(0xFF2A3C50) else Color(0xFFF0F0F0),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+
+                        // Options
+                        if (!activeContextMenu.srcUri.isNullOrEmpty()) {
+                            val imageUrl = activeContextMenu.srcUri
+                            // Google Lens Search Option
+                            ContextMenuItem(
+                                icon = Icons.Rounded.CameraAlt,
+                                title = "Search image with Google Lens",
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    val encodedUrl = android.net.Uri.encode(imageUrl)
+                                    val lensUrl = "https://lens.google.com/uploadbyurl?url=$encodedUrl"
+                                    viewModel.createNewTab(context, lensUrl)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                            
+                            // Google Lens App Intent
+                            ContextMenuItem(
+                                icon = Icons.Rounded.CameraAlt,
+                                title = "Search with Google Lens App",
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    try {
+                                        val intent = android.content.Intent("com.google.lens.intent.action.LENS_INPUT").apply {
+                                            setPackage("com.google.android.googlequicksearchbox")
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Google Lens app not installed", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                            
+                            // Open in New Tab
+                            ContextMenuItem(
+                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                                title = stringResource(R.string.menu_open_image_new_tab),
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    viewModel.createNewTab(context, imageUrl)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                            
+                            // Copy Image Link
+                            ContextMenuItem(
+                                icon = Icons.Rounded.ContentCopy,
+                                title = "Copy image link",
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Image Link", imageUrl)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Image link copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                        }
+
+                        if (!activeContextMenu.linkUri.isNullOrEmpty()) {
+                            val linkUrl = activeContextMenu.linkUri
+                            // Open Link in New Tab
+                            ContextMenuItem(
+                                icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                                title = stringResource(R.string.menu_open_link_new_tab),
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    viewModel.createNewTab(context, linkUrl)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                            
+                            // Copy Link Address
+                            ContextMenuItem(
+                                icon = Icons.Rounded.ContentCopy,
+                                title = "Copy link address",
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Link Address", linkUrl)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Link address copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+
+                            // Share Link
+                            ContextMenuItem(
+                                icon = Icons.Rounded.Share,
+                                title = "Share link",
+                                onClick = {
+                                    viewModel.dismissContextMenu()
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, linkUrl)
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    val chooserIntent = Intent.createChooser(shareIntent, "Share link").apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(chooserIntent)
+                                },
+                                isDark = viewModel.isDarkThemeEnabled
+                            )
+                        }
+                    }
+                }
             }
 
 
@@ -3112,457 +3282,212 @@ fun BrowserScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         
-                        val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-                        
-                        if (isYouTubePage) {
-                            if (isYtExtracting) {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().height(150.dp),
-                                    contentAlignment = Alignment.Center
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(nonDrmMedia) { item ->
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        CircularProgressIndicator()
-                                        Text("Extracting YouTube streams...", fontSize = 14.sp)
-                                    }
-                                }
-                            } else if (ytExtractionResult != null) {
-                                val ytResult = ytExtractionResult!!
-                                Text(
-                                    text = ytResult.title,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                )
-                                androidx.compose.foundation.lazy.LazyColumn(
-                                    modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(ytResult.streams) { stream ->
-                                        Surface(
-                                            shape = RoundedCornerShape(24.dp),
-                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                            modifier = Modifier.fillMaxWidth()
+                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Icon(
-                                                            imageVector = if (stream.isAudio) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                        Spacer(modifier = Modifier.width(8.dp))
-                                                        Text(
-                                                            text = stream.quality,
-                                                            fontWeight = FontWeight.Bold,
-                                                            fontSize = 15.sp
-                                                        )
-                                                    }
-                                                    Text(
-                                                        text = if (stream.isAudio) "AUDIO" else if (stream.isVideoOnly) "VIDEO ONLY" else "VIDEO",
-                                                        fontSize = 11.sp,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    Button(
-                                                        onClick = {
-                                                            showDownloadSheet = false
-                                                            onPlayOnlineStream(stream.url, viewModel.currentUrl)
-                                                        },
-                                                        modifier = Modifier.weight(1f),
-                                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                    ) {
-                                                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    }
-
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            showDownloadSheet = false
-                                                            coroutineScope.launch {
-                                                                val cleanTitle = ytResult.title.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                                val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
-                                                                
-                                                                // Find best audio URL if it's video-only
-                                                                val bestAudioUrl = if (stream.isVideoOnly) {
-                                                                    ytResult.streams.find { it.isAudio }?.url
-                                                                } else null
-
-                                                                viewModel.streamDownloadEngine.startDownload(
-                                                                    url = stream.url,
-                                                                    suggestedName = suggestedName,
-                                                                    type = if (stream.isAudio) com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO else com.rebelroot.omni.media.MediaInterceptor.MediaType.MP4,
-                                                                    saveToLocker = false,
-                                                                    referrerUrl = viewModel.currentUrl,
-                                                                    cookies = null,
-                                                                    audioUrl = bestAudioUrl
-                                                                )
-                                                                Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
-                                                            }
-                                                        },
-                                                        modifier = Modifier.weight(1f),
-                                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                    ) {
-                                                        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                // If programmatic extractor failed/not available, list media streams grabbed by the browser extension
-                                val youtubeMedia = nonDrmMedia.filter { it.url.contains("googlevideo.com") || it.url.contains("videoplayback") }
-                                if (youtubeMedia.isNotEmpty()) {
-                                    Text(
-                                        text = "Sniffed Streams (Play video to refresh list)",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 8.dp)
-                                    )
-                                    androidx.compose.foundation.lazy.LazyColumn(
-                                        modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        items(youtubeMedia) { item ->
-                                            Surface(
-                                                shape = RoundedCornerShape(24.dp),
-                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Icon(
-                                                                imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
-                                                                contentDescription = null,
-                                                                tint = MaterialTheme.colorScheme.primary
-                                                            )
-                                                            Spacer(modifier = Modifier.width(8.dp))
-                                                            Text(
-                                                                text = stringResource(R.string.download_quality_label, when (item.quality) {
-                                                                    "Source HD" -> stringResource(R.string.download_quality_source_hd)
-                                                                    "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
-                                                                    "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
-                                                                    null -> stringResource(R.string.download_quality_auto_source_fallback)
-                                                                    else -> item.quality
-                                                                }),
-                                                                fontWeight = FontWeight.Bold,
-                                                                fontSize = 15.sp
-                                                            )
-                                                        }
-                                                        Text(
-                                                            text = item.type.name,
-                                                            fontSize = 11.sp,
-                                                            color = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                    ) {
-                                                        Button(
-                                                            onClick = {
-                                                                showDownloadSheet = false
-                                                                onPlayOnlineStream(item.url, viewModel.currentUrl)
-                                                            },
-                                                            modifier = Modifier.weight(1f),
-                                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                        ) {
-                                                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                            Spacer(modifier = Modifier.width(4.dp))
-                                                            Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                        }
-                                                        OutlinedButton(
-                                                            onClick = {
-                                                                showDownloadSheet = false
-                                                                coroutineScope.launch {
-                                                                    val audioUrl = if (item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
-                                                                        youtubeMedia.find { 
-                                                                            it.url.contains("googlevideo.com") && 
-                                                                            (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                                        }?.url
-                                                                    } else null
-
-                                                                    val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                                    val rawTitle = activeTab?.title ?: "Video"
-                                                                    val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                                        rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                                    } else "Video"
-                                                                    val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
-
-                                                                    viewModel.streamDownloadEngine.startDownload(
-                                                                        url = item.url,
-                                                                        suggestedName = suggestedName,
-                                                                        type = item.type,
-                                                                        saveToLocker = false,
-                                                                        referrerUrl = viewModel.currentUrl,
-                                                                        cookies = viewModel.activeVideoCookies,
-                                                                        audioUrl = audioUrl
-                                                                    )
-                                                                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
-                                                                }
-                                                            },
-                                                            modifier = Modifier.weight(1f),
-                                                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                        ) {
-                                                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                            Spacer(modifier = Modifier.width(4.dp))
-                                                            Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth().height(150.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "Could not extract streaming URLs. Please play the video first to let the sniffer capture the stream.",
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 14.sp,
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            modifier = Modifier.padding(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            androidx.compose.foundation.lazy.LazyColumn(
-                                modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(nonDrmMedia) { item ->
-                                    Surface(
-                                        shape = RoundedCornerShape(24.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(
-                                                        text = stringResource(R.string.download_quality_label, when (item.quality) {
-                                                            "Source HD" -> stringResource(R.string.download_quality_source_hd)
-                                                            "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
-                                                            "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
-                                                            null -> stringResource(R.string.download_quality_auto_source_fallback)
-                                                            else -> item.quality
-                                                        }),
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 15.sp
-                                                    )
-                                                }
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = item.type.name,
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    text = stringResource(R.string.download_quality_label, when (item.quality) {
+                                                        "Source HD" -> stringResource(R.string.download_quality_source_hd)
+                                                        "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
+                                                        "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
+                                                        null -> stringResource(R.string.download_quality_auto_source_fallback)
+                                                        else -> item.quality
+                                                    }),
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 15.sp
                                                 )
                                             }
+                                            Text(
+                                                text = item.type.name,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha=0.1f), RoundedCornerShape(24.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
 
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    showDownloadSheet = false
+                                                    onPlayOnlineStream(item.url, viewModel.currentUrl)
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                                             ) {
-                                                Button(
-                                                    onClick = {
-                                                        showDownloadSheet = false
-                                                        onPlayOnlineStream(item.url, viewModel.currentUrl)
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                ) {
-                                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                }
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        showDownloadSheet = false
-                                                        coroutineScope.launch {
-                                                            val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                            val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
-                                                                nonDrmMedia.find { 
-                                                                    it.url.contains("googlevideo.com") && 
-                                                                    (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                                }?.url
-                                                            } else null
+                                                Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(stringResource(R.string.play_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showDownloadSheet = false
+                                                    coroutineScope.launch {
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                            nonDrmMedia.find { 
+                                                                it.url.contains("googlevideo.com") && 
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url
+                                                        } else null
 
-                                                            val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                            val rawTitle = activeTab?.title ?: "Video"
-                                                            val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                                rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                            } else "Video"
-                                                            val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Video"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Video"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
 
-                                                            if (viewModel.isExternalDownloadManagerEnabled && viewModel.canHandOffMedia(item.type, audioUrl)) {
-                                                                viewModel.handOffToExternalDownloadManager(
-                                                                    context = context,
-                                                                    url = item.url,
-                                                                    filename = suggestedName,
-                                                                    contentType = when (item.type) {
-                                                                        com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO -> "audio/*"
-                                                                        com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> "video/webm"
-                                                                        else -> "video/mp4"
-                                                                    }
-                                                                )
-                                                                Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
-                                                            } else {
-                                                                if (viewModel.isExternalDownloadManagerEnabled) {
-                                                                    Toast.makeText(context, context.getString(R.string.download_toast_no_handoff), Toast.LENGTH_LONG).show()
-                                                                } else {
-                                                                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
+                                                        if (viewModel.isExternalDownloadManagerEnabled && viewModel.canHandOffMedia(item.type, audioUrl)) {
+                                                            viewModel.handOffToExternalDownloadManager(
+                                                                context = context,
+                                                                url = item.url,
+                                                                filename = suggestedName,
+                                                                contentType = when (item.type) {
+                                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO -> "audio/*"
+                                                                    com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> "video/webm"
+                                                                    else -> "video/mp4"
                                                                 }
-                                                                viewModel.streamDownloadEngine.startDownload(
-                                                                    url = item.url,
-                                                                    suggestedName = suggestedName,
-                                                                    type = item.type,
-                                                                    saveToLocker = false,
-                                                                    referrerUrl = viewModel.currentUrl,
-                                                                    cookies = viewModel.activeVideoCookies,
-                                                                    audioUrl = audioUrl
-                                                                )
+                                                            )
+                                                            Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            if (viewModel.isExternalDownloadManagerEnabled) {
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_no_handoff), Toast.LENGTH_LONG).show()
+                                                            } else {
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
                                                             }
-                                                        }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                ) {
-                                                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                }
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        showDownloadSheet = false
-                                                        coroutineScope.launch {
-                                                            val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                            val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
-                                                                nonDrmMedia.find { 
-                                                                    it.url.contains("googlevideo.com") && 
-                                                                    (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                                }?.url
-                                                            } else null
-
-                                                            val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                            val rawTitle = activeTab?.title ?: "Video"
-                                                            val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                                rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                            } else "Video"
-                                                            val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
-
                                                             viewModel.streamDownloadEngine.startDownload(
                                                                 url = item.url,
                                                                 suggestedName = suggestedName,
                                                                 type = item.type,
-                                                                saveToLocker = true,
+                                                                saveToLocker = false,
                                                                 referrerUrl = viewModel.currentUrl,
                                                                 cookies = viewModel.activeVideoCookies,
                                                                 audioUrl = audioUrl
                                                             )
-                                                            Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
                                                         }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                ) {
-                                                    Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(stringResource(R.string.locker_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                }
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        showDownloadSheet = false
-                                                        coroutineScope.launch {
-                                                            // For YouTube/googlevideo, find the audio-only stream
-                                                            val isYouTubeUrl = item.url.contains("googlevideo.com")
-                                                            val mp3Url = if (isYouTubeUrl) {
-                                                                nonDrmMedia.find {
-                                                                    it.url.contains("googlevideo.com") &&
-                                                                    (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
-                                                                }?.url ?: item.url
-                                                            } else {
-                                                                item.url
-                                                            }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(stringResource(R.string.save_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showDownloadSheet = false
+                                                    coroutineScope.launch {
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val audioUrl = if (isYouTubeUrl && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) {
+                                                            nonDrmMedia.find { 
+                                                                it.url.contains("googlevideo.com") && 
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url
+                                                        } else null
 
-                                                            val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
-                                                            val rawTitle = activeTab?.title ?: "Audio"
-                                                            val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
-                                                                rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
-                                                            } else "Audio"
-                                                            val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Video"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Video"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
 
-                                                            if (viewModel.isExternalDownloadManagerEnabled && !isYouTubeUrl) {
-                                                                viewModel.handOffToExternalDownloadManager(
-                                                                    context = context,
-                                                                    url = mp3Url,
-                                                                    filename = suggestedName,
-                                                                    contentType = "audio/mpeg"
-                                                                )
-                                                                Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
-                                                            } else {
-                                                                if (viewModel.isExternalDownloadManagerEnabled) {
-                                                                    Toast.makeText(context, context.getString(R.string.download_toast_mp3_no_handoff), Toast.LENGTH_LONG).show()
-                                                                } else {
-                                                                    Toast.makeText(context, context.getString(R.string.download_toast_mp3_started), Toast.LENGTH_SHORT).show()
-                                                                }
-                                                                viewModel.streamDownloadEngine.startDownload(
-                                                                    url = mp3Url,
-                                                                    suggestedName = suggestedName,
-                                                                    type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
-                                                                    saveToLocker = false,
-                                                                    referrerUrl = viewModel.currentUrl,
-                                                                    cookies = viewModel.activeVideoCookies
-                                                                )
-                                                            }
+                                                        viewModel.streamDownloadEngine.startDownload(
+                                                            url = item.url,
+                                                            suggestedName = suggestedName,
+                                                            type = item.type,
+                                                            saveToLocker = true,
+                                                            referrerUrl = viewModel.currentUrl,
+                                                            cookies = viewModel.activeVideoCookies,
+                                                            audioUrl = audioUrl
+                                                        )
+                                                        Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(stringResource(R.string.locker_text), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showDownloadSheet = false
+                                                    coroutineScope.launch {
+                                                        // For YouTube/googlevideo, find the audio-only stream
+                                                        val isYouTubeUrl = item.url.contains("googlevideo.com")
+                                                        val mp3Url = if (isYouTubeUrl) {
+                                                            nonDrmMedia.find {
+                                                                it.url.contains("googlevideo.com") &&
+                                                                (it.url.contains("mime=audio") || it.url.contains("mime=audio%2F"))
+                                                            }?.url ?: item.url
+                                                        } else {
+                                                            item.url
                                                         }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                                                ) {
-                                                    Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(stringResource(R.string.download_sheet_mp3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                }
+
+                                                        val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
+                                                        val rawTitle = activeTab?.title ?: "Audio"
+                                                        val cleanTitle = if (rawTitle.isNotEmpty() && rawTitle != "Loading..." && rawTitle != "New Tab" && !rawTitle.startsWith("http")) {
+                                                            rawTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(100)
+                                                        } else "Audio"
+                                                        val suggestedName = "$cleanTitle-${System.currentTimeMillis()}"
+
+                                                        if (viewModel.isExternalDownloadManagerEnabled && !isYouTubeUrl) {
+                                                            viewModel.handOffToExternalDownloadManager(
+                                                                context = context,
+                                                                url = mp3Url,
+                                                                filename = suggestedName,
+                                                                contentType = "audio/mpeg"
+                                                            )
+                                                            Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            if (viewModel.isExternalDownloadManagerEnabled) {
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_mp3_no_handoff), Toast.LENGTH_LONG).show()
+                                                            } else {
+                                                                Toast.makeText(context, context.getString(R.string.download_toast_mp3_started), Toast.LENGTH_SHORT).show()
+                                                            }
+                                                            viewModel.streamDownloadEngine.startDownload(
+                                                                url = mp3Url,
+                                                                suggestedName = suggestedName,
+                                                                type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
+                                                                saveToLocker = false,
+                                                                referrerUrl = viewModel.currentUrl,
+                                                                cookies = viewModel.activeVideoCookies
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                                            ) {
+                                                Icon(Icons.Rounded.AudioFile, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(stringResource(R.string.download_sheet_mp3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                         }
                                     }
@@ -3573,7 +3498,7 @@ fun BrowserScreen(
                 }
             }
 
-            // Autofill suggestion bottom sheet: appears when user taps a login input
+            // Autofill picker sheet: appears when user taps a login input field
             if (viewModel.showAutofillBottomSheet && viewModel.autofillMatches.isNotEmpty()) {
                 ModalBottomSheet(
                     onDismissRequest = { viewModel.showAutofillBottomSheet = false },
@@ -3586,45 +3511,67 @@ fun BrowserScreen(
                             .fillMaxWidth()
                             .navigationBarsPadding()
                             .padding(horizontal = 24.dp, vertical = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // Header
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.VpnKey,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Text(
-                                text = "Saved Passwords",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
-                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.VpnKey,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.pm_title),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 17.sp,
+                                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                                    )
+                                    val host = try { java.net.URI(viewModel.currentUrl).host?.removePrefix("www.") ?: "" } catch(e: Exception) { "" }
+                                    if (host.isNotEmpty()) {
+                                        Text(
+                                            text = host,
+                                            fontSize = 12.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                            // X button to dismiss — "I'll type manually"
+                            IconButton(
+                                onClick = { viewModel.showAutofillBottomSheet = false },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.autofill_type_manually),
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
 
-                        Text(
-                            text = "Choose a credential to fill in for ${try { java.net.URI(viewModel.currentUrl).host?.removePrefix("www.") ?: "this site" } catch(e: Exception) { "this site" }}:",
-                            fontSize = 13.sp,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-
+                        // Credential list
                         androidx.compose.foundation.lazy.LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(viewModel.autofillMatches) { credential ->
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
                                     color = if (viewModel.isDarkThemeEnabled) Color(0xFF1E293B) else Color(0xFFF1F5F9),
-                                    onClick = {
-                                        viewModel.autofillCredential(credential)
-                                    },
+                                    onClick = { viewModel.autofillCredential(credential) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Row(
@@ -3634,23 +3581,45 @@ fun BrowserScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Column(
-                                            modifier = Modifier.weight(1f),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.weight(1f)
                                         ) {
-                                            Text(
-                                                text = credential.username,
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 15.sp,
-                                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Clip
-                                            )
-                                            Text(
-                                                text = "••••••••",
-                                                fontSize = 13.sp,
-                                                color = Color.Gray
-                                            )
+                                            // Filled indicator if this was the last used credential
+                                            val isLastUsed = viewModel.autofillLastUsed?.id == credential.id
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(38.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(
+                                                        if (isLastUsed) MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.VpnKey,
+                                                    contentDescription = null,
+                                                    tint = if (isLastUsed) Color.White else MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Text(
+                                                    text = credential.username,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 15.sp,
+                                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = if (isLastUsed) stringResource(R.string.autofill_currently_filled) else stringResource(R.string.autofill_tap_to_fill),
+                                                    fontSize = 12.sp,
+                                                    color = if (isLastUsed) MaterialTheme.colorScheme.primary else Color.Gray
+                                                )
+                                            }
                                         }
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
@@ -3663,7 +3632,17 @@ fun BrowserScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        // "Type manually" footer
+                        TextButton(
+                            onClick = { viewModel.showAutofillBottomSheet = false },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.autofill_type_manually_btn),
+                                fontSize = 13.sp,
+                                color = Color.Gray
+                            )
+                        }
                     }
                 }
             }
@@ -3930,6 +3909,32 @@ fun BrowserScreen(
                         ) {
                             Text(stringResource(R.string.close_text), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
+                    }
+                )
+            }
+
+            if (showSpoofIdentityDialog) {
+                SpoofIdentityChooserDialog(
+                    viewModel = viewModel,
+                    onDismiss = { showSpoofIdentityDialog = false },
+                    onOpenUserAgentSettings = onOpenUserAgentSettings
+                )
+            }
+
+            if (showTorrentDownloaderDialog) {
+                TorrentDownloaderDialog(
+                    viewModel = viewModel,
+                    onDismiss = { showTorrentDownloaderDialog = false }
+                )
+            }
+
+            if (showSpeedDialSheet) {
+                SpeedDialLauncherSheet(
+                    viewModel = viewModel,
+                    onDismissRequest = { showSpeedDialSheet = false },
+                    onOpenUrl = { url ->
+                        showSpeedDialSheet = false
+                        viewModel.loadUrl(url)
                     }
                 )
             }
@@ -4729,9 +4734,20 @@ fun BrowserScreen(
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.primary)
                                     .clickable {
-                                        showTabGroupsSheet = false
-                                        viewModel.createNewTab(context, "about:blank")
+                                        if (showOnlyGroups) {
+                                            showCreateGroupComposer = true
+                                        } else {
+                                            showTabGroupsSheet = false
+                                            val currentActiveGroup = activeGroupView
+                                            if (currentActiveGroup != null) {
+                                                viewModel.createNewTab(context, "about:blank", groupId = currentActiveGroup.id)
+                                            } else {
+                                                viewModel.createNewTab(context, "about:blank")
+                                            }
+                                        }
                                     },
+
+
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -5321,157 +5337,293 @@ fun BrowserScreen(
             // 3.5 Site Info (Cookies, Privacy, Security) Bottom Sheet
             if (showSiteInfoSheet) {
                 val currentDomain = remember(viewModel.currentUrl) {
-                    try { Uri.parse(viewModel.currentUrl).host ?: viewModel.currentUrl } catch (e: Exception) { viewModel.currentUrl }
+                    try { Uri.parse(viewModel.currentUrl).host ?: viewModel.currentUrl } catch (_: Exception) { viewModel.currentUrl }
                 }
-                val isHttps = viewModel.currentUrl.startsWith("https://")
+                val isHttps   = viewModel.currentUrl.startsWith("https://")
+                val isHttp    = viewModel.currentUrl.startsWith("http://")
+                val isLocal   = viewModel.currentUrl.startsWith("about:") || viewModel.currentUrl.startsWith("file://")
+                val isDark    = viewModel.isDarkThemeEnabled
+                val isAmoled  = viewModel.isAmoledMode
+
+                val sheetBg    = if (isAmoled) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+                val cardBg     = if (isAmoled) Color(0xFF111113) else if (isDark) Color(0xFF2C2C2E) else Color.White
+                val textPrimary   = if (isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E)
+                val textSecondary = if (isDark) Color(0xFF8E8E93) else Color(0xFF6C6C70)
+                val divColor      = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
+
+                val secureGreen = Color(0xFF30D158)
+                val warnOrange  = Color(0xFFFF9F0A)
+                val dangerRed   = Color(0xFFFF453A)
+
+                // Current per-site permission values
+                val permLocation   = remember(currentDomain) { viewModel.getSitePermissionValue(currentDomain, "location") }
+                val permCamera     = remember(currentDomain) { viewModel.getSitePermissionValue(currentDomain, "camera") }
+                val permMic        = remember(currentDomain) { viewModel.getSitePermissionValue(currentDomain, "microphone") }
+                val permNotif      = remember(currentDomain) { viewModel.getSitePermissionValue(currentDomain, "notifications") }
+                val permJs         = remember(currentDomain) { viewModel.getSitePermissionValue(currentDomain, "javascript") }
+                val permAutoplay   = remember(currentDomain) { viewModel.getSitePermissionValue(currentDomain, "autoplay") }
 
                 ModalBottomSheet(
                     onDismissRequest = { showSiteInfoSheet = false },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+                    containerColor = sheetBg,
+                    tonalElevation = 0.dp,
+                    dragHandle = {
+                        BottomSheetDefaults.DragHandle(
+                            color = if (isDark) Color(0xFF48484A) else Color(0xFFC7C7CC),
+                            width = 32.dp, height = 3.dp
+                        )
+                    }
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        // ── Header: favicon + domain + connection badge ──────────────
                         Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             coil.compose.AsyncImage(
                                 model = coil.request.ImageRequest.Builder(LocalContext.current)
                                     .data("https://www.google.com/s2/favicons?sz=128&domain=$currentDomain")
-                                    .size(64, 64)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Favicon",
-                                modifier = Modifier.size(24.dp).clip(CircleShape),
-                                error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_compass)
-                            )
-                            Column {
-                                Text(
-                                    text = currentDomain,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
-                                )
-                                Text(
-                                    text = if (isHttps) stringResource(R.string.site_info_secure_connection) else stringResource(R.string.site_info_insecure_connection),
-                                    fontSize = 11.sp,
-                                    color = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500)
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (isHttps) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                                contentDescription = stringResource(R.string.site_info_conn_status_desc),
-                                tint = if (isHttps) Color(0xFF34C759) else Color(0xFFFF9500),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isHttps) stringResource(R.string.site_info_conn_is_secure) else stringResource(R.string.site_info_conn_not_secure),
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
-                                )
-                                Text(
-                                    text = if (isHttps)
-                                        stringResource(R.string.site_info_conn_secure_desc)
-                                    else
-                                        stringResource(R.string.site_info_conn_insecure_desc),
-                                    fontSize = 12.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Folder,
+                                    .size(64, 64).crossfade(true).build(),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)),
+                                error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_compass)
                             )
                             Column(modifier = Modifier.weight(1f)) {
+                                Text(currentDomain, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(
-                                    text = stringResource(R.string.site_info_cookies_title),
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
-                                )
-                                Text(
-                                    text = stringResource(R.string.site_info_cookies_desc),
+                                    text = when {
+                                        isLocal  -> "Internal page"
+                                        isHttps  -> stringResource(R.string.site_info_secure_connection)
+                                        else     -> "Connection not secure"
+                                    },
                                     fontSize = 12.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
-                                    lineHeight = 16.sp
+                                    color = when {
+                                        isLocal  -> textSecondary
+                                        isHttps  -> secureGreen
+                                        else     -> dangerRed
+                                    }
                                 )
                             }
-                            TextButton(
-                                onClick = {
-                                    viewModel.clearSiteData(context)
-                                    showSiteInfoSheet = false
+                        }
+
+                        // ── Card 1: SSL / Connection ─────────────────────────────────
+                        Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
+                                // Connection row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = when {
+                                            isLocal  -> Icons.Rounded.Info
+                                            isHttps  -> Icons.Rounded.Lock
+                                            else     -> Icons.Rounded.LockOpen
+                                        },
+                                        contentDescription = null,
+                                        tint = when { isLocal -> textSecondary; isHttps -> secureGreen; else -> dangerRed },
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = when {
+                                                isLocal  -> "Internal page"
+                                                isHttps  -> stringResource(R.string.site_info_conn_is_secure)
+                                                else     -> stringResource(R.string.site_info_conn_not_secure)
+                                            },
+                                            fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimary
+                                        )
+                                        Text(
+                                            text = when {
+                                                isLocal  -> "No data is sent to external servers."
+                                                isHttps  -> stringResource(R.string.site_info_conn_secure_desc)
+                                                else     -> stringResource(R.string.site_info_conn_insecure_desc)
+                                            },
+                                            fontSize = 12.sp, color = textSecondary, lineHeight = 16.sp
+                                        )
+                                    }
                                 }
+
+                                if (!isLocal) {
+                                    HorizontalDivider(color = divColor, thickness = 0.5.dp)
+
+                                    // Certificate info row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.VerifiedUser, null,
+                                            tint = if (isHttps) secureGreen else warnOrange,
+                                            modifier = Modifier.size(22.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (isHttps) "Certificate valid (TLS)" else "No certificate",
+                                                fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimary
+                                            )
+                                            Text(
+                                                text = if (isHttps)
+                                                    "Identity verified · Data encrypted in transit"
+                                                else
+                                                    "Your data could be visible to others on this network",
+                                                fontSize = 12.sp, color = textSecondary, lineHeight = 16.sp
+                                            )
+                                        }
+                                    }
+
+                                    HorizontalDivider(color = divColor, thickness = 0.5.dp)
+
+                                    // HTTPS-only mode status
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.Security, null,
+                                            tint = if (viewModel.httpsOnlyMode) secureGreen else textSecondary,
+                                            modifier = Modifier.size(22.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("HTTPS-Only Mode", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimary)
+                                            Text(
+                                                text = if (viewModel.httpsOnlyMode) "Active — HTTP upgrades enforced" else "Off — some pages may load over HTTP",
+                                                fontSize = 12.sp, color = textSecondary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Card 2: Cookies ──────────────────────────────────────────
+                        Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(stringResource(R.string.site_info_clear), color = Color(0xFFFF4444), fontSize = 13.sp)
+                                Icon(Icons.Rounded.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.site_info_cookies_title), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimary)
+                                    Text(stringResource(R.string.site_info_cookies_desc), fontSize = 12.sp, color = textSecondary, lineHeight = 16.sp)
+                                }
+                                TextButton(onClick = { viewModel.clearSiteData(context); showSiteInfoSheet = false }) {
+                                    Text(stringResource(R.string.site_info_clear), color = dangerRed, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showSiteInfoSheet = false
-                                    showPrivacyReportSheet = true
-                                },
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // ── Card 3: Per-site permissions ─────────────────────────────
+                        if (!isLocal) {
+                            Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
+                                    Text(
+                                        text = "Permissions",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = textSecondary,
+                                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                                    )
+
+                                    val permissions = listOf(
+                                        Triple("Location",      Icons.Rounded.LocationOn,          permLocation),
+                                        Triple("Camera",        Icons.Rounded.CameraAlt,           permCamera),
+                                        Triple("Microphone",    Icons.Rounded.Mic,                 permMic),
+                                        Triple("Notifications", Icons.Rounded.NotificationsActive, permNotif),
+                                        Triple("JavaScript",    Icons.Rounded.Code,                permJs),
+                                        Triple("Autoplay",      Icons.Rounded.PlayCircle,          permAutoplay)
+                                    )
+                                    val typeKeys = listOf("location","camera","microphone","notifications","javascript","autoplay")
+
+                                    permissions.forEachIndexed { index, (label, icon, value) ->
+                                        if (index > 0) HorizontalDivider(color = divColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 38.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(icon, null,
+                                                tint = when (value) {
+                                                    "allow" -> secureGreen
+                                                    "block" -> dangerRed
+                                                    else    -> textSecondary
+                                                },
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(label, fontSize = 14.sp, color = textPrimary, modifier = Modifier.weight(1f))
+
+                                            // Compact 3-state selector: Ask / Allow / Block
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                listOf("ask" to "Ask", "allow" to "Allow", "block" to "Block").forEach { (key, lbl) ->
+                                                    val isSelected = value == key || (key == "ask" && value != "allow" && value != "block")
+                                                    Surface(
+                                                        onClick = { viewModel.updateSitePermission(currentDomain, typeKeys[index], key) },
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = when {
+                                                            isSelected && key == "allow" -> secureGreen.copy(alpha = 0.15f)
+                                                            isSelected && key == "block" -> dangerRed.copy(alpha = 0.15f)
+                                                            isSelected                  -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                            else                        -> Color.Transparent
+                                                        },
+                                                        modifier = Modifier.height(26.dp)
+                                                    ) {
+                                                        Box(
+                                                            contentAlignment = Alignment.Center,
+                                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = lbl,
+                                                                fontSize = 11.sp,
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                                color = when {
+                                                                    isSelected && key == "allow" -> secureGreen
+                                                                    isSelected && key == "block" -> dangerRed
+                                                                    isSelected                  -> MaterialTheme.colorScheme.primary
+                                                                    else                        -> textSecondary
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                }
+                            }
+                        }
+
+                        // ── Card 4: Privacy & Site Settings → Privacy Report ─────────
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = cardBg,
+                            modifier = Modifier.fillMaxWidth().clickable { showSiteInfoSheet = false; showPrivacyReportSheet = true }
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Shield,
-                                contentDescription = stringResource(R.string.site_info_privacy_settings_aria),
-                                tint = Color(0xFF30D158),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.site_info_privacy_title),
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
-                                )
-                                Text(
-                                    text = stringResource(R.string.site_info_privacy_desc),
-                                    fontSize = 12.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E8E93) else Color(0xFF8E8E93),
-                                    lineHeight = 16.sp
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Rounded.Shield, null, tint = secureGreen, modifier = Modifier.size(22.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.site_info_privacy_title), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = textPrimary)
+                                    Text(stringResource(R.string.site_info_privacy_desc), fontSize = 12.sp, color = textSecondary, lineHeight = 16.sp)
+                                }
+                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = textSecondary, modifier = Modifier.size(16.dp))
                             }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                contentDescription = stringResource(R.string.site_info_view_full_report),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
@@ -5546,13 +5698,81 @@ fun BrowserScreen(
             }
 
             // ── Menu Bottom Sheet (Unified with All-In-One Menu Sheet) ──────────────────
-            // Only redirect to the grid sheet when address bar is Bottom — in that
-            // layout the menu button is in the bottom nav bar which has no room for
-            // a popup. For Top/Split the omnimenuDropdown popup is used instead.
+            // Only redirect to the bottom sheet when the AllInOne nav is at the bottom.
+            // When nav is at the top, showMenu drives the omnimenuDropdown popup directly.
             LaunchedEffect(showMenu) {
-                if (showMenu && (viewModel.addressBarPosition == "Bottom" || viewModel.chromeNavBarEnabled)) {
+                if (showMenu && viewModel.addressBarPosition == "Bottom") {
                     showMenu = false
                     showAllInOneMenuSheet = true
+                }
+            }
+
+            // Render top dropdown as an in-canvas overlay on web pages to keep GeckoView window focused
+            if (showMenu && viewModel.addressBarPosition != "Bottom") {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val statusBarPx = WindowInsets.statusBars.getTop(density)
+                val statusBarDp = with(density) { statusBarPx.toDp() }
+                val topBarHeightDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else 56.dp
+                val menuTopOffset = statusBarDp + topBarHeightDp + 4.dp
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(100f)
+                ) {
+                    // Transparent clickable scrim to dismiss menu on outer tap
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { showMenu = false }
+                            )
+                    )
+                    // Positioned dropdown menu card floating below top address bar
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = menuTopOffset, end = 8.dp)
+                    ) {
+                        omnimenuDropdownCard(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            viewModel = viewModel,
+                            onNewTab = {
+                                showMenu = false
+                                viewModel.createNewTab(context, "about:blank")
+                            },
+                            onNewIncognitoTab = {
+                                showMenu = false
+                                if (!viewModel.isIncognitoMode) {
+                                    viewModel.toggleIncognitoMode(context)
+                                }
+                                viewModel.createNewTab(context, "about:blank")
+                            },
+                            onOpenHistory = { showMenu = false; onOpenHistory() },
+                            onBurnData = {
+                                showMenu = false
+                                coroutineScope.launch {
+                                    val runtime = viewModel.getGeckoRuntime(context)
+                                    FireButton(runtime, context).burn()
+                                    viewModel.burnAllData(context)
+                                    Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onOpenDownloads = { showMenu = false; onOpenDownloads() },
+                            onOpenBookmarks = { showMenu = false; onOpenBookmarks() },
+                            onOpenSettings = { showMenu = false; onOpenSettings() },
+                            onOpenPasswordManager = { showMenu = false; onOpenPasswordManager() },
+                            onShowThemeSheet = { showMenu = false; showThemeSheet = true },
+                            onShowFeedbackDialog = { showMenu = false; showFeedbackDialog = true },
+                            onShowCustomizationSheet = { showMenu = false; showCustomizationSheet = true },
+                            onShowExtensions = { showMenu = false; showExtensionsSheet = true },
+                            onShowPlayerSettings = { showMenu = false; showPlayerSettingsDialog = true },
+                            onShowSiteInfo = { showMenu = false; showSiteInfoSheet = true },
+                            onFindInPage = { showMenu = false; viewModel.openFindInPage() }
+                        )
+                    }
                 }
             }
 
@@ -5661,21 +5881,23 @@ fun BrowserScreen(
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Store,
                                             contentDescription = null,
-                                            modifier = Modifier.size(14.dp),
+                                            modifier = Modifier.size(13.dp),
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
                                             text = stringResource(R.string.ext_browse_store),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -5707,9 +5929,12 @@ fun BrowserScreen(
                                 ) {
                                     Text(
                                         text = if (tabId == "Installed") stringResource(R.string.ext_installed_tab_count, totalInstalled) else tabLabel,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 4.dp)
                                     )
                                 }
                             }
@@ -5725,10 +5950,18 @@ fun BrowserScreen(
                             ) {
                                 items(com.rebelroot.omni.browser.extensions.CuratedExtensionRepository.categories) { cat ->
                                     val isCatSelected = selectedCuratedCategory == cat
+                                    val catLabel = when (cat) {
+                                        "All" -> stringResource(R.string.ext_cat_all)
+                                        "Privacy" -> stringResource(R.string.ext_cat_privacy)
+                                        "Utilities" -> stringResource(R.string.ext_cat_utilities)
+                                        "Media" -> stringResource(R.string.ext_cat_media)
+                                        "Productivity" -> stringResource(R.string.ext_cat_productivity)
+                                        else -> cat
+                                    }
                                     FilterChip(
                                         selected = isCatSelected,
                                         onClick = { selectedCuratedCategory = cat },
-                                        label = { Text(cat, fontSize = 11.sp, fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Medium) },
+                                        label = { Text(catLabel, fontSize = 11.sp, fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Medium) },
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                                             selectedLabelColor = MaterialTheme.colorScheme.primary
@@ -5980,7 +6213,8 @@ fun BrowserScreen(
                                 BuiltInExt(Icons.Rounded.Download, extMediaSniffer, extTeamAuthor,
                                     extMediaSnifferDesc,
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
-                                    { viewModel.toggleMediaGrabber(context) }),
+                                    { viewModel.toggleMediaGrabber(context) },
+                                    { showMediaSnifferSettingsDialog = true }),
                                 BuiltInExt(Icons.Rounded.Block, extAiBlocker, extTeamAuthor,
                                     extAiBlockerDesc,
                                     viewModel.isAiBlockerEnabled, !viewModel.isAiBlockerToggling,
@@ -6039,9 +6273,13 @@ fun BrowserScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = stringResource(R.string.ext_get_more_addons),
-                                    fontSize = 14.sp,
+                                    fontSize = 13.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
                                 )
                             }
                         }
@@ -6288,9 +6526,27 @@ fun BrowserScreen(
                 onOpenDownloads = onOpenDownloads,
                 onOpenBookmarks = onOpenBookmarks,
                 onOpenSettings = onOpenSettings,
-                onShowCustomizationSheet = { showCustomizationSheet = true },
-                onShowExtensions = { showExtensionsSheet = true },
-                onShowPlayerSettings = { showPlayerSettingsDialog = true },
+                onShowCustomizationSheet = {
+                    showAllInOneMenuSheet = false
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        showCustomizationSheet = true
+                    }
+                },
+                onShowExtensions = {
+                    showAllInOneMenuSheet = false
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        showExtensionsSheet = true
+                    }
+                },
+                onShowPlayerSettings = {
+                    showAllInOneMenuSheet = false
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        showPlayerSettingsDialog = true
+                    }
+                },
                 onShowSiteInfo = { showSiteInfoSheet = true },
                 onFindInPage = { viewModel.openFindInPage() },
                 onAddTabToNewGroup = {
@@ -6305,8 +6561,20 @@ fun BrowserScreen(
                     }
                 },
                 hasActiveUserExtensions = hasActiveUserExtensions,
-                onShowThemeSheet = { showThemeSheet = true },
-                onShowFeedbackDialog = { showFeedbackDialog = true }
+                onShowThemeSheet = {
+                    showAllInOneMenuSheet = false
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        showThemeSheet = true
+                    }
+                },
+                onShowFeedbackDialog = {
+                    showAllInOneMenuSheet = false
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        showFeedbackDialog = true
+                    }
+                }
             )
         }
 
@@ -6314,6 +6582,17 @@ fun BrowserScreen(
             ThemeSheet(
                 viewModel = viewModel,
                 onDismissRequest = { showThemeSheet = false }
+            )
+        }
+
+        if (showPlayerSettingsDialog) {
+            PlayerSettingsSheet(
+                viewModel = viewModel,
+                onDismissRequest = { showPlayerSettingsDialog = false },
+                onShowSnifferSettings = {
+                    showPlayerSettingsDialog = false
+                    showMediaSnifferSettingsDialog = true
+                }
             )
         }
 
@@ -6374,11 +6653,12 @@ fun BrowserScreen(
                         val toolOrderState = remember(viewModel.quickToolsOrder) {
                             mutableStateListOf<String>().also { list ->
                                 val vmOrder = viewModel.quickToolsOrder
-                                val allTools = listOf(
-                                    "image_grabber", "page_inspector", "force_zoom", "vpn",
+                                 val allTools = listOf(
+                                    "speed_dial", "image_grabber", "page_inspector", "block_area", "spoof_identity", "force_zoom", "vpn",
+                                    "torrent_downloader", "omni_config",
                                     "qr_scanner", "safe_locker", "translator", "edit_page",
                                     "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
-                                    "qr_generator", "console_log", "dev_notes", "site_style"
+                                    "qr_generator", "dev_notes", "site_style"
                                 )
                                 list.addAll(vmOrder.filter { it in allTools } + allTools.filter { it !in vmOrder })
                             }
@@ -6389,13 +6669,22 @@ fun BrowserScreen(
 
                         // Resolve tool display info
                         fun toolTitle(id: String): String = when (id) {
-                            "image_grabber"  -> context.getString(R.string.tool_image_grabber)
-                            "page_inspector" -> context.getString(R.string.tool_page_inspector)
-                            "force_zoom"     -> if (viewModel.accessibilityForceZoom) context.getString(R.string.tool_force_zoom_on) else context.getString(R.string.tool_force_zoom)
-                            "vpn"            -> when (viewModel.proxyProvider) {
+                            "speed_dial"          -> "Speed Dial"
+                            "image_grabber"       -> context.getString(R.string.tool_image_grabber)
+                            "page_inspector"      -> context.getString(R.string.tool_page_inspector)
+                            "block_area"          -> context.getString(R.string.tool_block_area)
+                            "spoof_identity"      -> "Spoof Identity"
+                            "torrent_downloader"  -> "Torrent & Magnet"
+                            "omni_config"         -> "omni:config"
+                            "force_zoom"          -> if (viewModel.accessibilityForceZoom) context.getString(R.string.tool_force_zoom_on) else context.getString(R.string.tool_force_zoom)
+                            "vpn"                 -> when (viewModel.proxyProvider) {
                                 "tor", "tor_builtin" -> {
                                     val state = viewModel.activeTorState().value
                                     if (state is com.rebelroot.omni.privacy.TorState.Connected) context.getString(R.string.tool_vpn_tor_on) else context.getString(R.string.tool_vpn_tor)
+                                }
+                                "wireguard" -> {
+                                    val state = viewModel.vpnManager.state.value
+                                    if (state is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) context.getString(R.string.tool_vpn_on) else context.getString(R.string.tool_vpn)
                                 }
                                 else -> context.getString(R.string.tool_network)
                             }
@@ -6414,11 +6703,17 @@ fun BrowserScreen(
                             else -> id
                         }
                         fun toolIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector = when (id) {
-                            "image_grabber"  -> Icons.Rounded.Collections
-                            "page_inspector" -> Icons.Rounded.Code
-                            "force_zoom"     -> Icons.Rounded.ZoomIn
-                            "vpn"            -> when (viewModel.proxyProvider) {
+                            "speed_dial"          -> Icons.Rounded.Apps
+                            "image_grabber"      -> Icons.Rounded.Collections
+                            "page_inspector"     -> Icons.Rounded.Code
+                            "block_area"          -> Icons.Rounded.LayersClear
+                            "spoof_identity"      -> Icons.Rounded.Devices
+                            "torrent_downloader"  -> Icons.Rounded.Download
+                            "omni_config"         -> Icons.Rounded.Tune
+                            "force_zoom"          -> Icons.Rounded.ZoomIn
+                            "vpn"                 -> when (viewModel.proxyProvider) {
                                 "tor" -> Icons.Rounded.Security
+                                "wireguard" -> Icons.Rounded.VpnKey
                                 else -> Icons.Rounded.Public
                             }
                             "qr_scanner"     -> Icons.Rounded.QrCodeScanner
@@ -6436,6 +6731,10 @@ fun BrowserScreen(
                             else -> Icons.Rounded.Build
                         }
                         fun toolAction(id: String): () -> Unit = when (id) {
+                            "speed_dial" -> ({
+                                showQuickToolsSheet = false
+                                showSpeedDialSheet = true
+                            })
                             "image_grabber" -> ({
                                 showQuickToolsSheet = false
                                 if (!showHomeScreen && activeTab != null) showImageGrabberSheet = true
@@ -6445,6 +6744,23 @@ fun BrowserScreen(
                                 showQuickToolsSheet = false
                                 if (!showHomeScreen && activeTab != null) showPageInspectorSheet = true
                                 else Toast.makeText(context, context.getString(R.string.toast_open_webpage_inspect), Toast.LENGTH_SHORT).show()
+                            })
+                            "block_area" -> ({
+                                showQuickToolsSheet = false
+                                if (!showHomeScreen && activeTab != null) viewModel.toggleVisualBlockMode()
+                                else Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
+                            })
+                            "spoof_identity" -> ({
+                                showQuickToolsSheet = false
+                                showSpoofIdentityDialog = true
+                            })
+                            "torrent_downloader" -> ({
+                                showQuickToolsSheet = false
+                                showTorrentDownloaderDialog = true
+                            })
+                            "omni_config" -> ({
+                                showQuickToolsSheet = false
+                                viewModel.loadUrl("omni:config")
                             })
                             "force_zoom" -> ({
                                 val nextState = !viewModel.accessibilityForceZoom
@@ -6468,6 +6784,26 @@ fun BrowserScreen(
                                         } else {
                                             viewModel.connectTor()
                                             Toast.makeText(context, "🧅 " + context.getString(R.string.toast_tor_connecting), Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    "wireguard" -> {
+                                        if (viewModel.vpnManager.state.value is com.rebelroot.omni.privacy.VpnManager.VpnState.Connected) {
+                                            viewModel.disconnectVpn()
+                                            Toast.makeText(context, "🛡️ " + context.getString(R.string.toast_vpn_disconnected), Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val config = viewModel.customVpnConfig
+                                            if (!config.isNullOrBlank()) {
+                                                val vpnIntent = android.net.VpnService.prepare(context)
+                                                if (vpnIntent != null) {
+                                                    vpnPermissionLauncher.launch(vpnIntent)
+                                                } else {
+                                                    viewModel.connectCustomVpn()
+                                                    Toast.makeText(context, "🛡️ " + context.getString(R.string.toast_vpn_connecting), Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                onOpenSettings()
+                                                Toast.makeText(context, context.getString(R.string.toast_vpn_setup_required), Toast.LENGTH_LONG).show()
+                                            }
                                         }
                                     }
                                     else -> {
@@ -6711,69 +7047,173 @@ fun BrowserScreen(
                 )
             }
 
-            // --- Password Manager Banners ---
+            if (showCreateGroupComposer) {
+                CreateNewGroupComposerDialog(
+                    viewModel = viewModel,
+                    onDismissRequest = { showCreateGroupComposer = false },
+                    onGroupCreated = {
+                        showTabGroupsSheet = false
+                    }
+                )
+            }
+
+
+            // --- Safari-style Password Manager Banner ---
             val saveCred = viewModel.pendingSaveCredential
             val autofillSuggestion = viewModel.autofillSuggestion
+            val context = LocalContext.current
 
-            // Save-password banner: slides up from bottom when GeckoView fires onLoginSave
-            androidx.compose.animation.AnimatedVisibility(
-                visible = saveCred != null,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 90.dp, start = 12.dp, end = 12.dp)
-            ) {
+            if (saveCred != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .zIndex(1000f),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = true,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit = slideOutVertically { it } + fadeOut(),
+                        modifier = Modifier.padding(
+                            bottom = if (viewModel.addressBarPosition == "bottom" && !showHomeScreen) 84.dp else 24.dp,
+                            start = 16.dp,
+                            end = 16.dp
+                        )
+                    ) {
                 if (saveCred != null) {
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    val isDark = viewModel.isDarkThemeEnabled
+                    val bgColor = if (viewModel.isAmoledMode) Color(0xFF101012) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFAFAFC)
+                    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+                    val subTextColor = if (isDark) Color(0x99FFFFFF) else Color(0x99000000)
+
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = bgColor,
+                        shadowElevation = 16.dp,
+                        tonalElevation = 8.dp,
+                        border = BorderStroke(1.dp, if (isDark) Color(0x33FFFFFF) else Color(0x1F000000)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Save password for ${saveCred.domain}?",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = saveCred.username,
-                                    fontSize = 12.sp,
-                                    color = Color.Gray,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            TextButton(onClick = { viewModel.dismissSaveCredential() }) {
-                                Text("Ignore", color = Color.Gray, fontSize = 13.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    viewModel.savePassword(saveCred.domain, saveCred.username, saveCred.password)
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            // Header Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Save", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                shape = CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Lock,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Save Password?",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = textColor
+                                        )
+                                        Text(
+                                            text = saveCred.domain,
+                                            fontSize = 12.sp,
+                                            color = subTextColor,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { viewModel.dismissSaveCredential() },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Dismiss",
+                                        tint = subTextColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // Account Detail Pill
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isDark) Color(0x15FFFFFF) else Color(0x0A000000),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Person,
+                                        contentDescription = null,
+                                        tint = subTextColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = saveCred.username,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = textColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            // Actions Row (Safari-Style)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TextButton(
+                                    onClick = { viewModel.neverSavePasswordForDomain(context, saveCred.domain) },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Never for This Site", fontSize = 11.sp, color = subTextColor)
+                                }
+                                Spacer(modifier = Modifier.weight(1f))
+                                TextButton(
+                                    onClick = { viewModel.dismissSaveCredential() },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Not Now", fontSize = 13.sp, color = subTextColor)
+                                }
+                                Button(
+                                    onClick = {
+                                        viewModel.savePassword(saveCred.domain, saveCred.username, saveCred.password)
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Text("Save Password", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -6981,6 +7421,7 @@ fun BrowserScreen(
                                 val trackH = (size.height - topOff - botOff).coerceAtLeast(1f)
                                 val thumbH = (trackH * thumbHeightFraction).coerceIn(36.dp.toPx(), 90.dp.toPx())
                                 val maxThumbY = (trackH - thumbH).coerceAtLeast(0f)
+                                // thumbY is offset by topOff so it starts below the top nav
                                 val thumbY = topOff + scrollFraction * maxThumbY
                                 val w = capsuleWidth.toPx()
                                 val x = size.width - w
@@ -7007,61 +7448,73 @@ fun BrowserScreen(
                 }
             }
 
-            // Autofill suggestion bar: appears at bottom when visiting a site with saved credentials
+            // "Switch account" chip — shown after autofill when multiple passwords exist.
+            // Lets the user switch to a different saved credential without reloading.
+            val showSwitchChip = viewModel.autofillWasPerformed
+                && viewModel.autofillMatches.size > 1
+                && saveCred == null
             androidx.compose.animation.AnimatedVisibility(
-                visible = autofillSuggestion != null && saveCred == null,
+                visible = showSwitchChip,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 90.dp, start = 12.dp, end = 12.dp)
             ) {
-                if (autofillSuggestion != null) {
-                    Card(
+                val lastUsed = viewModel.autofillLastUsed
+                if (lastUsed != null) {
+                    Surface(
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        color = if (viewModel.isAmoledMode) Color(0xFF111827)
+                                else MaterialTheme.colorScheme.surface,
+                        shadowElevation = 8.dp,
+                        onClick = {
+                            viewModel.showAutofillBottomSheet = true
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 16.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.VpnKey,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Sign in as ${autofillSuggestion.username}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
+                                    text = stringResource(R.string.autofill_filled_as, lastUsed.username),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
                                     color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = autofillSuggestion.domain,
-                                    fontSize = 12.sp,
-                                    color = Color.Gray
+                                    text = stringResource(R.string.autofill_tap_to_switch),
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
-                            TextButton(onClick = { viewModel.dismissAutofill() }) {
-                                Text("Dismiss", color = Color.Gray, fontSize = 13.sp)
-                            }
-                            Button(
-                                onClick = { autofillSuggestion?.let { viewModel.autofillCredential(it) } },
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            // Dismiss
+                            IconButton(
+                                onClick = {
+                                    viewModel.autofillWasPerformed = false
+                                    viewModel.autofillLastUsed = null
+                                },
+                                modifier = Modifier.size(28.dp)
                             ) {
-                                Text("Fill In", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Dismiss",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(14.dp)
+                                )
                             }
                         }
                     }
@@ -7122,7 +7575,7 @@ fun BrowserScreen(
                 )
             }
 
-            // Extensions Overview Dialog
+            // Extensions Overview Dialog (shown only from other entry points)
             if (showExtensionsOverviewDialog) {
                 FeatureOverviewDialog(
                     title = stringResource(R.string.ext_overview_title),
@@ -7134,8 +7587,7 @@ fun BrowserScreen(
                     onDismiss = {
                         showExtensionsOverviewDialog = false
                         viewModel.saveExtensionsOverviewSeen(context, true)
-                        pendingExtensionsAction?.invoke()
-                        pendingExtensionsAction = null
+                        showExtensionsSheet = true
                     }
                 )
             }
@@ -7194,20 +7646,6 @@ fun BrowserScreen(
                 )
             }
             
-            // Android OS permission rationale — shown BEFORE the system dialog
-            viewModel.activeSystemPermissionRequest?.let { request ->
-                SystemPermissionRationaleDialog(
-                    request = request,
-                    onProceed = {
-                        systemPermissionLauncher.launch(request.permissions ?: emptyArray())
-                    },
-                    onDeny = {
-                        request.onDenied()
-                        viewModel.clearActiveSystemPermissionRequest()
-                    }
-                )
-            }
-
             // Site permission prompt overlay
             viewModel.activePermissionPrompt?.let { prompt ->
                 PermissionPromptDialog(prompt = prompt, isDarkThemeEnabled = viewModel.isDarkThemeEnabled)
@@ -7228,11 +7666,13 @@ fun BrowserScreen(
                 )
             }
 
-            // Native Player Settings dialog
-            if (showPlayerSettingsDialog) {
-                PlayerSettingsDialog(
+
+
+            // Media Sniffer Settings dialog
+            if (showMediaSnifferSettingsDialog) {
+                MediaSnifferSettingsDialog(
                     viewModel = viewModel,
-                    onDismissRequest = { showPlayerSettingsDialog = false }
+                    onDismissRequest = { showMediaSnifferSettingsDialog = false }
                 )
             }
 
@@ -7352,6 +7792,7 @@ fun BrowserScreen(
             }
             }
 
+
         // Lock Screen Overlay
         if (viewModel.isIncognitoMode && viewModel.lockIncognito && !viewModel.isIncognitoUnlocked) {
             Box(
@@ -7438,6 +7879,9 @@ fun BrowserScreen(
         }
     }
 }
+}
+}
+
 
 data class BuiltInExt(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -7456,7 +7900,8 @@ private fun MediaSnifferBanner(
     nonDrmMedia: List<com.rebelroot.omni.media.MediaInterceptor.DetectedMedia>,
     onDismiss: () -> Unit,
     onPlay: (String) -> Unit,
-    onDownloadClick: () -> Unit
+    onDownloadClick: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -7544,6 +7989,50 @@ private fun MediaSnifferBanner(
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
                 )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Settings,
+                    contentDescription = stringResource(R.string.media_sniffer_settings_title),
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            val context = LocalContext.current
+            val currentHost = remember(viewModel.currentUrl) {
+                try {
+                    android.net.Uri.parse(viewModel.currentUrl).host ?: ""
+                } catch (_: Exception) { "" }
+            }
+
+            if (currentHost.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = {
+                        viewModel.addDomainToMediaSnifferBlocklist(context, currentHost)
+                        onDismiss()
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.media_sniffer_blocked_toast, currentHost),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Block,
+                        contentDescription = stringResource(R.string.media_sniffer_block_site),
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

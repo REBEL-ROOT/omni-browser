@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#558B2F"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- Sliced Lime Fruit Outer -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,18 A30,30 0,1 1,47.9,18 Z M48,24 A24,24 0,1 0,48.1,24 Z"/>
+    <!-- Lime Segments -->
+    <path
+        android:fillColor="#DCEDC8"
+        android:pathData="M48,27 L48,45 L32,36 Z M51,27 L67,36 L51,45 Z M51,48 L67,57 L51,66 Z M48,48 L32,66 L48,66 Z M45,47 L29,47 L37,31 Z M51,47 L67,31 L67,47 Z"/>
+</vector>

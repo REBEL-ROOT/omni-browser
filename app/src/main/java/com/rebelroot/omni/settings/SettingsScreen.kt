@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.BasicTextField
 import com.rebelroot.omni.browser.BrowserViewModel
+import com.rebelroot.omni.browser.MediaSnifferSettingsDialog
 import com.rebelroot.omni.ui.theme.AccentThemesLight
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
@@ -84,10 +85,12 @@ fun SettingsScreen(
     onOpenAccessibility: () -> Unit = {},
     onOpenSiteSettings: () -> Unit = {},
     onOpenPasswordManager: () -> Unit = {},
+    onOpenDownloadSettings: () -> Unit = {},
     onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var showMediaSnifferSettingsDialog by remember { mutableStateOf(false) }
 
     BackHandler {
         if (isSearchActive) {
@@ -488,8 +491,6 @@ fun SettingsScreen(
                             } else { Toast.makeText(context, "Omni Browser is already your default browser!", Toast.LENGTH_SHORT).show() }
                         }),
                         SettingSearchResult(context.getString(R.string.app_language_title), "Change app display language ($currentLangName)", "BROWSING", Icons.Rounded.Translate, { showLanguageSelector = true }),
-                        SettingSearchResult("Discover Feed", "Show news recommendations on home page", "BROWSING", Icons.Rounded.Newspaper, { viewModel.saveShowDiscoverFeed(context, !viewModel.showDiscoverFeed) }),
-                        SettingSearchResult("Bottom Navigation Bar", "Show bottom toolbar with main navigation buttons", "BROWSING", Icons.Rounded.ViewAgenda, { viewModel.saveShowBottomNavBar(context, !viewModel.showBottomNavBar) }),
                         SettingSearchResult(context.getString(R.string.pdf_export_theme_title), "PDF export styling and background colors", "BROWSING", Icons.Rounded.Print, {}),
                         SettingSearchResult("Privacy and Security", "Clear browsing data, cookies, Safe Browsing, device lock", "PRIVACY & SECURITY", Icons.Rounded.Security, onOpenPrivacySecurity),
                         SettingSearchResult("Private Browsing", "Incognito mode without saving browsing history", "PRIVACY & SECURITY", Icons.Rounded.VisibilityOff, { viewModel.toggleIncognitoMode(context) }),
@@ -500,6 +501,7 @@ fun SettingsScreen(
                         }),
                         SettingSearchResult("Clear Cache & Site Data", "Removes cookies, offline data, and frees storage", "PRIVACY & SECURITY", Icons.Rounded.DeleteSweep, { showClearCacheConfirmation = true }),
                         SettingSearchResult(context.getString(R.string.privacy_hub_title), "Network routing, proxy, VPN, DNS, and identity controls", "PROXY HUB", Icons.Rounded.VpnLock, onOpenPrivacyHub),
+                        SettingSearchResult(context.getString(R.string.download_settings_title), "Default downloader (Built-in, System, ADM, 1DM), Wi-Fi rules, concurrent downloads", "DOWNLOADS", Icons.Rounded.Download, onOpenDownloadSettings),
                         SettingSearchResult(context.getString(R.string.native_player_title), "Custom floating video player with gesture controls", "MEDIA", Icons.Rounded.PlayCircle, { viewModel.toggleNativePlayer(context) }),
                         SettingSearchResult(context.getString(R.string.ai_blocker_title), "Filter AI generated search results and web bloat", "MEDIA", Icons.Rounded.Block, { viewModel.toggleAiBlocker(context) }),
                         SettingSearchResult(context.getString(R.string.search_engine_title), "Select default search provider (Google, DuckDuckGo, Bing, Brave, Custom)", "SEARCH", Icons.Rounded.Search, {}),
@@ -686,11 +688,6 @@ fun SettingsScreen(
                     }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                    SwitchRow(Icons.Rounded.Newspaper, stringResource(id = R.string.discover_feed_title), stringResource(id = R.string.discover_feed_desc), viewModel.showDiscoverFeed) { viewModel.saveShowDiscoverFeed(context, it) }
-                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.ViewAgenda, stringResource(id = R.string.bottom_nav_title), stringResource(id = R.string.bottom_nav_desc), viewModel.showBottomNavBar) { viewModel.saveShowBottomNavBar(context, it) }
-                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-
                     // PDF Export Theme
                     Row(
                         modifier = Modifier
@@ -802,15 +799,20 @@ fun SettingsScreen(
                 }
             }
 
-            // ── 4. MEDIA ──────────────────────────────────────────────────────────
+            // ── 4. MEDIA & DOWNLOADS ──────────────────────────────────────────
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionHeader(stringResource(id = R.string.settings_section_media))
                 SettingsCard {
+                    NavRow(
+                        Icons.Rounded.Download,
+                        stringResource(id = R.string.download_settings_title),
+                        stringResource(id = R.string.download_settings_desc),
+                        onClick = onOpenDownloadSettings
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.native_player_title), stringResource(id = R.string.native_player_desc), viewModel.isNativePlayerEnabled) { viewModel.toggleNativePlayer(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.VideoLibrary, stringResource(id = R.string.media_sniffer_title), stringResource(id = R.string.media_sniffer_desc), viewModel.isMediaGrabberEnabled) { viewModel.toggleMediaGrabber(context) }
-                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    SwitchRow(Icons.Rounded.Download, stringResource(id = R.string.external_download_manager_title), stringResource(id = R.string.external_download_manager_desc), viewModel.isExternalDownloadManagerEnabled) { viewModel.toggleExternalDownloadManager(context) }
+                    NavRow(Icons.Rounded.VideoLibrary, stringResource(id = R.string.media_sniffer_title), stringResource(id = R.string.media_sniffer_desc), onClick = { showMediaSnifferSettingsDialog = true })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
                 }
@@ -1094,7 +1096,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.Feedback, stringResource(id = R.string.send_feedback_title), stringResource(id = R.string.send_feedback_desc), onClick = { showFeedbackDialog = true })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.Code, stringResource(id = R.string.support_github), stringResource(id = R.string.support_github_desc), onClick = { onOpenUrl("https://github.com/rebelroot") })
+                    NavRow(Icons.Rounded.Code, stringResource(id = R.string.support_github), stringResource(id = R.string.support_github_desc), onClick = { onOpenUrl("https://github.com/REBEL-ROOT/omni-browser") })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.Public, stringResource(id = R.string.website_omnibrowser), stringResource(id = R.string.website_omnibrowser_desc), onClick = { onOpenUrl("https://www.rebelroot.xyz/omnibrowser") })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
@@ -1568,6 +1570,13 @@ fun SettingsScreen(
                     Text("Cancel", color = textSecondaryColor)
                 }
             }
+        )
+    }
+
+    if (showMediaSnifferSettingsDialog) {
+        MediaSnifferSettingsDialog(
+            viewModel = viewModel,
+            onDismissRequest = { showMediaSnifferSettingsDialog = false }
         )
     }
 }

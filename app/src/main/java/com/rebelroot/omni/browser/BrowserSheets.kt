@@ -2206,6 +2206,7 @@ fun ImageGrabberSheetContent(
 @Composable
 fun PageInspectorSheetContent(
     viewModel: BrowserViewModel,
+    initialTab: Int = 0,
     onDismissRequest: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -2214,7 +2215,7 @@ fun PageInspectorSheetContent(
     val cardBg = if (viewModel.isAmoledMode) Color(0xFF111111) else if (isDark) Color(0xFF1C1C1E) else Color.White
     val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
 
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableStateOf(initialTab) }
     var jsInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -2254,7 +2255,7 @@ fun PageInspectorSheetContent(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = stringResource(id = R.string.inspector_title),
+                        text = "DevTools (Inspector & Console)",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = textColor
@@ -3140,27 +3141,26 @@ fun AllInOneMenuSheet(
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
 
                     // Add to Shortcuts
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onDismissRequest()
-                                if (activeTab != null) {
+                    if (activeTab != null && activeTab.url != "about:blank" && viewModel.currentUrl != "about:blank") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onDismissRequest()
                                     viewModel.addShortcut(activeTab.title ?: "Page", viewModel.currentUrl)
-                                    Toast.makeText(context, context.getString(R.string.toast_added_to_shortcuts), Toast.LENGTH_SHORT).show()
                                 }
-                            }
-                            .padding(horizontal = 14.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = "Add to Shortcuts",
-                            tint = textColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(stringResource(id = R.string.menu_add_to_shortcuts), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                                .padding(horizontal = 14.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = "Add to Shortcuts",
+                                tint = textColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(stringResource(id = R.string.menu_add_to_shortcuts), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                        }
                     }
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
@@ -3788,5 +3788,284 @@ fun HelpFeedbackDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlayerSettingsSheet(
+    viewModel: BrowserViewModel,
+    onDismissRequest: () -> Unit,
+    onShowSnifferSettings: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val isDark = viewModel.isDarkThemeEnabled
+    val isAmoled = viewModel.isAmoledMode
+    val sheetBg = if (isAmoled) Color(0xFF000000) else if (isDark) Color(0xFF141416) else Color(0xFFF9F9FB)
+    val cardBg = if (isAmoled) Color(0xFF0C0C0E) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val secondaryText = if (isDark) Color(0xFFA0A0A5) else Color(0xFF8E8E93)
+    val dividerColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val accentColor = MaterialTheme.colorScheme.primary
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(),
+        containerColor = sheetBg,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = if (isDark) Color(0xFF48484A) else Color(0xFFC7C7CC),
+                width = 32.dp,
+                height = 3.dp
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayCircle,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        stringResource(id = R.string.menu_player_settings),
+                        color = textColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+                IconButton(onClick = onDismissRequest) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = secondaryText)
+                }
+            }
+
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    // Enable Native Player
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Enable Native Player", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Play web videos in native high-performance player", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isNativePlayerEnabled,
+                            onCheckedChange = { viewModel.toggleNativePlayer(context) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Media Sniffer / Fetcher
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Media Sniffer / Fetcher", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Detect web page videos and display sniffer banner", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onShowSnifferSettings) {
+                                Icon(
+                                    Icons.Rounded.Tune,
+                                    contentDescription = "Sniffer Settings",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Switch(
+                                checked = viewModel.isMediaGrabberEnabled,
+                                onCheckedChange = { viewModel.toggleMediaGrabber(context) },
+                                colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Auto-Play
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Auto-Play", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Start playback automatically when video opens", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isPlayerAutoPlayEnabled,
+                            onCheckedChange = { viewModel.savePlayerSetting(context, "autoplay", it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Loop Playback
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Loop Playback", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Repeat video playback automatically in a loop", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isPlayerLoopEnabled,
+                            onCheckedChange = { viewModel.savePlayerSetting(context, "loop", it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Brightness Gestures
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Brightness Gestures", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Swipe vertically on left side to adjust brightness", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isPlayerBrightnessGestureEnabled,
+                            onCheckedChange = { viewModel.savePlayerSetting(context, "brightness_gesture", it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Volume Gestures
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Volume Gestures", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Swipe vertically on right side to adjust volume", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isPlayerVolumeGestureEnabled,
+                            onCheckedChange = { viewModel.savePlayerSetting(context, "volume_gesture", it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Resume Playback
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Resume Playback", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Remember position and resume where you left off", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isPlayerResumePlaybackEnabled,
+                            onCheckedChange = { viewModel.savePlayerSetting(context, "resume", it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Background Playback
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Background Playback", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Continue audio playback when app is minimized", fontSize = 11.sp, color = secondaryText)
+                        }
+                        Switch(
+                            checked = viewModel.isPlayerBackgroundPlaybackEnabled,
+                            onCheckedChange = { viewModel.savePlayerSetting(context, "background", it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+
+                    HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+
+                    // Default Quality Limit
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Default Quality Limit", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("Maximum resolution to select automatically", fontSize = 11.sp, color = secondaryText)
+                        }
+                        var expandedQuality by remember { mutableStateOf(false) }
+                        val qualities = listOf("Auto", "360p", "480p", "720p", "1080p")
+                        Box {
+                            TextButton(onClick = { expandedQuality = true }) {
+                                Text(
+                                    text = viewModel.playerDefaultQuality,
+                                    color = accentColor,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = expandedQuality,
+                                onDismissRequest = { expandedQuality = false }
+                            ) {
+                                qualities.forEach { q ->
+                                    DropdownMenuItem(
+                                        text = { Text(q) },
+                                        onClick = {
+                                            viewModel.savePlayerSetting(context, "quality", q)
+                                            expandedQuality = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 

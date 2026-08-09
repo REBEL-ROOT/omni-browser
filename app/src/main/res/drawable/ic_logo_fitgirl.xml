@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#C2185B"
+        android:pathData="M48,0A48,48 0,1 0,96,48A48,48 0,0 0,48,0Z"/>
+    <!-- Headphones & Hair Silhouette -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,20 C36,20 28,28 28,40 C28,48 32,54 36,58 C38,60 42,66 48,66 C54,66 58,60 60,58 C64,54 68,48 68,40 C68,28 60,20 48,20 Z M26,38 C24,38 22,42 22,46 C22,50 24,54 26,54 Z M70,38 C72,38 74,42 74,46 C74,50 72,54 70,54 Z M48,24 C56,24 62,30 62,38 C62,42 58,48 48,56 C38,48 34,42 34,38 C34,30 40,24 48,24 Z"/>
+    <!-- FG Badge -->
+    <path
+        android:fillColor="#FCE4EC"
+        android:pathData="M34,68 L44,68 L44,71 L38,71 L38,73 L43,73 L43,76 L38,76 L38,80 L34,80 Z M48,68 L58,68 L58,71 L52,71 L52,77 L56,77 L56,75 L54,75 L54,73 L60,73 L60,80 L48,80 Z"/>
+</vector>

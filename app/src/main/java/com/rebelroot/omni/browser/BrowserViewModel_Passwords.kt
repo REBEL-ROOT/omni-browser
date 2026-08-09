@@ -93,7 +93,9 @@ fun BrowserViewModel.getPasswordsForDomain(domain: String): List<BrowserViewMode
     savedPasswords.filter { it.domain.contains(domain, ignoreCase = true) || domain.contains(it.domain, ignoreCase = true) }
 
 fun BrowserViewModel.checkAutofillForUrl(url: String) {
-    // Disabled to prevent auto-showing on page load
+    // Reset post-fill chip on every new page load
+    autofillWasPerformed = false
+    autofillLastUsed = null
     autofillSuggestion = null
 }
 
@@ -101,6 +103,9 @@ fun BrowserViewModel.checkAutofillForFocus(url: String) {
     if (url.isBlank() || url == "about:blank") {
         autofillMatches = emptyList()
         showAutofillBottomSheet = false
+        // Reset post-fill chip when navigating away
+        autofillWasPerformed = false
+        autofillLastUsed = null
         return
     }
     try {
@@ -111,6 +116,8 @@ fun BrowserViewModel.checkAutofillForFocus(url: String) {
         }
         if (matches.isNotEmpty()) {
             autofillMatches = matches
+            // Only open the sheet automatically; don't reset autofillWasPerformed
+            // so the "Switch account" chip can still be tapped again
             showAutofillBottomSheet = true
         } else {
             autofillMatches = emptyList()
@@ -123,76 +130,99 @@ fun BrowserViewModel.checkAutofillForFocus(url: String) {
 }
 
 fun BrowserViewModel.dismissSaveCredential() { pendingSaveCredential = null }
+fun BrowserViewModel.neverSavePasswordForDomain(context: Context, domain: String) {
+    val clean = domain.trim().lowercase().removePrefix("www.")
+    if (clean.isNotEmpty()) {
+        val updated = neverSavePasswordDomains + clean
+        neverSavePasswordDomains = updated
+        pendingSaveCredential = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.dataStore.edit { it[BrowserViewModel.NEVER_SAVE_PASSWORD_DOMAINS_KEY] = updated }
+            } catch (_: Exception) {}
+        }
+    }
+}
 fun BrowserViewModel.dismissAutofill() {
     autofillSuggestion = null
     showAutofillBottomSheet = false
 }
 
 fun BrowserViewModel.autofillCredential(credential: BrowserViewModel.SavedPassword) {
+    autofillLastUsed = credential
+    autofillWasPerformed = true
+    showAutofillBottomSheet = false
     val activeId = activeTabId ?: return
     val activeTab = tabs.find { it.id == activeId } ?: return
-    val userEscaped = credential.username.replace("'", "\\'")
-    val passEscaped = credential.password.replace("'", "\\'")
+    val userEscaped = credential.username.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
+    val passEscaped = credential.password.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
 
     val js = """
         (function() {
+            function setVal(el, val) {
+                if (!el) return;
+                try {
+                    el.focus();
+                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                    if (nativeSetter && nativeSetter.set) {
+                        nativeSetter.set.call(el, val);
+                    } else {
+                        el.value = val;
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('blur', { bubbles: true }));
+                } catch(e) {}
+            }
+
             var passInputs = Array.from(document.querySelectorAll('input[type="password"]'));
-            if (passInputs.length === 0) return;
-            
             var passInput = passInputs.find(function(el) {
                 return el.offsetWidth > 0 || el.offsetHeight > 0;
             }) || passInputs[0];
-            
+
             var userInput = null;
-            var form = passInput.form;
-            
-            if (form) {
-                var formInputs = Array.from(form.querySelectorAll('input'));
-                var passIdx = formInputs.indexOf(passInput);
-                for (var i = passIdx - 1; i >= 0; i--) {
-                    var inp = formInputs[i];
-                    var type = (inp.getAttribute('type') || 'text').toLowerCase();
-                    if (['text', 'email', 'tel', 'number', 'url'].indexOf(type) !== -1 || inp.name.indexOf('user') !== -1 || inp.id.indexOf('user') !== -1) {
-                        userInput = inp;
-                        break;
-                    }
-                }
-            }
-            
-            if (!userInput) {
-                var allInputs = Array.from(document.querySelectorAll('input'));
-                var passIdx = allInputs.indexOf(passInput);
-                for (var i = passIdx - 1; i >= 0; i--) {
-                    var inp = allInputs[i];
-                    var type = (inp.getAttribute('type') || 'text').toLowerCase();
-                    if (['text', 'email', 'tel', 'number', 'url'].indexOf(type) !== -1) {
-                        userInput = inp;
-                        break;
-                    }
-                }
-            }
-            
             if (passInput) {
-                passInput.focus();
-                passInput.value = '$passEscaped';
-                passInput.dispatchEvent(new Event('input', { bubbles: true }));
-                passInput.dispatchEvent(new Event('change', { bubbles: true }));
-                passInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                var form = passInput.form;
+                if (form) {
+                    var formInputs = Array.from(form.querySelectorAll('input'));
+                    var passIdx = formInputs.indexOf(passInput);
+                    for (var i = passIdx - 1; i >= 0; i--) {
+                        var inp = formInputs[i];
+                        var type = (inp.getAttribute('type') || 'text').toLowerCase();
+                        if (['text', 'email', 'tel', 'number', 'url'].indexOf(type) !== -1 || (inp.name && inp.name.indexOf('user') !== -1) || (inp.id && inp.id.indexOf('user') !== -1)) {
+                            userInput = inp;
+                            break;
+                        }
+                    }
+                }
+                if (!userInput) {
+                    var allInputs = Array.from(document.querySelectorAll('input'));
+                    var passIdx = allInputs.indexOf(passInput);
+                    for (var i = passIdx - 1; i >= 0; i--) {
+                        var inp = allInputs[i];
+                        var type = (inp.getAttribute('type') || 'text').toLowerCase();
+                        if (['text', 'email', 'tel', 'number', 'url'].indexOf(type) !== -1) {
+                            userInput = inp;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                var allInputs = Array.from(document.querySelectorAll('input'));
+                userInput = allInputs.find(function(inp) {
+                    var type = (inp.getAttribute('type') || 'text').toLowerCase();
+                    return type === 'email' || type === 'text' || (inp.name && inp.name.indexOf('user') !== -1) || (inp.id && inp.id.indexOf('user') !== -1);
+                });
             }
-            if (userInput) {
-                userInput.focus();
-                userInput.value = '$userEscaped';
-                userInput.dispatchEvent(new Event('input', { bubbles: true }));
-                userInput.dispatchEvent(new Event('change', { bubbles: true }));
-                userInput.dispatchEvent(new Event('blur', { bubbles: true }));
-            }
+
+            if (userInput) setVal(userInput, '$userEscaped');
+            if (passInput) setVal(passInput, '$passEscaped');
         })();
     """.trimIndent()
 
     android.os.Handler(android.os.Looper.getMainLooper()).post {
         try {
-            activeTab.session.loadUri("javascript:\$js")
-            showAutofillBottomSheet = false
+            activeTab.session.loadUri("javascript:$js")
         } catch (e: Exception) {
             Log.e(TAG, "Autofill injection failed", e)
         }

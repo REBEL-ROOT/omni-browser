@@ -355,6 +355,8 @@ class MainActivity : FragmentActivity() {
                                 onOpenBookmarks = { navController.navigate("bookmarks") },
                                 onOpenNewsCenter = { navController.navigate("news") },
                                 onOpenWallpapers = { navController.navigate("wallpapers") },
+                                onOpenVisualBlockSettings = { navController.navigate("visual_block_settings") },
+                                onOpenUserAgentSettings = { navController.navigate("user_agent_settings") },
                                 onPlayOnlineStream = { url, pageUrl ->
                                     android.util.Log.i("MainActivity", "🎬 onPlayOnlineStream triggered! url=$url, pageUrl=$pageUrl")
                                     val encodedPath = android.util.Base64.encodeToString(url.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
@@ -490,6 +492,9 @@ class MainActivity : FragmentActivity() {
                                 onOpenPasswordManager = {
                                     navController.navigate("password_manager")
                                 },
+                                onOpenDownloadSettings = {
+                                    navController.navigate("download_settings")
+                                },
                                 onSettingsImported = {
                                     this@MainActivity.recreate()
                                 }
@@ -501,7 +506,34 @@ class MainActivity : FragmentActivity() {
                             com.rebelroot.omni.settings.PrivacySecurityScreen(
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
-                                onOpenAdBlockConfig = { navController.navigate("adblock_settings") }
+                                onOpenAdBlockConfig = { navController.navigate("adblock_settings") },
+                                onOpenVisualBlockConfig = { navController.navigate("visual_block_settings") },
+                                onOpenUserAgentConfig = { navController.navigate("user_agent_settings") }
+                            )
+                        }
+
+                        // Download Settings Screen
+                        composable("download_settings") {
+                            com.rebelroot.omni.settings.DownloadSettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onOpenDownloads = { navController.navigate("downloads") }
+                            )
+                        }
+
+                        // User Agent Settings Screen
+                        composable("user_agent_settings") {
+                            com.rebelroot.omni.settings.UserAgentSettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // Visual Block Settings Screen
+                        composable("visual_block_settings") {
+                            com.rebelroot.omni.settings.VisualBlockSettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
