@@ -27,6 +27,8 @@
 
 </div>
 
+<a href="https://trendshift.io/repositories/78924?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-78924" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/78924/daily?language=Kotlin" alt="REBEL-ROOT%2Fomni-browser | Trendshift" width="250" height="55"/></a>
+
 ---
 
 > [!CAUTION]
