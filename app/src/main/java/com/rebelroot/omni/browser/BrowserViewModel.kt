@@ -378,6 +378,9 @@ class BrowserViewModel : ViewModel() {
     var isFullscreen by mutableStateOf(false)
     var isVideoPlayingInPage by mutableStateOf(false)
     var isInnerScrolled by mutableStateOf(false)
+    
+    /** Flag set when the browser activity/session was launched via an external ACTION_VIEW intent (e.g., RSS reader, email) */
+    var isExternalIntentLaunch by mutableStateOf(false)
 
     /** When true (default), user-initiated link taps can open external apps. Automatic redirects are always blocked. */
     var isOpenExternalAppAllowed by mutableStateOf(true)
@@ -2041,9 +2044,7 @@ class BrowserViewModel : ViewModel() {
             }
         }
         
-        if (siteStyleAppliedGlobally) {
-            applySiteStyleToActiveTab()
-        }
+        applySiteStyleToActiveTab()
         
         // Restore the tab's own saved navigation state
         canGoBack = tab.canGoBack

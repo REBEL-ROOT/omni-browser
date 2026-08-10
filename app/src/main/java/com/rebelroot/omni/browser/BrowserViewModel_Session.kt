@@ -557,6 +557,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     isVideoPlayingInPage = false
                     applyUserAgentForTab(tab, it)
                     injectStealthDefuserScriptlet(tab)
+                    applySiteStyleToTab(tab)
                     // Re-suppress the translate badge on SPA navigations within translate.goog
                     if (it.contains(".translate.goog")) {
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -719,6 +720,53 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     )
                 }
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
+            }
+
+            // ── Deep Link & Native App Delegation (HTTP/HTTPS) ─────────────────────
+            if ((lowerUri.startsWith("http://") || lowerUri.startsWith("https://")) && isOpenExternalAppAllowed) {
+                val nativeHandlers = getNativeAppHandlers(context, uri)
+                if (nativeHandlers.isNotEmpty()) {
+                    Log.i(TAG, "📱 Deep Link: Found ${nativeHandlers.size} native handler(s) for $uri")
+                    val sitePerm = getSitePermissionValue(tab.url, "externalApp")
+                    val targetPkg = nativeHandlers.firstOrNull()?.activityInfo?.packageName
+
+                    if (sitePerm == "allow") {
+                        // Always allow granted for this site — launch directly
+                        Log.i(TAG, "🚀 Deep Link: Launching native app handler ($targetPkg) directly (sitePerm=allow) for $uri")
+                        viewModelScope.launch(Dispatchers.Main) {
+                            try {
+                                val launchIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                                    addCategory(Intent.CATEGORY_BROWSABLE)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    if (!targetPkg.isNullOrBlank() && nativeHandlers.size == 1) {
+                                        setPackage(targetPkg)
+                                    }
+                                }
+                                context.startActivity(launchIntent)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to launch native app for deep link $uri", e)
+                            }
+                        }
+                        return GeckoResult.fromValue(AllowOrDeny.DENY)
+                    } else if (sitePerm == "block") {
+                        // Explicitly blocked for this site — load inside browser tab
+                        Log.i(TAG, "🚫 Deep Link: External app redirect blocked by site permission for $uri")
+                    } else {
+                        // Default ("ask"): prompt user for permission before opening external app
+                        Log.i(TAG, "❓ Deep Link: Prompting user for permission to open external app ($targetPkg) for $uri")
+                        val sourceHost = try { Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.") ?: "" } catch (_: Exception) { "" }
+                        viewModelScope.launch(Dispatchers.Main) {
+                            pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
+                                uri = uri,
+                                packageName = targetPkg,
+                                fallbackUrl = uri,
+                                blockedAutomatically = false,
+                                sourceHost = sourceHost
+                            )
+                        }
+                        return GeckoResult.fromValue(AllowOrDeny.DENY)
+                    }
+                }
             }
 
             if (!lowerUri.startsWith("http://") && 
@@ -1023,6 +1071,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 tabs[idx] = tabs[idx].copy(loadError = null)
             }
             applyUserAgentForTab(tab, url)
+            applySiteStyleToTab(tab)
             if (forceDarkWebsites || isDarkThemeEnabled) {
                 injectForceDarkCssIfNeeded(tab)
             }
@@ -1037,6 +1086,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 }, 300)
             }
             if (success) {
+                applySiteStyleToTab(tab)
                 if (forceDarkWebsites || isDarkThemeEnabled) {
                     injectForceDarkCssIfNeeded(tab)
                 }
@@ -1057,9 +1107,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                         tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
                         tab.session.loadUri("javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();")
                     }
-                    if (siteStyleAppliedGlobally) {
-                        applySiteStyleToActiveTab()
-                    }
                     applyVisualBlockRulesToTab(tab)
                 }
             }
@@ -1068,6 +1115,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         override fun onProgressChange(session: GeckoSession, progress: Int) {
             if (progress in 5..25) {
                 injectStealthDefuserScriptlet(tab)
+                applySiteStyleToTab(tab)
             }
             if (tab.id == activeTabId) {
                 loadingProgress = (progress / 100f).coerceIn(0.05f, 1f)
@@ -1094,5 +1142,61 @@ internal fun BrowserViewModel.injectStealthDefuserScriptlet(tab: TabState) {
         }
     } catch (e: Exception) {
         Log.e(TAG, "Error injecting stealth defuser scriptlet", e)
+    }
+}
+
+/**
+ * Queries Android PackageManager to resolve non-browser native app handlers for deep links.
+ * Filters out Omni Browser itself as well as generic web browsers.
+ */
+internal fun getNativeAppHandlers(context: Context, uri: String): List<android.content.pm.ResolveInfo> {
+    return try {
+        val parsedUri = Uri.parse(uri)
+        val scheme = parsedUri.scheme?.lowercase() ?: return emptyList()
+
+        val intent = Intent(Intent.ACTION_VIEW, parsedUri).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+        }
+        val pm = context.packageManager
+
+        val query: (Intent) -> List<android.content.pm.ResolveInfo> = { targetIntent ->
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                pm.queryIntentActivities(
+                    targetIntent,
+                    android.content.pm.PackageManager.ResolveInfoFlags.of(
+                        android.content.pm.PackageManager.MATCH_DEFAULT_ONLY.toLong()
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(
+                    targetIntent,
+                    android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                )
+            }
+        }
+
+        val resolveInfos = query(intent)
+
+        if (scheme == "http" || scheme == "https") {
+            // Query a dummy URL to identify generic web browsers registered for general HTTP/HTTPS
+            val dummyIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://a.b.c.invalid.test.domain.xyz")).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            }
+            val browserPackages = query(dummyIntent)
+                .map { it.activityInfo.packageName }
+                .toSet()
+
+            resolveInfos.filter { info ->
+                val pkg = info.activityInfo.packageName
+                pkg != context.packageName && !browserPackages.contains(pkg)
+            }
+        } else {
+            resolveInfos.filter { info ->
+                info.activityInfo.packageName != context.packageName
+            }
+        }
+    } catch (e: Exception) {
+        emptyList()
     }
 }

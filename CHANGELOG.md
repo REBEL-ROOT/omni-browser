@@ -2,6 +2,19 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.8.3] - 2026-08-10
+
+### Added
+- **Deep Link & Native App Delegation**: Added automatic detection and redirection for supported URLs (`https://reddit.com/r/...`, `https://youtube.com/watch...`, `intent://`, `mailto:`, etc.) to installed native Android applications with `Intent.FLAG_ACTIVITY_NEW_TASK`.
+- **Browser-Style Deep Link Permission Dialog**: Prompts user with an explicit `"Open in [App Name]?"` permission dialog before opening external apps, supporting *"Always allow for this site"*, *"Cancel / Stay in Browser"*, and per-site permission management.
+
+### Fixed
+- **External Intent Back-Button Task Stack Return**: Fixed back-gesture behavior when Omni Browser is launched via external `ACTION_VIEW` intents (e.g. from RSS reader apps, email clients, or social apps). Automatically finishes the activity and returns control directly to the caller's task stack when no web history remains.
+- **Enhanced Dark & Dark AMOLED Theme Scripts**: Upgraded site style theme scripts using modern open-source smart-inversion techniques with media element preservation (`img`, `video`, `canvas`, `svg image`, `picture`, `[style*="background-image"]`), nested iframe protection, and native `<meta name="color-scheme" content="dark">` injection.
+- **Light-Mode White Flash Elimination**: Injected site style theme scripts into `document.head || document.documentElement` at `onLocationChange`, `onPageStart`, and early progress (5%) to apply DOM styling on the very first paint frame before `<body>` renders.
+
+---
+
 ## [1.2.8.1] - 2026-08-06
 
 ### Added

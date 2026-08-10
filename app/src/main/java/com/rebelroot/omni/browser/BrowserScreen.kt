@@ -661,20 +661,33 @@ fun BrowserScreen(
     // The video player screen has its own BackHandler that takes priority when it is
     // composed on top, so this handler is only active when the browser is the top destination.
     androidx.activity.compose.BackHandler(enabled = true) {
+        val activity = context as? android.app.Activity
         if (!showHomeScreen) {
             if (viewModel.canGoBack) {
                 // Navigate the active tab's GeckoSession back safely
                 try { viewModel.goBack() } catch (e: Exception) {
-                    android.util.Log.w("BackHandler", "goBack() error, going home: ${e.message}")
-                    viewModel.navigateHomeDirectly()
+                    android.util.Log.w("BackHandler", "goBack() error, handling back stack: ${e.message}")
+                    if (viewModel.isExternalIntentLaunch && activity != null) {
+                        if (activity.isTaskRoot) activity.finishAndRemoveTask() else activity.finish()
+                    } else {
+                        viewModel.navigateHomeDirectly()
+                    }
                 }
+            } else if (viewModel.isExternalIntentLaunch && activity != null) {
+                // Session launched via external ACTION_VIEW intent (e.g., RSS app) with no web history left -> return to caller's task stack
+                android.util.Log.i("BackHandler", "🔙 External intent back target reached: returning to host app")
+                if (activity.isTaskRoot) activity.finishAndRemoveTask() else activity.finish()
             } else {
                 // No history left – go to home screen without touching session
                 viewModel.navigateHomeDirectly()
             }
         } else {
-            // On home screen — open exit options sheet immediately (single press)
-            showExitSheet = true
+            if (viewModel.isExternalIntentLaunch && activity != null) {
+                if (activity.isTaskRoot) activity.finishAndRemoveTask() else activity.finish()
+            } else {
+                // On home screen — open exit options sheet immediately (single press)
+                showExitSheet = true
+            }
         }
     }
 
@@ -1750,20 +1763,32 @@ fun BrowserScreen(
                     ) { (targetTabId, isHome) ->
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (activeTab != null && !isHome) {
-                                val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.uiScale) {
-                                    if (viewModel.addressBarPosition == "Bottom" && !isTablet && !isHome && !viewModel.isFullscreen && !isLandscape) {
-                                        val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
-                                        if (viewModel.chromeNavBarEnabled) {
-                                            searchHeight
+                                val density = androidx.compose.ui.platform.LocalDensity.current
+                                val navBarsHeightPx = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density)
+                                val navBarsHeightDp = with(density) { navBarsHeightPx.toDp() }
+
+                                val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.bottomNavScale, viewModel.uiScale, navBarsHeightDp) {
+                                    if (!isTablet && !isHome && !viewModel.isFullscreen && !isLandscape) {
+                                        if (viewModel.addressBarPosition == "Bottom") {
+                                            val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
+                                            val barContentHeight = if (viewModel.chromeNavBarEnabled) {
+                                                searchHeight
+                                            } else if (viewModel.showBottomNavBar) {
+                                                searchHeight + (52 * viewModel.bottomNavScale).dp
+                                            } else {
+                                                searchHeight
+                                            }
+                                            barContentHeight + navBarsHeightDp
+                                        } else if (viewModel.showBottomNavBar) {
+                                            (52 * viewModel.bottomNavScale).dp + navBarsHeightDp
                                         } else {
-                                            searchHeight + config.bottomNavBarHeight
+                                            0.dp
                                         }
                                     } else {
                                         0.dp
                                     }
                                 }
 
-                                val density = androidx.compose.ui.platform.LocalDensity.current
                                 val statusBarHeightPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
                                 val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
                                 

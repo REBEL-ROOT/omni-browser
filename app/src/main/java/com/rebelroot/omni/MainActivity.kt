@@ -208,7 +208,13 @@ class MainActivity : FragmentActivity() {
         browserViewModel.selectedAccentTheme = themeState.accentTheme
         browserViewModel.isDynamicColorEnabled = themeState.dynamicColorEnabled
 
+        val intentAction = intent?.action
         val intentUrl = intent?.dataString
+        if (intentAction == android.content.Intent.ACTION_VIEW || (!intentUrl.isNullOrEmpty() && intentAction != null)) {
+            android.util.Log.i("MainActivity", "🚀 External ACTION_VIEW intent launch detected: $intentUrl")
+            browserViewModel.isExternalIntentLaunch = true
+        }
+
         val isDirectVideo = !intentUrl.isNullOrEmpty() && (intentUrl.contains("autoplay=native") || intentUrl.endsWith(".mp4"))
         if (!intentUrl.isNullOrEmpty() && !isDirectVideo) {
             android.util.Log.i("MainActivity", "🎬 onCreate intent URL detected: $intentUrl")
@@ -671,7 +677,12 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        val intentAction = intent.action
         val intentUrl = intent.dataString
+        if (intentAction == android.content.Intent.ACTION_VIEW || (!intentUrl.isNullOrEmpty() && intentAction != null)) {
+            android.util.Log.i("MainActivity", "🚀 onNewIntent external ACTION_VIEW intent detected: $intentUrl")
+            browserViewModel.isExternalIntentLaunch = true
+        }
         if (!intentUrl.isNullOrEmpty()) {
             android.util.Log.i("MainActivity", "🎬 onNewIntent URL detected: $intentUrl")
             if (browserViewModel.isNativePlayerEnabled && browserViewModel.isDirectVideoUrl(intentUrl)) {
