@@ -18,6 +18,8 @@
 
 package com.rebelroot.omni.media
 
+import com.rebelroot.omni.browser.SecurityPolicy
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -533,8 +535,9 @@ class StreamDownloadEngine(
         cookies: String?,
         referrerUrl: String?
     ) = withContext(Dispatchers.IO) {
+        val safeFilename = SecurityPolicy.sanitizeFilename(filename)
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
-        val targetFile = File(targetDir, filename)
+        val targetFile = File(targetDir, safeFilename)
         if (targetFile.exists()) targetFile.delete()
 
         try {
@@ -614,15 +617,16 @@ class StreamDownloadEngine(
         filename: String,
         contentType: String?
     ): Pair<File, Uri?> {
-        val ext = filename.substringAfterLast('.', "").lowercase()
+        val safeFilename = SecurityPolicy.sanitizeFilename(filename)
+        val ext = safeFilename.substringAfterLast('.', "").lowercase()
         val mime = contentType?.takeIf { it.isNotBlank() }
             ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
-            ?: getMimeTypeForFile(filename)
+            ?: getMimeTypeForFile(safeFilename)
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Android 10+: Insert into MediaStore.Downloads
             val values = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.DISPLAY_NAME, safeFilename)
                 put(MediaStore.Downloads.MIME_TYPE, mime)
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
@@ -646,11 +650,11 @@ class StreamDownloadEngine(
             // Android 9 and below: write directly to public Downloads dir
             val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             downloadsDir.mkdirs()
-            var destFile = File(downloadsDir, filename)
+            var destFile = File(downloadsDir, safeFilename)
             var counter = 1
             while (destFile.exists()) {
-                val nameWithoutExt = filename.substringBeforeLast('.')
-                val extension = filename.substringAfterLast('.', "")
+                val nameWithoutExt = safeFilename.substringBeforeLast('.')
+                val extension = safeFilename.substringAfterLast('.', "")
                 destFile = if (extension.isNotEmpty())
                     File(downloadsDir, "${nameWithoutExt}($counter).$extension")
                 else
@@ -671,8 +675,9 @@ class StreamDownloadEngine(
         progressFlow: MutableStateFlow<DownloadProgress>,
         cookies: String?
     ) = withContext(Dispatchers.IO) {
+        val safeFilename = SecurityPolicy.sanitizeFilename(filename)
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
-        val targetFile = File(targetDir, filename)
+        val targetFile = File(targetDir, safeFilename)
         if (targetFile.exists()) targetFile.delete()
 
         try {
@@ -1480,11 +1485,12 @@ class StreamDownloadEngine(
                 else    -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             }
             val destDir = File(publicDir, "OmniDownloads").apply { mkdirs() }
-            var destFile = File(destDir, filename)
+            val safeFilename = SecurityPolicy.sanitizeFilename(filename)
+            var destFile = File(destDir, safeFilename)
             var counter = 1
             while (destFile.exists()) {
-                val nameWithoutExt = filename.substringBeforeLast('.')
-                val extension = filename.substringAfterLast('.', "")
+                val nameWithoutExt = safeFilename.substringBeforeLast('.')
+                val extension = safeFilename.substringAfterLast('.', "")
                 destFile = if (extension.isNotEmpty())
                     File(destDir, "$nameWithoutExt($counter).$extension")
                 else

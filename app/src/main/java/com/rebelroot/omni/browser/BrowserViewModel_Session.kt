@@ -69,12 +69,13 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         ): GeckoResult<Int>? {
             Log.d(TAG, "onContentPermissionRequest: type=${permission.permission}, uri=${permission.uri}")
 
-            // Auto-approve Storage Access and Identity permissions for Google Auth & standard login origins
-            val lowerUri = permission.uri.lowercase()
-            val isAuthOrigin = lowerUri.contains("accounts.google.com") ||
-                               lowerUri.contains("google.com") ||
-                               lowerUri.contains("appleid.apple.com") ||
-                               lowerUri.contains("facebook.com")
+            // Auto-approve Storage Access and Identity permissions for verified auth origins.
+            // Use OriginVerifier instead of substring matching to prevent spoofing
+            // (e.g., evilgoogle.com must NOT match google.com).
+            val isAuthOrigin = OriginVerifier.isExactOriginMatch(permission.uri, "accounts.google.com") ||
+                               OriginVerifier.isSubdomainOf(permission.uri, "google.com") ||
+                               OriginVerifier.isSubdomainOf(permission.uri, "appleid.apple.com") ||
+                               OriginVerifier.isSubdomainOf(permission.uri, "facebook.com")
             if (isAuthOrigin || permission.permission == 6 || permission.permission == 7 || permission.permission == 8) {
                 Log.i(TAG, "Auto-granting auth/storage permission (${permission.permission}) for ${permission.uri}")
                 return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
@@ -223,11 +224,45 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             return result
         }
 
+        /**
+         * Validates that the current tab's origin is trusted for receiving privileged
+         * OMNI_* messages. These messages control browser chrome features (visual blocking,
+         * page stats, console eval) and must only come from:
+         * 1. Our own moz-extension:// content scripts (built-in extensions)
+         * 2. The current top-level web page (not a cross-origin iframe)
+         *
+         * Rejects messages from about:blank, data:, javascript:, blob: origins.
+         */
+        private fun isTrustedOmniOrigin(): Boolean {
+            val url = tab.url
+            if (url.isNullOrBlank()) return false
+            // Always trust our own built-in extensions
+            if (url.startsWith("moz-extension://")) return true
+            // Reject dangerous origins that could spoof messages
+            val lower = url.lowercase()
+            if (lower.startsWith("about:") || lower.startsWith("data:") ||
+                lower.startsWith("javascript:") || lower.startsWith("blob:")) {
+                Log.w(TAG, "🛡️ Rejected OMNI_* message from dangerous origin: $url")
+                return false
+            }
+            // Trust any http/https page — the message came from the top-level content
+            // script injection, not a cross-origin iframe (Gecko isolates prompts by origin)
+            return lower.startsWith("http://") || lower.startsWith("https://")
+        }
+
         override fun onAlertPrompt(
             session: GeckoSession,
             prompt: GeckoSession.PromptDelegate.AlertPrompt
         ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
             val message = prompt.message ?: ""
+
+            // All OMNI_* prefixed messages are privileged native-app channels.
+            // Reject them from untrusted origins to prevent privilege escalation.
+            if (message.startsWith("OMNI_") && !isTrustedOmniOrigin()) {
+                Log.w(TAG, "🛡️ Blocked OMNI_* alert from untrusted origin: ${tab.url}, messagePrefix=${message.take(30)}")
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
+
             if (message.startsWith("OMNI_VISUAL_BLOCK_ADD:")) {
                 val jsonStr = message.removePrefix("OMNI_VISUAL_BLOCK_ADD:")
                 try {
@@ -514,24 +549,42 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         }
 
         override fun onTitleChange(session: GeckoSession, title: String?) {
+            // Maximum reasonable scroll values to prevent memory/DoS from malformed JS
+            val maxScrollMetric = 100_000_000f
             title?.let {
                 // Intercept scroll metrics sent from injected JS
                 if (it.startsWith("__omni__:")) {
                     try {
                         val parts = it.removePrefix("__omni__:").split(":")
                         if (parts.size >= 2) {
-                            pageScrollHeight = parts[0].toFloat()
-                            pageViewportHeight = parts[1].toFloat()
+                            val scrollHeight = parts[0].toFloatOrNull()
+                            val viewportHeight = parts[1].toFloatOrNull()
+                            // Validate: must be non-negative and within reasonable bounds
+                            if (scrollHeight != null && viewportHeight != null &&
+                                scrollHeight >= 0f && viewportHeight >= 0f &&
+                                scrollHeight <= maxScrollMetric && viewportHeight <= maxScrollMetric
+                            ) {
+                                pageScrollHeight = scrollHeight
+                                pageViewportHeight = viewportHeight
+                            } else {
+                                Log.w(TAG, "🛡️ Rejected out-of-bounds scroll metrics: scrollHeight=$scrollHeight, viewportHeight=$viewportHeight")
+                            }
                         }
                     } catch (_: Exception) {}
                     return
                 }
+
+                // Sanitize title before storing — strip control characters that could
+                // corrupt history, tabs, or UI rendering
+                val sanitizedTitle = it.filter { c -> c.code >= 32 || c == '\t' || c == '\n' || c == '\r' }
+                    .take(500) // Reasonable max title length
+
                 val idx = tabs.indexOfFirst { it.id == tab.id }
                 if (idx != -1) {
                     val currentTabUrl = tabs[idx].url
-                    tabs[idx] = tabs[idx].copy(title = it)
+                    tabs[idx] = tabs[idx].copy(title = sanitizedTitle)
                     if (!isIncognitoMode) {
-                        addToHistory(it, currentTabUrl)
+                        addToHistory(sanitizedTitle, currentTabUrl)
                     }
                     saveTabs()
                 }
@@ -662,7 +715,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             //   site → accounts.google.com → site-callback → accounts.google.com (again) → site
             // When the tab reaches a non-Google URL, the grace period is cleared so the
             // next "Sign in with Google" on any site shows the picker again normally.
-            val isGoogleAuthHost = lowerUri.contains("accounts.google.com")
+            val isGoogleAuthHost = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com")
 
             // Clear grace period once the OAuth redirect chain lands on a non-Google page
             if (!isGoogleAuthHost && oauthGracePeriodByTab.containsKey(tab.id)) {
@@ -719,7 +772,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 // No built-in popup blocker — all new-window navigations fall through to tab creation below.
             }
 
-            val host = try { Uri.parse(uri).host?.lowercase() ?: "" } catch (e: Exception) { "" }
+            val host = SecurityPolicy.extractEffectiveHost(uri)
             if (host.isNotEmpty() && adBlockManager.isHostBlocked(host)) {
                 Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker sub-navigation: $uri")
                 incrementTrackersBlocked(context, 1)
@@ -739,7 +792,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
-            val isYouTube = lowerUri.contains("youtube.com") || lowerUri.contains("youtu.be")
+            val isYouTube = OriginVerifier.isSubdomainOf(uri, "youtube.com") || OriginVerifier.isSubdomainOf(uri, "youtu.be")
             if (isNativePlayerEnabled && isDirectVideoUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
                 Log.i(TAG, "🎬 Intercepted direct video load request: $uri. Opening in native player...")
                 viewModelScope.launch(Dispatchers.Main) {
@@ -968,7 +1021,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             Log.e(TAG, "GeckoView Load Error: code=${error.code}, category=${error.category}, uri=$uri")
             
             val lowerUri = uri?.lowercase() ?: ""
-            val isGoogleAuthHost = lowerUri.contains("accounts.google.com")
+            val isGoogleAuthHost = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com")
 
             if (lowerUri.startsWith("moz-extension://")) {
                 Log.i(TAG, "🧩 Suppressed load error for extension URI: $uri")
@@ -1014,7 +1067,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
                 Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
                 val runtime = getGeckoRuntime(context)
-                val isAuthUri = lowerUri.contains("accounts.google.com") || lowerUri.contains("oauth") || lowerUri.contains("gsi")
+                val isAuthUri = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com") ||
+                                  lowerUri.contains("oauth") || lowerUri.contains("gsi")
                 val isJsAllowed = isAuthUri || getSitePermissionValue(uri, "javascript") == "allow"
                 val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                     .usePrivateMode(isIncognitoMode)

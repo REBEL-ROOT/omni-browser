@@ -209,7 +209,20 @@ class MainActivity : FragmentActivity() {
         browserViewModel.isDynamicColorEnabled = themeState.dynamicColorEnabled
 
         val intentAction = intent?.action
-        val intentUrl = intent?.dataString
+        val rawIntentUrl = intent?.dataString
+
+        // Security: validate external intent URIs before accepting them
+        val intentUrl = if (!rawIntentUrl.isNullOrEmpty() &&
+            com.rebelroot.omni.browser.SecurityPolicy.validateIntentUri(rawIntentUrl)
+        ) {
+            rawIntentUrl
+        } else {
+            if (!rawIntentUrl.isNullOrEmpty()) {
+                android.util.Log.w("MainActivity", "🛡️ Blocked dangerous intent URI: $rawIntentUrl")
+            }
+            null
+        }
+
         if (intentAction == android.content.Intent.ACTION_VIEW || (!intentUrl.isNullOrEmpty() && intentAction != null)) {
             android.util.Log.i("MainActivity", "🚀 External ACTION_VIEW intent launch detected: $intentUrl")
             browserViewModel.isExternalIntentLaunch = true
@@ -678,7 +691,20 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         val intentAction = intent.action
-        val intentUrl = intent.dataString
+        val rawIntentUrl = intent.dataString
+
+        // Security: validate external intent URIs before accepting them
+        val intentUrl = if (!rawIntentUrl.isNullOrEmpty() &&
+            com.rebelroot.omni.browser.SecurityPolicy.validateIntentUri(rawIntentUrl)
+        ) {
+            rawIntentUrl
+        } else {
+            if (!rawIntentUrl.isNullOrEmpty()) {
+                android.util.Log.w("MainActivity", "🛡️ Blocked dangerous onNewIntent URI: $rawIntentUrl")
+            }
+            null
+        }
+
         if (intentAction == android.content.Intent.ACTION_VIEW || (!intentUrl.isNullOrEmpty() && intentAction != null)) {
             android.util.Log.i("MainActivity", "🚀 onNewIntent external ACTION_VIEW intent detected: $intentUrl")
             browserViewModel.isExternalIntentLaunch = true

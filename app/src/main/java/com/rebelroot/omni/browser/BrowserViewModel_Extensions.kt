@@ -215,8 +215,20 @@ internal fun BrowserViewModel.installGrabberExtension(runtime: GeckoRuntime) {
 
 internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtension) {
     extension.setMessageDelegate(object : WebExtension.MessageDelegate {
+
+        // Maximum size for extension JSON messages to prevent DoS via memory exhaustion
+        private val MAX_MESSAGE_STRING_LENGTH = 1_000_000 // 1 MB
+
         override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
-            Log.d(TAG, "🎬 onMessage called! nativeApp = $nativeApp, messageType = ${message.javaClass.name}, message = $message")
+            Log.d(TAG, "🎬 onMessage called! nativeApp = $nativeApp, messageType = ${message.javaClass.name}")
+
+            // Reject oversized messages to prevent memory DoS
+            val messageString = message.toString()
+            if (messageString.length > MAX_MESSAGE_STRING_LENGTH) {
+                Log.w(TAG, "🛡️ Rejected oversized extension message (${messageString.length} chars) from $nativeApp")
+                return null
+            }
+
             try {
                 val type = if (message is org.json.JSONObject) {
                     if (message.has("type")) message.getString("type") else null

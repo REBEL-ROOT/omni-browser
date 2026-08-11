@@ -449,7 +449,7 @@ class BrowserViewModel : ViewModel() {
     var isCreamyMode by mutableStateOf(false)
     var isDynamicColorEnabled by mutableStateOf(false)
     var isIncognitoUnlocked by mutableStateOf(false)
-    var cookieBehavior by mutableStateOf(3)
+    var cookieBehavior by mutableStateOf(5)
     var doNotTrack by mutableStateOf(true)
     var safeBrowsingLevel by mutableStateOf(1)
     var preloadPages by mutableStateOf(1)
@@ -672,13 +672,13 @@ class BrowserViewModel : ViewModel() {
             null
         }
         if (!parsed.isNullOrBlank() && parsed.contains('.')) {
-            return parsed
+            return SecurityPolicy.sanitizeFilename(parsed)
         }
         if (!parsed.isNullOrBlank() && parsed.isNotBlank()) {
-            return "$parsed.bin"
+            return SecurityPolicy.sanitizeFilename("$parsed.bin")
         }
         val cleanContentType = contentType?.trim()?.lowercase()
-        return when {
+        return SecurityPolicy.sanitizeFilename(when {
             cleanContentType == null -> "download.bin"
             cleanContentType.contains("pdf") -> "download.pdf"
             cleanContentType.contains("zip") -> "download.zip"
@@ -694,7 +694,7 @@ class BrowserViewModel : ViewModel() {
             cleanContentType.startsWith("video/") -> "download.video"
             cleanContentType.contains("octet-stream") -> "download.bin"
             else -> "download.bin"
-        }
+        })
     }
 
     internal fun isGenericDownloadUrl(url: String): Boolean {
@@ -787,13 +787,15 @@ class BrowserViewModel : ViewModel() {
         cookies: String? = activeVideoCookies,
         referrerUrl: String? = currentUrl
     ): Boolean {
+        // Sanitize filename to prevent path traversal attacks
+        val safeFilename = SecurityPolicy.sanitizeFilename(filename)
         return runCatching {
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
             val request = android.app.DownloadManager.Request(Uri.parse(url)).apply {
-                setTitle(filename)
+                setTitle(safeFilename)
                 setDescription(url)
                 setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeFilename)
                 mimeType?.takeIf { it.isNotBlank() }?.let { setMimeType(it) }
                 if (downloadWifiOnly) {
                     setAllowedNetworkTypes(android.app.DownloadManager.Request.NETWORK_WIFI)
@@ -2549,7 +2551,7 @@ class BrowserViewModel : ViewModel() {
             val dnt = prefs[DO_NOT_TRACK_KEY] ?: true
             val hom = prefs[HTTPS_ONLY_MODE_KEY] ?: false
             val pl = prefs[PRELOAD_PAGES_KEY] ?: 1
-            val cookieBeh = prefs[COOKIE_BEHAVIOR_KEY] ?: 3
+            val cookieBeh = prefs[COOKIE_BEHAVIOR_KEY] ?: 5
             val sbLevel = prefs[SAFE_BROWSING_LEVEL_KEY] ?: 1
             val hc = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
             proxyProvider = prefs[PROXY_PROVIDER_KEY] ?: "direct"
@@ -2585,10 +2587,20 @@ class BrowserViewModel : ViewModel() {
                 val sb = java.lang.StringBuilder()
                 sb.append("pref:\n")
                 sb.append("  intl.accept_languages: \"${targetLocales.joinToString(", ")}\"\n")
-                sb.append("  dom.ipc.processCount: 1\n")
+                // Security hardening: Enable Fission site isolation with multiple content
+                // processes. Each origin runs in its own process, preventing cross-origin
+                // data access even if a renderer is compromised.
+                sb.append("  fission.autostart: true\n")
+                sb.append("  fission.web_content_process_count: 8\n")
+                sb.append("  dom.ipc.processCount: 8\n")
                 sb.append("  dom.ipc.processCount.webIsolated: 1\n")
                 sb.append("  privacy.donottrackheader.enabled: ${dnt}\n")
                 sb.append("  dom.security.https_only_mode: ${hom || sbLevel == 2}\n")
+                sb.append("  dom.security.https_first: true\n")
+                sb.append("  security.fileuri.strict_origin_policy: true\n")
+                sb.append("  privacy.partition.network_state: true\n")
+                // Total Cookie Protection (dFPI): isolate cookies per top-level site
+                sb.append("  network.cookie.cookieBehavior: 5\n")
                 sb.append("  ui.useAccessibilityTheme: ${if (hc) 1 else 0}\n")
                 if (pl == 0) {
                     sb.append("  network.dns.disablePrefetch: true\n")
@@ -2751,20 +2763,38 @@ class BrowserViewModel : ViewModel() {
             })
             
             geckoRuntime!!.webExtensionController.setPromptDelegate(object : org.mozilla.geckoview.WebExtensionController.PromptDelegate {
+
+                // Only auto-approve our own built-in extensions. External extensions must
+                // go through the native GeckoView permission prompt so the user can review.
+                private val BUNDLED_EXTENSION_IDS = setOf(
+                    "omni-media-grabber@omnibrowser.app",
+                    "omni-ai-blocker@omnibrowser.app",
+                    "omni-force-dark@omnibrowser.app",
+                    "omni-universal-copy@omnibrowser.app"
+                )
+
+                private fun isBundledExtension(extension: org.mozilla.geckoview.WebExtension): Boolean {
+                    return BUNDLED_EXTENSION_IDS.contains(extension.id)
+                }
+
                 override fun onInstallPromptRequest(
                     extension: org.mozilla.geckoview.WebExtension,
                     permissions: Array<String>,
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.WebExtension.PermissionPromptResponse>? {
-                    Log.d(TAG, "Auto-approving install prompt for extension: ${extension.id}")
-                    return org.mozilla.geckoview.GeckoResult.fromValue(
-                        org.mozilla.geckoview.WebExtension.PermissionPromptResponse(
-                            true, // isPermissionsGranted
-                            true, // isPrivateModeGranted
-                            false // isTechnicalAndInteractionDataGranted
+                    if (isBundledExtension(extension)) {
+                        Log.d(TAG, "Auto-approving install prompt for bundled extension: ${extension.id}")
+                        return org.mozilla.geckoview.GeckoResult.fromValue(
+                            org.mozilla.geckoview.WebExtension.PermissionPromptResponse(
+                                true, // isPermissionsGranted
+                                true, // isPrivateModeGranted
+                                false // isTechnicalAndInteractionDataGranted
+                            )
                         )
-                    )
+                    }
+                    Log.w(TAG, "🛡️ Extension install prompt NOT auto-approved for external extension: ${extension.id}. Showing native prompt.")
+                    return null // Let GeckoView show native prompt
                 }
 
                 override fun onOptionalPrompt(
@@ -2773,10 +2803,14 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
-                    Log.d(TAG, "Auto-granting optional permissions for extension: ${extension.id}")
-                    return org.mozilla.geckoview.GeckoResult.fromValue(
-                        org.mozilla.geckoview.AllowOrDeny.ALLOW
-                    )
+                    if (isBundledExtension(extension)) {
+                        Log.d(TAG, "Auto-granting optional permissions for bundled extension: ${extension.id}")
+                        return org.mozilla.geckoview.GeckoResult.fromValue(
+                            org.mozilla.geckoview.AllowOrDeny.ALLOW
+                        )
+                    }
+                    Log.w(TAG, "🛡️ Optional permissions NOT auto-granted for external extension: ${extension.id}")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY)
                 }
 
                 override fun onUpdatePrompt(
@@ -2785,10 +2819,14 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
-                    Log.d(TAG, "Auto-granting update permissions for extension: ${extension.id}")
-                    return org.mozilla.geckoview.GeckoResult.fromValue(
-                        org.mozilla.geckoview.AllowOrDeny.ALLOW
-                    )
+                    if (isBundledExtension(extension)) {
+                        Log.d(TAG, "Auto-granting update permissions for bundled extension: ${extension.id}")
+                        return org.mozilla.geckoview.GeckoResult.fromValue(
+                            org.mozilla.geckoview.AllowOrDeny.ALLOW
+                        )
+                    }
+                    Log.w(TAG, "🛡️ Update permissions NOT auto-granted for external extension: ${extension.id}")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY)
                 }
             })
         }
@@ -2966,7 +3004,7 @@ class BrowserViewModel : ViewModel() {
 
             viewModelScope.launch {
                 val prefs = appCtx.dataStore.data.first()
-                cookieBehavior = prefs[COOKIE_BEHAVIOR_KEY] ?: 3
+                cookieBehavior = prefs[COOKIE_BEHAVIOR_KEY] ?: 5
                 doNotTrack = prefs[DO_NOT_TRACK_KEY] ?: true
                 safeBrowsingLevel = prefs[SAFE_BROWSING_LEVEL_KEY] ?: 1
                 preloadPages = prefs[PRELOAD_PAGES_KEY] ?: 1
@@ -5290,7 +5328,9 @@ class BrowserViewModel : ViewModel() {
         try {
             val sb = StringBuilder()
             sb.append("pref:\n")
-            sb.append("  dom.ipc.processCount: 1\n")
+            sb.append("  fission.autostart: true\n")
+            sb.append("  fission.web_content_process_count: 8\n")
+            sb.append("  dom.ipc.processCount: 8\n")
             sb.append("  dom.ipc.processCount.webIsolated: 1\n")
             sb.append("  gfx.webrender.all: ${isWebRenderEnabled}\n")
             sb.append("  layers.acceleration.force-enabled: ${isGpuAccelerationEnabled}\n")
@@ -5299,6 +5339,10 @@ class BrowserViewModel : ViewModel() {
             }
             sb.append("  privacy.donottrackheader.enabled: ${doNotTrack}\n")
             sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2}\n")
+            sb.append("  dom.security.https_first: true\n")
+            sb.append("  security.fileuri.strict_origin_policy: true\n")
+            sb.append("  privacy.partition.network_state: true\n")
+            sb.append("  network.cookie.cookieBehavior: 5\n")
             if (preloadPages == 0) {
                 sb.append("  network.dns.disablePrefetch: true\n")
                 sb.append("  network.prefetch-next: false\n")
@@ -5556,6 +5600,15 @@ class BrowserViewModel : ViewModel() {
     fun loadUrl(url: String) {
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
+
+        // Security: block dangerous schemes at the navigation entry point
+        val scheme = try {
+            android.net.Uri.parse(formattedUrl).scheme?.lowercase(java.util.Locale.ROOT)
+        } catch (_: Exception) { null }
+        if (SecurityPolicy.isDangerousExternalScheme(scheme)) {
+            Log.w(TAG, "🛡️ loadUrl blocked dangerous scheme '$scheme': $formattedUrl")
+            return
+        }
 
         val lower = formattedUrl.lowercase()
         if (lower == "omni:config" || lower == "omni://config" || lower == "about:config") {
