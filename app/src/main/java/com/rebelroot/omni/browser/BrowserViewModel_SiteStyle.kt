@@ -4,8 +4,8 @@ import android.content.Context
 
 /**
  * Applies optimized, non-flashing custom site styles and dark/AMOLED theme presets to GeckoView tabs.
- * Based on modern open-source smart-inversion engine techniques to preserve natural colors on images,
- * videos, and media elements while enforcing early pre-document DOM styling.
+ * Features a Direct DOM Pitch-Black AMOLED engine (#000000) that turns off OLED pixels on all websites,
+ * preserves media element colors, sets Google dark search cookies, and handles dynamic DOM cards.
  */
 fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
     val tab = targetTab ?: activeTab ?: return
@@ -14,9 +14,7 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
     // Determine active theme preset
     val effectiveTheme = when {
         siteStyleTheme != "DEFAULT" -> siteStyleTheme
-        siteStyleAppliedGlobally && isAmoledMode -> "OLED"
-        siteStyleAppliedGlobally && (isDarkThemeEnabled || forceDarkWebsites) -> "DARK"
-        forceDarkWebsites -> if (isAmoledMode) "OLED" else "DARK"
+        isAmoledMode -> "OLED"
         else -> "DEFAULT"
     }
 
@@ -52,72 +50,200 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
     val letterSpacingCss = if (siteStyleLetterSpacing != 0f) "letter-spacing: ${siteStyleLetterSpacing}px !important;" else ""
 
     when (effectiveTheme) {
-        "DARK" -> {
+        "OLED" -> {
             colorScheme = "dark"
             cssRules = """
-                :root, html {
-                    filter: invert(90%) hue-rotate(180deg) brightness(100%) contrast(100%) !important;
+                :root, [data-theme], [data-color-mode], html, body {
+                    --color-surface: #000000 !important;
+                    --color-surface-1: #000000 !important;
+                    --color-surface-2: #000000 !important;
+                    --color-surface-3: #000000 !important;
+                    --color-surface-4: #000000 !important;
+                    --color-surface-5: #000000 !important;
+                    --color-background: #000000 !important;
+                    --color-primary-background: #000000 !important;
+                    --color-secondary-background: #000000 !important;
+                    --search-bg: #000000 !important;
+                    --ub-bg-color: #000000 !important;
+                    --theme-bg: #000000 !important;
+                    --theme-surface: #000000 !important;
+                    --theme-card: #000000 !important;
+                    --surface-background: #000000 !important;
+                    --header-bg: #000000 !important;
+                    --footer-bg: #000000 !important;
+                    --bg-primary: #000000 !important;
+                    --bg-secondary: #000000 !important;
+                    --bg-tertiary: #000000 !important;
+                    --background-color: #000000 !important;
+                    --yt-spec-base-background: #000000 !important;
+                    --yt-spec-raised-background: #000000 !important;
+                    --yt-spec-menu-background: #000000 !important;
+                    --yt-spec-static-overlay-background-solid: #000000 !important;
+                }
+                :root, html, body, div, span, p,
+                section, article, main, header, footer, nav, aside, dialog,
+                form, table, tr, td, th, ul, ol, li, summary, details,
+                [class*="card" i], [class*="container" i], [class*="wrapper" i], [class*="box" i],
+                [class*="header" i], [class*="footer" i], [class*="nav" i], [class*="search" i], [class*="bar" i],
+                [class*="sidebar" i], [class*="modal" i], [class*="dialog" i], [class*="popup" i], [class*="menu" i], [class*="panel" i], [class*="block" i],
+                [role="main"], [role="article"], [role="navigation"], [role="region"], [role="dialog"], [role="search"],
+                g-card, g-inner-card, g-header, g-flat-button, g-expandable-card, c-wiz,
+                .g, .kp-blk, .xpd, .cUnBl, .MjjYud, .vdLWh, .wDYH0e, .K5qjJc, .g-blk, .sfbg, .e222eb, .minidiv, .appbar, #aria-main, #cnt, #rcnt, [data-async-context] {
+                    background-color: #000000 !important;
+                    background: #000000 !important;
+                    color: #E2E8F0 !important;
+                    border-color: #1A1A1A !important;
+                    box-shadow: none !important;
                     color-scheme: dark !important;
-                    background-color: #121212 !important;
-                    transition: filter 0.15s ease !important;
                 }
-                iframe, img, image, video, canvas, svg image, picture,
-                [style*="background-image"], [style*="background:"] {
-                    filter: invert(100%) hue-rotate(180deg) brightness(105%) contrast(105%) !important;
+                p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i, span, summary, dt, dd,
+                [role="button"], [role="heading"], [role="option"], [role="treeitem"], [role="accordion"],
+                [class*="question" i], [class*="title" i], [class*="heading" i], [class*="header" i], [class*="text" i] {
+                    color: #E2E8F0 !important;
                 }
-                iframe img, iframe video, iframe canvas, iframe picture, iframe [style*="background-image"] {
+                [role="button"] *, summary *, [class*="question" i] *, c-wiz * {
+                    color: #E2E8F0 !important;
+                }
+                a, a * {
+                    color: #60A5FA !important;
+                }
+                a:visited, a:visited * {
+                    color: #A78BFA !important;
+                }
+                a:hover {
+                    color: #93C5FD !important;
+                }
+                mark, .mark, [class*="highlight" i] {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    color: #60A5FA !important;
+                }
+                img, video, canvas, svg, picture, iframe, g-img, g-img *,
+                [style*="background-image"], [style*="background: url"],
+                [class*="thumb" i], [class*="thumb" i] *,
+                [class*="thumbnail" i], [class*="thumbnail" i] *,
+                [class*="poster" i], [class*="poster" i] *,
+                [class*="avatar" i], [class*="avatar" i] *,
+                [class*="media" i], [class*="media" i] *,
+                [class*="video" i], [class*="video" i] *,
+                [class*="player" i], [class*="player" i] *,
+                [class*="image" i], [class*="image" i] *,
+                [class*="img" i], [class*="img" i] *,
+                [class*="photo" i], [class*="photo" i] *,
+                .v55W0e, .v55W0e *, .m652ud, .m652ud *, .Q83fi, .Q83fi *, .ctoDDe, .ctoDDe *, .Yk428, .Yk428 *, .vLffw, .vLffw *, .oJ3Ryb, .oJ3Ryb *, .B5e95, .B5e95 *, .rISNhc, .rISNhc *,
+                figure, figure * {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    opacity: 1 !important;
                     filter: none !important;
                 }
-                ::selection {
-                    background: #338fff !important;
-                    color: #ffffff !important;
+                input, textarea, select, [contenteditable="true"], [role="combobox"], [role="searchbox"] {
+                    background-color: #000000 !important;
+                    background: #000000 !important;
+                    color: #FFFFFF !important;
+                    -webkit-text-fill-color: #FFFFFF !important;
+                    border: none !important;
+                    outline: none !important;
+                    color-scheme: dark !important;
                 }
-                input, textarea, select, button {
+                input::placeholder, textarea::placeholder {
+                    color: #8E8E93 !important;
+                    -webkit-text-fill-color: #8E8E93 !important;
+                }
+                button, [role="button"], [class*="chip" i], [class*="pill" i], [class*="badge" i] {
                     color-scheme: dark !important;
                 }
                 *::-webkit-scrollbar {
-                    background-color: #1a1a1a !important;
+                    background-color: #000000 !important;
+                    width: 6px !important;
+                }
+                *::-webkit-scrollbar-thumb {
+                    background-color: #222222 !important;
+                    border-radius: 4px !important;
+                }
+                ::selection {
+                    background: #2563EB !important;
+                    color: #FFFFFF !important;
+                }
+            """.trimIndent()
+        }
+
+        "DARK" -> {
+            colorScheme = "dark"
+            cssRules = """
+                :root, html, body {
+                    background-color: #121212 !important;
+                    background: #121212 !important;
+                    color: #E2E8F0 !important;
+                    color-scheme: dark !important;
+                }
+                section, article, main, header, footer, nav, aside, dialog,
+                form, table, tr, td, th, ul, ol, li,
+                [class*="card" i], [class*="container" i], [class*="wrapper" i],
+                [class*="sidebar" i], [class*="modal" i], [class*="dialog" i], [class*="popup" i], [class*="menu" i], [class*="panel" i],
+                [role="main"], [role="article"], [role="navigation"], [role="region"], [role="dialog"],
+                .g, .kp-blk, .xpd, .cUnBl, .MjjYud {
+                    background-color: #1E1E1E !important;
+                    color: #E2E8F0 !important;
+                    border-color: #2D2D2D !important;
+                }
+                img, video, canvas, svg, picture, iframe, g-img, g-img *,
+                [style*="background-image"], [style*="background: url"],
+                [class*="thumb" i], [class*="thumb" i] *,
+                [class*="thumbnail" i], [class*="thumbnail" i] *,
+                [class*="poster" i], [class*="poster" i] *,
+                [class*="avatar" i], [class*="avatar" i] *,
+                [class*="media" i], [class*="media" i] *,
+                [class*="video" i], [class*="video" i] *,
+                [class*="player" i], [class*="player" i] *,
+                [class*="image" i], [class*="image" i] *,
+                [class*="img" i], [class*="img" i] *,
+                [class*="photo" i], [class*="photo" i] *,
+                .v55W0e, .v55W0e *, .m652ud, .m652ud *, .Q83fi, .Q83fi *, .ctoDDe, .ctoDDe *, .Yk428, .Yk428 *, .vLffw, .vLffw *, .oJ3Ryb, .oJ3Ryb *, .B5e95, .B5e95 *, .rISNhc, .rISNhc *,
+                figure, figure * {
+                    background-color: transparent !important;
+                    background: transparent !important;
+                    opacity: 1 !important;
+                    filter: none !important;
+                }
+                p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i {
+                    color: #E2E8F0 !important;
+                }
+                a {
+                    color: #60A5FA !important;
+                }
+                a:visited {
+                    color: #A78BFA !important;
+                }
+                a:hover {
+                    color: #93C5FD !important;
+                }
+                input, textarea, select, [contenteditable="true"], [role="combobox"], [role="searchbox"] {
+                    background-color: #1E1E1E !important;
+                    color: #FFFFFF !important;
+                    -webkit-text-fill-color: #FFFFFF !important;
+                    border: none !important;
+                    outline: none !important;
+                    color-scheme: dark !important;
+                }
+                input::placeholder, textarea::placeholder {
+                    color: #8E8E93 !important;
+                    -webkit-text-fill-color: #8E8E93 !important;
+                }
+                button, [role="button"], [class*="chip" i], [class*="pill" i], [class*="badge" i] {
+                    color-scheme: dark !important;
+                }
+                *::-webkit-scrollbar {
+                    background-color: #121212 !important;
+                    width: 6px !important;
                 }
                 *::-webkit-scrollbar-thumb {
                     background-color: #333333 !important;
                     border-radius: 4px !important;
                 }
-            """.trimIndent()
-        }
-
-        "OLED" -> {
-            colorScheme = "dark"
-            cssRules = """
-                :root, html {
-                    filter: invert(95%) hue-rotate(180deg) brightness(105%) contrast(105%) !important;
-                    color-scheme: dark !important;
-                    background-color: #000000 !important;
-                    background: #000000 !important;
-                    transition: filter 0.15s ease !important;
-                }
-                body, main, article, section, header, footer, nav, dialog, div[role="main"] {
-                    background-color: #000000 !important;
-                }
-                iframe, img, image, video, canvas, svg image, picture,
-                [style*="background-image"], [style*="background:"] {
-                    filter: invert(100%) hue-rotate(180deg) brightness(105%) contrast(105%) !important;
-                }
-                iframe img, iframe video, iframe canvas, iframe picture, iframe [style*="background-image"] {
-                    filter: none !important;
-                }
                 ::selection {
-                    background: #444444 !important;
-                    color: #ffffff !important;
-                }
-                input, textarea, select, button {
-                    color-scheme: dark !important;
-                }
-                *::-webkit-scrollbar {
-                    background-color: #000000 !important;
-                }
-                *::-webkit-scrollbar-thumb {
-                    background-color: #222222 !important;
-                    border-radius: 4px !important;
+                    background: #2563EB !important;
+                    color: #FFFFFF !important;
                 }
             """.trimIndent()
         }
@@ -210,6 +336,14 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
             const target = document.head || document.documentElement;
             if (!target) return;
 
+            if ('$colorScheme' === 'dark') {
+                try {
+                    if (location.hostname.indexOf('google.') !== -1) {
+                        document.cookie = 'PREF=f6=400; domain=' + location.hostname.substring(location.hostname.indexOf('.')) + '; path=/; max-age=31536000';
+                    }
+                } catch(e) {}
+            }
+
             if ('$colorScheme' !== '') {
                 let meta = document.getElementById(metaId);
                 if (!meta) {
@@ -231,6 +365,42 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                     target.appendChild(style);
                 }
                 style.textContent = '$fullCss';
+            }
+
+            if ('$colorScheme' === 'dark') {
+                const fixMediaParents = function() {
+                    try {
+                        const media = document.querySelectorAll('img, video, g-img, canvas, [class*="thumb"], [class*="video"]');
+                        for (let i = 0; i < media.length; i++) {
+                            let p = media[i].parentElement;
+                            let count = 0;
+                            while (p && count < 3) {
+                                if (p.style) {
+                                    p.style.setProperty('background-color', 'transparent', 'important');
+                                    p.style.setProperty('background', 'transparent', 'important');
+                                }
+                                p = p.parentElement;
+                                count++;
+                            }
+                        }
+                    } catch(e) {}
+                };
+                fixMediaParents();
+                setTimeout(fixMediaParents, 300);
+                setTimeout(fixMediaParents, 1000);
+
+                if (!window.__omniAmoledObserver) {
+                    window.__omniAmoledObserver = new MutationObserver(function() {
+                        let s = document.getElementById(id);
+                        if (!s && target && style) {
+                            target.appendChild(style);
+                        }
+                        fixMediaParents();
+                    });
+                    try {
+                        window.__omniAmoledObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+                    } catch(e) {}
+                }
             }
         })();
     """.trimIndent()

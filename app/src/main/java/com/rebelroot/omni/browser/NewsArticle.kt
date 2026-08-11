@@ -6,6 +6,7 @@ data class NewsArticle(
     val source: String,
     val pubDate: String,
     val imageUrl: String,
-    val sourceFaviconUrl: String = ""
+    val sourceFaviconUrl: String = "",
+    val category: String = "",
+    val summary: String = ""
 )
-

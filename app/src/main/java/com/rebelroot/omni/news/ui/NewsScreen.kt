@@ -55,7 +55,7 @@ fun NewsScreen(
     viewModel: BrowserViewModel,
     onNavigateHome: () -> Unit
 ) {
-    val categories = listOf("Top Stories", "Technology", "Business", "World", "Sports", "Entertainment", "Science", "Health", "Astrology", "Recipes")
+    val categories = listOf("Top Stories", "Tech", "Science", "Space", "Environment", "Nature", "Health", "History", "Sports", "Business")
     val listState = rememberLazyListState()
 
     // Fetch initial news when entering screen if empty
@@ -369,10 +369,27 @@ fun NewsScreen(
                                 }
                                 Spacer(modifier = Modifier.height(12.dp))
 
-
                                 Column(
                                     modifier = Modifier.padding(horizontal = 4.dp)
                                 ) {
+                                    // Category Chip Tag
+                                    val categoryTag = article.category.ifBlank { viewModel.selectedNewsCategory }
+                                    if (categoryTag.isNotBlank()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            modifier = Modifier.padding(bottom = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = categoryTag.uppercase(),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
                                     // Article Title
                                     Text(
                                         text = article.title,
@@ -383,6 +400,19 @@ fun NewsScreen(
                                         overflow = TextOverflow.Ellipsis,
                                         lineHeight = 22.sp
                                     )
+
+                                    if (article.summary.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = article.summary,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 13.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            lineHeight = 18.sp
+                                        )
+                                    }
+
                                     Spacer(modifier = Modifier.height(8.dp))
 
                                     // Source Favicon & Source Name & PubDate Row
