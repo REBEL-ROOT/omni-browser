@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -132,6 +133,69 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.PointerEventPass
 
+
+/**
+ * Parses an ISO-format date/time string from GeckoView DateTimePrompt into a Calendar.
+ * Handles: "yyyy-MM-dd", "yyyy-MM", "yyyy-Www", "HH:mm", "yyyy-MM-dd'T'HH:mm"
+ */
+private fun parseDateFromIso(value: String?): java.util.Calendar? {
+    if (value.isNullOrBlank()) return null
+    return try {
+        val cal = java.util.Calendar.getInstance()
+        when {
+            // "yyyy-MM-dd'T'HH:mm" (datetime-local)
+            value.contains("T") -> {
+                val parts = value.split("T")
+                val dateParts = parts[0].split("-").mapNotNull { it.toIntOrNull() }
+                val timeParts = parts.getOrNull(1)?.split(":")?.mapNotNull { it.toIntOrNull() }
+                if (dateParts.size >= 3) {
+                    cal.set(dateParts[0], dateParts[1] - 1, dateParts[2])
+                }
+                if (timeParts != null && timeParts.size >= 2) {
+                    cal.set(java.util.Calendar.HOUR_OF_DAY, timeParts[0])
+                    cal.set(java.util.Calendar.MINUTE, timeParts[1])
+                }
+                cal
+            }
+            // "yyyy-Www" (week — approximate to Monday of that week)
+            value.matches(Regex("\\d{4}-W\\d{2}")) -> {
+                val parts = value.split("-W")
+                val year = parts[0].toInt()
+                val week = parts[1].toInt()
+                cal.firstDayOfWeek = java.util.Calendar.MONDAY
+                cal.minimalDaysInFirstWeek = 4
+                cal.set(java.util.Calendar.YEAR, year)
+                cal.set(java.util.Calendar.WEEK_OF_YEAR, week)
+                cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
+                cal
+            }
+            // "yyyy-MM-dd" (date)
+            value.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) -> {
+                val parts = value.split("-").mapNotNull { it.toIntOrNull() }
+                if (parts.size >= 3) cal.set(parts[0], parts[1] - 1, parts[2])
+                cal
+            }
+            // "yyyy-MM" (month)
+            value.matches(Regex("\\d{4}-\\d{2}")) -> {
+                val parts = value.split("-").mapNotNull { it.toIntOrNull() }
+                if (parts.size >= 2) cal.set(parts[0], parts[1] - 1, 1)
+                cal
+            }
+            // "HH:mm" (time only — use today's date)
+            value.matches(Regex("\\d{2}:\\d{2}")) -> {
+                val parts = value.split(":").mapNotNull { it.toIntOrNull() }
+                if (parts.size >= 2) {
+                    cal.set(java.util.Calendar.HOUR_OF_DAY, parts[0])
+                    cal.set(java.util.Calendar.MINUTE, parts[1])
+                }
+                cal
+            }
+            else -> null
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -544,6 +608,153 @@ fun BrowserScreen(
         }
     }
 
+    // ── <select> Choice Prompt (Issue #74) ──────────────────────────────────────
+    // Derive dialog visibility directly from ViewModel state — no LaunchedEffect
+    // needed. This ensures Compose always recomposes when pendingChoicePrompt changes.
+    // Placed at TOP LEVEL (outside Scaffold) to avoid being gated by conditional content.
+    val showChoiceDialog = viewModel.pendingChoicePrompt != null
+
+    // ── Date/Time Picker Prompt (Issue #74) ─────────────────────────────────────
+    LaunchedEffect(viewModel.pendingDatePrompt) {
+        val pending = viewModel.pendingDatePrompt
+        if (pending == null) {
+            return@LaunchedEffect
+        }
+        val prompt = pending.prompt
+
+        // Resolve Activity context for native dialog windows.
+        val activity = run {
+            var ctx = context
+            while (ctx is android.content.ContextWrapper) {
+                if (ctx is Activity) break
+                ctx = ctx.baseContext
+            }
+            (ctx as? Activity) ?: com.rebelroot.omni.MainActivity.getActiveActivity()
+        }
+
+        if (activity == null) {
+            viewModel.cancelDateTimePrompt()
+            return@LaunchedEffect
+        }
+
+        // Parse the default value if present. GeckoView uses HTML5 value format strings.
+        val defaultDate = parseDateFromIso(prompt.defaultValue)
+        val minDate = parseDateFromIso(prompt.minValue)
+        val maxDate = parseDateFromIso(prompt.maxValue)
+
+        when (prompt.type) {
+            org.mozilla.geckoview.GeckoSession.PromptDelegate.DateTimePrompt.Type.DATE -> {
+                val datePicker = android.app.DatePickerDialog(
+                    activity,
+                    { _, year, month, dayOfMonth ->
+                        val isoValue = String.format("%04d-%02d-%02d", year, month + 1, dayOfMonth)
+                        viewModel.deliverDateTimePromptResult(isoValue)
+                    },
+                    defaultDate?.get(java.util.Calendar.YEAR) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                    defaultDate?.get(java.util.Calendar.MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                    defaultDate?.get(java.util.Calendar.DAY_OF_MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                )
+                datePicker.setOnCancelListener { viewModel.cancelDateTimePrompt() }
+                minDate?.let { datePicker.datePicker.minDate = it.timeInMillis }
+                maxDate?.let { datePicker.datePicker.maxDate = it.timeInMillis }
+                datePicker.show()
+            }
+            org.mozilla.geckoview.GeckoSession.PromptDelegate.DateTimePrompt.Type.TIME -> {
+                val cal = defaultDate ?: java.util.Calendar.getInstance()
+                val timePicker = android.app.TimePickerDialog(
+                    activity,
+                    { _, hourOfDay, minute ->
+                        val isoValue = String.format("%02d:%02d", hourOfDay, minute)
+                        viewModel.deliverDateTimePromptResult(isoValue)
+                    },
+                    cal.get(java.util.Calendar.HOUR_OF_DAY),
+                    cal.get(java.util.Calendar.MINUTE),
+                    true // 24-hour format
+                )
+                timePicker.setOnCancelListener { viewModel.cancelDateTimePrompt() }
+                timePicker.show()
+            }
+            org.mozilla.geckoview.GeckoSession.PromptDelegate.DateTimePrompt.Type.DATETIME_LOCAL -> {
+                // Show DatePicker first, then chain to TimePicker
+                val datePicker = android.app.DatePickerDialog(
+                    activity,
+                    { _, year, month, dayOfMonth ->
+                        val datePart = String.format("%04d-%02d-%02d", year, month + 1, dayOfMonth)
+                        // Now show TimePicker
+                        val cal = defaultDate ?: java.util.Calendar.getInstance()
+                        val timePicker = android.app.TimePickerDialog(
+                            activity,
+                            { _, hourOfDay, minute ->
+                                val isoValue = "${datePart}T${String.format("%02d:%02d", hourOfDay, minute)}"
+                                viewModel.deliverDateTimePromptResult(isoValue)
+                            },
+                            cal.get(java.util.Calendar.HOUR_OF_DAY),
+                            cal.get(java.util.Calendar.MINUTE),
+                            true
+                        )
+                        timePicker.setOnCancelListener {
+                            // User cancelled time — deliver just the date (partial result)
+                            viewModel.deliverDateTimePromptResult(datePart)
+                        }
+                        timePicker.show()
+                    },
+                    defaultDate?.get(java.util.Calendar.YEAR) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                    defaultDate?.get(java.util.Calendar.MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                    defaultDate?.get(java.util.Calendar.DAY_OF_MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                )
+                datePicker.setOnCancelListener { viewModel.cancelDateTimePrompt() }
+                minDate?.let { datePicker.datePicker.minDate = it.timeInMillis }
+                maxDate?.let { datePicker.datePicker.maxDate = it.timeInMillis }
+                datePicker.show()
+            }
+            org.mozilla.geckoview.GeckoSession.PromptDelegate.DateTimePrompt.Type.MONTH -> {
+                // Android has no built-in month picker. Use a DatePicker and extract year-month.
+                val datePicker = android.app.DatePickerDialog(
+                    activity,
+                    { _, year, month, _ ->
+                        val isoValue = String.format("%04d-%02d", year, month + 1)
+                        viewModel.deliverDateTimePromptResult(isoValue)
+                    },
+                    defaultDate?.get(java.util.Calendar.YEAR) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                    defaultDate?.get(java.util.Calendar.MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                    defaultDate?.get(java.util.Calendar.DAY_OF_MONTH) ?: 1
+                )
+                datePicker.setOnCancelListener { viewModel.cancelDateTimePrompt() }
+                minDate?.let { datePicker.datePicker.minDate = it.timeInMillis }
+                maxDate?.let { datePicker.datePicker.maxDate = it.timeInMillis }
+                datePicker.show()
+            }
+            org.mozilla.geckoview.GeckoSession.PromptDelegate.DateTimePrompt.Type.WEEK -> {
+                // Android has no built-in week picker. Use a DatePicker and convert to ISO week.
+                val datePicker = android.app.DatePickerDialog(
+                    activity,
+                    { _, year, month, dayOfMonth ->
+                        val cal = java.util.Calendar.getInstance()
+                        cal.set(year, month, dayOfMonth)
+                        cal.firstDayOfWeek = java.util.Calendar.MONDAY
+                        cal.minimalDaysInFirstWeek = 4
+                        val week = cal.get(java.util.Calendar.WEEK_OF_YEAR)
+                        // Handle year edge: week 1 may belong to next calendar year
+                        val weekYear = cal.get(java.util.Calendar.YEAR)
+                        val isoValue = String.format("%04d-W%02d", weekYear, week)
+                        viewModel.deliverDateTimePromptResult(isoValue)
+                    },
+                    defaultDate?.get(java.util.Calendar.YEAR) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                    defaultDate?.get(java.util.Calendar.MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                    defaultDate?.get(java.util.Calendar.DAY_OF_MONTH) ?: java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                )
+                datePicker.setOnCancelListener { viewModel.cancelDateTimePrompt() }
+                minDate?.let { datePicker.datePicker.minDate = it.timeInMillis }
+                maxDate?.let { datePicker.datePicker.maxDate = it.timeInMillis }
+                datePicker.show()
+            }
+            else -> {
+                Log.w("BrowserScreen", "onDateTimePrompt: unknown type=${prompt.type}")
+                viewModel.cancelDateTimePrompt()
+            }
+        }
+    }
+
     LaunchedEffect(viewModel.currentUrl) {
         inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
     }
@@ -838,6 +1049,30 @@ fun BrowserScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // ── <select> Choice Prompt Dialog (Issue #74) ──────────────────────────
+        // Rendered at TOP LEVEL (outside Scaffold) so it's never gated by
+        // conditional content branches like isHome/activeTab checks.
+        if (showChoiceDialog) {
+            viewModel.pendingChoicePrompt?.let { pending ->
+                val choices = pending.prompt.choices ?: emptyArray()
+                if (choices.isNotEmpty()) {
+                    ChoicePromptDialog(
+                        title = pending.prompt.message ?: "Select an option",
+                        choices = choices.toList(),
+                        initialSelectedIndex = choices.indexOfFirst { it.selected }.coerceAtLeast(0),
+                        isMultiple = pending.prompt.type == org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Type.MULTIPLE,
+                        onConfirm = { selectedIndex ->
+                            viewModel.deliverChoicePromptResult(selectedIndex)
+                        },
+                        onDismiss = {
+                            viewModel.cancelChoicePrompt()
+                        },
+                        isDarkTheme = viewModel.isDarkThemeEnabled
+                    )
+                }
+            }
+        }
+
         Scaffold(
         topBar = {
         if (!viewModel.isFullscreen && !showHomeScreen &&
@@ -845,7 +1080,8 @@ fun BrowserScreen(
                 (!viewModel.chromeNavBarEnabled && !(viewModel.addressBarPosition == "Bottom" && !isTablet)))) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val statusBarHeightDp = with(density) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }
-            val topBarHeight = (if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))) + 36.dp
+            val topBarMeasuredDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
+            val topBarTotalHeight = topBarMeasuredDp + statusBarHeightDp
 
             // Top bar: always rendered; graphicsLayer slides it out without removing from composition
             Box(
@@ -856,9 +1092,9 @@ fun BrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = statusBarHeightDp)
-                            .graphicsLayer { translationY = -(topBarHeight + statusBarHeightDp).toPx() * topBarFraction },
+                            .graphicsLayer { translationY = -topBarTotalHeight.toPx() * topBarFraction },
                         shape = androidx.compose.ui.graphics.RectangleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                        color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         shadowElevation = 8.dp,
                         tonalElevation = 2.dp
                     ) {
@@ -1763,24 +1999,19 @@ fun BrowserScreen(
                     ) { (targetTabId, isHome) ->
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (activeTab != null && !isHome) {
-                                val density = androidx.compose.ui.platform.LocalDensity.current
-                                val navBarsHeightPx = androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(density)
-                                val navBarsHeightDp = with(density) { navBarsHeightPx.toDp() }
-
-                                val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.bottomNavScale, viewModel.uiScale, navBarsHeightDp) {
+                                val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.bottomNavScale, viewModel.uiScale) {
                                     if (!isTablet && !isHome && !viewModel.isFullscreen && !isLandscape) {
                                         if (viewModel.addressBarPosition == "Bottom") {
                                             val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
-                                            val barContentHeight = if (viewModel.chromeNavBarEnabled) {
+                                            if (viewModel.chromeNavBarEnabled) {
                                                 searchHeight
                                             } else if (viewModel.showBottomNavBar) {
                                                 searchHeight + (52 * viewModel.bottomNavScale).dp
                                             } else {
                                                 searchHeight
                                             }
-                                            barContentHeight + navBarsHeightDp
                                         } else if (viewModel.showBottomNavBar) {
-                                            (52 * viewModel.bottomNavScale).dp + navBarsHeightDp
+                                            (52 * viewModel.bottomNavScale).dp
                                         } else {
                                             0.dp
                                         }
@@ -1789,13 +2020,15 @@ fun BrowserScreen(
                                     }
                                 }
 
+                                val density = androidx.compose.ui.platform.LocalDensity.current
                                 val statusBarHeightPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
                                 val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
                                 
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
-                                val topBarHeight = (if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))) + 36.dp
+                                val topBarMeasuredDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
+                                val topBarTotalHeight = topBarMeasuredDp + statusBarHeightDp
                                 
-                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarHeight else 0.dp
+                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarTotalHeight else 0.dp
                                 val geckoBottomPad = if (!viewModel.isFullscreen && !isLandscape) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
                                 
                                 val geckoTopPad = 0.dp
@@ -1826,6 +2059,9 @@ fun BrowserScreen(
                                 ) {
                                     DisposableEffect(Unit) {
                                         onDispose {
+                                            // When the GeckoView leaves composition, cancel any
+                                            // pending prompts so their GeckoResult is not left hanging.
+                                            viewModel.cancelAllPendingPrompts()
                                             viewModel.clearActiveGeckoView()
                                         }
                                     }
@@ -7932,7 +8168,7 @@ private fun MediaSnifferBanner(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
-        color = Color(0xFF1B2234)
+        color = if (viewModel.isAmoledMode) Color(0xFF000000) else Color(0xFF1B2234)
     ) {
         Row(
             modifier = Modifier
@@ -8186,4 +8422,119 @@ private fun ExitOptionRow(
             )
         }
     }
+}
+
+// ── Choice Prompt Dialog (for <select> elements) — Issue #74 ────────────────────
+/**
+ * Renders a native AlertDialog with a radio-list or checkbox-list of choices,
+ * matching the GeckoView ChoicePrompt specification.
+ */
+@Composable
+fun ChoicePromptDialog(
+    title: String,
+    choices: List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>,
+    initialSelectedIndex: Int = 0,
+    isMultiple: Boolean = false,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    isDarkTheme: Boolean = false
+) {
+    val selectedIndex = remember { mutableStateOf(initialSelectedIndex) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                color = if (isDarkTheme) Color.White else Color.Black,
+                maxLines = 3
+            )
+        },
+        text = {
+            LazyColumn {
+                itemsIndexed(choices) { index, choice ->
+                    if (choice.separator) {
+                        Divider(
+                            color = if (isDarkTheme) Color(0xFF333333) else Color(0xFFE0E0E0),
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !choice.disabled) {
+                                    selectedIndex.value = index
+                                    if (!isMultiple) {
+                                        onConfirm(index)
+                                    }
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp)
+                                .alpha(if (choice.disabled) 0.4f else 1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Radio or checkbox indicator
+                            if (!choice.disabled) {
+                                if (isMultiple) {
+                                    Checkbox(
+                                        checked = selectedIndex.value == index,
+                                        onCheckedChange = {
+                                            selectedIndex.value = index
+                                        }
+                                    )
+                                } else {
+                                    RadioButton(
+                                        selected = selectedIndex.value == index,
+                                        onClick = null
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.size(48.dp))
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Text(
+                                text = choice.label,
+                                color = if (isDarkTheme) Color.White else Color.Black,
+                                fontSize = 16.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            // Icon if available
+                            if (!choice.icon.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                coil.compose.AsyncImage(
+                                    model = choice.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (isMultiple) {
+                Button(
+                    onClick = { onConfirm(selectedIndex.value) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Text("OK", color = Color.White)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        containerColor = if (isDarkTheme) Color(0xFF1C1C1E) else MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(32.dp)
+    )
 }

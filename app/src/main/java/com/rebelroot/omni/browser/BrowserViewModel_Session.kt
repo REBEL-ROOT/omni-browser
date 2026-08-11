@@ -399,10 +399,60 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             val choices = prompt.choices ?: return GeckoResult.fromValue(prompt.dismiss())
             if (choices.isEmpty()) return GeckoResult.fromValue(prompt.dismiss())
 
-            // Auto-confirm the preselected/default choice (e.g. Google Sign-In account selector)
-            Log.i(TAG, "onChoicePrompt: auto-confirming choice from ${choices.size} options")
-            val defaultChoice = choices.firstOrNull { it.selected } ?: choices.first()
-            return GeckoResult.fromValue(prompt.confirm(defaultChoice))
+            // Dismiss any previously pending choice prompt to prevent stale GeckoResult.
+            // At most one prompt should be active per session at a time.
+            cancelChoicePrompt()
+
+            // Store the pending prompt so the Compose UI can show a native choice dialog
+            // with a radio/checkbox list (fixes Issue #74: <select> not responding).
+            Log.i(TAG, "onChoicePrompt: ${choices.size} choices, type=${prompt.type}")
+            val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+            pendingChoicePrompt = BrowserViewModel.PendingChoicePrompt(
+                geckoResult = result,
+                prompt = prompt
+            )
+            return result
+            return result
+        }
+
+        override fun onDateTimePrompt(
+            session: GeckoSession,
+            prompt: GeckoSession.PromptDelegate.DateTimePrompt
+        ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            if (tab.id != activeTabId) return GeckoResult.fromValue(prompt.dismiss())
+
+            // Dismiss any previously pending date/time prompt to prevent stale GeckoResult.
+            cancelDateTimePrompt()
+
+            // Store the pending prompt so the Compose UI can show native Android
+            // DatePickerDialog / TimePickerDialog (fixes Issue #74: date pickers not responding).
+            val typeLabel = when (prompt.type) {
+                GeckoSession.PromptDelegate.DateTimePrompt.Type.DATE -> "DATE"
+                GeckoSession.PromptDelegate.DateTimePrompt.Type.MONTH -> "MONTH"
+                GeckoSession.PromptDelegate.DateTimePrompt.Type.WEEK -> "WEEK"
+                GeckoSession.PromptDelegate.DateTimePrompt.Type.TIME -> "TIME"
+                GeckoSession.PromptDelegate.DateTimePrompt.Type.DATETIME_LOCAL -> "DATETIME_LOCAL"
+                else -> "UNKNOWN(${prompt.type})"
+            }
+            Log.i(TAG, "onDateTimePrompt: type=$typeLabel, default=${prompt.defaultValue}, " +
+                    "min=${prompt.minValue}, max=${prompt.maxValue}")
+            val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+            pendingDatePrompt = BrowserViewModel.PendingDatePrompt(
+                geckoResult = result,
+                prompt = prompt
+            )
+            return result
+        }
+
+        override fun onColorPrompt(
+            session: GeckoSession,
+            prompt: GeckoSession.PromptDelegate.ColorPrompt
+        ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            if (tab.id != activeTabId) return GeckoResult.fromValue(prompt.dismiss())
+
+            // Fall through to GeckoView's default color picker behavior.
+            // We do not override this — GeckoView handles <input type="color"> natively.
+            return null
         }
 
         override fun onLoginSelect(
@@ -727,11 +777,15 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 val nativeHandlers = getNativeAppHandlers(context, uri)
                 if (nativeHandlers.isNotEmpty()) {
                     Log.i(TAG, "📱 Deep Link: Found ${nativeHandlers.size} native handler(s) for $uri")
-                    val sitePerm = getSitePermissionValue(tab.url, "externalApp")
+                    val currentHost = try { 
+                        val h = Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.")
+                        if (!h.isNullOrBlank() && h != "blank") h else Uri.parse(uri).host?.lowercase()?.removePrefix("www.") ?: ""
+                    } catch (_: Exception) { "" }
+                    val sitePerm = getSitePermissionValue(currentHost, "externalApp")
                     val targetPkg = nativeHandlers.firstOrNull()?.activityInfo?.packageName
 
                     if (sitePerm == "allow") {
-                        // Always allow granted for this site — launch directly
+                        // User explicitly enabled "Always allow" for this site — launch native app directly
                         Log.i(TAG, "🚀 Deep Link: Launching native app handler ($targetPkg) directly (sitePerm=allow) for $uri")
                         viewModelScope.launch(Dispatchers.Main) {
                             try {
@@ -748,23 +802,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                             }
                         }
                         return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    } else if (sitePerm == "block") {
-                        // Explicitly blocked for this site — load inside browser tab
-                        Log.i(TAG, "🚫 Deep Link: External app redirect blocked by site permission for $uri")
                     } else {
-                        // Default ("ask"): prompt user for permission before opening external app
-                        Log.i(TAG, "❓ Deep Link: Prompting user for permission to open external app ($targetPkg) for $uri")
-                        val sourceHost = try { Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.") ?: "" } catch (_: Exception) { "" }
-                        viewModelScope.launch(Dispatchers.Main) {
-                            pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
-                                uri = uri,
-                                packageName = targetPkg,
-                                fallbackUrl = uri,
-                                blockedAutomatically = false,
-                                sourceHost = sourceHost
-                            )
-                        }
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
+                        // Default ("ask" / "block"): keep web browsing inside the browser tab!
+                        Log.i(TAG, "🌐 Deep Link: Standard HTTP/HTTPS link loaded in browser tab for $currentHost (sitePerm=$sitePerm)")
                     }
                 }
             }
@@ -775,15 +815,11 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 !lowerUri.startsWith("javascript:") && 
                 !lowerUri.startsWith("data:")
             ) {
-                // 1. Gesture / setting / per-site check — mirrors Chrome/Firefox behaviour:
-                //    • User-initiated tap (hasUserGesture && !isRedirect): launch directly when
-                //      the global toggle is on.
-                //    • Automatic redirect (isRedirect or no user gesture): consult the per-site
-                //      externalApp permission — "allow" = launch silently, "block" = deny silently,
-                //      "ask" (default) = queue a one-time dialog so the user decides.
-                val isUserInitiated = request.hasUserGesture && !request.isRedirect
-                val sourceHost = try { Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.") ?: "" } catch (_: Exception) { "" }
-                val sitePerm = getSitePermissionValue(tab.url, "externalApp")
+                val sourceHost = try { 
+                    val h = Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.")
+                    if (!h.isNullOrBlank() && h != "blank") h else Uri.parse(uri).host?.lowercase()?.removePrefix("www.") ?: ""
+                } catch (_: Exception) { "" }
+                val sitePerm = getSitePermissionValue(sourceHost, "externalApp")
 
                 // Helper for a browser-style external-app prompt.
                 val performFallback: (intentPackage: String?, isBlocked: Boolean) -> Unit = { intentPackage, isBlocked ->
@@ -808,41 +844,39 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     }
                 }
 
-                // Global toggle OFF → block everything (existing behaviour preserved)
+                // Global toggle OFF → block everything
                 if (!isOpenExternalAppAllowed) {
                     Log.w(TAG, "🚫 onLoadRequest: External app launches disabled in settings: $uri")
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
-                // Automatic redirect path — check per-site permission
-                if (!isUserInitiated) {
-                    when (sitePerm) {
-                        "allow" -> {
-                            // Per-site always-allow: fall through to the launch logic below
-                            Log.i(TAG, "✅ onLoadRequest: Auto-redirect allowed by site permission for $sourceHost: $uri")
-                        }
-                        "block" -> {
-                            Log.w(TAG, "🚫 onLoadRequest: Auto-redirect blocked by site permission for $sourceHost: $uri")
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-                        else -> {
-                            // "ask" — queue dialog, let user decide
-                            Log.i(TAG, "❓ onLoadRequest: Auto-redirect queued for user decision ($sourceHost): $uri")
-                            viewModelScope.launch(Dispatchers.Main) {
-                                val intentPackage = if (lowerUri.startsWith("intent:")) {
-                                    try { Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage() } catch (_: Exception) { null }
-                                } else if (lowerUri.startsWith("market:")) {
-                                    try { Uri.parse(uri).getQueryParameter("id") } catch (_: Exception) { null }
-                                } else {
-                                    try {
-                                        Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
-                                            ?: Uri.parse(uri).getQueryParameter("package")
-                                    } catch (_: Exception) { null }
-                                }
-                                performFallback(intentPackage, true)
+                // Check per-site permission for all external app intents
+                when (sitePerm) {
+                    "allow" -> {
+                        // Per-site always-allow: proceed to launch external app intent
+                        Log.i(TAG, "✅ onLoadRequest: External app launch allowed by site permission for $sourceHost: $uri")
+                    }
+                    "block" -> {
+                        Log.w(TAG, "🚫 onLoadRequest: External app launch blocked by site permission for $sourceHost: $uri")
+                        return GeckoResult.fromValue(AllowOrDeny.DENY)
+                    }
+                    else -> {
+                        // "ask" (default): ALWAYS prompt user for permission before opening any external app!
+                        Log.i(TAG, "❓ onLoadRequest: External app launch queued for user permission ($sourceHost): $uri")
+                        viewModelScope.launch(Dispatchers.Main) {
+                            val intentPackage = if (lowerUri.startsWith("intent:")) {
+                                try { Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage() } catch (_: Exception) { null }
+                            } else if (lowerUri.startsWith("market:")) {
+                                try { Uri.parse(uri).getQueryParameter("id") } catch (_: Exception) { null }
+                            } else {
+                                try {
+                                    Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
+                                        ?: Uri.parse(uri).getQueryParameter("package")
+                                } catch (_: Exception) { null }
                             }
-                            return GeckoResult.fromValue(AllowOrDeny.DENY)
+                            performFallback(intentPackage, false)
                         }
+                        return GeckoResult.fromValue(AllowOrDeny.DENY)
                     }
                 }
 
@@ -869,8 +903,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                             viewModelScope.launch(Dispatchers.Main) {
                                 Toast.makeText(context, "Blocked calendar spam intent", Toast.LENGTH_SHORT).show()
                             }
-                        } else {
-                            Log.i(TAG, "Launching external app intent safely: package=$intentPackage")
+                        } else if (sitePerm == "allow") {
+                            Log.i(TAG, "Launching external app intent safely (sitePerm=allow): package=$intentPackage")
                             viewModelScope.launch(Dispatchers.Main) {
                                 try {
                                     intent.addCategory(Intent.CATEGORY_BROWSABLE)
@@ -879,35 +913,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                                         intent.setSelector(null)
                                     }
-
-                                    val pm = context.packageManager
-                                    val resolveInfos = try {
-                                        pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-                                    } catch (_: Exception) {
-                                        emptyList()
-                                    }
-
-                                    val hasExplicitPackage = !intent.getPackage().isNullOrBlank()
-                                    val isSingleHandler = resolveInfos.size == 1
-
-                                    if (hasExplicitPackage || isSingleHandler) {
-                                        Log.i(TAG, "Launching intent directly (explicitPackage=$hasExplicitPackage, handlers=${resolveInfos.size})")
-                                        context.startActivity(intent)
-                                    } else if (resolveInfos.size > 1) {
-                                        Log.i(TAG, "Launching chooser for intent (${resolveInfos.size} handlers)")
-                                        val chooser = Intent.createChooser(intent, "Open with")
-                                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(chooser)
-                                    } else {
-                                        throw android.content.ActivityNotFoundException("No app found to handle intent")
-                                    }
-                                } catch (e: android.content.ActivityNotFoundException) {
-                                    Log.w(TAG, "No app found for intent, prompting user instead", e)
-                                    performFallback(intentPackage, false)
+                                    context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to launch external intent", e)
                                     performFallback(intentPackage, false)
                                 }
+                            }
+                        } else {
+                            // Default ("ask") or "block": ALWAYS prompt user for permission!
+                            Log.i(TAG, "❓ External intent queued for user decision ($sourceHost, sitePerm=$sitePerm): $uri")
+                            viewModelScope.launch(Dispatchers.Main) {
+                                performFallback(intentPackage, false)
                             }
                         }
                     } catch (e: Exception) {
@@ -924,44 +939,18 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     } catch (_: Exception) {
                         null
                     }
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        intent.addCategory(Intent.CATEGORY_BROWSABLE)
-
-                        val pm = context.packageManager
-                        val resolveInfos = try {
-                            pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
-
-                        val hasExplicitPackage = !intent.getPackage().isNullOrBlank()
-                        val isSingleHandler = resolveInfos.size == 1
-
-                        if (hasExplicitPackage || isSingleHandler) {
-                            Log.i(TAG, "Launching custom protocol directly (explicitPackage=$hasExplicitPackage, handlers=${resolveInfos.size})")
-                            context.startActivity(intent)
-                        } else if (resolveInfos.size > 1) {
-                            val chooserTitle = when {
-                                lowerUri.startsWith("upi:") -> "Pay with"
-                                lowerUri.startsWith("mailto:") -> "Send email with"
-                                lowerUri.startsWith("tel:") -> "Call with"
-                                lowerUri.startsWith("sms:") || lowerUri.startsWith("smsto:") -> "Send SMS with"
-                                else -> "Open with"
+                    if (sitePerm == "allow") {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                addCategory(Intent.CATEGORY_BROWSABLE)
                             }
-                            Log.i(TAG, "Launching chooser for custom protocol (${resolveInfos.size} handlers)")
-                            val chooser = Intent.createChooser(intent, chooserTitle)
-                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(chooser)
-                        } else {
-                            throw android.content.ActivityNotFoundException("No app found to handle custom protocol")
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            performFallback(intentPackage, false)
                         }
-                    } catch (e: android.content.ActivityNotFoundException) {
-                        Log.w(TAG, "No app found for custom protocol: $uri", e)
-                        performFallback(intentPackage, false)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to launch custom protocol intent for: $uri", e)
+                    } else {
+                        Log.i(TAG, "❓ Custom protocol queued for user decision ($sourceHost, sitePerm=$sitePerm): $uri")
                         performFallback(intentPackage, false)
                     }
                 }

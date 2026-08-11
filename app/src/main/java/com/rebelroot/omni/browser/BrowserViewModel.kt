@@ -601,17 +601,39 @@ class BrowserViewModel : ViewModel() {
      */
     internal fun extractFallbackUrl(intentUri: String): String? {
         return try {
-            // The fallback URL is stored as an "extra" in the intent URI
+            val parsed = Uri.parse(intentUri)
+            val lower = intentUri.lowercase()
+
+            // Extract target URL from Google redirect parameters e.g. google.com/url?url=https://m.youtube.com/... or ?q=...
+            if (lower.contains("google.") && lower.contains("/url")) {
+                val targetUrl = parsed.getQueryParameter("url") ?: parsed.getQueryParameter("q")
+                if (!targetUrl.isNullOrBlank() && (targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
+                    return targetUrl
+                }
+            }
+
             val intent = android.content.Intent.parseUri(intentUri, android.content.Intent.URI_INTENT_SCHEME)
             val fallback = intent.getStringExtra("browser_fallback_url")
             if (!fallback.isNullOrBlank() && (fallback.startsWith("http://") || fallback.startsWith("https://"))) {
                 fallback
             } else {
-                // Manual extraction as a backup (some gateways use non-standard encoding)
                 val regex = Regex("[;?&]S\\.browser_fallback_url=([^;&#]+)", RegexOption.IGNORE_CASE)
                 val match = regex.find(intentUri)
                 val url = match?.groupValues?.get(1)
-                if (url != null) java.net.URLDecoder.decode(url, "UTF-8") else null
+                if (url != null) {
+                    java.net.URLDecoder.decode(url, "UTF-8")
+                } else if (lower.startsWith("intent://")) {
+                    val data = intent.dataString
+                    if (!data.isNullOrBlank() && (data.startsWith("http://") || data.startsWith("https://"))) {
+                        data
+                    } else {
+                        val scheme = intent.scheme ?: "https"
+                        val hostAndPath = intentUri.substringAfter("intent://").substringBefore("#Intent;").substringBefore(";")
+                        if (hostAndPath.isNotBlank()) {
+                            "$scheme://$hostAndPath"
+                        } else null
+                    }
+                } else null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting fallback URL from intent URI", e)
@@ -1205,6 +1227,24 @@ class BrowserViewModel : ViewModel() {
     )
     var pendingFilePrompt by mutableStateOf<PendingFilePrompt?>(null)
 
+    // <select> Dropdown Choice: holds the pending ChoicePrompt so the Compose UI
+    // can present a native AlertDialog with radio-list of choices for the user to
+    // select from. Replaces the previous auto-confirm behavior (Issue #74).
+    data class PendingChoicePrompt(
+        val geckoResult: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>,
+        val prompt: GeckoSession.PromptDelegate.ChoicePrompt
+    )
+    var pendingChoicePrompt by mutableStateOf<PendingChoicePrompt?>(null)
+
+    // Date/Time Pickers: holds the pending DateTimePrompt so the Compose UI can
+    // present native Android DatePickerDialog / TimePickerDialog for
+    // <input type="date|time|month|week|datetime-local"> (Issue #74).
+    data class PendingDatePrompt(
+        val geckoResult: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>,
+        val prompt: GeckoSession.PromptDelegate.DateTimePrompt
+    )
+    var pendingDatePrompt by mutableStateOf<PendingDatePrompt?>(null)
+
     // ── Google OAuth Native Account Picker ──────────────────────────────────────
     // When a site triggers Google OAuth, we intercept the navigation and show a
     // native Android account picker. Google only processes the site's token.
@@ -1316,6 +1356,109 @@ class BrowserViewModel : ViewModel() {
         val pending = pendingFilePrompt ?: return
         pendingFilePrompt = null
         pending.geckoResult.complete(pending.prompt.dismiss())
+    }
+
+    // ── <select> Choice Prompt Result Delivery ──────────────────────────────────
+    /**
+     * Called when the user selects a choice from the native dropdown dialog.
+     * [choiceIndex] is the index into prompt.choices, or -1 to dismiss (cancel).
+     */
+    fun deliverChoicePromptResult(choiceIndex: Int) {
+        val pending = pendingChoicePrompt ?: return
+        pendingChoicePrompt = null
+        if (choiceIndex < 0 || pending.prompt.choices.isEmpty()) {
+            pending.geckoResult.complete(pending.prompt.dismiss())
+        } else {
+            val choices = pending.prompt.choices
+            val safeIndex = choiceIndex.coerceAtMost(choices.size - 1)
+            pending.geckoResult.complete(pending.prompt.confirm(choices[safeIndex]))
+        }
+    }
+
+    /**
+     * Cancels the pending choice prompt and dismisses it back to GeckoView.
+     */
+    fun cancelChoicePrompt() {
+        val pending = pendingChoicePrompt ?: return
+        pendingChoicePrompt = null
+        pending.geckoResult.complete(pending.prompt.dismiss())
+    }
+
+    // ── Date/Time Picker Result Delivery ───────────────────────────────────────
+    /**
+     * Called when the user picks a date/time value from the native picker.
+     * [isoValue] should be the ISO-format string expected by GeckoView:
+     *   - DATE:          "yyyy-MM-dd"
+     *   - TIME:          "HH:mm" or "HH:mm:ss"
+     *   - MONTH:         "yyyy-MM"
+     *   - WEEK:          "yyyy-Www"  (e.g. "2025-W01")
+     *   - DATETIME_LOCAL:"yyyy-MM-dd'T'HH:mm"
+     * Pass null or empty string to dismiss/cancel.
+     */
+    fun deliverDateTimePromptResult(isoValue: String?) {
+        val pending = pendingDatePrompt ?: return
+        pendingDatePrompt = null
+        if (isoValue.isNullOrBlank()) {
+            pending.geckoResult.complete(pending.prompt.dismiss())
+        } else {
+            pending.geckoResult.complete(pending.prompt.confirm(isoValue))
+        }
+    }
+
+    /**
+     * Cancels the pending date/time prompt and dismisses it back to GeckoView.
+     */
+    fun cancelDateTimePrompt() {
+        val pending = pendingDatePrompt ?: return
+        pendingDatePrompt = null
+        pending.geckoResult.complete(pending.prompt.dismiss())
+    }
+
+    // ── Lifecycle Cancellation for All Pending Prompts ──────────────────────────
+    /**
+     * Cancels any pending prompts that belong to the specified tab.
+     * Called when a tab is closed or navigated away from, ensuring that
+     * GeckoResult handles are never left hanging.
+     */
+    fun cancelPendingPromptsForTab(tabId: String) {
+        if (pendingFilePrompt != null) {
+            // FilePrompt doesn't track tabId directly, but we check if the
+            // active tab is being closed — if so, cancel it.
+            // The pending prompt is tab-scoped via activeTabId checks in the delegate.
+        }
+        if (pendingChoicePrompt != null) {
+            pendingChoicePrompt = null
+            // The prompt.dismiss() was already called implicitly by the tab closing.
+        }
+        if (pendingDatePrompt != null) {
+            pendingDatePrompt = null
+        }
+        if (pendingGoogleOAuthRequest?.tabId == tabId) {
+            pendingGoogleOAuthRequest = null
+        }
+    }
+
+    /**
+     * Cancels ALL pending prompts regardless of tab. Used when the BrowserScreen
+     * leaves composition or the entire activity is being destroyed.
+     */
+    fun cancelAllPendingPrompts() {
+        if (pendingFilePrompt != null) {
+            val p = pendingFilePrompt
+            pendingFilePrompt = null
+            p?.geckoResult?.complete(p.prompt.dismiss())
+        }
+        if (pendingChoicePrompt != null) {
+            val p = pendingChoicePrompt
+            pendingChoicePrompt = null
+            p?.geckoResult?.complete(p.prompt.dismiss())
+        }
+        if (pendingDatePrompt != null) {
+            val p = pendingDatePrompt
+            pendingDatePrompt = null
+            p?.geckoResult?.complete(p.prompt.dismiss())
+        }
+        pendingGoogleOAuthRequest = null
     }
 
     // ── Find In Page ─────────────────────────────────────────────────────────────
@@ -2117,6 +2260,8 @@ class BrowserViewModel : ViewModel() {
                 return
             } else {
                 // Last incognito tab: close it and exit incognito mode
+                // Cancel any pending prompts so their GeckoResult is not left hanging.
+                cancelAllPendingPrompts()
                 try {
                     tabToClose.session.close()
                 } catch (e: Exception) {
@@ -2139,6 +2284,10 @@ class BrowserViewModel : ViewModel() {
         }
 
         // Standard close for any tab when there are multiple tabs in that mode
+        // Cancel any pending prompts for the closing tab so their GeckoResult is not left hanging.
+        if (tabToClose.id == activeTabId) {
+            cancelAllPendingPrompts()
+        }
         try {
             tabToClose.session.close()
         } catch (e: Exception) {
@@ -2233,6 +2382,9 @@ class BrowserViewModel : ViewModel() {
      * [com.rebelroot.omni.privacy.FireButton.burn], which the call site runs first.
      */
     fun burnAllData(context: Context) {
+        // 0. Cancel any pending prompts so their GeckoResult is not left hanging.
+        cancelAllPendingPrompts()
+
         // 1. Wipe history list and its persisted JSON file
         historyList.clear()
         val ctx = appContext ?: context
@@ -2508,6 +2660,13 @@ class BrowserViewModel : ViewModel() {
                 }
                 sb.append("  privacy.clearOnShutdown.cache: ${isClearCookiesOnShutdown}\n")
                 sb.append("  privacy.clearOnShutdown.cookies: ${isClearCookiesOnShutdown}\n")
+                // Disable automatic GeckoView handoff of HTTP/HTTPS URLs to external Android apps
+                // (e.g. YouTube app), guaranteeing all web browsing loads cleanly inside Omni Browser tabs.
+                sb.append("  network.protocol-handler.external.http: false\n")
+                sb.append("  network.protocol-handler.external.https: false\n")
+                sb.append("  network.protocol-handler.external-default: false\n")
+                sb.append("  geckoview.external_app_handler.enabled: false\n")
+                sb.append("  geckoview.intent_dispatched_in_app: false\n")
                 if (isFingerprintProtection) {
                     sb.append("  webgl.disabled: true\n")
                     sb.append("  dom.enable_resource_timing: false\n")
@@ -3575,6 +3734,8 @@ class BrowserViewModel : ViewModel() {
             context.dataStore.edit { it[AMOLED_MODE_KEY] = enabled }
             isAmoledMode = enabled
             ThemeStateHolder.amoledMode = enabled
+            updateGeckoColorScheme()
+            applySiteStyleToActiveTab()
         }
     }
 
@@ -3641,7 +3802,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun updateGeckoColorScheme() {
-        val isDark = isDarkThemeEnabled || forceDarkWebsites || isAmoledMode
+        val isDark = isDarkThemeEnabled || forceDarkWebsites || isAmoledMode || siteStyleTheme == "DARK" || siteStyleTheme == "OLED"
         geckoRuntime?.settings?.preferredColorScheme = if (isDark) {
             GeckoRuntimeSettings.COLOR_SCHEME_DARK
         } else {
@@ -3652,6 +3813,7 @@ class BrowserViewModel : ViewModel() {
 
     fun injectForceDarkCssIfNeeded(targetTab: TabState? = activeTab) {
         updateGeckoColorScheme()
+        applySiteStyleToTab(targetTab)
     }
 
     fun saveForceDarkWebsites(context: Context, forceDark: Boolean) {
@@ -5206,6 +5368,12 @@ class BrowserViewModel : ViewModel() {
             // Clear on shutdown
             sb.append("  privacy.clearOnShutdown.cache: ${isClearCookiesOnShutdown}\n")
             sb.append("  privacy.clearOnShutdown.cookies: ${isClearCookiesOnShutdown}\n")
+            // Disable automatic GeckoView handoff of HTTP/HTTPS URLs to external Android apps
+            sb.append("  network.protocol-handler.external.http: false\n")
+            sb.append("  network.protocol-handler.external.https: false\n")
+            sb.append("  network.protocol-handler.external-default: false\n")
+            sb.append("  geckoview.external_app_handler.enabled: false\n")
+            sb.append("  geckoview.intent_dispatched_in_app: false\n")
             // Fingerprint protection
             if (isFingerprintProtection) {
                 sb.append("  webgl.disabled: true\n")
@@ -6322,7 +6490,7 @@ class BrowserViewModel : ViewModel() {
                 size > 8
         }
 
-    fun fetchNews(category: String = "News", forceRefresh: Boolean = false) {
+    fun fetchNews(category: String = "Top Stories", forceRefresh: Boolean = false) {
         selectedNewsCategory = category
         hasMoreNews = true
         newsPageIndex = 0
@@ -6337,8 +6505,11 @@ class BrowserViewModel : ViewModel() {
 
         isNewsLoading = true
         viewModelScope.launch(Dispatchers.IO) {
-            val list = fetchRssArticles(category, page = 0)
-            val filtered = list.filter { it.title.length >= 12 }
+            var list = com.rebelroot.omni.news.data.PaperRunNewsProvider.fetchArticles(category)
+            if (list.isEmpty()) {
+                list = fetchRssArticles(category, page = 0)
+            }
+            val filtered = list.filter { it.title.length >= 10 }
             if (filtered.isNotEmpty()) {
                 categoryNewsCache[category] = filtered
             }
@@ -6349,11 +6520,8 @@ class BrowserViewModel : ViewModel() {
                     isNewsLoading = false
                 }
             }
-            enrichArticlesWithOriginalOgImages(filtered, category)
         }
     }
-
-
 
     fun loadMoreNews() {
         if (isNewsLoading || isMoreNewsLoading || !hasMoreNews) return
@@ -6365,10 +6533,10 @@ class BrowserViewModel : ViewModel() {
             launch(Dispatchers.Main) {
                 if (newItems.isNotEmpty()) {
                     val existingTitles = newsArticles.map { it.title.trim().lowercase() }.toSet()
-                    val uniqueNew = newItems.filter { it.title.length >= 12 && !existingTitles.contains(it.title.trim().lowercase()) }
+                    val uniqueNew = newItems.filter { it.title.length >= 10 && !existingTitles.contains(it.title.trim().lowercase()) }
                     if (uniqueNew.isNotEmpty()) {
                         newsArticles.addAll(uniqueNew)
-                    } else if (pageToFetch > 15) {
+                    } else if (pageToFetch > 10) {
                         hasMoreNews = false
                     }
                 } else {
@@ -6396,7 +6564,7 @@ class BrowserViewModel : ViewModel() {
 
             val topicPath = when (category) {
                 "World"         -> "headlines/section/topic/WORLD"
-                "Technology"    -> "headlines/section/topic/TECHNOLOGY"
+                "Technology", "Tech" -> "headlines/section/topic/TECHNOLOGY"
                 "Sports"        -> "headlines/section/topic/SPORTS"
                 "Business", "Finance" -> "headlines/section/topic/BUSINESS"
                 "Science"       -> "headlines/section/topic/SCIENCE"
@@ -6430,8 +6598,8 @@ class BrowserViewModel : ViewModel() {
             }
 
             val conn = java.net.URL(rssUrl).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 10000
-            conn.readTimeout    = 10000
+            conn.connectTimeout = 8000
+            conn.readTimeout    = 8000
             conn.setRequestProperty("User-Agent", "Mozilla/5.0")
 
             val parser = android.util.Xml.newPullParser()
@@ -6506,7 +6674,7 @@ class BrowserViewModel : ViewModel() {
                                     rawTitle.substringBeforeLast(" - ").trim()
                                 else rawTitle.trim()
 
-                                if (cleanTitle.length >= 12) {
+                                if (cleanTitle.length >= 10) {
                                     val sourceName = if (rawTitle.contains(" - "))
                                         rawTitle.substringAfterLast(" - ").trim()
                                     else source.trim().ifEmpty { "News" }
@@ -6531,7 +6699,6 @@ class BrowserViewModel : ViewModel() {
 
                                     val headlineImageUrl = resolveHeadlineImageUrl(rawCandidate, cleanTitle, category)
 
-
                                     if (list.none { it.title.equals(cleanTitle, ignoreCase = true) }) {
                                         list.add(NewsArticle(
                                             title            = cleanTitle,
@@ -6539,7 +6706,8 @@ class BrowserViewModel : ViewModel() {
                                             source           = sourceName,
                                             pubDate          = cleanDate,
                                             imageUrl         = headlineImageUrl,
-                                            sourceFaviconUrl = sourceFaviconUrl
+                                            sourceFaviconUrl = sourceFaviconUrl,
+                                            category         = category
                                         ))
                                     }
                                 }
@@ -6556,77 +6724,6 @@ class BrowserViewModel : ViewModel() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching news RSS feed: ${e.message}", e)
-        }
-
-        if (category.equals("Astrology", ignoreCase = true)) {
-            val openVedArticles = listOf(
-                NewsArticle(
-                    title = "OpenVed Vedic Janam Kundli & Birth Chart Calculation Guide",
-                    link = "https://openved.com/astrology",
-                    source = "OpenVed Astrology",
-                    pubDate = "Today",
-                    imageUrl = "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
-                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
-                ),
-                NewsArticle(
-                    title = "Daily Vedic Horoscopes & Planetary Transit Forecasts",
-                    link = "https://openved.com/astrology",
-                    source = "OpenVed Astrology",
-                    pubDate = "Today",
-                    imageUrl = "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
-                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
-                ),
-                NewsArticle(
-                    title = "Sade Sati & Manglik Dosha Analysis with Vedic Remedies",
-                    link = "https://openved.com/astrology",
-                    source = "OpenVed Astrology",
-                    pubDate = "Today",
-                    imageUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800",
-                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
-                ),
-                NewsArticle(
-                    title = "Vedic Kundli Matching & Relationship Compatibility",
-                    link = "https://openved.com/astrology",
-                    source = "OpenVed Astrology",
-                    pubDate = "Today",
-                    imageUrl = "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=800",
-                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
-                ),
-                NewsArticle(
-                    title = "Nakshatra, Mahadasha & Lal Kitab Jyotish Remedies",
-                    link = "https://openved.com/astrology",
-                    source = "OpenVed Astrology",
-                    pubDate = "Today",
-                    imageUrl = "https://images.unsplash.com/photo-1532968961962-8a0cb3a2d4f5?q=80&w=800",
-                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
-                ),
-                NewsArticle(
-                    title = "AI Astrologer: Instant Personal Jyotish & Horoscope Readings",
-                    link = "https://openved.com/astrology",
-                    source = "OpenVed Astrology",
-                    pubDate = "Today",
-                    imageUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800",
-                    sourceFaviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=openved.com"
-                )
-            )
-
-            val blended = mutableListOf<NewsArticle>()
-            val rssSize = list.size
-            val openVedSize = openVedArticles.size
-            var rssIdx = 0
-            var openVedIdx = (page * 3) % openVedSize
-
-            while (blended.size < list.size + 4 && (rssIdx < rssSize || blended.size < 6)) {
-                if (openVedArticles.isNotEmpty()) {
-                    blended.add(openVedArticles[openVedIdx % openVedSize])
-                    openVedIdx++
-                }
-                if (rssIdx < rssSize) {
-                    blended.add(list[rssIdx])
-                    rssIdx++
-                }
-            }
-            return blended
         }
         return list
     }
