@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.R
+import com.rebelroot.omni.bookmarks.importexport.exportBookmarksToFile
 import com.rebelroot.omni.bookmarks.importexport.prepareImportPreview
 import com.rebelroot.omni.browser.*
 
@@ -124,6 +125,33 @@ fun BookmarksScreen(
                     }
                 },
                 actions = {
+                    // Export button
+                    IconButton(onClick = {
+                        viewModel.exportBookmarksToFile(context) { result ->
+                            result.onSuccess { uri ->
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/html"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, context.getString(R.string.export_share_subject))
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                val chooser = android.content.Intent.createChooser(shareIntent, context.getString(R.string.export_share_title))
+                                context.startActivity(chooser)
+                            }.onFailure { e ->
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Rounded.FileDownload,
+                            contentDescription = stringResource(id = R.string.bookmarks_export),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     // Import button
                     IconButton(onClick = { importLauncher.launch("text/html") }) {
                         Icon(

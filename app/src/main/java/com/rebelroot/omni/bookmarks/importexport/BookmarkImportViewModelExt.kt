@@ -13,6 +13,7 @@ import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.rebelroot.omni.bookmarks.model.BookmarkCollection
 import com.rebelroot.omni.bookmarks.model.BookmarkNode
+import com.rebelroot.omni.bookmarks.export.exportNetscapeBookmarkHtml
 import com.rebelroot.omni.bookmarks.parser.parseNetscapeBookmarkHtml
 import com.rebelroot.omni.bookmarks.storage.loadBookmarks
 import com.rebelroot.omni.bookmarks.storage.saveBookmarks
@@ -20,6 +21,7 @@ import com.rebelroot.omni.browser.BrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -156,4 +158,42 @@ fun flattenTreeForPreview(node: BookmarkNode, depth: Int = 0): List<Pair<Int, Bo
         }
     }
     return result
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────
+
+/**
+ * Exports the live bookmark collection to a Netscape Bookmark HTML file
+ * in the app's cache directory, then invokes [onResult] with the file URI.
+ *
+ * @param context Android context
+ * @param onResult callback with the exported file URI or an error
+ */
+fun BrowserViewModel.exportBookmarksToFile(
+    context: Context,
+    onResult: (Result<Uri>) -> Unit
+) {
+    viewModelScope.launch(Dispatchers.IO) {
+        try {
+            val collection = loadBookmarks(context)
+            val html = exportNetscapeBookmarkHtml(collection, title = "Omni Bookmarks")
+
+            val file = File(context.cacheDir, "omni_bookmarks_export.html")
+            file.writeText(html, Charsets.UTF_8)
+
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "com.rebelroot.omni.fileprovider",
+                file
+            )
+
+            withContext(Dispatchers.Main) {
+                onResult(Result.success(uri))
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                onResult(Result.failure(e))
+            }
+        }
+    }
 }

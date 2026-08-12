@@ -145,6 +145,9 @@
     <string name="import_error_toast">Import failed: %1$s</string>
     <string name="bookmarks_import">Import</string>
     <string name="bookmarks_export">Export</string>
+    <string name="export_share_subject">Omni Bookmarks Export</string>
+    <string name="export_share_title">Share bookmarks</string>
+    <string name="export_error_toast">Export failed: %1$s</string>
 
     <string name="history_title">History</string>
     <string name="history_clear_all">Clear all</string>
