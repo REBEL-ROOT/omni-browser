@@ -11,7 +11,6 @@ package com.rebelroot.omni.bookmarks.importexport
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
-import com.rebelroot.omni.bookmarks.model.BookmarkCollection
 import com.rebelroot.omni.bookmarks.model.BookmarkNode
 import com.rebelroot.omni.bookmarks.export.exportNetscapeBookmarkHtml
 import com.rebelroot.omni.bookmarks.parser.parseNetscapeBookmarkHtml
