@@ -826,42 +826,13 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
-            // ── Deep Link & Native App Delegation (HTTP/HTTPS) ─────────────────────
-            if ((lowerUri.startsWith("http://") || lowerUri.startsWith("https://")) && isOpenExternalAppAllowed) {
-                val nativeHandlers = getNativeAppHandlers(context, uri)
-                if (nativeHandlers.isNotEmpty()) {
-                    Log.i(TAG, "📱 Deep Link: Found ${nativeHandlers.size} native handler(s) for $uri")
-                    val currentHost = try { 
-                        val h = Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.")
-                        if (!h.isNullOrBlank() && h != "blank") h else Uri.parse(uri).host?.lowercase()?.removePrefix("www.") ?: ""
-                    } catch (_: Exception) { "" }
-                    val sitePerm = getSitePermissionValue(currentHost, "externalApp")
-                    val targetPkg = nativeHandlers.firstOrNull()?.activityInfo?.packageName
-
-                    if (sitePerm == "allow") {
-                        // User explicitly enabled "Always allow" for this site — launch native app directly
-                        Log.i(TAG, "🚀 Deep Link: Launching native app handler ($targetPkg) directly (sitePerm=allow) for $uri")
-                        viewModelScope.launch(Dispatchers.Main) {
-                            try {
-                                val launchIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
-                                    addCategory(Intent.CATEGORY_BROWSABLE)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    if (!targetPkg.isNullOrBlank() && nativeHandlers.size == 1) {
-                                        setPackage(targetPkg)
-                                    }
-                                }
-                                context.startActivity(launchIntent)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to launch native app for deep link $uri", e)
-                            }
-                        }
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    } else {
-                        // Default ("ask" / "block"): keep web browsing inside the browser tab!
-                        Log.i(TAG, "🌐 Deep Link: Standard HTTP/HTTPS link loaded in browser tab for $currentHost (sitePerm=$sitePerm)")
-                    }
-                }
-            }
+            // ── Native App Delegation: ordinary HTTP/HTTPS stays in Omni ─────────
+            // An installed Android app must never take over merely because it can
+            // handle the same HTTP/HTTPS URL (YouTube, Instagram, Maps, …). The
+            // presence of a native handler must not pull the user out of the
+            // browser, regardless of the per-site "externalApp" permission —
+            // "allow" only applies to explicit external-app requests (intent:,
+            // market:, custom schemes) handled below through the permission flow.
 
             if (!lowerUri.startsWith("http://") && 
                 !lowerUri.startsWith("https://") && 

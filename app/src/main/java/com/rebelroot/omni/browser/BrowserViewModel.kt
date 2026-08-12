@@ -1831,7 +1831,7 @@ class BrowserViewModel : ViewModel() {
             "notifications" -> perm?.notifications ?: defaultNotifications
             "javascript" -> perm?.javascript ?: (if (defaultJavascriptAllowed) "allow" else "block")
             "autoplay" -> perm?.autoplay ?: (if (defaultAutoplayAllowed) "allow" else "block")
-            "externalApp" -> perm?.externalApp ?: "allow"
+            "externalApp" -> perm?.externalApp ?: "ask"
             else -> "ask"
         }
     }
