@@ -198,6 +198,8 @@ dependencies {
     // project's existing SecurityPolicyTest and the new Offline AI tests compile
     // and run under `./gradlew test`.
     testImplementation("junit:junit:4.13.2")
+    // org.json for JVM unit tests (mirrors Android's org.json API)
+    testImplementation("org.json:json:20231013")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
