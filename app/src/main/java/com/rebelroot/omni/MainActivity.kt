@@ -77,7 +77,6 @@ import com.rebelroot.omni.ui.theme.OmniTheme
 import java.io.File
 import com.rebelroot.omni.browser.dataStore
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -302,35 +301,41 @@ class MainActivity : FragmentActivity() {
                         return@Surface
                     }
 
-                    val isOnboardingCompleted = remember {
-                        runBlocking {
-                            val prefs = context.dataStore.data.first()
-                            prefs[BrowserViewModel.ONBOARDING_COMPLETED_KEY] ?: false
+                    // Resolve the start destination asynchronously (DataStore
+                    // read off the main thread) instead of blocking composition
+                    // with runBlocking. A themed blank frame is shown until the
+                    // decision is ready, so the correct destination appears on
+                    // the very first composition — no white flash, no wrong-
+                    // screen flash, no double navigation.
+                    var languageSelectionDone by remember { androidx.compose.runtime.mutableStateOf(false) }
+                    var onboardingCompleted by remember { androidx.compose.runtime.mutableStateOf(false) }
+                    var startDestination by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        val prefs = context.dataStore.data.first()
+                        languageSelectionDone = prefs[BrowserViewModel.LANGUAGE_SELECTION_DONE_KEY] ?: false
+                        onboardingCompleted = prefs[BrowserViewModel.ONBOARDING_COMPLETED_KEY] ?: false
+                        startDestination = if (isDirectVideo) {
+                            val encodedPath = android.util.Base64.encodeToString(intentUrl!!.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+                            android.util.Log.i("MainActivity", "🎬 Startup direct video player route: video_player/$encodedPath")
+                            "video_player/$encodedPath"
+                        } else if (!languageSelectionDone) {
+                            "language_selection"
+                        } else if (!onboardingCompleted) {
+                            "onboarding"
+                        } else {
+                            "browser"
                         }
                     }
 
-                    val isLanguageSelectionDone = remember {
-                        runBlocking {
-                            val prefs = context.dataStore.data.first()
-                            prefs[BrowserViewModel.LANGUAGE_SELECTION_DONE_KEY] ?: false
-                        }
-                    }
-
-                    val startDestination = if (isDirectVideo) {
-                        val encodedPath = android.util.Base64.encodeToString(intentUrl!!.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
-                        android.util.Log.i("MainActivity", "🎬 Startup direct video player route: video_player/$encodedPath")
-                        "video_player/$encodedPath"
-                    } else if (!isLanguageSelectionDone) {
-                        "language_selection"
-                    } else if (!isOnboardingCompleted) {
-                        "onboarding"
+                    if (startDestination == null) {
+                        // Themed placeholder frame while startup preferences resolve.
+                        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize())
                     } else {
-                        "browser"
-                    }
-
+                    val destination = checkNotNull(startDestination)
                     NavHost(
                         navController = navController,
-                        startDestination = startDestination
+                        startDestination = destination
                     ) {
                         // Language Selection Screen (first launch)
                         composable("language_selection") {
@@ -338,7 +343,7 @@ class MainActivity : FragmentActivity() {
                                 viewModel = browserViewModel,
                                 context = context,
                                 onFinish = {
-                                    val nextRoute = if (!isOnboardingCompleted) "onboarding" else "browser"
+                                    val nextRoute = if (!onboardingCompleted) "onboarding" else "browser"
                                     navController.navigate(nextRoute) {
                                         popUpTo("language_selection") { inclusive = true }
                                     }
@@ -672,6 +677,7 @@ class MainActivity : FragmentActivity() {
                                 }
                             )
                         }
+                    }
                     }
 
                     // Listen for external links opening while browser is default app,
