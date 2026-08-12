@@ -336,27 +336,179 @@ class BookmarkCollection(
          * (legacy JSON, parsed bookmark HTML) via [replaceAll].
          */
         fun validate(newBookmarks: List<OmniBookmark>, newFolders: List<OmniBookmarkFolder>): List<BookmarkValidationIssue> {
-            val knownFolders = newFolders.map { it.id }.toSet()
             val issues = mutableListOf<BookmarkValidationIssue>()
+            val allIds = mutableSetOf<String>()
+            val knownFolders = newFolders.map { it.id }.toMutableSet()
 
-            fun checkEntry(id: String, parentId: String, position: Long, label: String) {
-                if (parentId != ROOT_FOLDER_ID && parentId !in knownFolders) {
-                    issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.UNKNOWN_PARENT, "$label references missing parent $parentId")
+            // ── ID validation (bookmarks) ──────────────────────────────────
+            newBookmarks.forEach { b ->
+                if (b.id.isBlank()) {
+                    issues += BookmarkValidationIssue(b.id, BookmarkValidationIssue.Kind.EMPTY_ID, "bookmark has empty id")
+                    return@forEach
                 }
-                if (position < 0) {
-                    issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.NEGATIVE_POSITION, "$label has negative position $position")
+                if (b.id == ROOT_FOLDER_ID) {
+                    issues += BookmarkValidationIssue(b.id, BookmarkValidationIssue.Kind.RESERVED_ROOT_ID, "bookmark uses reserved root id")
+                }
+                if (!allIds.add(b.id)) {
+                    issues += BookmarkValidationIssue(b.id, BookmarkValidationIssue.Kind.DUPLICATE_ID, "duplicate id $b.id across bookmarks and folders")
                 }
             }
-            newBookmarks.forEach { checkEntry(it.id, it.parentId, it.position, "bookmark") }
-            newFolders.forEach { checkEntry(it.id, it.parentId, it.position, "folder") }
 
-            // Duplicate siblings are only a problem when two items share both parent AND position.
-            val seen = mutableMapOf<Pair<String, Long>, String>()
-            (newBookmarks.map { Triple(it.id, it.parentId, it.position) } +
-                newFolders.map { Triple(it.id, it.parentId, it.position) }).forEach { (id, parent, pos) ->
-                val previous = seen.put(parent to pos, id)
-                if (previous != null) {
-                    issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.DUPLICATE_POSITION, "items $previous and $id share parent $parent position $pos")
+            // ── ID validation (folders) ────────────────────────────────────
+            newFolders.forEach { f ->
+                if (f.id.isBlank()) {
+                    issues += BookmarkValidationIssue(f.id, BookmarkValidationIssue.Kind.EMPTY_ID, "folder has empty id")
+                    return@forEach
+                }
+                if (f.id == ROOT_FOLDER_ID) {
+                    issues += BookmarkValidationIssue(f.id, BookmarkValidationIssue.Kind.RESERVED_ROOT_ID, "folder uses reserved root id")
+                }
+                if (!allIds.add(f.id)) {
+                    issues += BookmarkValidationIssue(f.id, BookmarkValidationIssue.Kind.DUPLICATE_ID, "duplicate id ${f.id} across bookmarks and folders")
+                }
+            }
+
+            // ── Parent/type/position/timestamp validation (bookmarks) ─────
+            newBookmarks.forEach { b ->
+                validateParent(b.id, b.parentId, "bookmark", b, issues, knownFolders)
+                if (b.position < 0) {
+                    issues += BookmarkValidationIssue(b.id, BookmarkValidationIssue.Kind.NEGATIVE_POSITION, "bookmark has negative position ${b.position}")
+                }
+                validateTimestamps(b.id, b.createdAt, b.modifiedAt, "bookmark", issues)
+            }
+
+            // ── Parent/type/position/timestamp validation (folders) ───────
+            newFolders.forEach { f ->
+                validateParent(f.id, f.parentId, "folder", f, issues, knownFolders)
+                if (f.position < 0) {
+                    issues += BookmarkValidationIssue(f.id, BookmarkValidationIssue.Kind.NEGATIVE_POSITION, "folder has negative position ${f.position}")
+                }
+                validateTimestamps(f.id, f.createdAt, f.modifiedAt, "folder", issues)
+            }
+
+            // ── Position density (fatal) ───────────────────────────────────
+            issues += computePositionDensityIssues(newBookmarks, newFolders)
+
+            // ── Cycle detection (fatal) ────────────────────────────────────
+            issues += computeCycleIssues(newFolders)
+
+            return issues
+        }
+
+        private fun validateParent(
+            id: String, parentId: String, label: String,
+            entity: Any, issues: MutableList<BookmarkValidationIssue>, knownFolders: Set<String>
+        ) {
+            if (parentId == id) {
+                issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.SELF_PARENT, "$label is its own parent")
+                return
+            }
+            if (parentId != ROOT_FOLDER_ID && parentId !in knownFolders) {
+                issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.UNKNOWN_PARENT, "$label references missing parent $parentId")
+            }
+            // Bookmarks must not be parented to a bookmark.
+            if (label == "bookmark" && entity is OmniBookmark && entity.parentId != ROOT_FOLDER_ID && entity.parentId !in knownFolders) {
+                // Already caught as UNKNOWN_PARENT; no extra issue needed.
+            }
+        }
+
+        private fun validateTimestamps(
+            id: String, createdAt: Long, modifiedAt: Long,
+            label: String, issues: MutableList<BookmarkValidationIssue>
+        ) {
+            // Future upper bound: year 2100
+            val maxTs = 4_102_444_800_000L
+            if (createdAt < 0 || createdAt > maxTs) {
+                issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.TIMESTAMP_OUT_OF_RANGE, "$label createdAt $createdAt out of sensible range")
+            }
+            if (modifiedAt < 0 || modifiedAt > maxTs) {
+                issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.TIMESTAMP_OUT_OF_RANGE, "$label modifiedAt $modifiedAt out of sensible range")
+            }
+            if (createdAt > modifiedAt) {
+                issues += BookmarkValidationIssue(id, BookmarkValidationIssue.Kind.TIMESTAMP_REVERSED, "$label createdAt $createdAt > modifiedAt $modifiedAt")
+            }
+        }
+
+        private fun computePositionDensityIssues(
+            newBookmarks: List<OmniBookmark>,
+            newFolders: List<OmniBookmarkFolder>
+        ): List<BookmarkValidationIssue> {
+            val issues = mutableListOf<BookmarkValidationIssue>()
+            val itemsByParent = mutableMapOf<String, MutableSet<Long>>()
+
+            fun record(parent: String, pos: Long) {
+                itemsByParent.getOrPut(parent) { mutableSetOf() }.add(pos)
+            }
+            newBookmarks.forEach { record(it.parentId, it.position) }
+            newFolders.forEach { record(it.parentId, it.position) }
+
+            itemsByParent.forEach { (parent, positions) ->
+                if (positions.isEmpty()) return@forEach
+                val sorted = positions.sorted()
+                val childCount = newBookmarks.count { it.parentId == parent } +
+                    newFolders.count { it.parentId == parent }
+
+                // Must start at 0.
+                if (sorted.first() != 0L) {
+                    issues += BookmarkValidationIssue(
+                        parent,
+                        BookmarkValidationIssue.Kind.NON_DENSE_POSITION,
+                        "parent $parent positions do not start at 0 (first=${sorted.first()})"
+                    )
+                } else {
+                    // Must be dense: every value 0..max must exist.
+                    val expected = (0L until sorted.size.toLong()).toSet()
+                    if (sorted.toSet() != expected) {
+                        issues += BookmarkValidationIssue(
+                            parent,
+                            BookmarkValidationIssue.Kind.NON_DENSE_POSITION,
+                            "parent $parent positions are not dense 0..${sorted.size - 1} (actual=$sorted)"
+                        )
+                    }
+                }
+                // Duplicate detection: size mismatch means duplicates.
+                if (sorted.size != childCount) {
+                    issues += BookmarkValidationIssue(
+                        parent,
+                        BookmarkValidationIssue.Kind.DUPLICATE_POSITION,
+                        "parent $parent has duplicate positions ($childCount children, ${sorted.size} unique positions)"
+                    )
+                }
+            }
+            return issues
+        }
+
+        private fun computeCycleIssues(newFolders: List<OmniBookmarkFolder>): List<BookmarkValidationIssue> {
+            val issues = mutableListOf<BookmarkValidationIssue>()
+            val parentOf = newFolders.associate { it.id to it.parentId }
+            val knownIds = newFolders.map { it.id }.toSet()
+
+            for (folder in newFolders) {
+                if (folder.parentId == ROOT_FOLDER_ID) continue
+                if (folder.parentId == folder.id) continue // already SELF_PARENT
+                if (folder.parentId !in knownIds) continue // already UNKNOWN_PARENT
+
+                // Walk ancestors.
+                val visited = mutableSetOf<String>()
+                var current = folder.parentId
+                while (current != ROOT_FOLDER_ID && current in knownIds) {
+                    if (!visited.add(current)) {
+                        issues += BookmarkValidationIssue(
+                            folder.id,
+                            BookmarkValidationIssue.Kind.PARENT_CYCLE,
+                            "folder ${folder.id} is part of a parent cycle involving ancestor $current"
+                        )
+                        break
+                    }
+                    current = parentOf[current] ?: break
+                    if (current == folder.id) {
+                        issues += BookmarkValidationIssue(
+                            folder.id,
+                            BookmarkValidationIssue.Kind.PARENT_CYCLE,
+                            "folder ${folder.id} is its own ancestor (cycle)"
+                        )
+                        break
+                    }
                 }
             }
             return issues
@@ -370,5 +522,17 @@ data class BookmarkValidationIssue(
     val kind: Kind,
     val message: String
 ) {
-    enum class Kind { UNKNOWN_PARENT, NEGATIVE_POSITION, DUPLICATE_POSITION }
+    enum class Kind {
+        EMPTY_ID,
+        DUPLICATE_ID,
+        RESERVED_ROOT_ID,
+        UNKNOWN_PARENT,
+        SELF_PARENT,
+        PARENT_CYCLE,
+        NEGATIVE_POSITION,
+        DUPLICATE_POSITION,
+        NON_DENSE_POSITION,
+        TIMESTAMP_OUT_OF_RANGE,
+        TIMESTAMP_REVERSED
+    }
 }
