@@ -119,6 +119,33 @@
     <string name="bookmarks_search_placeholder">Search bookmarks</string>
     <string name="bookmarks_empty">No bookmarks found</string>
     <string name="bookmarks_clear_confirm">Are you sure you want to clear all bookmarks?</string>
+
+    <!-- Import / Export -->
+    <string name="import_preview_title">Import Preview</string>
+    <string name="import_bookmarks_label">Bookmarks</string>
+    <string name="import_folders_label">Folders</string>
+    <string name="import_duplicates_label">Duplicates</string>
+    <string name="import_tree_preview">Preview</string>
+    <string name="import_duplicate_policy">Duplicate policy</string>
+    <string name="import_confirm">Import</string>
+    <string name="import_cancel">Cancel</string>
+    <string name="import_fatal_issues">This file has structural issues and cannot be imported.</string>
+    <string name="import_warnings_present">Some entries were skipped or modified during parsing.</string>
+    <string name="import_warnings_count">%d warnings</string>
+    <string name="import_issues_count">%d issues</string>
+    <string name="policy_keep_both">Keep both</string>
+    <string name="policy_keep_both_desc">Add duplicates alongside existing bookmarks</string>
+    <string name="policy_skip">Skip</string>
+    <string name="policy_skip_desc">Ignore bookmarks with duplicate URLs</string>
+    <string name="policy_replace">Replace</string>
+    <string name="policy_replace_desc">Overwrite existing with imported version</string>
+    <string name="policy_merge">Merge</string>
+    <string name="policy_merge_desc">Update titles only, keep existing URLs</string>
+    <string name="import_success_toast">Imported %1$d bookmarks and %2$d folders</string>
+    <string name="import_error_toast">Import failed: %1$s</string>
+    <string name="bookmarks_import">Import</string>
+    <string name="bookmarks_export">Export</string>
+
     <string name="history_title">History</string>
     <string name="history_clear_all">Clear all</string>
     <string name="history_search_placeholder">Search history</string>

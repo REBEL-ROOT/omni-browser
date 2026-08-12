@@ -6457,8 +6457,9 @@ class BrowserViewModel : ViewModel() {
 
     val bookmarksList = mutableStateListOf<BookmarkEntry>()
 
-    
-
+    // ── Bookmark Import State (Phase 05) ───────────────────────────────────
+    var importPreview by mutableStateOf<com.rebelroot.omni.bookmarks.importexport.ImportPreviewState?>(null)
+    var isImporting by mutableStateOf(false)
 
     val shortcutsList = mutableStateListOf<HomeShortcut>()
     

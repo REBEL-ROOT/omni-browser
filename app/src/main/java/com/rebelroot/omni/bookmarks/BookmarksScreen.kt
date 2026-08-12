@@ -18,7 +18,11 @@
 
 package com.rebelroot.omni.bookmarks
 
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,10 +42,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rebelroot.omni.R
+import com.rebelroot.omni.bookmarks.importexport.prepareImportPreview
 import com.rebelroot.omni.browser.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,8 +57,34 @@ import com.rebelroot.omni.browser.*
 fun BookmarksScreen(
     viewModel: BrowserViewModel,
     onNavigateBack: () -> Unit,
-    onOpenUrl: (String) -> Unit
+    onOpenUrl: (String) -> Unit,
+    onOpenImportPreview: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    // File picker for importing bookmarks (Netscape HTML)
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.prepareImportPreview(
+                context = context,
+                uri = uri,
+                onResult = { result ->
+                    result.onSuccess {
+                        onOpenImportPreview()
+                    }.onFailure { e ->
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.import_error_toast, e.message ?: "Unknown error"),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            )
+        }
+    }
+
     BackHandler {
         onNavigateBack()
     }
@@ -79,7 +113,7 @@ fun BookmarksScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.bookmarks_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -90,11 +124,19 @@ fun BookmarksScreen(
                     }
                 },
                 actions = {
+                    // Import button
+                    IconButton(onClick = { importLauncher.launch("text/html") }) {
+                        Icon(
+                            imageVector = Icons.Rounded.FileUpload,
+                            contentDescription = stringResource(id = R.string.bookmarks_import),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     if (viewModel.bookmarksList.isNotEmpty()) {
                         TextButton(onClick = {
                             viewModel.clearAllBookmarks()
                         }) {
-                            Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_clear_all), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(stringResource(id = R.string.bookmarks_clear_all), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 },
@@ -179,7 +221,7 @@ fun BookmarksScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                placeholder = { Text(androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_search_placeholder), color = textSecondaryColor) },
+                placeholder = { Text(stringResource(id = R.string.bookmarks_search_placeholder), color = textSecondaryColor) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.Search,
@@ -207,7 +249,7 @@ fun BookmarksScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = androidx.compose.ui.res.stringResource(id = com.rebelroot.omni.R.string.bookmarks_empty),
+                        text = stringResource(id = R.string.bookmarks_empty),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = textSecondaryColor

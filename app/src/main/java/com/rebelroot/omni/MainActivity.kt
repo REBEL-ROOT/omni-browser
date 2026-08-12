@@ -669,6 +669,30 @@ class MainActivity : FragmentActivity() {
                                             popUpTo("browser") { inclusive = true }
                                         }
                                     }
+                                },
+                                onOpenImportPreview = {
+                                    navController.navigate("import_preview")
+                                }
+                            )
+                        }
+
+                        // Bookmark Import Preview Screen
+                        composable("import_preview") {
+                            com.rebelroot.omni.bookmarks.ImportPreviewScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onImportComplete = { result ->
+                                    val message = if (result.success) {
+                                        "Imported ${result.addedBookmarks} bookmarks and ${result.addedFolders} folders"
+                                    } else {
+                                        "Import failed: ${result.errorMessage ?: "Unknown error"}"
+                                    }
+                                    android.widget.Toast.makeText(
+                                        this@MainActivity,
+                                        message,
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                    navController.popBackStack("bookmarks", inclusive = false)
                                 }
                             )
                         }
