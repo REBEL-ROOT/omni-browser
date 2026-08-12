@@ -65,7 +65,7 @@
 
 **Omni Browser** is a state-of-the-art mobile web browser built by **RebelRoot** — an independent development collective focused on privacy, performance, and open-source freedom.
 
-Powered by **Mozilla GeckoView** (the same engine behind Firefox), Omni delivers desktop-grade browsing, native Firefox WebExtension support, hardware-decoded media playback, and a fully offline AI toolkit — all wrapped in a premium OLED-dark Jetpack Compose interface.
+Powered by **Mozilla GeckoView** (the same engine behind Firefox), Omni delivers desktop-grade browsing, native Firefox WebExtension support, hardware-decoded media playback, and a built-in tools suite (QR tools, translator, developer console, PDF export) — all wrapped in a premium OLED-dark Jetpack Compose interface.
 
 ---
 
@@ -82,7 +82,7 @@ Powered by **Mozilla GeckoView** (the same engine behind Firefox), Omni delivers
 ### 🛡️ Privacy & Security
 | Feature | Details |
 |---|---|
-| **Built-in Ad Blocker** | Pre-bundled uBlock Origin blocks ads, trackers & telemetry across 70+ networks |
+| **Built-in Ad Blocker** | Host-based ad, tracker & telemetry blocker with configurable filter lists (EasyList, uAssets, StevenBlack & more) |
 | **Incognito Mode** | Fully isolated private session — no history, cookies, or cache saved |
 | **Extensions in Incognito** | All extensions work inside private tabs |
 | **Burn Data** | One-tap wipe of all history, cache, cookies, and session data |
@@ -91,7 +91,7 @@ Powered by **Mozilla GeckoView** (the same engine behind Firefox), Omni delivers
 ### 🔌 Extensions
 | Extension | Details |
 |---|---|
-| **uBlock Origin** | Efficient wide-spectrum content blocker — easy on CPU and memory |
+| **uBlock Origin** | Installable from AMO — efficient wide-spectrum content blocker, easy on CPU and memory |
 | **Universal Text Copy** | Bypass website restrictions to force-enable text selection & copying |
 | **Aggressive Media Grabber** | Sniff and capture HLS/DASH streams and dynamic segments |
 | **AI Blocker** | Block AI Overview summaries and assistant panels on search engines |
@@ -101,7 +101,7 @@ Powered by **Mozilla GeckoView** (the same engine behind Firefox), Omni delivers
 | Tool | Details |
 |---|---|
 | **QR Scanner** | Scan QR codes and barcodes via camera |
-| **Translator** | 100% on-device offline translation via Google ML Kit |
+| **Translator** | Online translation via the Google Translate endpoint |
 | **Edit Page** | Inject custom JS/CSS to modify any web page live |
 | **Save PDF** | Export any page as a PDF document |
 | **Pin Web App** | Add any website to the home screen as a PWA-style shortcut |
@@ -158,7 +158,6 @@ graph TD
     end
 
     subgraph Ext["Built-in Extensions"]
-        UB[uBlock Origin]
         MG[Aggressive Media Grabber]
         UC[Universal Copy]
         AIB[AI Blocker]
@@ -166,7 +165,7 @@ graph TD
 
     subgraph Svc["Services"]
         DL[Download Engine]
-        TL[ML Translator]
+        TL[Translator (online)]
         VPN[WireGuard VPN]
         VAULT[Biometric Vault]
         PDF[PDF Export]
@@ -179,7 +178,7 @@ graph TD
     GR --> GS
     GS --> GV
     GR --> WEC
-    WEC --> UB & MG & UC & AIB
+    WEC --> MG & UC & AIB
     GS -->|Delegates| BVM
     BVM --> DL & TL & VPN & VAULT & PDF
 ```
@@ -262,12 +261,12 @@ Download the latest signed APK from our [**Releases Page**](https://github.com/R
 - [x] Multi-tab browsing with GeckoView
 - [x] Incognito / Private mode with full isolation
 - [x] Firefox WebExtension support (.xpi)
-- [x] Built-in ad & tracker blocker (70+ networks)
+- [x] Built-in host-based ad & tracker blocker (configurable filter lists)
 - [x] Extensions working inside Incognito mode
-- [x] uBlock Origin, Universal Copy, AI Blocker, Media Grabber
+- [x] Universal Copy, AI Blocker, Media Grabber + installable uBlock Origin (AMO)
 - [x] Media stream sniffer + Omni ExoPlayer
 - [x] Biometric AES vault for private files
-- [x] Offline ML translator (Google ML Kit)
+- [x] Online translator (Google Translate endpoint)
 - [x] QR Scanner, Generator & Page Scan
 - [x] WireGuard VPN integration
 - [x] Interactive JS developer console REPL

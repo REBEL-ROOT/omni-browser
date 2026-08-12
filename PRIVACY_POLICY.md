@@ -14,7 +14,7 @@ This document details the Privacy Policy and Data Security configurations for Om
 ### 1.1 Data Collection & Transmission
 - **Zero Remote Storage:** RebelRoot does not host any backend databases, account servers, or analytics pipelines for Omni Browser. All browsing history, bookmarks, open tabs, cookies, and locker files remain entirely on your local device.
 - **No Telemetry / Analytics:** All analytics and diagnostic telemetry inside secondary components have been deactivated:
-  - **Google ML Kit Telemetry Opt-Out:** Omni Browser opts out of ML Kit telemetry tracking. No translation strings, scanner logs, or device details are sent to Google.
+  - **No Google ML Kit:** Omni Browser does not bundle Google ML Kit. Translation runs online via the Google Translate endpoint; no translation strings or scanner logs are stored by Omni.
   - **No Third-Party SDKs:** The app contains no advertisement SDKs, crash reporters (like Firebase Crashlytics), or telemetry tracking code.
 
 ### 1.2 Permissions & Usage Disclosure

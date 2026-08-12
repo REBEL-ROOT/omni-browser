@@ -11,7 +11,8 @@ Description: |-
   with Jetpack Compose and the Mozilla GeckoView engine.
 
   Features:
-  * Built-in ad, tracker and popup blocker (180+ domains, no Google dependencies)
+  * Built-in host-based ad, tracker and popup blocker (configurable filter lists)
+  * No Google SDKs are bundled; a few optional services call Google-hosted endpoints (favicons, translation, DoH)
   * Popup & ad-tab blocker — stops auto-jumping ad tabs and pop-under networks
   * Universal Text Copy to force-enable text selection on restricted pages
   * QR Code decoder and generator using 100% open-source ZXing libraries
