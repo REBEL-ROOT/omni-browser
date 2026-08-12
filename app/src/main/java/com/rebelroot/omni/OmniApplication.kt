@@ -19,7 +19,9 @@
 package com.rebelroot.omni
 
 import android.app.Application
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.rebelroot.omni.browser.dataStore
@@ -34,6 +36,16 @@ import kotlinx.coroutines.runBlocking
 class OmniApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Reads the startup preference snapshot, falling back to empty preferences
+     * on any read error. Callers own the lifecycle decision (synchronous theme
+     * pre-load vs. async updates); this helper only covers retrieval/parsing.
+     */
+    private suspend fun readStartupPrefs(): Preferences =
+        dataStore.data
+            .catch { emit(emptyPreferences()) }
+            .first()
 
     override fun onCreate() {
         super.onCreate()
@@ -53,9 +65,7 @@ class OmniApplication : Application() {
         // cheaper than the layout jump / wallpaper pop-in it prevents.
         runBlocking {
             try {
-                val prefs = dataStore.data
-                    .catch { emit(androidx.datastore.preferences.core.emptyPreferences()) }
-                    .first()
+                val prefs = readStartupPrefs()
                 UiStateHolder.uiScale            = prefs[UI_SCALE_KEY]            ?: 1.0f
                 UiStateHolder.homeUiScale        = prefs[HOME_UI_SCALE_KEY]       ?: 0.90f
                 UiStateHolder.bottomNavScale     = prefs[BOTTOM_NAV_SCALE_KEY]    ?: 1.0f
@@ -78,9 +88,7 @@ class OmniApplication : Application() {
         // the previous runBlocking values and indistinguishable to the user.
         appScope.launch {
             try {
-                val prefs = dataStore.data
-                    .catch { emit(androidx.datastore.preferences.core.emptyPreferences()) }
-                    .first()
+                val prefs = readStartupPrefs()
                 ThemeStateHolder.darkThemeEnabled  = prefs[DARK_THEME_ENABLED_KEY] ?: true
                 ThemeStateHolder.amoledMode        = prefs[AMOLED_MODE_KEY]        ?: false
                 ThemeStateHolder.accentTheme       = prefs[ACCENT_THEME_KEY]       ?: "Ocean Blue"
