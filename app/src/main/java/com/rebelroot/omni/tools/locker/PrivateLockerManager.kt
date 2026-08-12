@@ -34,12 +34,15 @@ class PrivateLockerManager(private val context: Context) {
 
     companion object {
         private const val TAG = "PrivateLockerManager"
-        private val DB_PASSPHRASE = "omni_secure_database_passphrase_bytes".toByteArray()
     }
 
     private val masterKey = MasterKey.Builder(context.applicationContext)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
+
+    // Provides the SQLCipher index-database key (random 256-bit, Keystore-
+    // protected; one-time legacy migration handled internally).
+    private val dbKeyManager = LockerDbKeyManager(context.applicationContext)
 
     private val lockerDir = File(context.filesDir, "locker").apply {
         if (!exists()) {
@@ -56,7 +59,7 @@ class PrivateLockerManager(private val context: Context) {
     // Encrypted SQLCipher Room Database instance
     private val database: LockerDatabase by lazy {
         System.loadLibrary("sqlcipher")
-        val supportFactory = SupportOpenHelperFactory(DB_PASSPHRASE)
+        val supportFactory = SupportOpenHelperFactory(dbKeyManager.getOrCreateDatabaseKey())
         Room.databaseBuilder(
             context.applicationContext,
             LockerDatabase::class.java,
