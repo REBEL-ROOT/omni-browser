@@ -349,6 +349,10 @@ class BrowserViewModel : ViewModel() {
     var navigateToVisualBlockSettingsTrigger by mutableStateOf(false)
     var navigateToUserAgentSettingsTrigger by mutableStateOf(false)
     val translationManager = com.rebelroot.omni.tools.TranslationManager()
+    /** Bridge for offline/hybrid page translation (content script <-> coordinator). */
+    internal val omniTranslateBridge = com.rebelroot.omni.ai.web.OmniTranslateBridge(translationManager.translationCoordinator)
+    /** Active per-tab page-translation controllers. */
+    internal val pageTranslationControllers = mutableMapOf<String, com.rebelroot.omni.ai.web.WebTranslationController>()
     internal var copyManager: UniversalCopyManager? = null
     internal var aiBlockerManager: BuiltInExtensionManager? = null
     internal var forceDarkManager: BuiltInExtensionManager? = null
@@ -1251,6 +1255,19 @@ class BrowserViewModel : ViewModel() {
         val mimeTypes: Array<String>?
     )
     var pendingFilePrompt by mutableStateOf<PendingFilePrompt?>(null)
+
+    // External extension install: GeckoView has NO native install-prompt UI — the
+    // delegate IS the prompt. We hold the GeckoResult here until the user answers
+    // the in-app permission dialog; returning null from onInstallPromptRequest
+    // would abort the installation.
+    data class PendingExtensionInstallPrompt(
+        val extensionId: String?,
+        val extensionName: String?,
+        val permissions: List<String>,
+        val origins: List<String>,
+        val geckoResult: GeckoResult<WebExtension.PermissionPromptResponse>
+    )
+    var pendingExtensionInstallPrompt by mutableStateOf<PendingExtensionInstallPrompt?>(null)
 
     // <select> Dropdown Choice: holds the pending ChoicePrompt so the Compose UI
     // can present a native AlertDialog with radio-list of choices for the user to
@@ -2252,6 +2269,9 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun closeTab(tabId: String, context: Context) {
+        // Stop any in-flight page translation for this tab so it never mutates
+        // a different tab (late-result isolation).
+        stopPageTranslation(tabId)
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
         val tabToClose = tabs[tabIndex]
@@ -2410,6 +2430,8 @@ class BrowserViewModel : ViewModel() {
     fun burnAllData(context: Context) {
         // 0. Cancel any pending prompts so their GeckoResult is not left hanging.
         cancelAllPendingPrompts()
+        // 0b. Stop and restore any active page translations (all tabs).
+        stopAllPageTranslations()
 
         // 1. Wipe history list and its persisted JSON file
         historyList.clear()
@@ -2817,8 +2839,20 @@ class BrowserViewModel : ViewModel() {
                             )
                         )
                     }
-                    Log.w(TAG, "🛡️ Extension install prompt NOT auto-approved for external extension: ${extension.id}. Showing native prompt.")
-                    return null // Let GeckoView show native prompt
+                    Log.w(TAG, "🔔 Install prompt for external extension ${extension.id}: ${permissions.toList()}. Showing in-app dialog.")
+                    // GeckoView has no native prompt UI: returning null here would
+                    // abort the installation. Instead, surface the request through
+                    // [pendingExtensionInstallPrompt] so the UI can ask the user and
+                    // complete the result with their choice.
+                    val result = org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.WebExtension.PermissionPromptResponse>()
+                    pendingExtensionInstallPrompt = PendingExtensionInstallPrompt(
+                        extensionId = extension.id,
+                        extensionName = extension.metaData?.name,
+                        permissions = permissions.toList(),
+                        origins = origins.toList(),
+                        geckoResult = result
+                    )
+                    return result
                 }
 
                 override fun onOptionalPrompt(
@@ -3177,6 +3211,8 @@ class BrowserViewModel : ViewModel() {
             mediaInterceptor.minDurationSeconds = minDur
             neverSavePasswordDomains = context.dataStore.data.map { it[NEVER_SAVE_PASSWORD_DOMAINS_KEY] ?: emptySet() }.first()
             installGrabberExtension(runtime)
+            // On-device page translation bridge (content script <-> coordinator).
+            installOmniTranslateExtension(runtime)
 
             // Always-on: routes traffic through the active Tor / SOCKS proxy via
             // the WebExtension `proxy` API. No user toggle.
@@ -6179,13 +6215,34 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    /** Complete the in-flight extension install prompt with the user's choice. */
+    fun respondToInstallPrompt(allow: Boolean) {
+        val pending = pendingExtensionInstallPrompt ?: return
+        pendingExtensionInstallPrompt = null
+        runCatching {
+            pending.geckoResult.complete(
+                org.mozilla.geckoview.WebExtension.PermissionPromptResponse(
+                    allow, // isPermissionsGranted
+                    allow, // isPrivateModeGranted
+                    false  // isTechnicalAndInteractionDataGranted
+                )
+            )
+        }
+    }
+
     fun syncUserExtensions() {
         val runtime = geckoRuntime ?: return
         runtime.webExtensionController.list()
             .accept(
                 { list ->
-                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app", PROXY_ROUTER_ID, FORCE_DARK_EXTENSION_ID)
-                    val filtered = list?.filter { it.id !in coreIds } ?: emptyList()
+                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app", PROXY_ROUTER_ID, FORCE_DARK_EXTENSION_ID, "omni-translate@omnibrowser.app")
+                    // Skip null-id extensions (e.g. a built-in installed before its
+                    // manifest declared applications.gecko.id): they cannot be
+                    // enabled/disabled and would crash the UI which keys on ext.id.
+                    val filtered = list?.filter { ext ->
+                        val id = ext.id
+                        id != null && id !in coreIds
+                    } ?: emptyList()
                     val leftoverAgent = list?.find { it.id == "omni-agent@omnibrowser.app" }
                     if (leftoverAgent != null) {
                         Log.i(TAG, "Leftover Omni Agent extension found in profile database. Uninstalling...")

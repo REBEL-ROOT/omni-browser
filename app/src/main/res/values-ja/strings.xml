@@ -707,6 +707,8 @@
     <string name="ext_builtin_universal_copy_desc">Webサイトの制限を回避して、テキスト選択とコピーを強制的に有効化します。</string>
     <string name="ext_builtin_media_sniffer">メディアスニファー</string>
     <string name="ext_builtin_media_sniffer_desc">オフラインで動的なHLS/DASHセグメントとストリームを検出・キャプチャします。</string>
+    <string name="ext_builtin_omni_translate">Omni Translate</string>
+    <string name="ext_builtin_omni_translate_desc">端末上でのウェブページ翻訳</string>
     <string name="ext_builtin_ai_blocker">AIブロッカー</string>
     <string name="ext_builtin_ai_blocker_desc">検索エンジン上のAI概要サマリーとアシスタントパネルをブロックします。</string>
     <string name="customize_home_title">ホーム画面をカスタマイズ</string>
@@ -886,6 +888,8 @@
     <string name="translator_page_desc">Google翻訳プロキシでアクティブなページ全体を翻訳します。</string>
     <string name="translator_target_lang">翻訳先言語:</string>
     <string name="translator_translate_page">ページ全体を翻訳</string>
+    <string name="translator_translate_device">端末で翻訳</string>
+    <string name="translator_show_original">原文を表示</string>
     <string name="translator_open_page">サイト全体翻訳を有効にするにはページを開いてください。</string>
     <string name="translator_text_title">テキストを翻訳</string>
     <string name="translator_downloading">オフラインモデルをダウンロード中...</string>

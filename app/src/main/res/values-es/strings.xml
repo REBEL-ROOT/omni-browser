@@ -708,6 +708,8 @@
     <string name="ext_builtin_universal_copy_desc">Omite las restricciones del sitio web para forzar la selección y copia de texto.</string>
     <string name="ext_builtin_media_sniffer">Rastreador de medios</string>
     <string name="ext_builtin_media_sniffer_desc">Detecta y captura segmentos HLS/DASH dinámicos y transmisiones sin conexión.</string>
+    <string name="ext_builtin_omni_translate">Omni Translate</string>
+    <string name="ext_builtin_omni_translate_desc">Traducción de páginas web en el dispositivo</string>
     <string name="ext_builtin_ai_blocker">Bloqueador de IA</string>
     <string name="ext_builtin_ai_blocker_desc">Bloquea resúmenes de vistas generales de IA y paneles de asistentes en motores de búsqueda.</string>
 
@@ -891,6 +893,8 @@
     <string name="translator_page_desc">Traduce toda la página activa mediante el proxy de traducción de Google.</string>
     <string name="translator_target_lang">Idioma de destino:</string>
     <string name="translator_translate_page">Traducir página completa</string>
+    <string name="translator_translate_device">Traducir en el dispositivo</string>
+    <string name="translator_show_original">Mostrar original</string>
     <string name="translator_open_page">Abre cualquier página para activar la traducción del sitio.</string>
     <string name="translator_text_title">Traducir texto personalizado</string>
     <string name="translator_downloading">Descargando modelo sin conexión...</string>

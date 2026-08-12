@@ -707,6 +707,8 @@
     <string name="ext_builtin_universal_copy_desc">تجاوز قيود الموقع لتمكين تحديد النص والنسخ بالقوة.</string>
     <string name="ext_builtin_media_sniffer">كاشف الوسائط</string>
     <string name="ext_builtin_media_sniffer_desc">الشم والتقاط شرائح HLS/DASH الديناميكية وجداول البث بدون اتصال.</string>
+    <string name="ext_builtin_omni_translate">Omni Translate</string>
+    <string name="ext_builtin_omni_translate_desc">الترجمة على الجهاز لصفحات الويب</string>
     <string name="ext_builtin_ai_blocker">حاجب الذكاء الاصطناعي</string>
     <string name="ext_builtin_ai_blocker_desc">حظر ملخصات نظرة عامة الذكاء الاصطناعي وألواح المساعد في محركات البحث.</string>
     <string name="customize_home_title">تخصيص الشاشة الرئيسية</string>
@@ -886,6 +888,8 @@
     <string name="translator_page_desc">ترجمة صفحة الويب النشطة بالكامل عبر وكيل ترجمة Google.</string>
     <string name="translator_target_lang">اللغة الهدف:</string>
     <string name="translator_translate_page">ترجمة الصفحة بالكامل</string>
+    <string name="translator_translate_device">ترجمة على الجهاز</string>
+    <string name="translator_show_original">إظهار النص الأصلي</string>
     <string name="translator_open_page">افتح أي صفحة ويب لتمكين ترجمة الموقع بالكامل.</string>
     <string name="translator_text_title">ترجمة نص مخصص</string>
     <string name="translator_downloading">جارٍ تنزيل النموذج دون اتصال...</string>

@@ -19,15 +19,31 @@
 package com.rebelroot.omni.tools
 
 import android.util.Log
+import com.rebelroot.omni.ai.engine.LexiconTranslationEngine
+import com.rebelroot.omni.ai.engine.TranslationEngineManager
+import com.rebelroot.omni.ai.translation.OnlineTranslationProvider
+import com.rebelroot.omni.ai.translation.OfflineTranslationProvider
+import com.rebelroot.omni.ai.translation.TranslationCoordinator
+import com.rebelroot.omni.ai.translation.TranslationMode
+import com.rebelroot.omni.ai.translation.TranslationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
 
+/**
+ * Public translation facade used by the browser UI.
+ *
+ * This now delegates to the unified [TranslationCoordinator] which selects
+ * between the online backend ([OnlineTranslationProvider], the original Google
+ * "gtx" endpoint) and the offline backend ([OfflineTranslationProvider],
+ * driven by on-device engines via [TranslationEngineManager]).
+ *
+ * The default [TranslationMode.ASK] preserves the previous behaviour: it uses a
+ * local model when one is installed for the pair, otherwise falls back to the
+ * online service. Users can switch to [TranslationMode.OFFLINE_ONLY] in settings;
+ * in that mode no cloud request is ever made.
+ */
 class TranslationManager {
 
     sealed class TranslationStatus {
@@ -40,75 +56,68 @@ class TranslationManager {
     private val _status = MutableStateFlow<TranslationStatus>(TranslationStatus.Idle)
     val status: StateFlow<TranslationStatus> = _status
 
+    private val lexiconEngine = LexiconTranslationEngine()
+    private val engineManager = TranslationEngineManager.withDefaults(lexiconEngine)
+    private val onlineProvider = OnlineTranslationProvider()
+    private val offlineProvider = OfflineTranslationProvider(engineManager)
+
+    private val coordinator: TranslationCoordinator = TranslationCoordinator.default(
+        onlineProvider = onlineProvider,
+        offlineProvider = offlineProvider,
+        modeProvider = { translationMode }
+    )
+
+    /** The active translation policy. */
+    @Volatile var translationMode: TranslationMode = TranslationMode.ASK
+        private set
+
     private var sourceLang: String = "auto"
     private var targetLang: String = "en"
 
-    /**
-     * Initializes online translation. Since it's online, the API is immediately ready without downloading models.
-     */
+    /** Configure the language pair. Kept for backwards compatibility with the
+     *  existing translation dialog. Online translation is immediately ready. */
     fun setupLanguage(sourceLang: String, targetLang: String, onSuccess: () -> Unit) {
         this.sourceLang = sourceLang.lowercase()
         this.targetLang = targetLang.lowercase()
-        
-        Log.i("TranslationManager", "Configuring online translator: $sourceLang -> $targetLang")
+        Log.i(TAG, "Configuring translator: $sourceLang -> $targetLang (mode=$translationMode)")
         _status.value = TranslationStatus.Ready
         onSuccess()
     }
 
-    /**
-     * Translates custom text using Google's free gtx translation endpoint.
-     */
+    /** Translate arbitrary text using the active mode. Suspending; caller should
+     *  show progress and handle exceptions. */
     suspend fun translateText(text: String): String = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext ""
-        
-        try {
-            val encodedText = URLEncoder.encode(text, "UTF-8")
-            val urlString = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sourceLang&tl=$targetLang&dt=t&q=$encodedText"
-            
-            val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                parseTranslationResponse(responseText)
-            } else {
-                val errorText = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                Log.e("TranslationManager", "HTTP Error $responseCode: $errorText")
-                throw Exception("Translation API error ($responseCode)")
-            }
-        } catch (e: Exception) {
-            Log.e("TranslationManager", "Online translation failed", e)
-            throw e
-        }
+        coordinator.translate(text, sourceLang, targetLang).translatedText
     }
 
-    private fun parseTranslationResponse(response: String): String {
-        try {
-            val jsonArray = JSONArray(response)
-            val segments = jsonArray.optJSONArray(0) ?: return ""
-            val result = StringBuilder()
-            for (i in 0 until segments.length()) {
-                val segment = segments.optJSONArray(i)
-                if (segment != null) {
-                    val translatedText = segment.optString(0)
-                    if (translatedText != null && translatedText != "null") {
-                        result.append(translatedText)
-                    }
-                }
-            }
-            return result.toString()
-        } catch (e: Exception) {
-            Log.e("TranslationManager", "Failed to parse translation response JSON", e)
-            return ""
-        }
+    /** Rich translation using the active mode (returns provider + offline flag). */
+    suspend fun translate(text: String): TranslationResult =
+        coordinator.translate(text, sourceLang, targetLang)
+
+    /** Whether an offline engine can serve the currently configured pair. */
+    suspend fun isOfflineAvailable(): Boolean =
+        coordinator.canTranslateOffline(sourceLang, targetLang)
+
+    fun setMode(newMode: TranslationMode) {
+        translationMode = newMode
+        Log.i(TAG, "Translation mode set to $translationMode")
+    }
+
+    fun getMode(): TranslationMode = translationMode
+
+    /** Expose the underlying coordinator (used by the page-translation bridge). */
+    val translationCoordinator: TranslationCoordinator get() = coordinator
+
+    /** Release resident offline models (call when translation is no longer active). */
+    suspend fun releaseModels() {
+        runCatching { engineManager.releaseAll() }
     }
 
     fun close() {
         _status.value = TranslationStatus.Idle
+    }
+
+    companion object {
+        private const val TAG = "TranslationManager"
     }
 }

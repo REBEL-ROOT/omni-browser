@@ -3833,6 +3833,46 @@ fun BrowserScreen(
                                         ) {
                                             Text(stringResource(R.string.translator_translate_page), color = Color.White, fontWeight = FontWeight.Bold)
                                         }
+
+                                        // Omni on-device page translation (offline-aware).
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    val tab = activeTab
+                                                    if (tab != null) {
+                                                        val src = selectedSourceLang.second
+                                                        viewModel.translatePage(
+                                                            tabId = tab.id,
+                                                            session = tab.session,
+                                                            sourceLanguage = if (src.isBlank() || src == "auto") null else src,
+                                                            targetLanguage = selectedPageTargetLang.second,
+                                                            isPrivate = tab.isIncognito
+                                                        )
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(20.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    stringResource(R.string.translator_translate_device),
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                            OutlinedButton(
+                                                onClick = { activeTab?.let { viewModel.stopPageTranslation(it.id) } },
+                                                shape = RoundedCornerShape(20.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(stringResource(R.string.translator_show_original), fontSize = 13.sp)
+                                            }
+                                        }
                                     } else {
                                         Text(
                                             text = stringResource(R.string.translator_open_page),
@@ -5851,9 +5891,11 @@ fun BrowserScreen(
                         } catch (_: Exception) { /* ignore sync errors */ }
                     }
 
-                    // Take a stable snapshot to avoid ConcurrentModificationException
+                    // Take a stable snapshot to avoid ConcurrentModificationException.
+                    // Extensions without an id are unmanageable leftovers — hide them
+                    // so the UI (which keys on ext.id) can never crash on them.
                     val userExts = remember(viewModel.userExtensions.toList()) {
-                        viewModel.userExtensions.toList()
+                        viewModel.userExtensions.filter { it.id != null }.toList()
                     }
                     val isDarkExt = viewModel.isDarkThemeEnabled
                     val totalInstalled = userExts.size
@@ -6122,7 +6164,7 @@ fun BrowserScreen(
                                                             { showExtensionsSheet = false; viewModel.loadUrl(optionsUrl) }
                                                         } else null,
                                                         onPopupClick = run {
-                                                            val activeAction = viewModel.getActionForExtension(ext.id)
+                                                            val activeAction = ext.id?.let { viewModel.getActionForExtension(it) }
                                                             if (activeAction != null || !ext.metaData?.optionsPageUrl.isNullOrBlank()) {
                                                                 {
                                                                     showExtensionsSheet = false
@@ -6208,7 +6250,7 @@ fun BrowserScreen(
                                                     { showExtensionsSheet = false; viewModel.loadUrl(optionsUrl) }
                                                 } else null,
                                                 onPopupClick = run {
-                                                    val activeAction = viewModel.getActionForExtension(ext.id)
+                                                    val activeAction = ext.id?.let { viewModel.getActionForExtension(it) }
                                                     if (activeAction != null || !ext.metaData?.optionsPageUrl.isNullOrBlank()) {
                                                         {
                                                             showExtensionsSheet = false
@@ -6260,6 +6302,8 @@ fun BrowserScreen(
                         val extAiBlockerDesc = stringResource(R.string.ext_builtin_ai_blocker_desc)
                         val extForceDark = stringResource(R.string.appearance_force_dark_websites)
                         val extForceDarkDesc = stringResource(R.string.appearance_force_dark_websites_desc)
+                        val extOmniTranslate = stringResource(R.string.ext_builtin_omni_translate)
+                        val extOmniTranslateDesc = stringResource(R.string.ext_builtin_omni_translate_desc)
                         val builtInExts = remember(
                             viewModel.isUniversalCopyEnabled, viewModel.isUniversalCopyToggling,
                             viewModel.isMediaGrabberEnabled, viewModel.isMediaGrabberToggling,
@@ -6276,6 +6320,11 @@ fun BrowserScreen(
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
                                     { viewModel.toggleMediaGrabber(context) },
                                     { showMediaSnifferSettingsDialog = true }),
+                                BuiltInExt(Icons.Rounded.Translate, extOmniTranslate, extTeamAuthor,
+                                    extOmniTranslateDesc,
+                                    true, false,
+                                    { /* always-on bridge: not user-togglable */ },
+                                    { showTranslationDialog = true }),
                                 BuiltInExt(Icons.Rounded.Block, extAiBlocker, extTeamAuthor,
                                     extAiBlockerDesc,
                                     viewModel.isAiBlockerEnabled, !viewModel.isAiBlockerToggling,
@@ -6349,6 +6398,68 @@ fun BrowserScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
+            }
+
+
+            // 4c. External extension install permission dialog.
+            // GeckoView has no native prompt UI; this surfaces the install-prompt
+            // request and completes the GeckoResult with the user's choice.
+            viewModel.pendingExtensionInstallPrompt?.let { pending ->
+                AlertDialog(
+                    onDismissRequest = { viewModel.respondToInstallPrompt(false) },
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
+                    title = {
+                        Text(
+                            text = "Install extension?",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = pending.extensionName ?: pending.extensionId ?: "Unknown extension",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp
+                            )
+                            if (pending.permissions.isNotEmpty()) {
+                                Text(
+                                    text = "This extension is requesting permission to:",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                pending.permissions.forEach { perm ->
+                                    Text("• $perm", fontSize = 13.sp)
+                                }
+                            }
+                            if (pending.origins.isNotEmpty()) {
+                                Text(
+                                    text = "Sites:",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                pending.origins.forEach { origin ->
+                                    Text("• $origin", fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { viewModel.respondToInstallPrompt(true) }) {
+                            Text("Install", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.respondToInstallPrompt(false) }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
 
 

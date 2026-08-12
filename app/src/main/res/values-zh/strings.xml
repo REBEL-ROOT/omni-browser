@@ -707,6 +707,8 @@
     <string name="ext_builtin_universal_copy_desc">绕过网站限制，强制启用文本选择和复制。</string>
     <string name="ext_builtin_media_sniffer">媒体嗅探器</string>
     <string name="ext_builtin_media_sniffer_desc">嗅探并捕获离线动态 HLS/DASH 片段和流。</string>
+    <string name="ext_builtin_omni_translate">Omni Translate</string>
+    <string name="ext_builtin_omni_translate_desc">网页设备端翻译</string>
     <string name="ext_builtin_ai_blocker">AI 拦截器</string>
     <string name="ext_builtin_ai_blocker_desc">在搜索引擎中拦截 AI 概览摘要和助手面板。</string>
     <string name="customize_home_title">自定义主屏幕</string>
@@ -886,6 +888,8 @@
     <string name="translator_page_desc">通过 Google 翻译代理翻译整个当前网页。</string>
     <string name="translator_target_lang">目标语言：</string>
     <string name="translator_translate_page">翻译整页</string>
+    <string name="translator_translate_device">在设备上翻译</string>
+    <string name="translator_show_original">显示原文</string>
     <string name="translator_open_page">打开任意网页以启用整站翻译。</string>
     <string name="translator_text_title">翻译自定义文本</string>
     <string name="translator_downloading">正在下载离线模型...</string>

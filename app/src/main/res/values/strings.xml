@@ -748,6 +748,8 @@
     <string name="ext_builtin_universal_copy_desc">Bypass website restrictions to force-enable text selection and copying.</string>
     <string name="ext_builtin_media_sniffer">Media Sniffer</string>
     <string name="ext_builtin_media_sniffer_desc">Sniff and capture offline dynamic HLS/DASH segments and streams.</string>
+    <string name="ext_builtin_omni_translate">Omni Translate</string>
+    <string name="ext_builtin_omni_translate_desc">On-device page translation for webpages</string>
     <string name="ext_builtin_ai_blocker">AI Blocker</string>
     <string name="ext_builtin_ai_blocker_desc">Block AI Overview summaries and assistant panels on search engines.</string>
 
@@ -930,6 +932,8 @@
     <string name="translator_page_desc">Translate the entire active webpage using Google Web Translation proxy.</string>
     <string name="translator_target_lang">Target Language:</string>
     <string name="translator_translate_page">Translate Entire Page</string>
+    <string name="translator_translate_device">Translate on Device</string>
+    <string name="translator_show_original">Show Original</string>
     <string name="translator_open_page">Open any webpage to enable whole-site translation.</string>
     <string name="translator_text_title">Translate Custom Text</string>
     <string name="translator_downloading">Downloading offline model...</string>

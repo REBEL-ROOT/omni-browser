@@ -192,6 +192,12 @@ configurations.all {
 dependencies {
     // === Core Android & Lifecycle ===
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // === Unit Testing ===
+    // JUnit 4 powers the JVM unit test suite (app/src/test). Required so the
+    // project's existing SecurityPolicyTest and the new Offline AI tests compile
+    // and run under `./gradlew test`.
+    testImplementation("junit:junit:4.13.2")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
@@ -244,6 +250,10 @@ dependencies {
     ksp("androidx.room:room-compiler:2.7.1")
     implementation("net.zetetic:sqlcipher-android:4.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+
+    // === WorkManager — keeps model downloads alive after the user leaves Settings ===
+    // Downloads are long-running and must not depend on a Compose screen's lifecycle.
+    implementation("androidx.work:work-runtime:2.9.1")
 
 
     // === Image Loading ===

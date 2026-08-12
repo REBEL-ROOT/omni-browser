@@ -1,0 +1,21 @@
+{
+  "allowHosts": [
+    "alphacephei.com"
+  ],
+  "models": [
+    {
+      "id": "vosk-small-en-us",
+      "version": "0.15",
+      "task": "asr",
+      "name": "Vosk Small English (US)",
+      "sourceLanguage": "en",
+      "targetLanguage": null,
+      "sizeBytes": 0,
+      "downloadUrl": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+      "sha256": null,
+      "license": "Apache-2.0",
+      "sourceProject": "Vosk (Alpha Cephei)",
+      "minimumRuntimeVersion": "1.0"
+    }
+  ]
+}

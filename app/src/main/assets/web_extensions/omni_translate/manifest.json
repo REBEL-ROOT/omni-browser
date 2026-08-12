@@ -1,0 +1,19 @@
+{
+  "manifest_version": 2,
+  "name": "Omni Translate",
+  "version": "1.0",
+  "description": "On-device page translation bridge for Omni Browser. Sends page text to the app for local translation and applies the result. The content script never receives model paths, files, or native runtime access.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "omni-translate@omnibrowser.app"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

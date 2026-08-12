@@ -201,6 +201,7 @@ fun VideoPlayerScreen(
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var selectedSettingsTab by remember { mutableStateOf("Speed") }
+    var showSnifferSubDialog by remember { mutableStateOf(false) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var audioTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
     var subtitleTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
@@ -1384,7 +1385,7 @@ fun VideoPlayerScreen(
                                 .background(if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
                                 .padding(vertical = 12.dp)
                         ) {
-                            val tabs = listOf("Speed", "Quality", "Audio (Dub)", "Subtitles (CC)", "Servers")
+                            val tabs = listOf("Speed", "Quality", "Audio (Dub)", "Subtitles (CC)", "Servers", "Media")
                             tabs.forEach { tab ->
                                 val isSelected = selectedSettingsTab == tab
                                 Box(
@@ -1679,6 +1680,50 @@ fun VideoPlayerScreen(
                                         }
                                     }
                                 }
+                                "Media" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text("Media Tools", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 4.dp))
+                                        val vm = viewModel
+                                        if (vm != null) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("Media Sniffer / Fetcher", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                    Text("Detect web page videos and show the sniffer banner", color = textSecondary, fontSize = 11.sp)
+                                                }
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    IconButton(onClick = { showSnifferSubDialog = true }) {
+                                                        Icon(
+                                                            Icons.Rounded.Tune,
+                                                            contentDescription = "Sniffer Settings",
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Switch(
+                                                        checked = vm.isMediaGrabberEnabled,
+                                                        onCheckedChange = { vm.toggleMediaGrabber(context) }
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = "Tap the settings symbol to open the full sniffer settings.",
+                                                color = textSecondary,
+                                                fontSize = 11.sp
+                                            )
+                                        } else {
+                                            Text("Browser settings unavailable", color = textSecondary, fontSize = 12.sp)
+                                        }
+                                    }
+                                }
                                 "Servers" -> {
                                     Column(
                                         modifier = Modifier
@@ -1745,6 +1790,14 @@ fun VideoPlayerScreen(
                     }
                 }
             }
+        }
+
+        // Sniffer settings sub-dialog, opened from the Media tab's settings symbol.
+        if (showSnifferSubDialog && viewModel != null) {
+            com.rebelroot.omni.browser.MediaSnifferSettingsDialog(
+                viewModel = viewModel!!,
+                onDismissRequest = { showSnifferSubDialog = false }
+            )
         }
 
 

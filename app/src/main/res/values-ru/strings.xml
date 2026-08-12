@@ -706,6 +706,8 @@
     <string name="ext_builtin_universal_copy_desc">Обход ограничений сайта для принудительного выделения и копирования текста.</string>
     <string name="ext_builtin_media_sniffer">Сниффер медиа</string>
     <string name="ext_builtin_media_sniffer_desc">Обнаружение и захват офлайн динамических сегментов HLS/DASH и потоков.</string>
+    <string name="ext_builtin_omni_translate">Omni Translate</string>
+    <string name="ext_builtin_omni_translate_desc">Перевод веб-страниц на устройстве</string>
     <string name="ext_builtin_ai_blocker">Блокировщик ИИ</string>
     <string name="ext_builtin_ai_blocker_desc">Блокирует обзоры ИИ и панели ассистентов в поисковых системах.</string>
     <string name="customize_home_title">Настроить главный экран</string>
@@ -886,6 +888,8 @@
     <string name="translator_page_desc">Перевести всю активную страницу через прокси Google Translate.</string>
     <string name="translator_target_lang">Язык перевода:</string>
     <string name="translator_translate_page">Перевести всю страницу</string>
+    <string name="translator_translate_device">Перевести на устройстве</string>
+    <string name="translator_show_original">Показать оригинал</string>
     <string name="translator_open_page">Откройте страницу, чтобы включить перевод сайта.</string>
     <string name="translator_text_title">Перевести свой текст</string>
     <string name="translator_downloading">Загрузка офлайн-модели...</string>
