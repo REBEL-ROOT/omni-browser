@@ -81,6 +81,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
+import com.rebelroot.omni.utils.FileSizeFormat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -176,9 +177,9 @@ fun PrivateLockerScreen(
     // Format size helper
     fun formatFileSize(bytes: Long): String {
         if (bytes < 1024) return "$bytes B"
-        val exp = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
+        val exp = FileSizeFormat.unitIndex(bytes)
         val pre = "KMGTPE"[exp - 1]
-        return String.format(Locale.getDefault(), "%.1f %cB", bytes / Math.pow(1024.0, exp.toDouble()), pre)
+        return String.format(Locale.getDefault(), "%.1f %cB", FileSizeFormat.inUnits(bytes, exp), pre)
     }
 
     // Format date helper

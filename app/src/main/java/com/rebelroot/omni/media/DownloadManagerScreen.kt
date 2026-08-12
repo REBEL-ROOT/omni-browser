@@ -25,6 +25,7 @@ import android.os.Environment
 import android.os.StatFs
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import com.rebelroot.omni.utils.FileSizeFormat
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -784,6 +785,6 @@ private fun getDeviceStorageInfo(context: Context): Pair<Long, Long> {
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt()
-    return String.format("%.2f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
+    val digitGroups = FileSizeFormat.unitIndex(bytes)
+    return String.format("%.2f %s", FileSizeFormat.inUnits(bytes, digitGroups), units[digitGroups])
 }
