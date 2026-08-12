@@ -710,6 +710,8 @@
     <string name="ext_builtin_media_sniffer_desc">ऑफलाइन गतिशील HLS/DASH सेगमेंट और स्ट्रीम को सूंघें और कैप्चर करें।</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">वेबपेजों का ऑन-डिवाइस अनुवाद</string>
+    <string name="offline_ai_settings_title">ऑफ़लाइन AI</string>
+    <string name="offline_ai_settings_desc">डिवाइस पर अनुवाद और कैप्शन — मॉडल डाउनलोड करें, कोई क्लाउड नहीं</string>
     <string name="ext_builtin_ai_blocker">AI ब्लॉकर</string>
     <string name="ext_builtin_ai_blocker_desc">सर्च इंजन पर AI ओवरव्यू सारांश और सहायक पैनल ब्लॉक करें।</string>
     <string name="customize_home_title">होम स्क्रीन कस्टमाइज़ करें</string>

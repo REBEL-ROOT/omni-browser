@@ -710,6 +710,8 @@
     <string name="ext_builtin_media_sniffer_desc">Détecte et capture hors ligne les segments et flux HLS/DASH dynamiques.</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">Traduction de pages web sur l\'appareil</string>
+    <string name="offline_ai_settings_title">IA hors ligne</string>
+    <string name="offline_ai_settings_desc">Traduction et sous-titres sur l\'appareil — téléchargez des modèles, sans cloud</string>
     <string name="ext_builtin_ai_blocker">Bloqueur d’IA</string>
     <string name="ext_builtin_ai_blocker_desc">Bloque les résumés de vue d’ensemble IA et les panneaux d’assistant dans les moteurs de recherche.</string>
     <string name="customize_home_title">Personnaliser l’écran d’accueil</string>

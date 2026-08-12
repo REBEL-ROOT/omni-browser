@@ -519,6 +519,9 @@ class MainActivity : FragmentActivity() {
                                 onOpenDownloadSettings = {
                                     navController.navigate("download_settings")
                                 },
+                                onOpenOfflineAi = {
+                                    navController.navigate("offline_ai")
+                                },
                                 onSettingsImported = {
                                     this@MainActivity.recreate()
                                 }
@@ -542,6 +545,14 @@ class MainActivity : FragmentActivity() {
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
                                 onOpenDownloads = { navController.navigate("downloads") }
+                            )
+                        }
+
+                        // Offline AI Settings Screen (models, translation mode)
+                        composable("offline_ai") {
+                            com.rebelroot.omni.settings.OfflineAiSettingsScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

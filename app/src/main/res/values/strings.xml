@@ -750,6 +750,8 @@
     <string name="ext_builtin_media_sniffer_desc">Sniff and capture offline dynamic HLS/DASH segments and streams.</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">On-device page translation for webpages</string>
+    <string name="offline_ai_settings_title">Offline AI</string>
+    <string name="offline_ai_settings_desc">On-device translation &amp; captions — download models, no cloud</string>
     <string name="ext_builtin_ai_blocker">AI Blocker</string>
     <string name="ext_builtin_ai_blocker_desc">Block AI Overview summaries and assistant panels on search engines.</string>
 

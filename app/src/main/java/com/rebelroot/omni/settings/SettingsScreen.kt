@@ -86,6 +86,7 @@ fun SettingsScreen(
     onOpenSiteSettings: () -> Unit = {},
     onOpenPasswordManager: () -> Unit = {},
     onOpenDownloadSettings: () -> Unit = {},
+    onOpenOfflineAi: () -> Unit = {},
     onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
@@ -808,6 +809,13 @@ fun SettingsScreen(
                         stringResource(id = R.string.download_settings_title),
                         stringResource(id = R.string.download_settings_desc),
                         onClick = onOpenDownloadSettings
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(
+                        Icons.Rounded.AutoAwesome,
+                        stringResource(id = R.string.offline_ai_settings_title),
+                        stringResource(id = R.string.offline_ai_settings_desc),
+                        onClick = onOpenOfflineAi
                     )
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.native_player_title), stringResource(id = R.string.native_player_desc), viewModel.isNativePlayerEnabled) { viewModel.toggleNativePlayer(context) }

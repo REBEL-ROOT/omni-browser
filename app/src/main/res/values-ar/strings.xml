@@ -709,6 +709,8 @@
     <string name="ext_builtin_media_sniffer_desc">الشم والتقاط شرائح HLS/DASH الديناميكية وجداول البث بدون اتصال.</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">الترجمة على الجهاز لصفحات الويب</string>
+    <string name="offline_ai_settings_title">الذكاء الاصطناعي دون اتصال</string>
+    <string name="offline_ai_settings_desc">ترجمة وترجمة فورية على الجهاز — تنزيل النماذج، بدون سحابة</string>
     <string name="ext_builtin_ai_blocker">حاجب الذكاء الاصطناعي</string>
     <string name="ext_builtin_ai_blocker_desc">حظر ملخصات نظرة عامة الذكاء الاصطناعي وألواح المساعد في محركات البحث.</string>
     <string name="customize_home_title">تخصيص الشاشة الرئيسية</string>

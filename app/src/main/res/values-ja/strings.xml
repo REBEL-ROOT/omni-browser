@@ -709,6 +709,8 @@
     <string name="ext_builtin_media_sniffer_desc">オフラインで動的なHLS/DASHセグメントとストリームを検出・キャプチャします。</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">端末上でのウェブページ翻訳</string>
+    <string name="offline_ai_settings_title">オフラインAI</string>
+    <string name="offline_ai_settings_desc">端末内の翻訳と字幕 — モデルのダウンロード、クラウド不要</string>
     <string name="ext_builtin_ai_blocker">AIブロッカー</string>
     <string name="ext_builtin_ai_blocker_desc">検索エンジン上のAI概要サマリーとアシスタントパネルをブロックします。</string>
     <string name="customize_home_title">ホーム画面をカスタマイズ</string>

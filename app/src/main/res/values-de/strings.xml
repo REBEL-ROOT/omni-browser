@@ -706,6 +706,8 @@
     <string name="ext_builtin_media_sniffer_desc">Erfasst und speichert offline dynamische HLS/DASH-Segmente und Streams.</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">Übersetzung von Webseiten auf dem Gerät</string>
+    <string name="offline_ai_settings_title">Offline-KI</string>
+    <string name="offline_ai_settings_desc">Übersetzung und Untertitel auf dem Gerät — Modelle herunterladen, ohne Cloud</string>
     <string name="ext_builtin_ai_blocker">AI-Blocker</string>
     <string name="ext_builtin_ai_blocker_desc">Blockiert KI-Übersichts-Zusammenfassungen und Assistenten-Panels in Suchmaschinen.</string>
     <string name="customize_home_title">Startbildschirm anpassen</string>

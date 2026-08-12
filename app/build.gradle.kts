@@ -269,6 +269,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
 
+    // === Vosk on-device speech recognition (runtime lib, no model weights) ===
+    // Loads downloaded/verified models from application-private storage.
+    implementation("com.alphacephei:vosk-android:0.3.75")
+
     // === CameraX ===
     val cameraxVersion = "1.4.0"
     implementation("androidx.camera:camera-camera2:$cameraxVersion")

@@ -709,6 +709,8 @@
     <string name="ext_builtin_media_sniffer_desc">嗅探并捕获离线动态 HLS/DASH 片段和流。</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">网页设备端翻译</string>
+    <string name="offline_ai_settings_title">离线 AI</string>
+    <string name="offline_ai_settings_desc">设备端翻译和字幕 — 下载模型，无需云端</string>
     <string name="ext_builtin_ai_blocker">AI 拦截器</string>
     <string name="ext_builtin_ai_blocker_desc">在搜索引擎中拦截 AI 概览摘要和助手面板。</string>
     <string name="customize_home_title">自定义主屏幕</string>

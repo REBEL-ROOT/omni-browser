@@ -708,6 +708,8 @@
     <string name="ext_builtin_media_sniffer_desc">Обнаружение и захват офлайн динамических сегментов HLS/DASH и потоков.</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">Перевод веб-страниц на устройстве</string>
+    <string name="offline_ai_settings_title">Офлайн-ИИ</string>
+    <string name="offline_ai_settings_desc">Перевод и субтитры на устройстве — скачайте модели, без облака</string>
     <string name="ext_builtin_ai_blocker">Блокировщик ИИ</string>
     <string name="ext_builtin_ai_blocker_desc">Блокирует обзоры ИИ и панели ассистентов в поисковых системах.</string>
     <string name="customize_home_title">Настроить главный экран</string>

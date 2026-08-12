@@ -710,6 +710,8 @@
     <string name="ext_builtin_media_sniffer_desc">Wykrywaj i przechwytuj offline dynamiczne segmenty HLS/DASH i strumienie.</string>
     <string name="ext_builtin_omni_translate">Omni Translate</string>
     <string name="ext_builtin_omni_translate_desc">Tłumaczenie stron na urządzeniu</string>
+    <string name="offline_ai_settings_title">AI offline</string>
+    <string name="offline_ai_settings_desc">Tłumaczenie i napisy na urządzeniu — pobierz modele, bez chmury</string>
     <string name="ext_builtin_ai_blocker">Blokada AI</string>
     <string name="ext_builtin_ai_blocker_desc">Blokuj podsumowania przeglądu AI i panele asystenta w wyszukiwarkach.</string>
     <string name="customize_home_title">Dostosuj ekran główny</string>

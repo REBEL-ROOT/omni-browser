@@ -51,6 +51,17 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.runtime.rememberCoroutineScope
 import com.rebelroot.omni.media.MediaInterceptor
 import androidx.compose.material3.*
+import androidx.compose.runtime.collectAsState
+import com.rebelroot.omni.ai.asr.VoskAsrEngine
+import com.rebelroot.omni.ai.captions.LiveCaptionEngine
+import com.rebelroot.omni.ai.media.CaptionRenderersFactory
+import com.rebelroot.omni.ai.media.PcmTeeAudioProcessor
+import com.rebelroot.omni.ai.models.ModelInstallState
+import com.rebelroot.omni.ai.models.ModelPlatform
+import com.rebelroot.omni.ai.models.ModelState
+import com.rebelroot.omni.ai.models.ModelZipExtractor
+import java.io.File
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,6 +217,66 @@ fun VideoPlayerScreen(
     var audioTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
     var subtitleTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
     var videoTracks by remember { mutableStateOf<List<TrackOption>>(emptyList()) }
+
+    // ── Offline live captions (on-device ASR) ───────────────────────────────
+    val captionPlatform = remember { ModelPlatform.get(context) }
+    val captionRepoStates by captionPlatform.repository.states.collectAsState()
+    val asrDescriptor = remember { captionPlatform.catalog.findForAsr(null).firstOrNull() }
+    var captionActive by remember { mutableStateOf(false) }
+    var captionBusy by remember { mutableStateOf(false) }
+    var showCaptionModelDialog by remember { mutableStateOf(false) }
+    var activeCaptionEngine by remember { mutableStateOf<LiveCaptionEngine?>(null) }
+
+    // Tee from the Media3 audio sink into the caption engine (playback untouched).
+    val captionTee = remember {
+        PcmTeeAudioProcessor { bytes, sampleRate, channelCount ->
+            activeCaptionEngine?.feedPcm(bytes, sampleRate, channelCount)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            activeCaptionEngine?.release()
+            activeCaptionEngine = null
+        }
+    }
+
+    val startOfflineCaptions: () -> Unit = {
+        val desc = asrDescriptor
+        when {
+            desc == null -> Toast.makeText(context, "No offline caption model available", Toast.LENGTH_LONG).show()
+            !captionPlatform.repository.isInstalled(desc) -> showCaptionModelDialog = true
+            captionBusy -> Unit
+            else -> {
+                captionBusy = true
+                Toast.makeText(context, "Starting offline captions…", Toast.LENGTH_SHORT).show()
+                coroutineScope.launch {
+                    try {
+                        val extractDir = File(captionPlatform.storage.modelDir(desc.id), "extracted")
+                        ModelZipExtractor.extract(captionPlatform.storage.finalFile(desc), extractDir)
+                        val modelRoot = ModelZipExtractor.findModelRoot(extractDir)
+                        val engine = LiveCaptionEngine(
+                            asr = VoskAsrEngine(modelRoot),
+                            clockMs = { exoPlayerInstance?.currentPosition ?: 0L }
+                        )
+                        activeCaptionEngine = engine
+                        captionActive = true
+                    } catch (e: Exception) {
+                        android.util.Log.e("VideoPlayer", "Failed to start offline captions", e)
+                        Toast.makeText(context, "Failed to start captions: ${e.message ?: "error"}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        captionBusy = false
+                    }
+                }
+            }
+        }
+    }
+
+    val stopOfflineCaptions: () -> Unit = {
+        activeCaptionEngine?.release()
+        activeCaptionEngine = null
+        captionActive = false
+    }
 
     val updateTracksList = { player: Player ->
         val currentTracks = player.currentTracks
@@ -510,7 +581,7 @@ fun VideoPlayerScreen(
 
             val mediaItem = mediaItemBuilder.build()
 
-            val player = ExoPlayer.Builder(context)
+            val player = ExoPlayer.Builder(context, CaptionRenderersFactory(context, captionTee))
                 .setMediaSourceFactory(mediaSourceFactory)
                 .build().apply {
                     setMediaItem(mediaItem)
@@ -553,6 +624,17 @@ fun VideoPlayerScreen(
                         }
                         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                             android.util.Log.d("VideoPlayer", "🎬 onVideoSizeChanged: ${videoSize.width}x${videoSize.height}")
+                        }
+                        override fun onPositionDiscontinuity(
+                            oldPosition: Player.PositionInfo,
+                            newPosition: Player.PositionInfo,
+                            reason: Int
+                        ) {
+                            // Any user seek discards stale caption text and restarts ASR
+                            // around the new position — skipped audio is never transcribed.
+                            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                                coroutineScope.launch { activeCaptionEngine?.reset() }
+                            }
                         }
                         override fun onRenderedFirstFrame() {
                             // Strong signal that the video surface is actually rendering
@@ -746,6 +828,126 @@ fun VideoPlayerScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        // ── Offline live captions overlay (hidden in PiP) ────────────────────
+        if (captionActive && viewModel?.isInPictureInPictureMode != true) {
+            val engine = activeCaptionEngine
+            if (engine != null) {
+                val captionLines by engine.lines.collectAsState()
+                val captionPartial by engine.partial.collectAsState()
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(bottom = 110.dp, start = 24.dp, end = 24.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        captionLines.takeLast(2).forEach { line ->
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    line.text,
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                        if (captionPartial.isNotBlank()) {
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    captionPartial,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 15.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Offline caption model dialog (download on demand) ────────────────
+        if (showCaptionModelDialog) {
+            val desc = asrDescriptor
+            AlertDialog(
+                onDismissRequest = { showCaptionModelDialog = false },
+                containerColor = if (viewModel?.isAmoledMode == true) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
+                title = {
+                    Text(
+                        text = "Offline captions model required",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (desc != null) {
+                            Text(
+                                text = "${desc.name} — downloaded once, verified, and stored only on this device. No audio is uploaded.",
+                                fontSize = 13.sp,
+                                color = if (viewModel?.isDarkThemeEnabled != false) Color.White else Color(0xFF1C1C1E)
+                            )
+                            val st = captionRepoStates[desc.id] ?: ModelState(descriptor = desc)
+                            when {
+                                st.status == ModelInstallState.DOWNLOADING || st.status == ModelInstallState.VERIFYING -> {
+                                    Text(
+                                        text = "Downloading… ${st.progress.bytesDownloaded} / ${st.progress.totalBytes}",
+                                        fontSize = 13.sp,
+                                        color = if (viewModel?.isDarkThemeEnabled != false) Color(0xFF8E8E93) else Color(0xFF8E8E93)
+                                    )
+                                    LinearProgressIndicator(
+                                        progress = { if (st.progress.isIndeterminate) 0.4f else st.progress.fraction },
+                                        modifier = Modifier.fillMaxWidth().height(6.dp)
+                                    )
+                                }
+                                st.status == ModelInstallState.FAILED -> {
+                                    Text(
+                                        text = st.errorMessage ?: "Download failed",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFFF3B30)
+                                    )
+                                }
+                            }
+                        } else {
+                            Text("No caption model is available in the catalog.", fontSize = 13.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    if (desc != null) {
+                        val st = captionRepoStates[desc.id] ?: ModelState(descriptor = desc)
+                        val installing = st.status == ModelInstallState.DOWNLOADING || st.status == ModelInstallState.VERIFYING
+                        if (!installing && !captionPlatform.repository.isInstalled(desc)) {
+                            TextButton(onClick = { coroutineScope.launch { captionPlatform.repository.install(desc) } }) {
+                                Text("Download", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCaptionModelDialog = false }) { Text("Cancel") }
+                }
+            )
+
+            // Auto-start captions the moment the install completes.
+            LaunchedEffect(desc?.id, captionRepoStates[desc?.id]?.status) {
+                if (desc != null && captionRepoStates[desc.id]?.status == ModelInstallState.INSTALLED) {
+                    showCaptionModelDialog = false
+                    startOfflineCaptions()
+                }
+            }
         }
 
         // All UI overlays are hidden in PiP mode — only raw video is shown in the floating window
@@ -1076,10 +1278,10 @@ fun VideoPlayerScreen(
                                         selectSubtitleTrack(player, subtitleTracks.first())
                                         Toast.makeText(context, "Subtitles Enabled: ${subtitleTracks.first().label}", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        // No embedded subtitles, redirect user to Live Caption settings
+                                        // No embedded subtitles: offer on-device generated captions.
                                         showSettingsDialog = true
                                         selectedSettingsTab = "Subtitles (CC)"
-                                        Toast.makeText(context, "No embedded subtitles found. Try Live Caption.", Toast.LENGTH_LONG).show()
+                                        startOfflineCaptions()
                                     }
                                 }
                             },
@@ -1638,6 +1840,37 @@ fun VideoPlayerScreen(
                                         }
 
                                         HorizontalDivider(color = dividerColor, modifier = Modifier.padding(vertical = 8.dp))
+
+                                        // ── Offline generated captions (on-device ASR) ──
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Generate captions (offline)", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                Text(
+                                                    if (captionActive) "Live on-device captions active — no upload"
+                                                    else "Speech-to-text on this device, from a downloaded model",
+                                                    color = textSecondary, fontSize = 11.sp
+                                                )
+                                            }
+                                            if (captionActive) {
+                                                OutlinedButton(onClick = { stopOfflineCaptions() }, shape = RoundedCornerShape(12.dp)) {
+                                                    Text("Stop", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            } else {
+                                                Button(
+                                                    onClick = { startOfflineCaptions() },
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    enabled = !captionBusy
+                                                ) {
+                                                    Text(if (captionBusy) "Starting…" else "Generate", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = dividerColor)
 
                                         Text("Live Caption (Speech-to-Text)", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
                                         Text("Automatically generate subtitles for any media playing on your device using Android system captions.", color = textSecondary, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
