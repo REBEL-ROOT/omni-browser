@@ -1124,6 +1124,23 @@
     <!-- Download Sheet -->
     <string name="download_media_title">Download Media</string>
 
+    <!-- Media Sniffer / Player (Issue #73) -->
+    <string name="media_open_detected">Open detected media</string>
+    <string name="media_detected_title">Media detected</string>
+    <string name="media_detected_count">%1$d playable sources</string>
+    <string name="media_checking">Checking media…</string>
+    <string name="media_none_found">No playable media found</string>
+    <string name="media_play_source">Play</string>
+    <string name="media_download_source">Download</string>
+    <string name="media_detection_title">Detect media in background</string>
+    <string name="media_detection_desc">Silently detect playable video/audio on pages without interrupting you.</string>
+    <string name="media_button_title">Show media button</string>
+    <string name="media_button_desc">Display a media action in the address bar when streams are found.</string>
+    <string name="media_auto_open_title">Automatically open media panel</string>
+    <string name="media_auto_open_desc">Open the media sheet automatically (off by default to avoid intrusive popups).</string>
+    <string name="media_validate_title">Validate media before showing</string>
+    <string name="media_validate_desc">Check that streams are playable before listing them.</string>
+
     <!-- Settings Screen -->
     <string name="settings_notifications_enabled_success">Notifications enabled successfully!</string>
     <string name="settings_notifications_denied">Notification permission denied.</string>

@@ -814,6 +814,14 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.VideoLibrary, stringResource(id = R.string.media_sniffer_title), stringResource(id = R.string.media_sniffer_desc), onClick = { showMediaSnifferSettingsDialog = true })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.Sensors, stringResource(id = R.string.media_detection_title), stringResource(id = R.string.media_detection_desc), viewModel.isMediaDetectionEnabled) { viewModel.toggleMediaDetection(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.media_button_title), stringResource(id = R.string.media_button_desc), viewModel.isMediaButtonEnabled) { viewModel.toggleMediaButton(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.AutoAwesome, stringResource(id = R.string.media_auto_open_title), stringResource(id = R.string.media_auto_open_desc), viewModel.isMediaAutoOpenEnabled) { viewModel.toggleMediaAutoOpen(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    SwitchRow(Icons.Rounded.Verified, stringResource(id = R.string.media_validate_title), stringResource(id = R.string.media_validate_desc), viewModel.isMediaValidateEnabled) { viewModel.toggleMediaValidate(context) }
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
                 }
             }

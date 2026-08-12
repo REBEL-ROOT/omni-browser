@@ -308,12 +308,11 @@ fun BrowserScreen(
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     
-    // Video detection states
+    // Video detection states (Issue #73: detection is silent; UI is on-demand only)
     val detectedMedia by viewModel.mediaInterceptor.detectedMedia.collectAsState()
+    val playableMedia by viewModel.mediaInterceptor.playableMedia.collectAsState()
+    val hasPlayableMedia by viewModel.mediaInterceptor.hasPlayableMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
-    var isAlohaBannerDismissed by remember { mutableStateOf(false) }
-    val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
-    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled && !viewModel.isUrlBlockedByMediaSniffer(viewModel.currentUrl)
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -338,23 +337,13 @@ fun BrowserScreen(
         viewModel.userExtensions.any { it.metaData.enabled }
     }
     LaunchedEffect(viewModel.currentUrl) {
-        isAlohaBannerDismissed = false
         isScrollNavBarVisible = true
-    }
-    // Clear dismissal state only when media list is reset
-    LaunchedEffect(viewModel.mediaInterceptor.detectedMedia) {
-        viewModel.mediaInterceptor.detectedMedia.collect { mediaList ->
-            if (mediaList.isEmpty()) {
-                isAlohaBannerDismissed = false
-            }
-        }
     }
     LaunchedEffect(isNavHideEnabled) {
         if (!isNavHideEnabled) {
             isScrollNavBarVisible = true
         }
     }
-    var selectedMediaItem by remember { mutableStateOf<MediaInterceptor.DetectedMedia?>(null) }
     var showExtensionsSheet by remember { mutableStateOf(false) }
     var extensionToDelete by remember { mutableStateOf<org.mozilla.geckoview.WebExtension?>(null) }
     var builtInExtensionToDelete by remember { mutableStateOf<String?>(null) }
@@ -416,22 +405,9 @@ fun BrowserScreen(
             showFullscreenDownloadBtn = true
         }
     }
-    // Direct Native Player Interception on Web Fullscreen trigger
-    LaunchedEffect(viewModel.isFullscreen) {
-        if (viewModel.isFullscreen) {
-            showFullscreenDownloadBtn = true
-            if (viewModel.isNativePlayerEnabled) {
-                val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-                if (!isYouTubePage) {
-                    val mediaUrl = nonDrmMedia.firstOrNull()?.url ?: viewModel.mediaInterceptor.detectedMedia.value.firstOrNull { !it.isDrmProtected }?.url
-                    if (mediaUrl != null) {
-                        viewModel.isFullscreen = false
-                        onPlayOnlineStream(mediaUrl, viewModel.currentUrl)
-                    }
-                }
-            }
-        }
-    }
+    // Issue #73: The site's own video player is NEVER overridden automatically.
+    // The native player is launched only when the user taps the dedicated media
+    // button and selects a stream. The previous auto-override on fullscreen is removed.
 
     // Offline Translation states
     var showTranslationDialog by remember { mutableStateOf(false) }
@@ -1484,7 +1460,8 @@ fun BrowserScreen(
                                         onShowPlayerSettings = { showPlayerSettingsDialog = true },
                                         onShowTabGroups = { showTabGroupsSheet = true },
                                         onShowSiteInfo = { showSiteInfoSheet = true },
-                                        onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true }
+                                        onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true },
+                            onOpenMediaSheet = { showDownloadSheet = true },
                                     )
                                 }
                             }
@@ -1502,28 +1479,6 @@ fun BrowserScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                     trackColor = Color.Transparent,
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
-                                )
-                            }
-
-                            AnimatedVisibility(
-                                visible = showAlohaBanner && viewModel.addressBarPosition != "Bottom",
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
-                            ) {
-                                MediaSnifferBanner(
-                                    viewModel = viewModel,
-                                    nonDrmMedia = nonDrmMedia,
-                                    onDismiss = { isAlohaBannerDismissed = true },
-                                    onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
-                                    onDownloadClick = {
-                                        if (!viewModel.hasSeenVideoOverview) {
-                                            pendingVideoAction = { showDownloadSheet = true }
-                                            showVideoOverviewDialog = true
-                                        } else {
-                                            showDownloadSheet = true
-                                        }
-                                    },
-                                    onOpenSettings = { showMediaSnifferSettingsDialog = true }
                                 )
                             }
                         }
@@ -1672,7 +1627,8 @@ fun BrowserScreen(
                             onShowPlayerSettings = { showPlayerSettingsDialog = true },
                             onShowTabGroups = { showTabGroupsSheet = true },
                             onShowSiteInfo = { showSiteInfoSheet = true },
-                            onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true }
+                            onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true },
+                            onOpenMediaSheet = { showDownloadSheet = true }
                         )
                     }
                     }
@@ -1949,23 +1905,6 @@ fun BrowserScreen(
                     HorizontalDivider(
                         color = dividerColor,
                         thickness = 0.5.dp
-                    )
-                }
-
-                AnimatedVisibility(
-                    visible = showAlohaBanner && viewModel.addressBarPosition == "Bottom",
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    MediaSnifferBanner(
-                        viewModel = viewModel,
-                        nonDrmMedia = nonDrmMedia,
-                        onDismiss = { isAlohaBannerDismissed = true },
-                        onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
-                        onDownloadClick = {
-                            showDownloadSheet = true
-                        },
-                        onOpenSettings = { showMediaSnifferSettingsDialog = true }
                     )
                 }
 
@@ -3235,7 +3174,8 @@ fun BrowserScreen(
 
             // ─── Unified smart download button ─────────────────────────────────────
             // • Fullscreen: fades while playing, stays / reappears while paused or on tap
-            val nonDrmMedia = detectedMedia.filter { !it.isDrmProtected }
+            // Issue #73: use the deduped/validated playable list rather than raw detection.
+            val nonDrmMedia = playableMedia
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
             if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
                 if (viewModel.isFullscreen) {
@@ -3315,7 +3255,7 @@ fun BrowserScreen(
                                 if (firstMedia != null) {
                                     FloatingActionButton(
                                         onClick = {
-                                            onPlayOnlineStream(firstMedia.url, viewModel.currentUrl)
+                                            viewModel.playMedia(firstMedia.toPlaybackRequest())
                                         },
                                         containerColor = MaterialTheme.colorScheme.primary,
                                         contentColor = Color.White,
@@ -3379,17 +3319,24 @@ fun BrowserScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.download_media_title),
+                            text = stringResource(R.string.media_detected_title),
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
+                        if (nonDrmMedia.isNotEmpty()) {
+                            Text(
+                                text = stringResource(R.string.media_detected_count, nonDrmMedia.size),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         
                         androidx.compose.foundation.lazy.LazyColumn(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(nonDrmMedia) { item ->
+                            items(nonDrmMedia, key = { it.url + "|" + it.type.name }) { item ->
                                 Surface(
                                     shape = RoundedCornerShape(24.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -3435,7 +3382,7 @@ fun BrowserScreen(
                                             Button(
                                                 onClick = {
                                                     showDownloadSheet = false
-                                                    onPlayOnlineStream(item.url, viewModel.currentUrl)
+                                                    viewModel.playMedia(item.toPlaybackRequest())
                                                 },
                                                 modifier = Modifier.weight(1f),
                                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
@@ -3596,6 +3543,17 @@ fun BrowserScreen(
                                     }
                                 }
                             }
+                        }
+                        if (nonDrmMedia.isEmpty()) {
+                            val isChecking = detectedMedia.any {
+                                it.validationStatus == com.rebelroot.omni.media.MediaInterceptor.ValidationStatus.PENDING
+                            }
+                            Text(
+                                text = stringResource(if (isChecking) R.string.media_checking else R.string.media_none_found),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -7997,149 +7955,6 @@ data class BuiltInExt(
     val onUninstallClick: (() -> Unit)? = null
 )
 
-@Composable
-private fun MediaSnifferBanner(
-    viewModel: BrowserViewModel,
-    nonDrmMedia: List<com.rebelroot.omni.media.MediaInterceptor.DetectedMedia>,
-    onDismiss: () -> Unit,
-    onPlay: (String) -> Unit,
-    onDownloadClick: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp),
-        color = if (viewModel.isAmoledMode) Color(0xFF000000) else Color(0xFF1B2234)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = stringResource(R.string.browser_dismiss),
-                    tint = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            if (viewModel.isVideoPlayingInPage) {
-                EqualizerIcon(
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Rounded.PlayCircle,
-                    contentDescription = stringResource(R.string.browser_video_detected),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            val hasOnlyAudio = nonDrmMedia.all { it.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO }
-            val bannerText = when {
-                viewModel.isVideoPlayingInPage && hasOnlyAudio -> stringResource(R.string.media_sniffer_banner_audio_playing)
-                viewModel.isVideoPlayingInPage -> stringResource(R.string.media_sniffer_banner_video_playing)
-                hasOnlyAudio -> stringResource(R.string.media_sniffer_banner_audio_detected)
-                else -> stringResource(R.string.media_sniffer_banner_media_detected)
-            }
-            Text(
-                text = bannerText,
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-
-            IconButton(
-                onClick = {
-                    val firstMedia = nonDrmMedia.firstOrNull()
-                    if (firstMedia != null) {
-                        onPlay(firstMedia.url)
-                    }
-                },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = stringResource(R.string.browser_play_premium),
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            IconButton(
-                onClick = onDownloadClick,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Download,
-                    contentDescription = stringResource(R.string.browser_download_options),
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Settings,
-                    contentDescription = stringResource(R.string.media_sniffer_settings_title),
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            val context = LocalContext.current
-            val currentHost = remember(viewModel.currentUrl) {
-                try {
-                    android.net.Uri.parse(viewModel.currentUrl).host ?: ""
-                } catch (_: Exception) { "" }
-            }
-
-            if (currentHost.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
-                    onClick = {
-                        viewModel.addDomainToMediaSnifferBlocklist(context, currentHost)
-                        onDismiss()
-                        android.widget.Toast.makeText(
-                            context,
-                            context.getString(R.string.media_sniffer_blocked_toast, currentHost),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Block,
-                        contentDescription = stringResource(R.string.media_sniffer_block_site),
-                        tint = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun GridMenuTile(

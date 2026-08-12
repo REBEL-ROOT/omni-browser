@@ -657,6 +657,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     currentUrl = it
                     checkAutofillForUrl(it)
                     mediaInterceptor.clear()
+                    notifyPageNavigation()
                     isVideoPlayingInPage = false
                     applyUserAgentForTab(tab, it)
                     injectStealthDefuserScriptlet(tab)

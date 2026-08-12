@@ -156,6 +156,9 @@ fun VideoPlayerScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
+    // Captured PlayerView reference so we can bind the player to the view
+    // deterministically inside the player-init effect (see black-screen fix below).
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var isPlaying by remember { mutableStateOf(true) }
     var playbackPosition by remember { mutableLongStateOf(viewModel?.getVideoPosition(decodedPath) ?: 0L) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -547,6 +550,14 @@ fun VideoPlayerScreen(
                         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                             updateTracksList(this@apply)
                         }
+                        override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                            android.util.Log.d("VideoPlayer", "🎬 onVideoSizeChanged: ${videoSize.width}x${videoSize.height}")
+                        }
+                        override fun onRenderedFirstFrame() {
+                            // Strong signal that the video surface is actually rendering
+                            // (i.e. NOT a black screen). Used to verify the surface bind fix.
+                            android.util.Log.d("VideoPlayer", "🎬 onRenderedFirstFrame — first video frame rendered")
+                        }
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                             android.util.Log.e("VideoPlayer", "ExoPlayer playback error: ${error.message}", error)
                             coroutineScope.launch {
@@ -558,6 +569,17 @@ fun VideoPlayerScreen(
 
             exoPlayer = player
             exoPlayerInstance = player
+
+            // BLACK-SCREEN FIX: bind the player to the PlayerView immediately and
+            // deterministically. Previously the view only received the player via the
+            // AndroidView `update` lambda reading `exoPlayerInstance`. Because that
+            // state was assigned here (inside a DisposableEffect, after composition),
+            // the view's `update` could run with a null player. The audio decoder runs
+            // independently of the view, so audio played while the video surface never
+            // bound → black screen. Attaching directly via the captured view reference
+            // guarantees the surface is owned by ExoPlayer's own PlayerView output.
+            playerViewRef?.player = player
+            android.util.Log.d("VideoPlayer", "🎬 ExoPlayer created and bound to PlayerView (black-screen fix)")
 
             var wasPlayingBeforePause = false
             val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -704,6 +726,10 @@ fun VideoPlayerScreen(
                         isClickable = false
                         isFocusable = false
                         resizeMode = aspectMode.toResizeMode()
+                        // Capture the view reference so the player-init effect above can
+                        // bind the player deterministically (prevents black screen).
+                        player = exoPlayerInstance
+                        playerViewRef = this
                         layoutParams = FrameLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
@@ -711,7 +737,10 @@ fun VideoPlayerScreen(
                     }
                 },
                 update = { playerView ->
-                    playerView.player = exoPlayerInstance
+                    // Keep the binding in sync; guarded so we don't thrash the surface.
+                    if (playerView.player !== exoPlayerInstance) {
+                        playerView.player = exoPlayerInstance
+                    }
                     playerView.resizeMode = aspectMode.toResizeMode()
                 },
                 modifier = Modifier.fillMaxSize()

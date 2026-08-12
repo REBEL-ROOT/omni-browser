@@ -131,6 +131,14 @@ class BrowserViewModel : ViewModel() {
         val NATIVE_PLAYER_ENABLED_KEY = booleanPreferencesKey("native_player_enabled")
         val YOUTUBE_ENABLED_KEY = booleanPreferencesKey("youtube_enabled")
         val MEDIA_GRABBER_ENABLED_KEY = booleanPreferencesKey("media_grabber_enabled")
+        /** Background media detection master toggle (Issue #73). */
+        val MEDIA_DETECTION_ENABLED_KEY = booleanPreferencesKey("media_detection_enabled")
+        /** Show the dedicated media action button in the address bar (Issue #73). */
+        val MEDIA_BUTTON_ENABLED_KEY = booleanPreferencesKey("media_button_enabled")
+        /** Legacy/advanced: automatically open the media panel (default OFF — no intrusive popup). */
+        val MEDIA_AUTO_OPEN_KEY = booleanPreferencesKey("media_auto_open")
+        /** Validate streams before showing them as playable (Issue #73). */
+        val MEDIA_VALIDATE_ENABLED_KEY = booleanPreferencesKey("media_validate_enabled")
         val EXTERNAL_DOWNLOAD_MANAGER_KEY = booleanPreferencesKey("external_download_manager_enabled")
         val DEFAULT_DOWNLOADER_KEY = stringPreferencesKey("default_downloader")
         val ASK_BEFORE_DOWNLOAD_KEY = booleanPreferencesKey("ask_before_download")
@@ -321,6 +329,13 @@ class BrowserViewModel : ViewModel() {
 
     // Feature Modules
     val mediaInterceptor = MediaInterceptor()
+    /** Monotonic counter used to tag media with the active page/session for
+     *  deterministic per-page invalidation (no stale media across navigations). */
+    private var mediaPageIdCounter = 0
+    fun notifyPageNavigation() {
+        mediaPageIdCounter++
+        mediaInterceptor.setActivePage("page-$mediaPageIdCounter")
+    }
     lateinit var ffmpegLoader: FFmpegLoader
     lateinit var ffmpegBridge: FFmpegBridge
     lateinit var streamDownloadEngine: StreamDownloadEngine
@@ -387,6 +402,14 @@ class BrowserViewModel : ViewModel() {
     var isUniversalCopyEnabled by mutableStateOf(false)
     var isAiBlockerEnabled by mutableStateOf(false)
     var isMediaGrabberEnabled by mutableStateOf(true)
+    /** Background media detection (Issue #73). Defaults ON. */
+    var isMediaDetectionEnabled by mutableStateOf(true)
+    /** Show the dedicated media action button in the address bar (Issue #73). Defaults ON. */
+    var isMediaButtonEnabled by mutableStateOf(true)
+    /** Legacy/advanced auto-open of the media panel. Defaults OFF (no intrusive popup). */
+    var isMediaAutoOpenEnabled by mutableStateOf(false)
+    /** Validate streams before showing them as playable (Issue #73). Defaults ON. */
+    var isMediaValidateEnabled by mutableStateOf(true)
     data class ExternalDownloaderApp(
         val name: String,
         val packageName: String,
@@ -2198,6 +2221,7 @@ class BrowserViewModel : ViewModel() {
 
         // Clear media list when switching tabs to ensure only active tab's media is tracked
         mediaInterceptor.clear()
+        notifyPageNavigation()
         isVideoPlayingInPage = false
         // Dismiss Find-in-Page when switching tabs — GeckoView highlights are per-session
         if (showFindInPage) closeFindInPage()
@@ -3139,6 +3163,12 @@ class BrowserViewModel : ViewModel() {
         val runtime = geckoRuntime ?: return
         viewModelScope.launch {
             isMediaGrabberEnabled = getMediaGrabberPreference(context).first()
+            // Issue #73: load the new media settings and push them to the interceptor.
+            isMediaDetectionEnabled = context.dataStore.data.map { it[MEDIA_DETECTION_ENABLED_KEY] ?: true }.first()
+            isMediaButtonEnabled = context.dataStore.data.map { it[MEDIA_BUTTON_ENABLED_KEY] ?: true }.first()
+            isMediaAutoOpenEnabled = context.dataStore.data.map { it[MEDIA_AUTO_OPEN_KEY] ?: false }.first()
+            isMediaValidateEnabled = context.dataStore.data.map { it[MEDIA_VALIDATE_ENABLED_KEY] ?: true }.first()
+            syncMediaInterceptorSettings()
             val blocklist = getMediaSnifferBlocklistPreference(context).first()
             mediaSnifferBlocklist = blocklist
             mediaInterceptor.blockedDomains = blocklist
@@ -4552,6 +4582,65 @@ class BrowserViewModel : ViewModel() {
                 preferences[MEDIA_GRABBER_ENABLED_KEY] = newState
             }
             syncMediaGrabberState(shouldReload = true)
+        }
+    }
+
+    /** Pushes all media-related settings into the interceptor. Safe to call repeatedly. */
+    fun syncMediaInterceptorSettings() {
+        mediaInterceptor.isMediaDetectionEnabled = isMediaDetectionEnabled
+        mediaInterceptor.isMediaValidationEnabled = isMediaValidateEnabled
+        mediaInterceptor.isMediaButtonEnabled = isMediaButtonEnabled
+        mediaInterceptor.isYouTubeEnabled = isYouTubeEnabled
+    }
+
+    fun toggleMediaDetection(context: Context) {
+        viewModelScope.launch {
+            val newState = !isMediaDetectionEnabled
+            isMediaDetectionEnabled = newState
+            context.dataStore.edit { preferences -> preferences[MEDIA_DETECTION_ENABLED_KEY] = newState }
+            syncMediaInterceptorSettings()
+        }
+    }
+
+    fun toggleMediaButton(context: Context) {
+        viewModelScope.launch {
+            val newState = !isMediaButtonEnabled
+            isMediaButtonEnabled = newState
+            context.dataStore.edit { preferences -> preferences[MEDIA_BUTTON_ENABLED_KEY] = newState }
+            syncMediaInterceptorSettings()
+        }
+    }
+
+    fun toggleMediaAutoOpen(context: Context) {
+        viewModelScope.launch {
+            val newState = !isMediaAutoOpenEnabled
+            isMediaAutoOpenEnabled = newState
+            context.dataStore.edit { preferences -> preferences[MEDIA_AUTO_OPEN_KEY] = newState }
+        }
+    }
+
+    fun toggleMediaValidate(context: Context) {
+        viewModelScope.launch {
+            val newState = !isMediaValidateEnabled
+            isMediaValidateEnabled = newState
+            context.dataStore.edit { preferences -> preferences[MEDIA_VALIDATE_ENABLED_KEY] = newState }
+            syncMediaInterceptorSettings()
+        }
+    }
+
+    /**
+     * Issue #73: explicit, user-initiated launch of the native player for a selected
+     * stream. Preserves the stream's request context (cookies/referer/origin) in memory
+     * and forwards to the navigation callback. The site's own player is never touched
+     * unless the user chooses to do this.
+     */
+    fun playMedia(request: MediaInterceptor.MediaPlaybackRequest) {
+        activeVideoCookies = request.cookies
+        val callback = onPlayVideoRequestReceived
+        if (callback != null) {
+            callback.invoke(request.url, request.referrer ?: "")
+        } else {
+            pendingVideoUrl = request.url
         }
     }
 
