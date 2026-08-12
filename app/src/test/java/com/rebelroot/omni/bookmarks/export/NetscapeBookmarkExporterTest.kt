@@ -104,14 +104,15 @@ class NetscapeBookmarkExporterTest {
     }
 
     @Test
-    fun `export encodes HTML entities in URLs`() {
+    fun `export keeps ampersand raw in URLs`() {
         val collection = BookmarkCollection()
         collection.addBookmark("Test", "https://example.com?a=1&b=2")
 
         val html = exportNetscapeBookmarkHtml(collection)
 
-        // Ampersand in URL attribute must be encoded
-        assertTrue("HREF=\"https://example.com?a=1&amp;b=2\"" in html)
+        // Ampersand in URLs stays raw (not &amp;) to avoid double-encoding
+        // on round-trip. Browsers export hrefs with raw &.
+        assertTrue("HREF=\"https://example.com?a=1&b=2\"" in html)
     }
 
     @Test

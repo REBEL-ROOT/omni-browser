@@ -103,11 +103,18 @@ private fun encodeHtmlEntities(text: String): String = text
     .replace("'", "&#39;")
 
 /**
- * Encodes a string for use inside a double-quoted HTML attribute.
- * This is stricter than body encoding because quotes must be escaped.
+ * Encodes a string for use inside a double-quoted HTML attribute (href).
+ *
+ * We do NOT encode `&` because:
+ * 1. URLs often contain `&` as query-param separators
+ * 2. Browsers export hrefs with raw `&` (not `&amp;`)
+ * 3. Our parser keeps URLs as-is (does not decode `&amp;` in hrefs)
+ * 4. Encoding `&` would cause double-encoding on round-trip
+ *
+ * We only encode characters that would break the HTML syntax:
+ * `<`, `>`, and `"`.
  */
 private fun encodeHtmlAttribute(value: String): String = value
-    .replace("&", "&amp;")
     .replace("<", "&lt;")
     .replace(">", "&gt;")
     .replace("\"", "&quot;")

@@ -1,0 +1,22 @@
+<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- Edge cases fixture: empty titles, special chars, unicode, long URLs -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+    <DT><H3 ADD_DATE="1609459200" LAST_MODIFIED="1609459200"></H3>
+    <DL><p>
+        <DT><A HREF="https://example.com/" ADD_DATE="1609459200"></A>
+        <DT><A HREF="https://example.com/a&amp;b" ADD_DATE="1609459210">A &amp; B</A>
+        <DT><A HREF="https://example.com/less-than" ADD_DATE="1609459220">5 &lt; 10 &gt; 3</A>
+        <DT><A HREF="https://example.com/quotes" ADD_DATE="1609459230">&quot;Quoted&quot; &apos;Single&apos;</A>
+        <DT><A HREF="https://example.com/unicode" ADD_DATE="1609459240">日本語 中文 🚀 émojis</A>
+        <DT><A HREF="https://example.com/very/long/path/that/keeps/going/on/and/on/with/many/segments/to/test/length/handling/and/ensure/the/parser/does/not/truncate/or/fail/when/encountering/urls/that/are/much/longer/than/typical/bookmark/entries/might/normally/have/in/practice" ADD_DATE="1609459250">Long URL</A>
+    </DL><p>
+    <DT><H3 ADD_DATE="1609459300" LAST_MODIFIED="1609459300">Special &amp; Chars &lt;in&gt; Folder</H3>
+    <DL><p>
+        <DT><A HREF="javascript:alert('xss')" ADD_DATE="1609459310">Dangerous URL (should be skipped)</A>
+        <DT><A HREF="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;" ADD_DATE="1609459320">Data URL (should be skipped)</A>
+        <DT><A HREF="https://example.com/normal" ADD_DATE="1609459330">Normal URL</A>
+    </DL><p>
+</DL><p>
