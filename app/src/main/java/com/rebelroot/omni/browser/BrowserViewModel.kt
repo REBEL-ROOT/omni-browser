@@ -4608,6 +4608,30 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    // ── Media Handoff State (Phase 5-7) ───────────────────────────────────
+
+    /** Pending handoff from website <video> to native player. Consumed once. */
+    var pendingHandoff: com.rebelroot.omni.media.handoff.MediaHandoff? = null
+        internal set
+
+    /**
+     * Consumes the pending handoff if it matches [expectedSourceUri].
+     * Returns null if no handoff exists, it's stale, or the URI doesn't match.
+     * This is a one-time operation — after consumption, [pendingHandoff] is cleared.
+     */
+    fun consumePendingHandoff(expectedSourceUri: String): com.rebelroot.omni.media.handoff.MediaHandoff? {
+        val handoff = pendingHandoff
+        pendingHandoff = null
+        return if (handoff != null && handoff.sourceUri == expectedSourceUri) {
+            handoff
+        } else null
+    }
+
+    /** Clears any pending handoff without consuming it. Called on player close/failure. */
+    fun clearPendingHandoff() {
+        pendingHandoff = null
+    }
+
     fun toggleMediaGrabber(context: Context) {
         if (isMediaGrabberToggling) return
         isMediaGrabberToggling = true

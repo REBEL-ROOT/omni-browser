@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -170,9 +171,24 @@ fun VideoPlayerScreen(
     // Captured PlayerView reference so we can bind the player to the view
     // deterministically inside the player-init effect (see black-screen fix below).
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
-    var isPlaying by remember { mutableStateOf(true) }
-    var playbackPosition by remember { mutableLongStateOf(viewModel?.getVideoPosition(decodedPath) ?: 0L) }
+
+    // ── Media Handoff (Phase 5-7): consume live state from website <video> ──
+    // Priority: live handoff > persisted position > 0
+    val handoff = remember { viewModel?.consumePendingHandoff(decodedPath) }
+    var isPlaying by remember { mutableStateOf(!(handoff?.isPaused ?: false)) }
+    var playbackPosition by remember {
+        mutableLongStateOf(
+            handoff?.currentPositionMs
+                ?: viewModel?.getVideoPosition(decodedPath)
+                ?: 0L
+        )
+    }
     var duration by remember { mutableLongStateOf(0L) }
+
+    // Restore handoff-derived playback parameters
+    var initialPlaybackRate by remember { mutableFloatStateOf(handoff?.playbackRate ?: 1.0f) }
+    var initialVolume by remember { mutableFloatStateOf(handoff?.volume ?: 1.0f) }
+    var initialMuted by remember { mutableStateOf(handoff?.muted ?: false) }
     
     // Gestures overlay states
     var brightness by remember { mutableFloatStateOf(0.5f) }
@@ -587,8 +603,24 @@ fun VideoPlayerScreen(
                     setMediaItem(mediaItem)
 
 
-                    val initialPos = viewModel?.getVideoPosition(decodedPath) ?: 0L
+                    // Media Handoff (Phase 5-7): restore live state from website <video>
+                    val handoffPos = handoff?.currentPositionMs
+                    val persistedPos = viewModel?.getVideoPosition(decodedPath)
+                    val initialPos = handoffPos ?: persistedPos ?: 0L
                     if (initialPos > 0L) seekTo(initialPos)
+
+                    // Restore playback speed from handoff or default
+                    val speed = handoff?.playbackRate ?: 1.0f
+                    if (speed != 1.0f) {
+                        playbackParameters = PlaybackParameters(speed)
+                    }
+
+                    // Restore volume/mute from handoff
+                    val handoffVolume = handoff?.volume
+                    val handoffMuted = handoff?.muted
+                    if (handoffVolume != null && handoffVolume in 0.0f..1.0f) {
+                        volume = if (handoffMuted == true) 0f else handoffVolume
+                    }
 
                     repeatMode = if (viewModel?.isPlayerLoopEnabled == true) {
                         Player.REPEAT_MODE_ONE
@@ -607,7 +639,12 @@ fun VideoPlayerScreen(
                     trackSelectionParameters = updatedParams
 
                     prepare()
-                    playWhenReady = viewModel?.isPlayerAutoPlayEnabled ?: true
+                    // Media Handoff: respect website play/pause state over auto-play setting
+                    playWhenReady = if (handoff != null) {
+                        !handoff.isPaused
+                    } else {
+                        viewModel?.isPlayerAutoPlayEnabled ?: true
+                    }
 
                     addListener(object : Player.Listener {
                         override fun onIsPlayingChanged(playing: Boolean) {

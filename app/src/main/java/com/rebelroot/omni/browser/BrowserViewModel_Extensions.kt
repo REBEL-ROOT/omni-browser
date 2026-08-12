@@ -15,6 +15,9 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.WebExtension
 import com.rebelroot.omni.browser.BrowserViewModel.Companion.TAG
+import com.rebelroot.omni.media.handoff.MediaHandoff
+import com.rebelroot.omni.media.handoff.MediaSourceClassifier
+import com.rebelroot.omni.media.handoff.MediaSourceType
 
 fun BrowserViewModel.registerExtensionAction(id: String, session: GeckoSession?, action: WebExtension.Action) {
     extensionActions[id] = action
@@ -265,38 +268,11 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                     if (url != null) {
                         mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies)
                     }
+                } else if (type == "REQUEST_HANDOFF") {
+                    handleRequestHandoff(message)
                 } else if (type == "PLAY_IN_NATIVE") {
-                    val videoUrl = if (message is org.json.JSONObject) {
-                        if (message.has("url")) message.getString("url") else null
-                    } else {
-                        (message as? Map<*, *>)?.get("url") as? String
-                    }
-                    val pageUrl = (if (message is org.json.JSONObject) {
-                        if (message.has("pageUrl")) message.getString("pageUrl") else null
-                    } else {
-                        (message as? Map<*, *>)?.get("pageUrl") as? String
-                    }) ?: ""
-                    val cookies = if (message is org.json.JSONObject) {
-                        if (message.has("cookies")) message.getString("cookies") else null
-                    } else {
-                        (message as? Map<*, *>)?.get("cookies") as? String
-                    }
-                    Log.i(TAG, "🎬 received PLAY_IN_NATIVE message. url=$videoUrl, pageUrl=$pageUrl, isNativePlayerEnabled=$isNativePlayerEnabled")
-                    val isYouTube = pageUrl.lowercase().contains("youtube.com") || pageUrl.lowercase().contains("youtu.be") ||
-                                    (videoUrl != null && (videoUrl.lowercase().contains("youtube.com") || videoUrl.lowercase().contains("youtu.be")))
-                    if (videoUrl != null && isNativePlayerEnabled && (!isYouTube || isYouTubeEnabled)) {
-                        activeVideoCookies = cookies
-                        viewModelScope.launch(Dispatchers.Main) {
-                            Log.i(TAG, "🎬 Native player takeover starting for: $videoUrl")
-                            if (onPlayVideoRequestReceived == null) {
-                                Log.e(TAG, "onPlayVideoRequestReceived is NULL! Cannot navigate to VideoPlayerScreen.")
-                            } else {
-                                onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
-                            }
-                        }
-                    } else if (isYouTube) {
-                        Log.i(TAG, "🎬 Native player takeover bypassed for YouTube URL")
-                    }
+                    // Legacy fallback — kept for backward compatibility with older inject.js
+                    handleLegacyPlayInNative(message)
                 } else if (type == "INNER_SCROLL_STATE") {
                     val isScrolled = if (message is org.json.JSONObject) {
                         if (message.has("isScrolled")) message.getBoolean("isScrolled") else false
@@ -534,5 +510,164 @@ internal fun BrowserViewModel.getMediaSnifferBlocklistPreference(context: Contex
 internal fun BrowserViewModel.getMediaSnifferMinDurationSecPreference(context: Context): Flow<Int> {
     return context.dataStore.data.map { preferences ->
         preferences[BrowserViewModel.MEDIA_SNIFFER_MIN_DURATION_SEC_KEY] ?: 0
+    }
+}
+
+// ── Media Handoff Handlers ────────────────────────────────────────────────
+
+/**
+ * Handles the new REQUEST_HANDOFF message from the JS extension.
+ * Captures the handoff state, classifies the source, and either:
+ *   (a) Accepts: sends PAUSE_AND_LAUNCH to JS, stores handoff, launches player
+ *   (b) Rejects: sends RESUME_WEBSITE to JS, leaves webpage playing
+ */
+private fun BrowserViewModel.handleRequestHandoff(message: Any) {
+    val videoUrl = if (message is org.json.JSONObject) {
+        if (message.has("url")) message.getString("url") else null
+    } else {
+        (message as? Map<*, *>)?.get("url") as? String
+    } ?: return
+
+    val pageUrl = (if (message is org.json.JSONObject) {
+        if (message.has("pageUrl")) message.getString("pageUrl") else null
+    } else {
+        (message as? Map<*, *>)?.get("pageUrl") as? String
+    }) ?: ""
+
+    val handoffJson = if (message is org.json.JSONObject) {
+        if (message.has("handoff")) message.getJSONObject("handoff") else null
+    } else {
+        null
+    }
+
+    Log.i(TAG, "🎬 REQUEST_HANDOFF received. url=$videoUrl, pageUrl=$pageUrl")
+
+    if (handoffJson == null) {
+        Log.w(TAG, "🎬 REQUEST_HANDOFF missing handoff data — falling back to legacy PLAY_IN_NATIVE")
+        sendJsMessage("PAUSE_AND_LAUNCH", "{}")
+        viewModelScope.launch(Dispatchers.Main) {
+            onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
+        }
+        return
+    }
+
+    // Parse handoff from JSON
+    val handoff = try {
+        parseMediaHandoff(handoffJson)
+    } catch (e: Exception) {
+        Log.e(TAG, "🎬 Failed to parse handoff JSON", e)
+        sendJsMessage("RESUME_WEBSITE", "{}")
+        return
+    }
+
+    // Classify the source
+    val sourceType = MediaSourceClassifier.classify(handoff.sourceUri, handoff.mimeType)
+    Log.i(TAG, "🎬 Handoff source classified as: $sourceType (supported=${sourceType.isSupported})")
+
+    if (!MediaSourceClassifier.isSupported(sourceType)) {
+        // Reject: tell JS to keep website playing
+        Log.i(TAG, "🎬 Handoff rejected — unsupported source type $sourceType")
+        sendJsMessage("RESUME_WEBSITE", "{}")
+        return
+    }
+
+    // Accept: tell JS to pause, then launch native player
+    Log.i(TAG, "🎬 Handoff accepted — launching native player for $videoUrl")
+    sendJsMessage("PAUSE_AND_LAUNCH", "{\"handoffId\":\"${handoff.handoffId}\"}")
+
+    // Store the handoff in the ViewModel for consumption by VideoPlayerScreen
+    pendingHandoff = handoff
+
+    viewModelScope.launch(Dispatchers.Main) {
+        if (onPlayVideoRequestReceived == null) {
+            Log.e(TAG, "onPlayVideoRequestReceived is NULL! Cannot navigate to VideoPlayerScreen.")
+        } else {
+            onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
+        }
+    }
+}
+
+/**
+ * Legacy handler for old PLAY_IN_NATIVE messages (backward compatibility).
+ */
+private fun BrowserViewModel.handleLegacyPlayInNative(message: Any) {
+    val videoUrl = if (message is org.json.JSONObject) {
+        if (message.has("url")) message.getString("url") else null
+    } else {
+        (message as? Map<*, *>)?.get("url") as? String
+    }
+    val pageUrl = (if (message is org.json.JSONObject) {
+        if (message.has("pageUrl")) message.getString("pageUrl") else null
+    } else {
+        (message as? Map<*, *>)?.get("pageUrl") as? String
+    }) ?: ""
+
+    Log.i(TAG, "🎬 Legacy PLAY_IN_NATIVE received. url=$videoUrl, pageUrl=$pageUrl")
+    val isYouTube = pageUrl.lowercase().contains("youtube.com") || pageUrl.lowercase().contains("youtu.be") ||
+        (videoUrl != null && (videoUrl.lowercase().contains("youtube.com") || videoUrl.lowercase().contains("youtu.be")))
+    if (videoUrl != null && isNativePlayerEnabled && (!isYouTube || isYouTubeEnabled)) {
+        viewModelScope.launch(Dispatchers.Main) {
+            onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
+        }
+    }
+}
+
+/**
+ * Parses a MediaHandoff from a JSON object received from the JS extension.
+ */
+private fun parseMediaHandoff(json: org.json.JSONObject): MediaHandoff {
+    val handoffId = json.optString("handoffId", "")
+    val tabId = json.optString("tabId", "")
+    val sourceUri = json.optString("sourceUri", "")
+    val pageUrl = json.optString("pageUrl", "")
+    val title = json.optString("title", "").takeIf { it.isNotEmpty() }
+    val currentPositionMs = json.optLong("currentPositionMs", 0L)
+    val durationMs = if (json.has("durationMs") && !json.isNull("durationMs")) json.optLong("durationMs", -1L).takeIf { it >= 0 } else null
+    val isPaused = json.optBoolean("isPaused", false)
+    val playbackRate = json.optDouble("playbackRate", 1.0).toFloat()
+    val volume = json.optDouble("volume", 1.0).toFloat()
+    val muted = json.optBoolean("muted", false)
+    val mimeType = json.optString("mimeType", "").takeIf { it.isNotEmpty() }
+    val capturedAt = json.optLong("capturedAt", 0L)
+    val videoWidth = json.optInt("videoWidth", 0)
+    val videoHeight = json.optInt("videoHeight", 0)
+
+    // Classify the source type
+    val sourceType = MediaSourceClassifier.classify(sourceUri, mimeType)
+
+    return MediaHandoff(
+        handoffId = handoffId,
+        tabId = tabId,
+        sourceUri = sourceUri,
+        pageUrl = pageUrl,
+        title = title,
+        currentPositionMs = currentPositionMs,
+        durationMs = durationMs,
+        isPaused = isPaused,
+        playbackRate = playbackRate,
+        volume = volume,
+        muted = muted,
+        mimeType = mimeType,
+        sourceType = sourceType,
+        capturedAt = capturedAt,
+        videoWidth = videoWidth,
+        videoHeight = videoHeight
+    )
+}
+
+/**
+ * Sends a message to the JS extension via the native app message port.
+ */
+internal fun BrowserViewModel.sendJsMessage(type: String, payload: String) {
+    // Find the active session to send the message
+    val activeTab = tabs.find { it.id == activeTabId }
+    val session = activeTab?.session ?: return
+
+    try {
+        // Use javascript: URI to post a message that the inject.js listener will receive
+        val js = "window.postMessage({ type: '$type', payload: $payload }, '*');"
+        session.loadUri("javascript:$js")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to send JS message: $type", e)
     }
 }

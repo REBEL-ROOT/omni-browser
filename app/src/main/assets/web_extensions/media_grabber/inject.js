@@ -10,6 +10,10 @@
     let nativePlayerEnabled = true; // Default ON — intercept fullscreen + play
     let youtubeEnabled = false; // Default OFF — play on original YouTube player by default
 
+    // Pending handoff state — stores the handoff until native responds
+    let pendingHandoffVideo = null;
+    let pendingHandoffId = null;
+
     window.addEventListener('message', (event) => {
         if (event.source !== window) return;
         if (event.data?.type === 'OMNI_SET_NATIVE_PLAYER') {
@@ -25,6 +29,27 @@
             } catch (err) {
                 console.error("Error: " + (err.message || err));
             }
+        } else if (event.data?.type === 'PAUSE_AND_LAUNCH') {
+            // Native accepted the handoff — pause the website player
+            const handoffId = event.data.handoffId;
+            if (handoffId && pendingHandoffId === handoffId && pendingHandoffVideo) {
+                console.log('[inject.js] Native accepted handoff', handoffId, '- pausing website player');
+                try { pendingHandoffVideo.pause(); } catch(e) {}
+                pendingHandoffVideo._omniIntercepted = true;
+                pendingHandoffVideo = null;
+                pendingHandoffId = null;
+            }
+        } else if (event.data?.type === 'RESUME_WEBSITE') {
+            // Native rejected the handoff — clear pending state, video keeps playing
+            console.log('[inject.js] Native rejected handoff — resuming website playback');
+            pendingHandoffVideo = null;
+            pendingHandoffId = null;
+        } else if (event.data?.type === 'HANDOFF_COMPLETE') {
+            // Native player closed — clear intercepted flags so future handoffs work
+            console.log('[inject.js] Handoff complete — clearing intercepted flags');
+            document.querySelectorAll('video').forEach(v => {
+                delete v._omniIntercepted;
+            });
         }
     });
 
@@ -157,6 +182,33 @@
         if (height > 0 && height < 100) return true;
         
         return false;
+    }
+
+    // =========================================================
+    // Media Handoff — Capture live <video> element state
+    // =========================================================
+
+    /**
+     * Captures the live playback state from an HTML5 <video> element.
+     * Returns a structured object that can be passed to the native player.
+     */
+    function captureVideoState(video) {
+        const duration = video.duration;
+        const videoUrl = getVideoUrl(video) || video.currentSrc || video.src || '';
+        return {
+            sourceUri: videoUrl,
+            pageUrl: window.location.href,
+            title: document.title || '',
+            currentPositionMs: Math.floor(video.currentTime * 1000),
+            durationMs: (isFinite(duration) && duration > 0) ? Math.floor(duration * 1000) : null,
+            isPaused: video.paused,
+            playbackRate: video.playbackRate || 1.0,
+            volume: video.volume || 1.0,
+            muted: video.muted || false,
+            mimeType: video.type || getMimeType(videoUrl) || '',
+            videoWidth: video.videoWidth || 0,
+            videoHeight: video.videoHeight || 0
+        };
     }
 
     // Post grabbed media URL back to the content script (passive — never blocks)
@@ -392,7 +444,7 @@
 
     /**
      * Request the native app to play a video in the Omni Player.
-     * Pauses the in-page video and sends the URL to native.
+     * NEW: Two-phase handoff — capture state first, pause only after native accepts.
      */
     function requestNativePlayback(video, videoUrl) {
         console.log('[inject.js] requestNativePlayback called for videoUrl:', videoUrl);
@@ -412,15 +464,17 @@
             console.log('[inject.js] Cleared reported videoUrl from rate-limit cache:', videoUrl);
         }, 2000);
 
-        // Pause the in-page player
-        try { 
-            video.pause(); 
-            console.log('[inject.js] Successfully paused web video element.');
-        } catch(e) { 
-            console.error('[inject.js] Failed to pause web video element:', e); 
-        }
+        // Capture live state BEFORE pausing
+        const handoff = captureVideoState(video);
+        handoff.handoffId = 'h_' + Math.random().toString(36).substr(2, 9);
+        handoff.tabId = window.location.href;
+        handoff.capturedAt = Date.now();
 
-        // Exit any in-page fullscreen
+        // Store pending handoff so we can pause the correct video when native responds
+        pendingHandoffVideo = video;
+        pendingHandoffId = handoff.handoffId;
+
+        // Exit any in-page fullscreen (safe to do before native responds)
         try {
             if (document.fullscreenElement) {
                 document.exitFullscreen();
@@ -430,12 +484,13 @@
             console.error('[inject.js] Failed to exit browser fullscreen:', e); 
         }
 
-        console.log('[inject.js] Posting PLAY_IN_NATIVE message to window context...');
-        // Send to native
+        console.log('[inject.js] Posting REQUEST_HANDOFF message to window context...');
+        // Send to native — do NOT pause yet. Native will respond with PAUSE_AND_LAUNCH or RESUME_WEBSITE.
         window.postMessage({
-            type: 'PLAY_IN_NATIVE',
+            type: 'REQUEST_HANDOFF',
             url: videoUrl,
             pageUrl: window.location.href,
+            handoff: handoff,
             mimeType: getMimeType(videoUrl)
         }, '*');
 
