@@ -343,6 +343,12 @@ git push origin feature/your-feature
         <br /><sub><b>prince-kumar-12</b></sub>
       </a>
     </td>
+    <td align="center">
+      <a href="https://github.com/garg612">
+        <img src="https://github.com/garg612.png?size=100" width="80" height="80" style="border-radius:50%" alt="garg612" />
+        <br /><sub><b>Kushagra Garg</b></sub>
+      </a>
+    </td>
   </tr>
 </table>
 
