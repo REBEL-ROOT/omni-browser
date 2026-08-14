@@ -20,7 +20,11 @@ package com.rebelroot.omni.tools
 
 import android.util.Log
 import com.rebelroot.omni.ai.engine.LexiconTranslationEngine
+import com.rebelroot.omni.ai.engine.ModelBackedTranslationEngine
+import com.rebelroot.omni.ai.engine.OfflineTranslationEngine
 import com.rebelroot.omni.ai.engine.TranslationEngineManager
+import com.rebelroot.omni.ai.models.ModelPlatform
+import com.rebelroot.omni.ai.models.ModelTask
 import com.rebelroot.omni.ai.translation.OnlineTranslationProvider
 import com.rebelroot.omni.ai.translation.OfflineTranslationProvider
 import com.rebelroot.omni.ai.translation.TranslationCoordinator
@@ -44,7 +48,7 @@ import kotlinx.coroutines.withContext
  * online service. Users can switch to [TranslationMode.OFFLINE_ONLY] in settings;
  * in that mode no cloud request is ever made.
  */
-class TranslationManager {
+class TranslationManager(platform: ModelPlatform? = null) {
 
     sealed class TranslationStatus {
         object Idle : TranslationStatus()
@@ -56,10 +60,59 @@ class TranslationManager {
     private val _status = MutableStateFlow<TranslationStatus>(TranslationStatus.Idle)
     val status: StateFlow<TranslationStatus> = _status
 
+    /**
+     * Shared model platform used to discover translation models the user has
+     * downloaded. Null when the app context is not yet available; [attachPlatform]
+     * wires it in once it is.
+     */
+    private var platform: ModelPlatform? = platform
+
     private val lexiconEngine = LexiconTranslationEngine()
     private val engineManager = TranslationEngineManager.withDefaults(lexiconEngine)
     private val onlineProvider = OnlineTranslationProvider()
     private val offlineProvider = OfflineTranslationProvider(engineManager)
+
+    init {
+        // Register any translation models already installed on disk.
+        refreshEngines()
+    }
+
+    /**
+     * Build the offline engine set: every installed TRANSLATION model becomes a
+     * [ModelBackedTranslationEngine], plus the guaranteed bundled lexicon
+     * baseline. Installed models are preferred (higher quality), so a downloaded
+     * model is used instead of falling back to Google.
+     */
+    private fun buildEngines(): List<OfflineTranslationEngine> {
+        val engines = mutableListOf<OfflineTranslationEngine>()
+        platform?.let { p ->
+            runCatching {
+                p.repository.installedModels()
+                    .filter { it.task == ModelTask.TRANSLATION }
+                    .mapNotNull { descriptor ->
+                        val file = p.storage.finalFile(descriptor)
+                        if (file.isFile) ModelBackedTranslationEngine(descriptor, file) else null
+                    }
+            }.getOrNull()?.let { engines.addAll(it) }
+        }
+        engines.add(lexiconEngine)
+        return engines
+    }
+
+    /**
+     * Re-scan installed translation models and rebuild the engine set. Call this
+     * after a model is installed or deleted so the change takes effect immediately
+     * (e.g. a freshly downloaded model is used and Google is no longer needed).
+     */
+    fun refreshEngines() {
+        runCatching { engineManager.replaceEngines(buildEngines()) }
+    }
+
+    /** Wire the shared model platform (after the app context is available). */
+    fun attachPlatform(platform: ModelPlatform) {
+        this.platform = platform
+        refreshEngines()
+    }
 
     private val coordinator: TranslationCoordinator = TranslationCoordinator.default(
         onlineProvider = onlineProvider,

@@ -65,6 +65,27 @@ class ModelCatalogTest {
     }
 
     @Test
+    fun catalog_keepsAssetSchemeTranslationModels() {
+        val json = """
+        {
+          "allowHosts": ["alphacephei.com"],
+          "models": [
+            {
+              "id": "omni-translation-en-es", "version": "1.0", "task": "translation",
+              "name": "Omni EN-ES", "sourceLanguage": "en", "targetLanguage": "es",
+              "sizeBytes": 884, "downloadUrl": "asset://ai/models/translation_en_es.json",
+              "sha256": null, "license": "Omni", "sourceProject": "Omni Lexicon"
+            }
+          ]
+        }
+        """.trimIndent()
+        val catalog = ModelCatalog.parse(json)
+        assertEquals(1, catalog.all().size)
+        assertEquals("omni-translation-en-es", catalog.all().first().id)
+        assertEquals(1, catalog.findForTranslation("en", "es").size)
+    }
+
+    @Test
     fun catalog_parsesDescriptorRoundTrip() {
         val d = ModelDescriptor(
             id = "x", version = "1", task = ModelTask.TRANSLATION, name = "X",

@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">Pliki cookie i dane witryn</string>
     <string name="site_info_cookies_desc">Pliki cookie są używane do utrzymania zalogowania, zapamiętywania preferencji i dostarczania spersonalizowanych treści.</string>
     <string name="site_info_clear">Wyczyść</string>
-    <string name="site_info_privacy_title">Ustawienia prywatności i witryny</string>
+    <string name="site_info_privacy_title">Raport prywatności</string>
     <string name="site_info_privacy_desc">JavaScript jest aktywny. Wbudowane bloki śledzenia aktywnie filtrują reklamy i analitykę w celu uzyskania optymalnej prędkości.</string>
     <string name="site_info_privacy_settings_aria">Ustawienia prywatności</string>
+    <string name="site_history_title">Historia witryny</string>
+    <string name="site_history_empty">Nie znaleziono historii dla tej witryny</string>
+    <string name="site_history_clear">Wyczyść historię tej witryny</string>
+    <string name="site_history_cleared">Historia tej witryny została wyczyszczona</string>
     <string name="site_info_view_full_report">Zobacz pełny raport prywatności</string>
     <string name="privacy_cat_analytics_telemetry">Analityka i telemetria</string>
     <string name="privacy_cat_social_tracking">Śledzenie społecznościowe i piksel</string>

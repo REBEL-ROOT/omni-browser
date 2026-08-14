@@ -50,11 +50,19 @@ download → size validation → SHA-256 → (optional signature) → atomic act
 - Checksum: not pinned in this build ⇒ size-only verification, surfaced as
   UNVERIFIED in the UI.
 
-### Translation models (planned, not yet pinned)
+### Translation models (downloaded, lexicon tier)
 
-A Bergamot / OPUS-MT NMT model should be added to the catalog when a compatible
-native runtime is wired in. The engine manager will then prefer it over the
-bundled lexicon baseline. See `OFFLINE_TRANSLATION_ARCHITECTURE.md`.
+Translation models are now listed in the catalog and installed through the same
+shared model platform as ASR. They ship as `asset://` lexicon models (a JSON
+word→translation map) so they install fully offline with no external host. The
+`ModelBackedTranslationEngine` loads each installed translation model from
+`ModelStorage` and the `TranslationEngineManager` prefers it (higher quality)
+over the bundled lexicon — so a downloaded translation model is actually used
+for translation instead of falling back to Google.
+
+When a compatible native NMT runtime (Bergamot / OPUS-MT) is wired in, a real
+neural model can be added to the catalog the same way and will be preferred
+automatically. See `OFFLINE_TRANSLATION_ARCHITECTURE.md`.
 
 ## Adding a model safely
 

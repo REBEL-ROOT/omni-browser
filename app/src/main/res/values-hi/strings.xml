@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">कुकीज़ और साइट डेटा</string>
     <string name="site_info_cookies_desc">कुकीज़ का उपयोग आपको साइन इन रखने, आपकी प्राथमिकताएं याद रखने और स्थानीयकृत सामग्री प्रदान करने के लिए किया जाता है।</string>
     <string name="site_info_clear">साफ़ करें</string>
-    <string name="site_info_privacy_title">गोपनीयता और साइट सेटिंग्स</string>
+    <string name="site_info_privacy_title">गोपनीयता रिपोर्ट</string>
     <string name="site_info_privacy_desc">JavaScript सक्रिय है। बिल्ट-इन ट्रैकिंग ब्लॉकर्स इष्टतम गति के लिए विज्ञापनों और एनालिटिक्स को सक्रिय रूप से फ़िल्टर कर रहे हैं।</string>
     <string name="site_info_privacy_settings_aria">गोपनीयता सेटिंग्स</string>
+    <string name="site_history_title">साइट इतिहास</string>
+    <string name="site_history_empty">इस साइट के लिए कोई इतिहास नहीं मिला</string>
+    <string name="site_history_clear">इस साइट का इतिहास साफ़ करें</string>
+    <string name="site_history_cleared">इस साइट का इतिहास साफ़ किया गया</string>
     <string name="site_info_view_full_report">पूरी गोपनीयता रिपोर्ट देखें</string>
     <string name="privacy_cat_analytics_telemetry">एनालिटिक्स और टेलीमेट्री</string>
     <string name="privacy_cat_social_tracking">सोशल ट्रैकिंग और पिक्सेल</string>

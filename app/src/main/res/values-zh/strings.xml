@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">Cookie 和网站数据</string>
     <string name="site_info_cookies_desc">Cookie 用于保持您的登录状态、记住您的偏好设置并提供本地化内容。</string>
     <string name="site_info_clear">清除</string>
-    <string name="site_info_privacy_title">隐私与网站设置</string>
+    <string name="site_info_privacy_title">隐私报告</string>
     <string name="site_info_privacy_desc">JavaScript 已启用。内置追踪拦截器正在积极过滤广告和分析，以获得最佳速度。</string>
     <string name="site_info_privacy_settings_aria">隐私设置</string>
+    <string name="site_history_title">站点历史</string>
+    <string name="site_history_empty">未找到此站点的历史记录</string>
+    <string name="site_history_clear">清除此站点的历史记录</string>
+    <string name="site_history_cleared">已清除此站点的历史记录</string>
     <string name="site_info_view_full_report">查看完整隐私报告</string>
     <string name="privacy_cat_analytics_telemetry">分析与遥测</string>
     <string name="privacy_cat_social_tracking">社交追踪与 Pixel</string>

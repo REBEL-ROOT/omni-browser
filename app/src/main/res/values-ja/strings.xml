@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">Cookie とサイトデータ</string>
     <string name="site_info_cookies_desc">Cookie はログイン状態の維持、設定の記憶、ローカライズされたコンテンツの提供に使用されます。</string>
     <string name="site_info_clear">消去</string>
-    <string name="site_info_privacy_title">プライバシーとサイトの設定</string>
+    <string name="site_info_privacy_title">プライバシーレポート</string>
     <string name="site_info_privacy_desc">JavaScript は有効です。組み込みのトラッキング ブロッカーが広告と分析をアクティブにフィルタリングし、最適な速度を実現します。</string>
     <string name="site_info_privacy_settings_aria">プライバシー設定</string>
+    <string name="site_history_title">サイト履歴</string>
+    <string name="site_history_empty">このサイトの履歴は見つかりませんでした</string>
+    <string name="site_history_clear">このサイトの履歴を消去</string>
+    <string name="site_history_cleared">このサイトの履歴を消去しました</string>
     <string name="site_info_view_full_report">完全なプライバシーレポートを表示</string>
     <string name="privacy_cat_analytics_telemetry">分析とテレメトリ</string>
     <string name="privacy_cat_social_tracking">ソーシャル トラッキング &amp; ピクセル</string>

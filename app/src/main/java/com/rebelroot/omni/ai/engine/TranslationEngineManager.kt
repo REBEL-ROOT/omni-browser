@@ -31,13 +31,30 @@ import com.rebelroot.omni.ai.translation.UnsupportedLanguagePairException
  * goes idle (see performance rules: unload models when not required).
  */
 class TranslationEngineManager(
-    private val engines: List<OfflineTranslationEngine>
+    engines: List<OfflineTranslationEngine>
 ) {
+
+    /**
+     * Engines are held in a mutable list so the set can be rebuilt when the
+     * installed-model inventory changes (e.g. a translation model is downloaded
+     * or deleted). The list is always kept sorted best-quality-first by the
+     * selection helpers via [enginesForPair].
+     */
+    private val engines: MutableList<OfflineTranslationEngine> = engines.toMutableList()
 
     private val loadedEngines = LinkedHashSet<String>()
 
     /** All registered engines (for diagnostics / UI). */
     fun engines(): List<OfflineTranslationEngine> = engines.toList()
+
+    /**
+     * Replace the registered engine set (e.g. after a model is installed or
+     * deleted). Loaded engines that are no longer present are released first.
+     */
+    fun replaceEngines(newEngines: List<OfflineTranslationEngine>) {
+        engines.clear()
+        engines.addAll(newEngines)
+    }
 
     /** Whether any registered engine can serve the pair. */
     suspend fun hasEngine(sourceLanguage: String?, targetLanguage: String): Boolean =

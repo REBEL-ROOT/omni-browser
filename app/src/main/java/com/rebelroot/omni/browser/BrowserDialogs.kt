@@ -1423,9 +1423,7 @@ fun QrScanResultComposer(
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, currentResult)
                             }
-                            val chooser = Intent.createChooser(intent, "Share Link").apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
+                            val chooser = Intent.createChooser(intent, "Share Link")
                             context.startActivity(chooser)
                         },
                         shape = RoundedCornerShape(24.dp),
@@ -1609,9 +1607,7 @@ fun QrGeneratorDialog(
                                     putExtra(Intent.EXTRA_STREAM, contentUri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                val chooser = Intent.createChooser(intent, "Share QR Code").apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
+                                val chooser = Intent.createChooser(intent, "Share QR Code")
                                 context.startActivity(chooser)
                             } catch (e: java.lang.Exception) {
                                 Toast.makeText(context, context.getString(R.string.qr_gen_share_failed, e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
@@ -2255,12 +2251,10 @@ fun ExternalAppRedirectDialog(
                 Intent.parseUri(request.uri, Intent.URI_INTENT_SCHEME).apply {
                     addCategory(Intent.CATEGORY_BROWSABLE)
                     setComponent(null)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) setSelector(null)
                 }
             } else {
                 Intent(Intent.ACTION_VIEW, Uri.parse(request.uri)).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     addCategory(Intent.CATEGORY_BROWSABLE)
                 }
             }
@@ -2273,9 +2267,7 @@ fun ExternalAppRedirectDialog(
                 handlers.size == 1 || !intent.getPackage().isNullOrBlank() ->
                     context.startActivity(intent)
                 handlers.size > 1 -> {
-                    val chooser = Intent.createChooser(intent, "Open with").apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                    val chooser = Intent.createChooser(intent, "Open with")
                     context.startActivity(chooser)
                 }
                 else -> Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()

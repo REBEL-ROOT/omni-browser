@@ -88,15 +88,22 @@ class ModelCatalog(
                 val o = entry as? JsonValue.Obj ?: return@mapNotNull null
                 runCatching { parseModelDescriptor(o) }.getOrNull()
             }.filter { d ->
-                val ok = d.downloadUrl.startsWith("https://", true) &&
-                    d.sizeBytes > 0 && d.id.isNotBlank()
-                if (ok) {
-                    val host = runCatching { java.net.URL(d.downloadUrl).host.lowercase() }.getOrNull()
-                    if (host != null && allowHosts.isNotEmpty() && host !in allowHosts) {
-                        false
-                    } else true
-                } else {
+                val isAsset = d.downloadUrl.startsWith("asset://", true)
+                // App-bundled models (asset://) carry no host restriction; remote
+                // models must be HTTPS on an allow-listed host.
+                val schemeOk = d.downloadUrl.startsWith("https://", true) || isAsset
+                val sizeOk = d.sizeBytes > 0 && d.id.isNotBlank()
+                if (!(schemeOk && sizeOk)) {
                     false
+                } else if (isAsset) {
+                    true
+                } else {
+                    val host = runCatching { java.net.URL(d.downloadUrl).host.lowercase() }.getOrNull()
+                    if (host != null && allowHosts.isNotEmpty() && host.isNotBlank()) {
+                        host in allowHosts
+                    } else {
+                        true
+                    }
                 }
             }
 

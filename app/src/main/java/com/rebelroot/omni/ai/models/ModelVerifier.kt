@@ -64,13 +64,15 @@ class ModelVerifier {
         if (!file.isFile) return VerificationResult.Failed("file missing")
 
         val actualSize = file.length()
-        if (descriptor.sizeBytes > 0 && actualSize != descriptor.sizeBytes) {
-            return VerificationResult.Failed(
-                "size mismatch: expected ${descriptor.sizeBytes} bytes, got $actualSize"
-            )
-        }
+        val sizeMatches = descriptor.sizeBytes <= 0 || actualSize == descriptor.sizeBytes
 
         if (descriptor.isChecksumPinned) {
+            // Size is part of the integrity contract when a hash is pinned.
+            if (descriptor.sizeBytes > 0 && actualSize != descriptor.sizeBytes) {
+                return VerificationResult.Failed(
+                    "size mismatch: expected ${descriptor.sizeBytes} bytes, got $actualSize"
+                )
+            }
             val expected = descriptor.sha256!!.lowercase()
             val actual = sha256Of(file)
             if (actual != expected) {
@@ -81,6 +83,14 @@ class ModelVerifier {
             return VerificationResult.Verified
         }
 
-        return VerificationResult.Unverified("no SHA-256 pinned; verified by size only")
+        // No hash pinned: size is advisory only. A mismatch is warned, not rejected,
+        // so a minor upstream size drift never blocks an unverifiable model.
+        return if (sizeMatches) {
+            VerificationResult.Unverified("no SHA-256 pinned; verified by size only")
+        } else {
+            VerificationResult.Unverified(
+                "no SHA-256 pinned; size mismatch ($actualSize vs ${descriptor.sizeBytes}) — installing unverified"
+            )
+        }
     }
 }

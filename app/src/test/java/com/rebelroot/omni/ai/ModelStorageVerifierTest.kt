@@ -80,10 +80,14 @@ class ModelStorageVerifierTest {
     }
 
     @Test
-    fun verifier_sizeMismatchFails() {
+    fun verifier_sizeMismatchUnverifiedWhenNoHashPinned() {
+        // When no SHA-256 is pinned, a size mismatch is warned (Unverified), not
+        // rejected — see ModelVerifier: size is advisory so upstream drift never
+        // blocks an unverifiable model.
         val f = File(dir, "v.bin").also { it.writeBytes("hello".toByteArray()) }
         val d = desc.copy(sizeBytes = 999, sha256 = null)
-        assertTrue(verifier.verify(f, d) is VerificationResult.Failed)
+        val r = verifier.verify(f, d)
+        assertTrue(r is VerificationResult.Unverified)
     }
 
     @Test

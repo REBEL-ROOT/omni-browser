@@ -43,7 +43,11 @@ class ModelPlatform private constructor(private val appContext: Context) {
     private val storageRoot = File(appContext.getDir("ai_models", Context.MODE_PRIVATE), "v1")
     val storage: ModelStorage = ModelStorage(storageRoot)
     val catalog: ModelCatalog = ModelCatalog.parse(loadCatalogJson())
-    val repository: ModelRepository = ModelRepository(catalog, storage)
+    val repository: ModelRepository = ModelRepository(
+        catalog,
+        storage,
+        assetOpener = { name -> runCatching { appContext.assets.open(name) }.getOrNull() }
+    )
 
     /** Total bytes used by all installed models. */
     fun installedBytes(): Long = storage.totalInstalledBytes()

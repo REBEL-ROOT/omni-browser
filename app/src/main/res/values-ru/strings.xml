@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">Файлы cookie и данные сайтов</string>
     <string name="site_info_cookies_desc">Файлы cookie используются для сохранения входа, запоминания настроек и предоставления локализованного контента.</string>
     <string name="site_info_clear">Очистить</string>
-    <string name="site_info_privacy_title">Настройки конфиденциальности и сайта</string>
+    <string name="site_info_privacy_title">Отчет о конфиденциальности</string>
     <string name="site_info_privacy_desc">JavaScript активен. Встроенные блокировщики отслеживания фильтруют рекламу и аналитику для оптимальной скорости.</string>
     <string name="site_info_privacy_settings_aria">Настройки конфиденциальности</string>
+    <string name="site_history_title">История сайта</string>
+    <string name="site_history_empty">История для этого сайта не найдена</string>
+    <string name="site_history_clear">Очистить историю этого сайта</string>
+    <string name="site_history_cleared">История этого сайта очищена</string>
     <string name="site_info_view_full_report">Просмотреть полный отчет о конфиденциальности</string>
     <string name="privacy_cat_analytics_telemetry">Аналитика и телеметрия</string>
     <string name="privacy_cat_social_tracking">Социальное отслеживание и пиксели</string>

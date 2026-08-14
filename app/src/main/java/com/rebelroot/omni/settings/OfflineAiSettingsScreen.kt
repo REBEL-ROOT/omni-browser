@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -98,6 +99,7 @@ fun OfflineAiSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
         // Header
@@ -170,7 +172,11 @@ fun OfflineAiSettingsScreen(
 
                 val models = platform.catalog.all()
                 if (models.isEmpty()) {
-                    Text("No downloadable models in the catalog.", color = textSecondary, fontSize = 13.sp)
+                    EmptyModelsState(
+                        isDark = isDark,
+                        textPrimary = textPrimary,
+                        textSecondary = textSecondary
+                    )
                 }
                 models.forEach { descriptor ->
                     val state: ModelState = repoStates[descriptor.id] ?: ModelState(descriptor = descriptor)
@@ -189,10 +195,14 @@ fun OfflineAiSettingsScreen(
                         onDownload = {
                             scope.launch {
                                 platform.repository.install(descriptor)
+                                // Wire the platform and make a freshly downloaded
+                                // translation model available to the translator.
+                                viewModel.translationManager.attachPlatform(platform)
                             }
                         },
                         onDelete = {
                             platform.repository.delete(descriptor.id)
+                            viewModel.translationManager.attachPlatform(platform)
                             Toast.makeText(context, "Model deleted", Toast.LENGTH_SHORT).show()
                         }
                     )
@@ -278,6 +288,42 @@ private fun ModelRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyModelsState(
+    isDark: Boolean,
+    textPrimary: androidx.compose.ui.graphics.Color,
+    textSecondary: androidx.compose.ui.graphics.Color
+) {
+    val context = LocalContext.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp)
+    ) {
+        Icon(
+            Icons.Rounded.Info,
+            contentDescription = null,
+            tint = textSecondary,
+            modifier = Modifier.size(40.dp)
+        )
+        Text(
+            text = "No models available yet",
+            color = textPrimary,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp
+        )
+        Text(
+            text = "AI models for on-device translation and captions are downloaded from the catalog. Check back later for available models.",
+            color = textSecondary,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
     }
 }
 

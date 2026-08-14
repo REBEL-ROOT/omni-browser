@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">ملفات تعريف الارتباط وبيانات الموقع</string>
     <string name="site_info_cookies_desc">تُستخدم ملفات تعريف الارتباط لإبقائك مسجلاً للدخول، وتذكر تفضيلاتك، وتوفير محتوى مخصص.</string>
     <string name="site_info_clear">مسح</string>
-    <string name="site_info_privacy_title">إعدادات الخصوصية والموقع</string>
+    <string name="site_info_privacy_title">تقرير الخصوصية</string>
     <string name="site_info_privacy_desc">JavaScript نشط. تعمل أدوات حظر التتبع المدمجة على تصفية الإعلانات والتحليلات للحصول على السرعة المثالية.</string>
     <string name="site_info_privacy_settings_aria">إعدادات الخصوصية</string>
+    <string name="site_history_title">سجل الموقع</string>
+    <string name="site_history_empty">لم يُعثر على سجل لهذا الموقع</string>
+    <string name="site_history_clear">مسح سجل هذا الموقع</string>
+    <string name="site_history_cleared">تم مسح السجل لهذا الموقع</string>
     <string name="site_info_view_full_report">عرض تقرير الخصوصية الكامل</string>
     <string name="privacy_cat_analytics_telemetry">التحليلات والقياس عن بعد</string>
     <string name="privacy_cat_social_tracking">تتبع الشبكات الاجتماعية والبكسل</string>

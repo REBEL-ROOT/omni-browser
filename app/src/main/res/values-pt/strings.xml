@@ -328,9 +328,13 @@
     <string name="site_info_cookies_title">Cookies e dados do site</string>
     <string name="site_info_cookies_desc">Cookies são usados para manter você conectado, lembrar suas preferências e fornecer conteúdo localizado.</string>
     <string name="site_info_clear">Limpar</string>
-    <string name="site_info_privacy_title">Configurações de privacidade e do site</string>
+    <string name="site_info_privacy_title">Relatório de privacidade</string>
     <string name="site_info_privacy_desc">O JavaScript está ativo. Os bloqueadores de rastreamento integrados estão filtrando anúncios e análises para uma velocidade ideal.</string>
     <string name="site_info_privacy_settings_aria">Configurações de privacidade</string>
+    <string name="site_history_title">Histórico do site</string>
+    <string name="site_history_empty">Nenhum histórico encontrado para este site</string>
+    <string name="site_history_clear">Limpar histórico deste site</string>
+    <string name="site_history_cleared">Histórico limpo para este site</string>
     <string name="site_info_view_full_report">Ver relatório completo de privacidade</string>
     <string name="privacy_cat_analytics_telemetry">Análise e telemetria</string>
     <string name="privacy_cat_social_tracking">Rastreamento social e pixel</string>

@@ -934,7 +934,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                 try {
                                     intent.addCategory(Intent.CATEGORY_BROWSABLE)
                                     intent.setComponent(null)
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                                         intent.setSelector(null)
                                     }
@@ -967,7 +966,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     if (sitePerm == "allow") {
                         try {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 addCategory(Intent.CATEGORY_BROWSABLE)
                             }
                             context.startActivity(intent)

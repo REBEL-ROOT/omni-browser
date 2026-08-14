@@ -46,6 +46,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rebelroot.omni.browser.extensions.UniversalCopyManager
 import com.rebelroot.omni.browser.extensions.BuiltInExtensionManager
+import com.rebelroot.omni.ai.models.ModelPlatform
 import com.rebelroot.omni.media.FFmpegBridge
 import com.rebelroot.omni.media.FFmpegLoader
 import com.rebelroot.omni.media.MediaInterceptor
@@ -471,6 +472,7 @@ class BrowserViewModel : ViewModel() {
     var customSuggestUrl by mutableStateOf("")
     var customSearchEngines by mutableStateOf<List<CustomSearchEngine>>(emptyList())
     val searchSuggestions = androidx.compose.runtime.mutableStateListOf<String>()
+    val historySuggestions = androidx.compose.runtime.mutableStateListOf<HistoryEntry>()
     var isDarkThemeEnabled by mutableStateOf(true)
     var isAmoledMode by mutableStateOf(false)
     var isCreamyMode by mutableStateOf(false)
@@ -542,7 +544,7 @@ class BrowserViewModel : ViewModel() {
     var pageViewportHeight by mutableStateOf(0f)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
-    var hideRefreshIndicator by mutableStateOf(false)
+    var hideRefreshIndicator by mutableStateOf(true)
     var addressBarPosition by mutableStateOf("Split")
     var appIconState by mutableStateOf("Default")
     var customIconPath by mutableStateOf<String?>(null)
@@ -956,7 +958,6 @@ class BrowserViewModel : ViewModel() {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(parsed, contentType?.takeIf { it.isNotBlank() } ?: "*/*")
             addCategory(Intent.CATEGORY_BROWSABLE)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             val headers = Bundle().apply {
                 referrerUrl?.takeIf { it.isNotBlank() }?.let { putString("Referer", it) }
                 cookies?.takeIf { it.isNotBlank() }?.let { putString("Cookie", it) }
@@ -973,9 +974,7 @@ class BrowserViewModel : ViewModel() {
             if (!targetPackage.isNullOrEmpty()) {
                 context.startActivity(intent)
             } else {
-                val chooser = Intent.createChooser(intent, "Download with…").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
+                val chooser = Intent.createChooser(intent, "Download with…")
                 context.startActivity(chooser)
             }
             true
@@ -983,9 +982,7 @@ class BrowserViewModel : ViewModel() {
             if (!targetPackage.isNullOrEmpty()) {
                 runCatching {
                     intent.setPackage(null)
-                    val chooser = Intent.createChooser(intent, "Download with…").apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                    val chooser = Intent.createChooser(intent, "Download with…")
                     context.startActivity(chooser)
                     true
                 }.getOrDefault(false)
@@ -2568,6 +2565,10 @@ class BrowserViewModel : ViewModel() {
         val appCtx = context.applicationContext
         appContext = appCtx
 
+        // Wire the shared offline-AI model platform into the translation manager
+        // so any downloaded translation model is used instead of Google.
+        runCatching { translationManager.attachPlatform(ModelPlatform.get(appCtx)) }
+
         // Load persistent extension view mode settings
         viewModelScope.launch {
             try {
@@ -3135,7 +3136,7 @@ class BrowserViewModel : ViewModel() {
                     showScrollButtons = prefs[SHOW_SCROLL_BUTTONS_KEY] ?: true
                     navBarHideTop = prefs[NAV_BAR_HIDE_TOP_KEY] ?: true
                     navBarHideBottom = prefs[NAV_BAR_HIDE_BOTTOM_KEY] ?: true
-                    hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: false
+                    hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: true
                     addressBarPosition = prefs[ADDRESS_BAR_POSITION_KEY] ?: "Split"
                     appIconState = prefs[APP_ICON_STATE_KEY] ?: "Default"
                     customIconPath = prefs[CUSTOM_ICON_PATH_KEY]
@@ -5594,6 +5595,7 @@ class BrowserViewModel : ViewModel() {
         searchSuggestJob?.cancel()
         if (query.trim().isBlank()) {
             searchSuggestions.clear()
+            historySuggestions.clear()
             return
         }
         searchSuggestJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -5694,6 +5696,24 @@ class BrowserViewModel : ViewModel() {
                 Log.e("BrowserViewModel", "Error fetching suggestions", e)
             }
         }
+    }
+
+    fun fetchHistorySuggestions(query: String) {
+        if (query.trim().isBlank()) {
+            historySuggestions.clear()
+            return
+        }
+        val lower = query.lowercase()
+        val matches = historyList
+            .asReversed()
+            .filter {
+                it.title.lowercase().contains(lower) ||
+                it.url.lowercase().contains(lower)
+            }
+            .distinctBy { it.url }
+            .take(5)
+        historySuggestions.clear()
+        historySuggestions.addAll(matches)
     }
 
     fun getSearchUrlForQuery(query: String): String {
@@ -7694,7 +7714,6 @@ class BrowserViewModel : ViewModel() {
                                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                                     setDataAndType(apkUri, "application/vnd.android.package-archive")
                                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
                             } else {
@@ -8676,7 +8695,7 @@ class BrowserViewModel : ViewModel() {
         tabLayoutMode = prefs[TAB_LAYOUT_MODE_KEY] ?: "Grid"
         autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
         openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
-        hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: false
+        hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: true
         accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
         accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
         accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false

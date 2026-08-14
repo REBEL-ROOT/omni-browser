@@ -358,9 +358,13 @@
     <string name="site_info_cookies_title">Cookies &amp; site data</string>
     <string name="site_info_cookies_desc">Cookies are used to keep you signed in, remember your preferences, and provide localized content.</string>
     <string name="site_info_clear">Clear</string>
-    <string name="site_info_privacy_title">Privacy &amp; Site Settings</string>
+    <string name="site_info_privacy_title">Privacy Report</string>
     <string name="site_info_privacy_desc">JavaScript is active. Built-in Tracking Blockers are actively filtering ads and analytics for optimal speed.</string>
     <string name="site_info_privacy_settings_aria">Privacy settings</string>
+    <string name="site_history_title">Site History</string>
+    <string name="site_history_empty">No history found for this site</string>
+    <string name="site_history_clear">Clear history for this site</string>
+    <string name="site_history_cleared">History cleared for this site</string>
     <string name="site_info_view_full_report">View Full Privacy Report</string>
     <string name="privacy_cat_analytics_telemetry">Analytics &amp; Telemetry</string>
     <string name="privacy_cat_social_tracking">Social Tracking &amp; Pixel</string>
@@ -1748,4 +1752,22 @@
     <string name="autofill_tap_to_fill">Tap to fill</string>
     <string name="autofill_filled_as">Filled as %1$s</string>
     <string name="autofill_tap_to_switch">Tap to switch account</string>
+    <string name="media_sniffer_block_confirm_title">Block Media Sniffer on this site?</string>
+    <string name="media_sniffer_block_confirm_message">Do you want to disable Media Sniffer on %1$s? The sniffer banner won\'t appear on this site. You can re-enable it anytime in settings.</string>
+    <string name="media_sniffer_block_confirm_block">Block</string>
+    <string name="media_sniffer_block_confirm_cancel">Cancel</string>
+    <string name="menu_section_top_navigation">Top Navigation (Global Actions)</string>
+    <string name="menu_section_page_tabs">Page &amp; Tabs</string>
+    <string name="menu_section_privacy_utilities">Privacy &amp; Utilities</string>
+    <string name="menu_section_settings_display">Settings &amp; Display</string>
+    <string name="lottie_loading">Loading…</string>
+    <string name="lottie_empty_title">Nothing here yet</string>
+    <string name="lottie_empty_subtitle">This space is waiting for your content</string>
+    <string name="lottie_error_title">Something went wrong</string>
+    <string name="lottie_error_retry">Retry</string>
+    <string name="lottie_success_saved">Saved successfully</string>
+    <string name="lottie_success_downloaded">Downloaded</string>
+    <string name="lottie_searching">Searching…</string>
+    <string name="lottie_privacy_secure">Secure connection</string>
+    <string name="lottie_privacy_insecure">Connection not secure</string>
 </resources>

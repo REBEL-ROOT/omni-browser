@@ -304,6 +304,10 @@ fun BrowserScreen(
     var showSiteInfoSheet by remember { mutableStateOf(false) }
     var showPrivacyReportSheet by remember { mutableStateOf(false) }
     var inputUrl by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)) }
+    LaunchedEffect(inputUrl.text) {
+        viewModel.fetchSearchSuggestions(inputUrl.text)
+        viewModel.fetchHistorySuggestions(inputUrl.text)
+    }
     var isInputFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -5481,7 +5485,8 @@ fun BrowserScreen(
                             .fillMaxWidth()
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp)
-                            .padding(bottom = 20.dp),
+                            .padding(bottom = 20.dp)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // ── Header: favicon + domain + connection badge ──────────────
@@ -5623,7 +5628,105 @@ fun BrowserScreen(
                             }
                         }
 
-                        // ── Card 3: Per-site permissions ─────────────────────────────
+                        // ── Card 3: Site History ─────────────────────────────────────
+                        if (!isLocal) {
+                            val siteHistory by remember(currentDomain) {
+                                derivedStateOf { viewModel.getHistoryForDomain(currentDomain) }
+                            }
+                            Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.site_history_title),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = textSecondary,
+                                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                                    )
+
+                                    if (siteHistory.isEmpty()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+                                        ) {
+                                            Icon(Icons.Rounded.History, null, tint = textSecondary, modifier = Modifier.size(22.dp))
+                                            Text(stringResource(R.string.site_history_empty), fontSize = 13.sp, color = textSecondary)
+                                        }
+                                    } else {
+                                        val now = System.currentTimeMillis()
+                                        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                        androidx.compose.foundation.lazy.LazyColumn(
+                                            state = listState,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 280.dp),
+                                            verticalArrangement = Arrangement.spacedBy(0.dp),
+                                            userScrollEnabled = true
+                                        ) {
+                                            items(siteHistory.size, key = { siteHistory[it].url + siteHistory[it].timestamp }) { index ->
+                                                val entry = siteHistory[index]
+                                                val entryHost = remember(entry.url) {
+                                                    try { java.net.URL(entry.url).host } catch (_: Exception) { null }
+                                                }
+                                                val faviconUrl = remember(entryHost) {
+                                                    entryHost?.let { "https://www.google.com/s2/favicons?domain=$it&sz=64" }
+                                                }
+                                                val path = remember(entry.url) {
+                                                    try {
+                                                        java.net.URL(entry.url).path.let { if (it.isBlank() || it == "/") "" else it }
+                                                    } catch (_: Exception) { "" }
+                                                }
+                                                Column {
+                                                    if (index > 0) HorizontalDivider(color = divColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 38.dp))
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        if (faviconUrl != null) {
+                                                            coil.compose.AsyncImage(
+                                                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                                    .data(faviconUrl).size(32, 32).crossfade(true).build(),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)),
+                                                                error = androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_compass)
+                                                            )
+                                                        } else {
+                                                            Box(modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                                                                Icon(Icons.Rounded.Language, null, tint = textSecondary, modifier = Modifier.size(14.dp))
+                                                            }
+                                                        }
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = entry.title.takeIf { it.isNotBlank() } ?: path.ifBlank { entry.url },
+                                                                fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = textPrimary,
+                                                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            if (path.isNotBlank()) {
+                                                                Text(path, fontSize = 11.sp, color = textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                            }
+                                                        }
+                                                        Text(
+                                                            text = formatRelativeTime(entry.timestamp, now),
+                                                            fontSize = 11.sp, color = textSecondary
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        HorizontalDivider(color = divColor, thickness = 0.5.dp)
+                                        TextButton(
+                                            onClick = { viewModel.clearHistoryForDomain(currentDomain); android.widget.Toast.makeText(context, R.string.site_history_cleared, android.widget.Toast.LENGTH_SHORT).show() },
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                        ) {
+                                            Text(stringResource(R.string.site_history_clear), color = dangerRed, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Card 4: Per-site permissions ─────────────────────────────
                         if (!isLocal) {
                             Surface(shape = RoundedCornerShape(14.dp), color = cardBg, modifier = Modifier.fillMaxWidth()) {
                                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
@@ -5706,7 +5809,7 @@ fun BrowserScreen(
                             }
                         }
 
-                        // ── Card 4: Privacy & Site Settings → Privacy Report ─────────
+                        // ── Card 4: Privacy Report ─────────
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = cardBg,
@@ -8305,4 +8408,27 @@ fun ChoicePromptDialog(
         containerColor = if (isDarkTheme) Color(0xFF1C1C1E) else MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(32.dp)
     )
+}
+
+/**
+ * Format a timestamp as a human-readable relative string (e.g. "2h ago", "Yesterday").
+ */
+private fun formatRelativeTime(timestamp: Long, now: Long): String {
+    val diffMs = now - timestamp
+    if (diffMs < 0) return "Just now"
+    val seconds = diffMs / 1000
+    val minutes = seconds / 60
+    val hours = minutes / 60
+    val days = hours / 24
+    return when {
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        days == 1L -> "Yesterday"
+        days < 7 -> "${days}d ago"
+        else -> {
+            val fmt = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+            fmt.format(java.util.Date(timestamp))
+        }
+    }
 }

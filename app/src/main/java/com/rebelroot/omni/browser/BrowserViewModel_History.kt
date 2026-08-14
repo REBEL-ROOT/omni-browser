@@ -95,3 +95,36 @@ fun BrowserViewModel.clearHistorySince(cutoffTime: Long) {
     saveHistory(context)
 }
 
+/**
+ * Return up to [limit] history entries whose URL host matches the given [domain].
+ * Results are sorted by timestamp descending (most recent first).
+ * Domain comparison is normalized: lowercase, www. stripped.
+ */
+fun BrowserViewModel.getHistoryForDomain(domain: String, limit: Int = 20): List<HistoryEntry> {
+    val normalizedDomain = domain.lowercase().removePrefix("www.")
+    return historyList.filter { entry ->
+        val entryHost = try {
+            java.net.URI(entry.url).host?.lowercase()?.removePrefix("www.") ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+        entryHost == normalizedDomain || entryHost.endsWith(".$normalizedDomain")
+    }.sortedByDescending { it.timestamp }.take(limit)
+}
+
+/**
+ * Remove all history entries whose URL host matches the given [domain].
+ */
+fun BrowserViewModel.clearHistoryForDomain(domain: String) {
+    val context = appContext ?: return
+    val normalizedDomain = domain.lowercase().removePrefix("www.")
+    historyList.removeAll { entry ->
+        val entryHost = try {
+            java.net.URI(entry.url).host?.lowercase()?.removePrefix("www.") ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+        entryHost == normalizedDomain || entryHost.endsWith(".$normalizedDomain")
+    }
+    saveHistory(context)
+}

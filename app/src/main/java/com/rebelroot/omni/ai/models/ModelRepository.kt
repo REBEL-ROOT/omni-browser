@@ -20,6 +20,7 @@ package com.rebelroot.omni.ai.models
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -44,7 +45,13 @@ class ModelRepository(
     private val catalog: ModelCatalog,
     private val storage: ModelStorage,
     private val downloader: ModelDownloader = ModelDownloader(),
-    private val verifier: ModelVerifier = ModelVerifier()
+    private val verifier: ModelVerifier = ModelVerifier(),
+    /**
+     * Opens an app-bundled asset by name. Required to install `asset://` models
+     * (e.g. offline translation lexicons shipped with the app) without network.
+     * Null when no asset source is available (pure unit tests).
+     */
+    private val assetOpener: ((String) -> InputStream?)? = null
 ) {
     private val _states = MutableStateFlow<Map<String, ModelState>>(emptyMap())
     val states: StateFlow<Map<String, ModelState>> = _states
@@ -65,37 +72,45 @@ class ModelRepository(
 
         emit(descriptor.id) { copy(status = ModelInstallState.QUEUED, errorMessage = null) }
 
-        // Skip transfer if a complete partial already exists.
-        val partialComplete = storage.partialBytes(descriptor) == descriptor.sizeBytes
-        if (!partialComplete) {
-            emit(descriptor.id) { copy(status = ModelInstallState.DOWNLOADING, progress = ModelProgress(0, descriptor.sizeBytes)) }
-            val outcome = downloader.download(
-                descriptor = descriptor,
-                partialFile = storage.partialFile(descriptor),
-                allowHosts = catalog.allowedHosts().takeIf { it.isNotEmpty() },
-                listener = object : ModelDownloader.ProgressListener {
-                    override fun onProgress(bytesDownloaded: Long, totalBytes: Long, bytesPerSecond: Long) {
-                        emit(descriptor.id) {
-                            copy(
-                                status = ModelInstallState.DOWNLOADING,
-                                progress = ModelProgress(bytesDownloaded, totalBytes, bytesPerSecond)
-                            )
+        val isAsset = descriptor.downloadUrl.startsWith("asset://", ignoreCase = true)
+        if (isAsset) {
+            // App-bundled model: copy from assets instead of downloading.
+            if (!copyAsset(descriptor)) {
+                return stateFor(descriptor.id)
+            }
+        } else {
+            // Skip transfer if a complete partial already exists.
+            val partialComplete = storage.partialBytes(descriptor) == descriptor.sizeBytes
+            if (!partialComplete) {
+                emit(descriptor.id) { copy(status = ModelInstallState.DOWNLOADING, progress = ModelProgress(0, descriptor.sizeBytes)) }
+                val outcome = downloader.download(
+                    descriptor = descriptor,
+                    partialFile = storage.partialFile(descriptor),
+                    allowHosts = catalog.allowedHosts().takeIf { it.isNotEmpty() },
+                    listener = object : ModelDownloader.ProgressListener {
+                        override fun onProgress(bytesDownloaded: Long, totalBytes: Long, bytesPerSecond: Long) {
+                            emit(descriptor.id) {
+                                copy(
+                                    status = ModelInstallState.DOWNLOADING,
+                                    progress = ModelProgress(bytesDownloaded, totalBytes, bytesPerSecond)
+                                )
+                            }
                         }
+                    },
+                    isCancelled = { cancelFlag.get() }
+                )
+                when (outcome) {
+                    is ModelDownloader.DownloadOutcome.Success -> { /* continue */ }
+                    is ModelDownloader.DownloadOutcome.Cancelled -> {
+                        emit(descriptor.id) { copy(status = ModelInstallState.IDLE, progress = ModelProgress()) }
+                        storage.discardPartial(descriptor)
+                        return stateFor(descriptor.id)
                     }
-                },
-                isCancelled = { cancelFlag.get() }
-            )
-            when (outcome) {
-                is ModelDownloader.DownloadOutcome.Success -> { /* continue */ }
-                is ModelDownloader.DownloadOutcome.Cancelled -> {
-                    emit(descriptor.id) { copy(status = ModelInstallState.IDLE, progress = ModelProgress()) }
-                    storage.discardPartial(descriptor)
-                    return stateFor(descriptor.id)
-                }
-                is ModelDownloader.DownloadOutcome.Failed -> {
-                    emit(descriptor.id) { copy(status = ModelInstallState.FAILED, errorMessage = outcome.reason) }
-                    storage.discardPartial(descriptor)
-                    return stateFor(descriptor.id)
+                    is ModelDownloader.DownloadOutcome.Failed -> {
+                        emit(descriptor.id) { copy(status = ModelInstallState.FAILED, errorMessage = outcome.reason) }
+                        storage.discardPartial(descriptor)
+                        return stateFor(descriptor.id)
+                    }
                 }
             }
         }
@@ -147,6 +162,33 @@ class ModelRepository(
     /** Drop a partial download (e.g. on user cancel) without affecting installs. */
     fun discardPartial(id: String) {
         catalog.byId(id)?.let { storage.discardPartial(it) }
+    }
+
+    /**
+     * Copy an `asset://` model from the app's bundled assets into the partial file.
+     * Returns false (and emits FAILED) if the asset source is unavailable or the
+     * named asset is missing.
+     */
+    private fun copyAsset(descriptor: ModelDescriptor): Boolean {
+        val assetName = descriptor.downloadUrl.removePrefix("asset://").removePrefix("/")
+        val opener = assetOpener
+        if (opener == null) {
+            emit(descriptor.id) { copy(status = ModelInstallState.FAILED, errorMessage = "asset model source unavailable") }
+            return false
+        }
+        return try {
+            val copied = opener(assetName)?.use { input ->
+                storage.partialFile(descriptor).outputStream().use { out -> input.copyTo(out) }
+                true
+            } ?: run {
+                emit(descriptor.id) { copy(status = ModelInstallState.FAILED, errorMessage = "asset not found: $assetName") }
+                false
+            }
+            copied
+        } catch (e: Exception) {
+            emit(descriptor.id) { copy(status = ModelInstallState.FAILED, errorMessage = "asset copy failed: ${e.message}") }
+            false
+        }
     }
 
     private fun removeOlderVersions(descriptor: ModelDescriptor) {
