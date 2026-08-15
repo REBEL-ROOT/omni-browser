@@ -317,6 +317,8 @@ git push origin feature/your-feature
 
 ## 👥 Contributors
 
+### Core Team
+
 <table>
   <tr>
     <td align="center">
@@ -351,6 +353,21 @@ git push origin feature/your-feature
     </td>
   </tr>
 </table>
+
+### Bug Hunters & QA Contributors
+
+Special thanks to the following community members who have helped debug the project, perform extensive testing, and present critical issues:
+
+| Rank | Contributor | Contribution Evidence |
+| :---: | :--- | :--- |
+| **1** | [<img src="https://github.com/Tr4p-kun.png?size=50" width="40" height="40" style="border-radius:50%" alt="Tr4p-kun" /><br /><sub><b>Tr4p-kun</b></sub>](https://github.com/Tr4p-kun) | **#10, #11, #12, #13** — Multiple detailed bug reports, proper reproduction steps, device/version information, and screenshots/videos. |
+| **2** | [<img src="https://github.com/HikaruIchijyo.png?size=50" width="40" height="40" style="border-radius:50%" alt="HikaruIchijyo" /><br /><sub><b>HikaruIchijyo</b></sub>](https://github.com/HikaruIchijyo) | **#23, #24, #25, #27, #28, #31, #37, #38, #40, #52, #53 and more** — Very extensive testing and UI/UX feedback. #31 alone had multiple concrete improvements with reference screenshots, many of which were marked completed. |
+| **3** | [<img src="https://github.com/trinadhthatakula.png?size=50" width="40" height="40" style="border-radius:50%" alt="trinadhthatakula" /><br /><sub><b>trinadhthatakula</b></sub>](https://github.com/trinadhthatakula) | **#34** — Exceptional technical investigation of the versionCode regression, including release-by-release analysis, affected users, reproduction, and a proposed fix. |
+| **4** | [<img src="https://github.com/abhishekjena601-source.png?size=50" width="40" height="40" style="border-radius:50%" alt="abhishekjena601-source" /><br /><sub><b>abhishekjena601-source</b></sub>](https://github.com/abhishekjena601-source) | **#73, #77 and others** — Repeated testing/feedback across media player, dark mode, pull-to-refresh, toolbar/UI, and other areas. |
+| **5** | [<img src="https://github.com/MalikSabahatAli.png?size=50" width="40" height="40" style="border-radius:50%" alt="MalikSabahatAli" /><br /><sub><b>MalikSabahatAli</b></sub>](https://github.com/MalikSabahatAli) | **#61** — Excellent cross-site investigation of the .pk/.bin navigation bug, testing multiple domains and comparing behavior against Chrome. |
+| **6** | [<img src="https://github.com/jd0spec.png?size=50" width="40" height="40" style="border-radius:50%" alt="jd0spec" /><br /><sub><b>jd0spec</b></sub>](https://github.com/jd0spec) | **#51** — Detailed analysis of Omni's video-player architecture and playback continuity, with comparison against Quetta and a concrete technical direction. |
+| **7** | [<img src="https://github.com/Atrium0495.png?size=50" width="40" height="40" style="border-radius:50%" alt="Atrium0495" /><br /><sub><b>Atrium0495</b></sub>](https://github.com/Atrium0495) | **#71** — Real tablet testing with screenshots identifying layout and accessibility problems. |
+
 
 ---
 

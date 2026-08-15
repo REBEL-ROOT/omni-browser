@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.rebelroot.omni.browser
 
 import android.app.Activity
