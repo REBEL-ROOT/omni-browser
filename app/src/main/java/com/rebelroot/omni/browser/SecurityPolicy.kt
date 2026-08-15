@@ -369,14 +369,11 @@ object OriginVerifier {
         if (uri.isNullOrBlank() || domain.isBlank()) return false
 
         val host = SecurityPolicy.extractEffectiveHost(uri)
-        val target = domain.lowercase(java.util.Locale.ROOT).removePrefix("www.")
+        val target = domain.lowercase(java.util.Locale.ROOT)
 
-        // Also strip www. from the extracted host for fair comparison
-        val normalizedHost = if (host.startsWith("www.")) host.removePrefix("www.") else host
-
-        val match = normalizedHost == target
+        val match = host == target
         if (!match && Log.isLoggable(TAG, Log.DEBUG)) {
-            Log.d(TAG, "Exact origin mismatch: host='$normalizedHost' vs expected='$target' for uri='$uri'")
+            Log.d(TAG, "Exact origin mismatch: host='$host' vs expected='$target' for uri='$uri'")
         }
         return match
     }
