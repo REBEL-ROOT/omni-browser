@@ -367,7 +367,14 @@ Special thanks to the following community members who have helped debug the proj
 | **5** | [<img src="https://github.com/MalikSabahatAli.png?size=50" width="40" height="40" style="border-radius:50%" alt="MalikSabahatAli" /><br /><sub><b>MalikSabahatAli</b></sub>](https://github.com/MalikSabahatAli) | **#61** — Excellent cross-site investigation of the .pk/.bin navigation bug, testing multiple domains and comparing behavior against Chrome. |
 | **6** | [<img src="https://github.com/jd0spec.png?size=50" width="40" height="40" style="border-radius:50%" alt="jd0spec" /><br /><sub><b>jd0spec</b></sub>](https://github.com/jd0spec) | **#51** — Detailed analysis of Omni's video-player architecture and playback continuity, with comparison against Quetta and a concrete technical direction. |
 | **7** | [<img src="https://github.com/Atrium0495.png?size=50" width="40" height="40" style="border-radius:50%" alt="Atrium0495" /><br /><sub><b>Atrium0495</b></sub>](https://github.com/Atrium0495) | **#71** — Real tablet testing with screenshots identifying layout and accessibility problems. |
-| **8** | [<img src="https://github.com/odorizzioficial.png?size=50" width="40" height="40" style="border-radius:50%" alt="odorizzioficial" /><br /><sub><b>odorizzioficial</b></sub>](https://github.com/odorizzioficial) | **[YouTube Showcase](https://www.youtube.com/watch?v=OyfB_JcbzVI)** — Created a detailed video review showcasing and demonstrating Omni Browser's features and performance. |
+
+### 📺 Community Showcases & Reviews
+
+Special thanks to content creators who have featured, demonstrated, or reviewed Omni Browser:
+
+| Creator | Showcase |
+| :--- | :--- |
+| [<img src="https://github.com/odorizzioficial.png?size=50" width="40" height="40" style="border-radius:50%" alt="odorizzioficial" /><br /><sub><b>odorizzioficial</b></sub>](https://github.com/odorizzioficial) | **[YouTube Showcase Video](https://www.youtube.com/watch?v=OyfB_JcbzVI)** — Detailed video demonstration and overview of Omni Browser's features. |
 
 ---
 
