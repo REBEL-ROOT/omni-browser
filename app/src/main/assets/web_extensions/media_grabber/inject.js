@@ -436,7 +436,9 @@
                     return manifests[0]; // Return FIRST manifest (master)
                 }
             }
-            return urls[0]; // Return FIRST detected URL
+            // Fallback to first playable media URL
+            const playableUrl = urls.find(u => isPlayableMediaUrl(u));
+            if (playableUrl) return playableUrl;
         }
 
         return null;

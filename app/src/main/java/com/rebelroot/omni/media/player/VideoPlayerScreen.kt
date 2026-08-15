@@ -765,6 +765,9 @@ fun VideoPlayerScreen(
             // Capture the WebView reference so onRelease can properly destroy it,
             // preventing the ~50–150MB Chromium renderer from leaking on close.
             var youtubeWebView by remember { mutableStateOf<android.webkit.WebView?>(null) }
+            var customView by remember { mutableStateOf<android.view.View?>(null) }
+            var customViewCallback by remember { mutableStateOf<android.webkit.WebChromeClient.CustomViewCallback?>(null) }
+
             DisposableEffect(youtubeVideoId) {
                 onDispose {
                     youtubeWebView?.apply {
@@ -778,63 +781,86 @@ fun VideoPlayerScreen(
                     youtubeWebView = null
                 }
             }
-            AndroidView(
-                factory = { ctx ->
-                    android.webkit.WebView(ctx).also { youtubeWebView = it }.apply {
-                        settings.apply {
-                            javaScriptEnabled = true
-                            domStorageEnabled = true
-                            databaseEnabled = true
-                            mediaPlaybackRequiresUserGesture = false
-                            useWideViewPort = true
-                            loadWithOverviewMode = true
-                            allowFileAccess = false
-                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        }
-                        webViewClient = android.webkit.WebViewClient()
-                        webChromeClient = object : android.webkit.WebChromeClient() {
-                            override fun onShowCustomView(view: android.view.View?, callback: CustomViewCallback?) {
-                                // Allow native fullscreen inside the embed WebView
-                                super.onShowCustomView(view, callback)
+
+            BackHandler(enabled = customView != null) {
+                customView = null
+                customViewCallback?.onCustomViewHidden()
+                customViewCallback = null
+                activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+
+            if (customView != null) {
+                AndroidView(
+                    factory = { customView!! },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        android.webkit.WebView(ctx).also { youtubeWebView = it }.apply {
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                databaseEnabled = true
+                                mediaPlaybackRequiresUserGesture = false
+                                useWideViewPort = true
+                                loadWithOverviewMode = true
+                                allowFileAccess = false
+                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             }
+                            webViewClient = android.webkit.WebViewClient()
+                            webChromeClient = object : android.webkit.WebChromeClient() {
+                                override fun onShowCustomView(view: android.view.View?, callback: CustomViewCallback?) {
+                                    customView = view
+                                    customViewCallback = callback
+                                    activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                }
+
+                                override fun onHideCustomView() {
+                                    customView = null
+                                    customViewCallback?.onCustomViewHidden()
+                                    customViewCallback = null
+                                    activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                }
+                            }
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            // Use loadDataWithBaseURL so the iframe has a YouTube origin,
+                            // which is required for autoplay and the IFrame Player API to work.
+                            val embedHtml = """
+                                <!DOCTYPE html>
+                                <html>
+                                <head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                                <style>
+                                * { margin:0; padding:0; box-sizing:border-box; background:#000; }
+                                html, body { width:100%; height:100%; overflow:hidden; }
+                                iframe { width:100%; height:100%; border:none; display:block; }
+                                </style>
+                                </head>
+                                <body>
+                                <iframe
+                                    src="https://www.youtube.com/embed/$youtubeVideoId?autoplay=1&rel=0&showinfo=0&controls=1&playsinline=1&enablejsapi=1"
+                                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                                    allowfullscreen>
+                                </iframe>
+                                </body>
+                                </html>
+                            """.trimIndent()
+                            loadDataWithBaseURL(
+                                "https://www.youtube.com",
+                                embedHtml,
+                                "text/html",
+                                "UTF-8",
+                                null
+                            )
                         }
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        // Use loadDataWithBaseURL so the iframe has a YouTube origin,
-                        // which is required for autoplay and the IFrame Player API to work.
-                        val embedHtml = """
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-                            <style>
-                            * { margin:0; padding:0; box-sizing:border-box; background:#000; }
-                            html, body { width:100%; height:100%; overflow:hidden; }
-                            iframe { width:100%; height:100%; border:none; display:block; }
-                            </style>
-                            </head>
-                            <body>
-                            <iframe
-                                src="https://www.youtube.com/embed/$youtubeVideoId?autoplay=1&rel=0&showinfo=0&controls=1&playsinline=1&enablejsapi=1"
-                                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                                allowfullscreen>
-                            </iframe>
-                            </body>
-                            </html>
-                        """.trimIndent()
-                        loadDataWithBaseURL(
-                            "https://www.youtube.com",
-                            embedHtml,
-                            "text/html",
-                            "UTF-8",
-                            null
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         } else {
             // ExoPlayer Canvas Surface
             AndroidView(
