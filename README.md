@@ -255,46 +255,6 @@ Download the latest signed APK from our [**Releases Page**](https://github.com/R
 
 ---
 
-## 🗺️ Roadmap
-
-### ✅ Completed (v1.0 – v1.2.2)
-- [x] Multi-tab browsing with GeckoView
-- [x] Incognito / Private mode with full isolation
-- [x] Firefox WebExtension support (.xpi)
-- [x] Built-in host-based ad & tracker blocker (configurable filter lists)
-- [x] Extensions working inside Incognito mode
-- [x] Universal Copy, AI Blocker, Media Grabber + installable uBlock Origin (AMO)
-- [x] Media stream sniffer + Omni ExoPlayer
-- [x] Biometric AES vault for private files
-- [x] Online translator (Google Translate endpoint)
-- [x] QR Scanner, Generator & Page Scan
-- [x] WireGuard VPN integration
-- [x] Interactive JS developer console REPL
-- [x] Developer Notes offline scratchpad
-- [x] Save page as PDF
-- [x] Auto-scroll
-- [x] Pin Web App to home screen
-- [x] Custom site styles
-- [x] Accent color picker
-- [x] UPI & deep-link intent routing
-- [x] Desktop mode per tab
-- [x] Android 15+ edge-to-edge UI
-- [x] Discover news feed (Trending, World, Tech, Sports)
-
-### 🔜 Planned (v1.3+)
-- [ ] Tab groups — collapsible named groups
-- [ ] Reading mode — distraction-free article view
-- [ ] Custom homepage widgets (news, weather)
-- [ ] Password manager integration
-- [ ] Web3 / dApp support (MetaMask-compatible)
-- [ ] Split-screen dual-tab view for tablets
-- [ ] Advanced download manager (queue, resume)
-- [ ] Offline page saving
-- [ ] Bookmarks & history sync (encrypted cloud)
-- [ ] Custom CSS injection per site
-
----
-
 ## 🤝 Contributing
 
 We welcome contributions from the open-source community! Please read [**CONTRIBUTING.md**](CONTRIBUTING.md) before submitting a PR.
