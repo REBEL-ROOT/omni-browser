@@ -163,9 +163,9 @@ graph TD
         AIB[AI Blocker]
     end
 
-subgraph Svc["Services"]
+    subgraph Svc["Services"]
         DL[Download Engine]
-        TL[Translator (online)]
+        TL["Translator (online)"]
         VPN[WireGuard VPN]
         VAULT[Biometric Vault]
         PDF[PDF Export]
