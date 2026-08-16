@@ -36,9 +36,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
@@ -400,9 +402,21 @@ fun BrowserScreen(
         }
     }
 
-    // Ensure fullscreen controls are always ready and visible when video is playing or fullscreen
-    LaunchedEffect(viewModel.isVideoPlayingInPage, viewModel.isFullscreen) {
+    // Auto-hide fullscreen controls while video is playing; keep visible when paused or on user touch
+    LaunchedEffect(viewModel.isVideoPlayingInPage, viewModel.lastUserInteractionTime, viewModel.isFullscreen) {
+        if (!viewModel.isFullscreen) {
+            showFullscreenDownloadBtn = true
+            return@LaunchedEffect
+        }
+
+        // Show controls immediately upon state change or user touch
         showFullscreenDownloadBtn = true
+
+        if (viewModel.isVideoPlayingInPage) {
+            // While playing, auto-hide after 3.5 seconds of inactivity
+            kotlinx.coroutines.delay(3500)
+            showFullscreenDownloadBtn = false
+        }
     }
     // Issue #73: The site's own video player is NEVER overridden automatically.
     // The native player is launched only when the user taps the dedicated media
@@ -2064,6 +2078,9 @@ fun BrowserScreen(
                                                 private val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
 
                                                 override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+                                                    if (ev.action == android.view.MotionEvent.ACTION_DOWN) {
+                                                        viewModel.registerUserTouch()
+                                                    }
                                                     val scrollY = currentScrollPos
                                                     when (ev.action) {
                                                         android.view.MotionEvent.ACTION_DOWN -> {
@@ -3375,7 +3392,14 @@ fun BrowserScreen(
                 if (viewModel.isFullscreen) {
                     // Fullscreen mode — overlay with non-blocking floating controls
                     Box(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(pass = PointerEventPass.Initial)
+                                    viewModel.registerUserTouch()
+                                }
+                            }
                     ) {
                         // Top-left controls: Back + Exit Fullscreen
                         androidx.compose.animation.AnimatedVisibility(
