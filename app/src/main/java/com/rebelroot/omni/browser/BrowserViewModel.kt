@@ -362,6 +362,101 @@ class BrowserViewModel : ViewModel() {
     // GeckoView Reference for capturePixels
     internal var activeGeckoViewRef: WeakReference<GeckoView>? = null
 
+    /** Durable on-disk SessionState persistence engine (Phase 1-4). */
+    internal var sessionStatePersistence: com.rebelroot.omni.browser.session.SessionStatePersistence? = null
+
+    /** Central recovery state machine. */
+    internal var recoveryCoordinator: com.rebelroot.omni.browser.session.SessionRecoveryCoordinator? = null
+
+    /** True when Omni launched an external app (UPI/PayPal/banking/camera) and
+     *  we checkpointed state before leaving. Cleared on resume after health check. */
+    var isInExternalAppHandoff by mutableStateOf(false)
+
+    /** True when the process was recreated after being killed by Android. */
+    var isProcessRecreated by mutableStateOf(false)
+
+    /** Monotonic counter for session generations (tab-level). */
+    private var tabGenerationCounter = 0L
+
+    fun nextTabGeneration(): Long = ++tabGenerationCounter
+
+    /** True while the active tab is being recovered (content-process or process death).
+     *  Drives the "Restoring your page…" overlay in BrowserScreen so the user never
+     *  sees a blank white screen during recovery. */
+    var isRecoveringActiveTab by mutableStateOf(false)
+
+    /** True if the last recovery attempt failed and the safe recovery UI should be shown. */
+    var lastRecoveryFailed by mutableStateOf(false)
+
+    /**
+     * Force-durable checkpoint of all eligible tabs' current SessionState.
+     * Called before launching external apps, on activity stop, and any other
+     * process-death-prone boundary. Never blocks the UI thread for long.
+     */
+    fun forceCheckpoint() {
+        val persistence = sessionStatePersistence ?: return
+        com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logActivityStop()
+        try {
+            val states = mutableMapOf<String, Pair<org.mozilla.geckoview.GeckoSession.SessionState, com.rebelroot.omni.browser.session.OmniSessionState.TabMetadata>>()
+            tabs.forEach { tab ->
+                val state = tab.savedSessionState ?: return@forEach
+                states[tab.id] = state to com.rebelroot.omni.browser.session.OmniSessionState.TabMetadata(
+                    title = tab.title,
+                    url = tab.url,
+                    isIncognito = tab.isIncognito,
+                    lastActiveTime = tab.lastActiveTime,
+                    canGoBack = tab.canGoBack,
+                    canGoForward = tab.canGoForward
+                )
+            }
+            persistence.forceCheckpointBatch(states)
+            recoveryCoordinator?.onCheckpointCompleted()
+        } catch (e: Exception) {
+            Log.w(TAG, "forceCheckpoint failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Requests a durable checkpoint of a single tab's state (debounced).
+     * Called from onSessionStateChange and tab-switch boundaries.
+     */
+    fun requestSessionStatePersist(tab: TabState) {
+        val persistence = sessionStatePersistence ?: return
+        val state = tab.savedSessionState ?: return
+        persistence.requestPersist(
+            tabId = tab.id,
+            sessionState = state,
+            metadata = com.rebelroot.omni.browser.session.OmniSessionState.TabMetadata(
+                title = tab.title,
+                url = tab.url,
+                isIncognito = tab.isIncognito,
+                lastActiveTime = tab.lastActiveTime,
+                canGoBack = tab.canGoBack,
+                canGoForward = tab.canGoForward
+            )
+        )
+    }
+
+    /**
+     * Checkpoint the active tab's session state and mark that we're handing off to an
+     * external application. Called before launching UPI / PayPal / banking / OAuth / etc.
+     */
+    fun forceCheckpointBeforeHandoff(tabId: String) {
+        isInExternalAppHandoff = true
+        recoveryCoordinator?.onExternalAppHandoffStarted()
+        com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logActivityResume(isExternalAppHandoff = true)
+        // Force-flush Gecko if the active tab is live, then checkpoint.
+        val tab = tabs.find { it.id == tabId }
+        if (tab != null && tab.session.isOpen) {
+            try {
+                tab.session.flushSessionState()
+            } catch (e: Exception) {
+                Log.w(TAG, "flushSessionState failed before handoff: ${e.message}")
+            }
+        }
+        forceCheckpoint()
+    }
+
     fun setActiveGeckoView(geckoView: GeckoView) {
         activeGeckoViewRef = WeakReference(geckoView)
     }
@@ -1940,6 +2035,11 @@ class BrowserViewModel : ViewModel() {
                     val jsonStr = file.readText()
                     val jsonArray = org.json.JSONArray(jsonStr)
                     var activeId: String? = null
+
+                    // Pre-read all durable SessionStates so background tabs can be
+                    // lazily restored from disk without blocking cold startup.
+                    val durableStates = sessionStatePersistence?.readAllDurableStates() ?: emptyMap()
+
                     for (i in 0 until jsonArray.length()) {
                         val obj = jsonArray.getJSONObject(i)
                         val id = obj.getString("id")
@@ -1948,7 +2048,7 @@ class BrowserViewModel : ViewModel() {
                         val isActive = obj.optBoolean("isActive", false)
                         val isIncognito = obj.optBoolean("isIncognito", false)
                         val lastActiveTime = obj.optLong("lastActiveTime", System.currentTimeMillis())
-                        
+
                         val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
                         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                             .usePrivateMode(isIncognito)
@@ -1957,27 +2057,47 @@ class BrowserViewModel : ViewModel() {
                             .allowJavascript(isJsAllowed)
                             .build()
                         val session = GeckoSession(settings)
-                        
-                        val shouldLoadNow = isActive || (url == "about:blank" || url.isEmpty())
-                        
+                        val gen = nextTabGeneration()
+
+                        // The SELECTED tab is opened immediately (its SessionState is
+                        // restored from disk if available). Background tabs are created
+                        // lazily: their session is NOT opened yet to avoid RAM/CPU cost
+                        // and network activity during cold startup. They are restored
+                        // when the user selects them.
+                        val shouldOpenNow = isActive
+
                         val tab = TabState(
                             id = id,
                             session = session,
                             title = title,
                             url = url,
                             isIncognito = isIncognito,
-                            isUriLoaded = shouldLoadNow,
+                            isUriLoaded = shouldOpenNow,
+                            isLazy = !shouldOpenNow,
                             lastActiveTime = lastActiveTime,
-                            settingsVersion = currentSettingsVersion
+                            settingsVersion = currentSettingsVersion,
+                            sessionGenerationId = gen
                         )
                         setupTabSessionListeners(tab, context)
                         tabs.add(tab)
-                        session.open(getGeckoRuntime(context))
-                        
-                        if (shouldLoadNow && url != "about:blank" && url.isNotEmpty()) {
-                            session.loadUri(url)
+                        recoveryCoordinator?.registerTab(id, gen, if (shouldOpenNow) com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN else com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.NOT_CREATED)
+
+                        if (shouldOpenNow) {
+                            val runtime = getGeckoRuntime(context)
+                            session.open(runtime)
+                            // Restore from durable SessionState if available (survives process death).
+                            val durable = durableStates[id]
+                            if (durable != null && url != "about:blank" && url.isNotEmpty()) {
+                                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(id, "durable_state")
+                                session.restoreState(durable)
+                            } else if (url != "about:blank" && url.isNotEmpty()) {
+                                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(id, "url_load")
+                                session.loadUri(url)
+                            }
+                        } else {
+                            com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(id, "lazy")
                         }
-                        
+
                         if (isActive) {
                             activeId = id
                             if (isIncognito) {
@@ -1992,7 +2112,7 @@ class BrowserViewModel : ViewModel() {
                         val activeIncognitoTab = tabs.find { it.isIncognito }
                         activeNormalTabId = activeNormalTabId ?: activeNormalTab?.id
                         activeIncognitoTabId = activeIncognitoTabId ?: activeIncognitoTab?.id
-                        
+
                         val targetId = activeId ?: tabs.first().id
                         selectTab(targetId)
                         checkAutoCloseTabs(context)
@@ -2004,7 +2124,7 @@ class BrowserViewModel : ViewModel() {
                     Log.e(TAG, "Error loading saved tabs", e)
                 }
             }
-            
+
             if (loaded) {
                 val urlToLoad = pendingIntentUrl
                 if (urlToLoad != null) {
@@ -2035,17 +2155,20 @@ class BrowserViewModel : ViewModel() {
             .build()
         val session = GeckoSession(settings)
         val tabId = java.util.UUID.randomUUID().toString()
+        val gen = nextTabGeneration()
         val newTab = TabState(
             id = tabId,
             session = session,
             title = "New Tab",
             url = url,
             isIncognito = isIncognito,
-            settingsVersion = currentSettingsVersion
+            settingsVersion = currentSettingsVersion,
+            sessionGenerationId = gen
         )
-        
+
         setupTabSessionListeners(newTab, context)
         tabs.add(newTab)
+        recoveryCoordinator?.registerTab(tabId, gen, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
         if (groupId != null) {
             addTabToGroup(tabId, groupId)
         }
@@ -2153,11 +2276,26 @@ class BrowserViewModel : ViewModel() {
         if (showFindInPage) closeFindInPage()
         
         // If the tab's URI was loaded lazily and hasn't actually been requested yet, load it now!
-        if (!tab.isUriLoaded) {
-            val updatedTab = tab.copy(isUriLoaded = true)
-            tabs[tabIndex] = updatedTab
-            if (updatedTab.url != "about:blank" && updatedTab.url.isNotEmpty()) {
-                updatedTab.session.loadUri(updatedTab.url)
+        // Lazy tabs (created during cold-start without opening a live GeckoSession) need:
+        //   1. Session opened on the runtime
+        //   2. SessionState restored from disk if available, else URL load
+        var workingTab = tab
+        if (!tab.isUriLoaded || tab.isLazy) {
+            val runtime = getGeckoRuntime(appContext ?: return)
+            if (!tab.session.isOpen) {
+                tab.session.open(runtime)
+                recoveryCoordinator?.updateTabGeckoState(tabId, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logSessionOpened(tabId, tab.sessionGenerationId)
+            }
+            val restoredState = if (tab.isLazy) sessionStatePersistence?.readDurableState(tabId) else null
+            workingTab = tab.copy(isUriLoaded = true, isLazy = false)
+            tabs[tabIndex] = workingTab
+            if (restoredState != null && tab.url != "about:blank" && tab.url.isNotEmpty()) {
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(tabId, "durable_state_lazy")
+                tab.session.restoreState(restoredState)
+            } else if (tab.url != "about:blank" && tab.url.isNotEmpty()) {
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(tabId, "url_load_lazy")
+                tab.session.loadUri(tab.url)
             }
         }
         
@@ -2181,6 +2319,8 @@ class BrowserViewModel : ViewModel() {
         // Stop any in-flight page translation for this tab so it never mutates
         // a different tab (late-result isolation).
         stopPageTranslation(tabId)
+        // Cancel any in-flight recovery for this tab before removing its state.
+        recoveryCoordinator?.cancelRecovery(tabId)
         val tabIndex = tabs.indexOfFirst { it.id == tabId }
         if (tabIndex == -1) return
         val tabToClose = tabs[tabIndex]
@@ -2217,14 +2357,24 @@ class BrowserViewModel : ViewModel() {
                 // Last incognito tab: close it and exit incognito mode
                 // Cancel any pending prompts so their GeckoResult is not left hanging.
                 cancelAllPendingPrompts()
+                val geckoView = activeGeckoViewRef?.get()
+                if (geckoView != null && geckoView.session == tabToClose.session) {
+                    try {
+                        geckoView.releaseSession()
+                    } catch (_: Exception) {}
+                }
                 try {
                     tabToClose.session.close()
                 } catch (e: Exception) {
                     Log.e(TAG, "Error closing tab session", e)
                 }
                 tabs.removeAt(tabIndex)
+                recoveryCoordinator?.unregisterTab(tabId)
                 
                 isIncognitoMode = false
+                mediaInterceptor.clear()
+                activeVideoCookies = null
+                pendingHandoff = null
                 
                 val normalTabs = tabs.filter { !it.isIncognito }
                 if (normalTabs.isEmpty()) {
@@ -2243,12 +2393,19 @@ class BrowserViewModel : ViewModel() {
         if (tabToClose.id == activeTabId) {
             cancelAllPendingPrompts()
         }
+        val geckoView = activeGeckoViewRef?.get()
+        if (geckoView != null && geckoView.session == tabToClose.session) {
+            try {
+                geckoView.releaseSession()
+            } catch (_: Exception) {}
+        }
         try {
             tabToClose.session.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error closing tab session", e)
         }
         tabs.removeAt(tabIndex)
+        recoveryCoordinator?.unregisterTab(tabId)
         // Clean up group membership for the closed tab
         removeTabFromAllGroups(tabId)
         
@@ -2268,6 +2425,11 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun closeAllTabs(context: Context, incognito: Boolean) {
+        if (incognito) {
+            mediaInterceptor.clear()
+            activeVideoCookies = null
+            pendingHandoff = null
+        }
         val targetTabs = tabs.filter { it.isIncognito == incognito }.toList()
         targetTabs.forEach { tab ->
             closeTab(tab.id, context)
@@ -2844,6 +3006,24 @@ class BrowserViewModel : ViewModel() {
                 label = "Force Dark Theme"
             )
             
+            // Prune any stale temporary cache files left behind by older versions
+            pruneTemporaryStorage(appCtx)
+
+            // Initialize session recovery infrastructure (durable persistence +
+            // central recovery coordinator). Created once per process alongside the
+            // runtime. If already initialized (e.g. during Activity recreation), skip.
+            if (sessionStatePersistence == null) {
+                sessionStatePersistence = com.rebelroot.omni.browser.session.SessionStatePersistence(appCtx.filesDir)
+            }
+            if (recoveryCoordinator == null) {
+                recoveryCoordinator = com.rebelroot.omni.browser.session.SessionRecoveryCoordinator(
+                    persistence = sessionStatePersistence!!
+                )
+                if (isProcessRecreated) {
+                    recoveryCoordinator?.onProcessRecreated()
+                }
+            }
+
             // Sync user extensions on start
             syncUserExtensions()
 
@@ -4511,7 +4691,7 @@ class BrowserViewModel : ViewModel() {
     val videoPlaybackPositions = mutableMapOf<String, Long>()
 
     fun getVideoPosition(url: String): Long {
-        return if (isPlayerResumePlaybackEnabled) {
+        return if (isPlayerResumePlaybackEnabled && !isIncognitoMode) {
             videoPlaybackPositions[url] ?: 0L
         } else {
             0L
@@ -4519,33 +4699,94 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun saveVideoPosition(url: String, position: Long) {
-        if (isPlayerResumePlaybackEnabled) {
+        if (isPlayerResumePlaybackEnabled && !isIncognitoMode) {
             videoPlaybackPositions[url] = position
         }
     }
 
-    // ── Media Handoff State (Phase 5-7) ───────────────────────────────────
+    // ── Web Video Session State & Handoff (Quetta-Style) ──────────────────
+
+    /** Authoritative video session currently under Omni control. */
+    var activeVideoSession: com.rebelroot.omni.media.handoff.WebVideoSession? = null
+        internal set
 
     /** Pending handoff from website <video> to native player. Consumed once. */
     var pendingHandoff: com.rebelroot.omni.media.handoff.MediaHandoff? = null
         internal set
 
     /**
-     * Consumes the pending handoff if it matches [expectedSourceUri].
+     * Consumes the pending handoff or active video session if it matches [expectedSourceUri].
      * Returns null if no handoff exists, it's stale, or the URI doesn't match.
-     * This is a one-time operation — after consumption, [pendingHandoff] is cleared.
      */
     fun consumePendingHandoff(expectedSourceUri: String): com.rebelroot.omni.media.handoff.MediaHandoff? {
+        val session = activeVideoSession
+        if (session != null && (session.sourceUri == expectedSourceUri || expectedSourceUri.isEmpty() || expectedSourceUri.contains(session.sourceUri) || session.sourceUri.contains(expectedSourceUri))) {
+            session.state = com.rebelroot.omni.media.handoff.WebVideoSessionState.NATIVE_PREPARING
+            pendingHandoff = null
+            return session.toMediaHandoff()
+        }
         val handoff = pendingHandoff
         pendingHandoff = null
-        return if (handoff != null && handoff.sourceUri == expectedSourceUri) {
+        return if (handoff != null && (handoff.sourceUri == expectedSourceUri || expectedSourceUri.isEmpty() || expectedSourceUri.contains(handoff.sourceUri) || handoff.sourceUri.contains(expectedSourceUri))) {
             handoff
         } else null
+    }
+
+    /**
+     * Updates active video session during native playback.
+     */
+    fun updateActiveVideoSession(
+        positionMs: Long,
+        isPlaying: Boolean,
+        playbackRate: Float = 1.0f,
+        volume: Float = 1.0f,
+        muted: Boolean = false
+    ) {
+        activeVideoSession?.updateNativeProgress(positionMs, isPlaying, playbackRate, volume, muted)
+    }
+
+    /**
+     * Seamless return from native player back to the webpage video player.
+     * Takes the final state from ExoPlayer and sends RESTORE_VIDEO_STATE to the originating tab's video.
+     */
+    fun returnFromNativePlayer(
+        positionMs: Long,
+        isPlaying: Boolean,
+        playbackRate: Float = 1.0f,
+        volume: Float = 1.0f,
+        muted: Boolean = false,
+        onComplete: (() -> Unit)? = null
+    ) {
+        val session = activeVideoSession
+        if (session != null) {
+            session.updateNativeProgress(positionMs, isPlaying, playbackRate, volume, muted)
+            session.state = com.rebelroot.omni.media.handoff.WebVideoSessionState.HANDOFF_TO_SITE
+            val payload = session.toRestoreJson().toString()
+            Log.i(TAG, "🎬 returnFromNativePlayer: restoring website video at ${positionMs}ms, isPlaying=$isPlaying, payload=$payload")
+            sendJsMessage("RESTORE_VIDEO_STATE", payload, session.tabId)
+        }
+        onComplete?.invoke()
+    }
+
+    /**
+     * Cancels native handoff and tells the webpage video to resume playback (e.g. on player error).
+     */
+    fun cancelNativeHandoffAndResumeWeb() {
+        val session = activeVideoSession
+        val sessionId = session?.sessionId ?: pendingHandoff?.handoffId ?: ""
+        val videoId = session?.videoElementId ?: pendingHandoff?.videoElementId ?: ""
+        val tabId = session?.tabId ?: pendingHandoff?.tabId ?: ""
+        Log.i(TAG, "🎬 cancelNativeHandoffAndResumeWeb: resuming website video, sessionId=$sessionId, videoId=$videoId")
+        sendJsMessage("RESUME_WEBSITE", "{\"sessionId\":\"$sessionId\",\"videoId\":\"$videoId\"}", tabId)
+        session?.state = com.rebelroot.omni.media.handoff.WebVideoSessionState.FAILED
+        activeVideoSession = null
+        pendingHandoff = null
     }
 
     /** Clears any pending handoff without consuming it. Called on player close/failure. */
     fun clearPendingHandoff() {
         pendingHandoff = null
+        activeVideoSession = null
     }
 
     fun toggleMediaGrabber(context: Context) {
@@ -6051,6 +6292,9 @@ class BrowserViewModel : ViewModel() {
     fun toggleIncognitoMode(context: Context) {
         val nextMode = !isIncognitoMode
         isIncognitoMode = nextMode
+        mediaInterceptor.clear()
+        activeVideoCookies = null
+        pendingHandoff = null
         
         val targetTabId = if (nextMode) activeIncognitoTabId else activeNormalTabId
         val targetTabExists = tabs.any { it.id == targetTabId && it.isIncognito == nextMode }
@@ -8834,6 +9078,8 @@ class BrowserViewModel : ViewModel() {
                 }
             }
         }
+        runCatching { recoveryCoordinator?.shutdown() }
+        runCatching { sessionStatePersistence?.shutdown() }
         runCatching { dismissExtensionPopup() }
         runCatching { tts?.shutdown() }
         runCatching { translationManager.close() }

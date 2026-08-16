@@ -739,9 +739,10 @@ fun VideoPlayerScreen(
 
         } catch (e: Exception) {
             android.util.Log.e("VideoPlayer", "Failed to initialize ExoPlayer: ${e.message}", e)
+            viewModel?.cancelNativeHandoffAndResumeWeb()
             coroutineScope.launch {
-                Toast.makeText(context, "Unable to play video: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-                kotlinx.coroutines.delay(500)
+                Toast.makeText(context, "Unable to play in Omni Player: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                kotlinx.coroutines.delay(300)
                 onNavigateBack()
             }
         }
@@ -750,7 +751,20 @@ fun VideoPlayerScreen(
             try {
                 lifecycleObserver?.let { lifecycleOwner.lifecycle.removeObserver(it) }
                 exoPlayer?.let { player ->
-                    viewModel?.saveVideoPosition(decodedPath, player.currentPosition)
+                    val finalPos = player.currentPosition
+                    val finalPlaying = player.isPlaying
+                    val finalSpeed = player.playbackParameters.speed
+                    val finalVolume = player.volume
+                    val finalMuted = finalVolume == 0f
+                    viewModel?.saveVideoPosition(decodedPath, finalPos)
+                    viewModel?.returnFromNativePlayer(
+                        positionMs = finalPos,
+                        isPlaying = finalPlaying,
+                        playbackRate = finalSpeed,
+                        volume = finalVolume,
+                        muted = finalMuted
+                    )
+                    player.stop()
                     player.release()
                 }
                 exoPlayerInstance = null
@@ -765,10 +779,17 @@ fun VideoPlayerScreen(
     LaunchedEffect(Unit) {
         while (true) {
             if (!isSeeking) {
-                exoPlayerInstance?.let {
-                    playbackPosition = it.currentPosition
+                exoPlayerInstance?.let { player ->
+                    playbackPosition = player.currentPosition
+                    viewModel?.updateActiveVideoSession(
+                        positionMs = player.currentPosition,
+                        isPlaying = player.isPlaying,
+                        playbackRate = player.playbackParameters.speed,
+                        volume = player.volume,
+                        muted = player.volume == 0f
+                    )
                     if (isPlaying) {
-                        viewModel?.saveVideoPosition(decodedPath, it.currentPosition)
+                        viewModel?.saveVideoPosition(decodedPath, player.currentPosition)
                     }
                 }
             }

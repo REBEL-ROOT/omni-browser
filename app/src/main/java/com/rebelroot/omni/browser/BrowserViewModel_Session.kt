@@ -7,6 +7,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.viewModelScope
 import com.rebelroot.omni.browser.BrowserViewModel.Companion.TAG
+import com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics
+import com.rebelroot.omni.browser.session.SessionRecoveryCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.mozilla.geckoview.AllowOrDeny
@@ -69,9 +71,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         ): GeckoResult<Int>? {
             Log.d(TAG, "onContentPermissionRequest: type=${permission.permission}, uri=${permission.uri}")
 
-            // Auto-approve Storage Access and Identity permissions for verified auth origins.
-            // Use OriginVerifier instead of substring matching to prevent spoofing
-            // (e.g., evilgoogle.com must NOT match google.com).
+            // Auto-grant Storage Access and Identity permissions for verified auth origins.
             val isAuthOrigin = OriginVerifier.isExactOriginMatch(permission.uri, "accounts.google.com") ||
                                OriginVerifier.isSubdomainOf(permission.uri, "google.com") ||
                                OriginVerifier.isSubdomainOf(permission.uri, "appleid.apple.com") ||
@@ -79,6 +79,14 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (isAuthOrigin || permission.permission == 6 || permission.permission == 7 || permission.permission == 8) {
                 Log.i(TAG, "Auto-granting auth/storage permission (${permission.permission}) for ${permission.uri}")
                 return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+            }
+
+            // Auto-grant DRM (Widevine / EME) permission for media playback unless explicitly blocked
+            if (permission.permission == GeckoSession.PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS || permission.permission == 5) {
+                val drmVal = getSitePermissionValue(permission.uri, "drm")
+                if (drmVal != "block") {
+                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                }
             }
             
             if (permission.permission == GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE ||
@@ -119,7 +127,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 permissionType = permission.permission,
                 onAllow = {
                     activePermissionPrompt = null
-                    if (permissionTypeStr != null) updateSitePermission(permission.uri, permissionTypeStr, "allow")
+                    if (permissionTypeStr != null && !tab.isIncognito) {
+                        updateSitePermission(permission.uri, permissionTypeStr, "allow")
+                    }
                     result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
                 },
                 onAllowOnce = {
@@ -129,7 +139,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 },
                 onDeny = {
                     activePermissionPrompt = null
-                    if (permissionTypeStr != null) updateSitePermission(permission.uri, permissionTypeStr, "block")
+                    if (permissionTypeStr != null && !tab.isIncognito) {
+                        updateSitePermission(permission.uri, permissionTypeStr, "block")
+                    }
                     result.complete(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
                 }
             )
@@ -146,7 +158,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             Log.d(TAG, "onMediaPermissionRequest: uri=$uri, video=${video?.size}, audio=${audio?.size}")
             
             if (tab.id != activeTabId) {
-                callback.reject()
+                runCatching { callback.reject() }
                 return
             }
 
@@ -154,7 +166,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             val hasAudio = !audio.isNullOrEmpty()
 
             if (!hasVideo && !hasAudio) {
-                callback.reject()
+                runCatching { callback.reject() }
                 return
             }
 
@@ -164,7 +176,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
             if (cameraVal == "block" || micVal == "block") {
                 Log.d(TAG, "onMediaPermissionRequest: Blocked media access based on settings rule")
-                callback.reject()
+                runCatching { callback.reject() }
                 return
             }
 
@@ -172,7 +184,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 Log.d(TAG, "onMediaPermissionRequest: Allowed media access based on settings rule")
                 val videoSource = video?.firstOrNull()
                 val audioSource = audio?.firstOrNull()
-                callback.grant(videoSource, audioSource)
+                runCatching { callback.grant(videoSource, audioSource) }
                 return
             }
 
@@ -184,20 +196,20 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 audioSources = audio,
                 onAllow = { selectedVideo, selectedAudio ->
                     activeMediaPermissionPrompt = null
-                    if (hasVideo) updateSitePermission(uri, "camera", "allow")
-                    if (hasAudio) updateSitePermission(uri, "microphone", "allow")
-                    callback.grant(selectedVideo, selectedAudio)
+                    if (hasVideo && !tab.isIncognito) updateSitePermission(uri, "camera", "allow")
+                    if (hasAudio && !tab.isIncognito) updateSitePermission(uri, "microphone", "allow")
+                    runCatching { callback.grant(selectedVideo, selectedAudio) }
                 },
                 onAllowOnce = { selectedVideo, selectedAudio ->
                     // Grant for this session only — do NOT persist
                     activeMediaPermissionPrompt = null
-                    callback.grant(selectedVideo, selectedAudio)
+                    runCatching { callback.grant(selectedVideo, selectedAudio) }
                 },
                 onDeny = {
                     activeMediaPermissionPrompt = null
-                    if (hasVideo) updateSitePermission(uri, "camera", "block")
-                    if (hasAudio) updateSitePermission(uri, "microphone", "block")
-                    callback.reject()
+                    if (hasVideo && !tab.isIncognito) updateSitePermission(uri, "camera", "block")
+                    if (hasAudio && !tab.isIncognito) updateSitePermission(uri, "microphone", "block")
+                    runCatching { callback.reject() }
                 }
             )
         }
@@ -596,6 +608,70 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             session.reload()
         }
 
+        override fun onKill(session: GeckoSession) {
+            android.util.Log.e(TAG, "GeckoSession content process killed for tab ${tab.id}")
+            com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logSessionKilled(tab.id, tab.sessionGenerationId)
+
+            val idx = tabs.indexOfFirst { it.id == tab.id }
+            if (idx == -1) return
+
+            // Mark session as dead and invalidate generation so stale callbacks are ignored.
+            val deadGeneration = tabs[idx].sessionGenerationId
+            val deadState = tabs[idx].savedSessionState
+            val deadUrl = tabs[idx].url
+            val deadIncognito = tabs[idx].isIncognito
+
+            // Close the dead session.
+            runCatching { session.close() }
+
+            // Update tab state to reflect death.
+            tabs[idx] = tabs[idx].copy(isSuspended = true)
+
+            // If this is the active tab, trigger recovery.
+            if (tab.id == activeTabId) {
+                val context = appContext ?: return
+                val runtime = getGeckoRuntime(context)
+                isRecoveringActiveTab = true
+                lastRecoveryFailed = false
+                recoveryCoordinator?.recoverTab(
+                    tabId = tab.id,
+                    context = context,
+                    runtime = runtime,
+                    url = deadUrl,
+                    isIncognito = deadIncognito,
+                    isDesktopMode = isDesktopMode,
+                    inMemoryState = deadState,
+                    createSession = { newSession ->
+                        val newGen = recoveryCoordinator?.nextGenerationId() ?: 0L
+                        tabs[idx] = tabs[idx].copy(
+                            session = newSession,
+                            isSuspended = false,
+                            sessionGenerationId = newGen,
+                            savedSessionState = null
+                        )
+                        setupTabSessionListeners(tabs[idx], context)
+                        recoveryCoordinator?.registerTab(tab.id, newGen, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
+                    },
+                    onComplete = { success, method ->
+                        isRecoveringActiveTab = false
+                        if (success) {
+                            Log.i(TAG, "Session recovered for ${tab.id} via $method")
+                            // Re-attach to GeckoView if this is still the active tab.
+                            if (tab.id == activeTabId) {
+                                activeGeckoViewRef?.get()?.let { gv ->
+                                    gv.setSession(tabs[idx].session)
+                                    tabs[idx].session.setActive(true)
+                                }
+                            }
+                        } else {
+                            Log.w(TAG, "Session recovery failed for ${tab.id}")
+                            lastRecoveryFailed = true
+                        }
+                    }
+                )
+            }
+        }
+
         override fun onContextMenu(
             session: GeckoSession,
             screenX: Int,
@@ -640,6 +716,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
             hasUserGesture: Boolean
         ) {
+            // Stale-callback protection: ignore callbacks from a dead/invalid session generation.
+            if (recoveryCoordinator?.isStaleCallback(tab.id, tab.sessionGenerationId) == true) return
             url?.let {
                 // Dynamically update allowJavascript setting for the new domain
                 session.settings.allowJavascript = (getSitePermissionValue(it, "javascript") == "allow")
@@ -1088,6 +1166,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         }
 
         override fun onProgressChange(session: GeckoSession, progress: Int) {
+            // Stale-callback protection: ignore callbacks from a dead/invalid session generation.
+            if (recoveryCoordinator?.isStaleCallback(tab.id, tab.sessionGenerationId) == true) return
+
             if (progress in 5..25) {
                 injectStealthDefuserScriptlet(tab)
                 applySiteStyleToTab(tab)
@@ -1097,12 +1178,33 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
         }
 
-        // Continuously capture session state so it's always available for suspension.
+        // Continuously capture session state so it's always available for suspension
+        // AND persist it durably (debounced) so it survives process death.
         // GeckoView delivers the serializable SessionState here after every navigation.
         override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {
+            // Stale-callback protection: ignore callbacks from a dead/invalid session generation.
+            if (recoveryCoordinator?.isStaleCallback(tab.id, tab.sessionGenerationId) == true) {
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logSessionStateChanged(tab.id, tab.sessionGenerationId, accepted = false)
+                return
+            }
+
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
                 tabs[idx] = tabs[idx].copy(savedSessionState = sessionState)
+                // Debounced durable persistence (incognito tabs are skipped inside the persistence layer).
+                sessionStatePersistence?.requestPersist(
+                    tabId = tab.id,
+                    sessionState = sessionState,
+                    metadata = com.rebelroot.omni.browser.session.OmniSessionState.TabMetadata(
+                        title = tab.title,
+                        url = tab.url,
+                        isIncognito = tab.isIncognito,
+                        lastActiveTime = tab.lastActiveTime,
+                        canGoBack = tab.canGoBack,
+                        canGoForward = tab.canGoForward
+                    )
+                )
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logSessionStateChanged(tab.id, tab.sessionGenerationId, accepted = true)
             }
         }
     }

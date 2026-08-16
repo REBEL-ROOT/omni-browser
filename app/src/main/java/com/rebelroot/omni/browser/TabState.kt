@@ -30,6 +30,13 @@ data class TabState(
     /** Serialized GeckoSession state preserved during suspension to restore
      *  exact page state, form inputs, scroll position, and history stack. */
     val savedSessionState: GeckoSession.SessionState? = null,
+    /** Monotonic generation identifier for this tab's current GeckoSession.
+     *  Used to prevent stale callbacks from a dead session from corrupting
+     *  a replacement session after onKill or process death recovery. */
+    val sessionGenerationId: Long = 0L,
+    /** True when this tab's GeckoSession has been created but not yet opened
+     *  on the runtime. Used for lazy tab restoration on cold startup. */
+    val isLazy: Boolean = false,
     /** ID of the opener tab that spawned this tab (e.g., auth popups via window.open).
      *  When this tab closes, the browser smoothly switches back to the opener tab. */
     val parentId: String? = null

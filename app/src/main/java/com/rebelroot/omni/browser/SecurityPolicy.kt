@@ -207,16 +207,38 @@ object SecurityPolicy {
         if (uri.isNullOrBlank()) return ""
 
         return try {
-            // Parse the URI
-            val parsed = Uri.parse(uri)
-            var host = parsed.host?.lowercase(Locale.ROOT) ?: ""
+            var host = ""
 
-            // If no host extracted, try parsing as bare hostname
+            // 1. Try Android Uri parsing
+            try {
+                val parsed = Uri.parse(uri)
+                val h = parsed.host
+                if (!h.isNullOrBlank()) {
+                    host = h.lowercase(Locale.ROOT)
+                }
+            } catch (_: Exception) {}
+
+            // 2. Fallback to java.net.URI (covers host JVM unit test stubs)
             if (host.isEmpty()) {
-                // Try treating the whole string as a hostname
-                host = uri.lowercase(Locale.ROOT)
-                    .trim()
-                    .removeSuffix(".")  // Remove trailing dot (FQDN)
+                try {
+                    val jHost = java.net.URI(uri).host
+                    if (!jHost.isNullOrBlank()) {
+                        host = jHost.lowercase(Locale.ROOT)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // 3. Fallback: string extraction for non-standard, malformed, or userinfo URIs
+            if (host.isEmpty()) {
+                var clean = uri.lowercase(Locale.ROOT).trim()
+                val schemeIdx = clean.indexOf("://")
+                if (schemeIdx != -1) {
+                    clean = clean.substring(schemeIdx + 3)
+                }
+                val pathIdx = clean.indexOfAny(charArrayOf('/', '?', '#', ':'))
+                val authority = if (pathIdx != -1) clean.substring(0, pathIdx) else clean
+                val atIdx = authority.lastIndexOf('@')
+                host = if (atIdx != -1) authority.substring(atIdx + 1) else authority
             }
 
             // Remove trailing dot if present
@@ -225,7 +247,6 @@ object SecurityPolicy {
             }
 
             // Normalize IDN/Punycode to ASCII form for consistent comparison
-            // This prevents IDN homograph attacks (e.g., Cyrillic 'а' vs Latin 'a')
             if (host.isNotEmpty()) {
                 try {
                     host = IDN.toASCII(host, IDN.ALLOW_UNASSIGNED).lowercase(Locale.ROOT)
@@ -273,11 +294,19 @@ object SecurityPolicy {
         if (trimmed.any { it.code < 32 }) return false
 
         // Extract and validate scheme
-        val scheme = try {
-            Uri.parse(trimmed).scheme?.lowercase(Locale.ROOT)
-        } catch (e: Exception) {
-            Log.w(TAG, "Unparseable intent URI: $uri")
-            return false
+        var scheme: String? = null
+        try {
+            val s = Uri.parse(trimmed).scheme
+            if (!s.isNullOrBlank()) {
+                scheme = s.lowercase(Locale.ROOT)
+            }
+        } catch (_: Exception) {}
+
+        if (scheme == null) {
+            val colonIdx = trimmed.indexOf(':')
+            if (colonIdx > 0) {
+                scheme = trimmed.substring(0, colonIdx).lowercase(Locale.ROOT)
+            }
         }
 
         if (scheme == null) return false

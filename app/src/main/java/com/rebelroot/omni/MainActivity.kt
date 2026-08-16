@@ -62,6 +62,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.rebelroot.omni.browser.BrowserScreen
 import com.rebelroot.omni.browser.BrowserViewModel
+import com.rebelroot.omni.browser.setupTabSessionListeners
+import com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics
 import com.rebelroot.omni.media.DownloadManagerScreen
 import com.rebelroot.omni.media.player.VideoPlayerScreen
 import com.rebelroot.omni.settings.SettingsScreen
@@ -824,6 +826,109 @@ class MainActivity : FragmentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         browserViewModel.isInPictureInPictureMode = isInPictureInPictureMode
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Session recovery lifecycle hooks
+    //
+    // These guard against blank-page / session-loss bugs when Android backgrounds,
+    // recreates, or kills the Omni process, or when the user returns from an external
+    // application (UPI/PayPal/banking/OAuth/camera/file picker).
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    override fun onPause() {
+        super.onPause()
+        SessionRecoveryDiagnostics.logActivityPause()
+        // Checkpoint session state before the app is backgrounded. If the process is
+        // killed while paused, this durable state is what survives.
+        browserViewModel.forceCheckpoint()
+        browserViewModel.recoveryCoordinator?.onActivityBackground()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        SessionRecoveryDiagnostics.logActivityStop()
+        // Final checkpoint before the Activity may be destroyed by the system.
+        browserViewModel.forceCheckpoint()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        SessionRecoveryDiagnostics.logActivityResume(browserViewModel.isInExternalAppHandoff)
+        browserViewModel.recoveryCoordinator?.onActivityVisible()
+
+        // If we returned from an external app, clear the handoff flag now and check
+        // the active tab's GeckoSession health. If the session is dead (process kill),
+        // trigger recovery from durable SessionState.
+        if (browserViewModel.isInExternalAppHandoff) {
+            browserViewModel.isInExternalAppHandoff = false
+            browserViewModel.recoveryCoordinator?.onExternalAppHandoffEnded()
+            val activeTab = browserViewModel.activeTab
+            if (activeTab != null && !activeTab.session.isOpen) {
+                // Session was killed while we were away → recover it.
+                val context = this
+                val runtime = browserViewModel.getGeckoRuntime(context)
+                var recoveredSession: org.mozilla.geckoview.GeckoSession? = null
+                browserViewModel.isRecoveringActiveTab = true
+                browserViewModel.lastRecoveryFailed = false
+                browserViewModel.recoveryCoordinator?.recoverTab(
+                    tabId = activeTab.id,
+                    context = context,
+                    runtime = runtime,
+                    url = activeTab.url,
+                    isIncognito = activeTab.isIncognito,
+                    isDesktopMode = browserViewModel.isDesktopMode,
+                    inMemoryState = activeTab.savedSessionState,
+                    createSession = { newSession ->
+                        recoveredSession = newSession
+                        val idx = browserViewModel.tabs.indexOfFirst { it.id == activeTab.id }
+                        if (idx != -1) {
+                            val newGen = browserViewModel.recoveryCoordinator?.nextGenerationId() ?: 0L
+                            browserViewModel.tabs[idx] = browserViewModel.tabs[idx].copy(
+                                session = newSession,
+                                isSuspended = false,
+                                sessionGenerationId = newGen
+                            )
+                            browserViewModel.setupTabSessionListeners(browserViewModel.tabs[idx], context)
+                        }
+                    },
+                    onComplete = { success, method ->
+                        browserViewModel.isRecoveringActiveTab = false
+                        if (success && recoveredSession != null) {
+                            val gv = browserViewModel.activeGeckoViewRef?.get()
+                            if (gv != null) {
+                                gv.setSession(recoveredSession!!)
+                                recoveredSession!!.setActive(true)
+                            }
+                        } else {
+                            browserViewModel.lastRecoveryFailed = true
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Persist lightweight, non-sensitive recovery metadata. This is NOT the primary
+        // persistence mechanism (that is the durable SessionState file); it supplements it
+        // for fast Activity recreation (config change) without a full process restart.
+        outState.putString("omni_active_tab_id", browserViewModel.activeTabId)
+        outState.putBoolean("omni_external_handoff", browserViewModel.isInExternalAppHandoff)
+        outState.putBoolean("omni_process_recreated", browserViewModel.isProcessRecreated)
+        SessionRecoveryDiagnostics.logActivitySaveInstanceState(browserViewModel.activeTabId)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        val activeTabId = savedInstanceState.getString("omni_active_tab_id")
+        val processRecreated = savedInstanceState.getBoolean("omni_process_recreated", false)
+        if (processRecreated) {
+            browserViewModel.isProcessRecreated = true
+            browserViewModel.recoveryCoordinator?.onProcessRecreated()
+        }
+        SessionRecoveryDiagnostics.logActivityCreated(savedInstanceStatePresent = true, processRecreated = processRecreated)
     }
 
     // Note: Auto-PiP on home press was removed because requestedOrientation changes

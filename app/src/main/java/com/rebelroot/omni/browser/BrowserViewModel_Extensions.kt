@@ -2,6 +2,7 @@ package com.rebelroot.omni.browser
 
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -15,9 +16,12 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.WebExtension
 import com.rebelroot.omni.browser.BrowserViewModel.Companion.TAG
+import com.rebelroot.omni.media.MediaInterceptor
 import com.rebelroot.omni.media.handoff.MediaHandoff
 import com.rebelroot.omni.media.handoff.MediaSourceClassifier
 import com.rebelroot.omni.media.handoff.MediaSourceType
+import com.rebelroot.omni.media.handoff.WebVideoSession
+import com.rebelroot.omni.media.handoff.WebVideoSessionState
 
 fun BrowserViewModel.registerExtensionAction(id: String, session: GeckoSession?, action: WebExtension.Action) {
     extensionActions[id] = action
@@ -270,6 +274,10 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                     }
                 } else if (type == "REQUEST_HANDOFF") {
                     handleRequestHandoff(message)
+                } else if (type == "REQUEST_DOWNLOAD") {
+                    handleRequestDownload(message)
+                } else if (type == "HANDOFF_RESTORED") {
+                    handleHandoffRestored(message)
                 } else if (type == "PLAY_IN_NATIVE") {
                     // Legacy fallback — kept for backward compatibility with older inject.js
                     handleLegacyPlayInNative(message)
@@ -513,12 +521,12 @@ internal fun BrowserViewModel.getMediaSnifferMinDurationSecPreference(context: C
     }
 }
 
-// ── Media Handoff Handlers ────────────────────────────────────────────────
+// ── Media Handoff & Quetta-Style Video Session Handlers ───────────────────
 
 /**
- * Handles the new REQUEST_HANDOFF message from the JS extension.
- * Captures the handoff state, classifies the source, and either:
- *   (a) Accepts: sends PAUSE_AND_LAUNCH to JS, stores handoff, launches player
+ * Handles the REQUEST_HANDOFF message from the JS extension.
+ * Creates an authoritative WebVideoSession, classifies the source, and either:
+ *   (a) Accepts: sends PAUSE_AND_LAUNCH to JS, stores session, launches native player
  *   (b) Rejects: sends RESUME_WEBSITE to JS, leaves webpage playing
  */
 private fun BrowserViewModel.handleRequestHandoff(message: Any) {
@@ -526,13 +534,19 @@ private fun BrowserViewModel.handleRequestHandoff(message: Any) {
         if (message.has("url")) message.getString("url") else null
     } else {
         (message as? Map<*, *>)?.get("url") as? String
-    } ?: return
+    } ?: ""
 
     val pageUrl = (if (message is org.json.JSONObject) {
         if (message.has("pageUrl")) message.getString("pageUrl") else null
     } else {
         (message as? Map<*, *>)?.get("pageUrl") as? String
-    }) ?: ""
+    }) ?: currentUrl
+
+    val tabId = (if (message is org.json.JSONObject) {
+        if (message.has("tabId")) message.getString("tabId") else null
+    } else {
+        (message as? Map<*, *>)?.get("tabId") as? String
+    }) ?: activeTabId ?: ""
 
     val handoffJson = if (message is org.json.JSONObject) {
         if (message.has("handoff")) message.getJSONObject("handoff") else null
@@ -540,51 +554,234 @@ private fun BrowserViewModel.handleRequestHandoff(message: Any) {
         null
     }
 
-    Log.i(TAG, "🎬 REQUEST_HANDOFF received. url=$videoUrl, pageUrl=$pageUrl")
+    Log.i(TAG, "🎬 REQUEST_HANDOFF received. url=$videoUrl, pageUrl=$pageUrl, tabId=$tabId")
 
-    if (handoffJson == null) {
-        Log.w(TAG, "🎬 REQUEST_HANDOFF missing handoff data — falling back to legacy PLAY_IN_NATIVE")
-        sendJsMessage("PAUSE_AND_LAUNCH", "{}")
-        viewModelScope.launch(Dispatchers.Main) {
-            onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
+    // Parse authoritative WebVideoSession from JSON if present
+    val rawSession = if (handoffJson != null) {
+        try {
+            WebVideoSession.fromJson(handoffJson).copy(tabId = tabId.ifEmpty { activeTabId ?: "" })
+        } catch (e: Exception) {
+            Log.e(TAG, "🎬 Failed to parse WebVideoSession from JSON", e)
+            null
         }
-        return
+    } else null
+
+    // Resolve blob: or empty URLs against mediaInterceptor sniffed streams
+    var effectiveSourceUri = rawSession?.sourceUri ?: videoUrl
+    var effectiveMimeType = rawSession?.mimeType
+    var effectiveCookies = rawSession?.cookies ?: activeVideoCookies
+    var effectiveHeaders = rawSession?.headers ?: emptyMap()
+
+    if (effectiveSourceUri.startsWith("blob:") || effectiveSourceUri.isEmpty() || rawSession?.sourceType?.isSupported == false) {
+        val sniffed = mediaInterceptor.playableMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
+            ?: mediaInterceptor.detectedMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
+        if (sniffed != null) {
+            effectiveSourceUri = sniffed.url
+            effectiveMimeType = when (sniffed.type) {
+                MediaInterceptor.MediaType.HLS -> "application/x-mpegURL"
+                MediaInterceptor.MediaType.DASH -> "application/dash+xml"
+                MediaInterceptor.MediaType.MP4 -> "video/mp4"
+                MediaInterceptor.MediaType.WEBM -> "video/webm"
+                MediaInterceptor.MediaType.AUDIO -> "audio/mpeg"
+            }
+            if (effectiveCookies.isNullOrEmpty()) effectiveCookies = sniffed.cookies
+            if (effectiveHeaders.isEmpty()) effectiveHeaders = sniffed.headers
+            Log.i(TAG, "🎬 Resolved blob sourceUri to sniffed media stream: $effectiveSourceUri ($effectiveMimeType)")
+        }
     }
 
-    // Parse handoff from JSON
-    val handoff = try {
-        parseMediaHandoff(handoffJson)
-    } catch (e: Exception) {
-        Log.e(TAG, "🎬 Failed to parse handoff JSON", e)
-        sendJsMessage("RESUME_WEBSITE", "{}")
-        return
+    val finalSession = if (rawSession != null) {
+        rawSession.copy(
+            sourceUri = effectiveSourceUri,
+            mimeType = effectiveMimeType,
+            cookies = effectiveCookies,
+            headers = effectiveHeaders,
+            sourceType = MediaSourceClassifier.classify(effectiveSourceUri, effectiveMimeType)
+        )
+    } else {
+        val st = MediaSourceClassifier.classify(effectiveSourceUri, effectiveMimeType)
+        WebVideoSession(
+            sessionId = "h_" + System.currentTimeMillis(),
+            tabId = tabId.ifEmpty { activeTabId ?: "" },
+            videoElementId = "omni_vid_resolved",
+            sourceUri = effectiveSourceUri,
+            pageUrl = pageUrl,
+            mimeType = effectiveMimeType,
+            sourceType = st,
+            cookies = effectiveCookies,
+            headers = effectiveHeaders
+        )
     }
 
-    // Classify the source
-    val sourceType = MediaSourceClassifier.classify(handoff.sourceUri, handoff.mimeType)
+    val sourceType = finalSession.sourceType
     Log.i(TAG, "🎬 Handoff source classified as: $sourceType (supported=${sourceType.isSupported})")
 
     if (!MediaSourceClassifier.isSupported(sourceType)) {
         // Reject: tell JS to keep website playing
-        Log.i(TAG, "🎬 Handoff rejected — unsupported source type $sourceType")
-        sendJsMessage("RESUME_WEBSITE", "{}")
+        Log.i(TAG, "🎬 Handoff rejected — unsupported source type $sourceType for URI $effectiveSourceUri")
+        sendJsMessage("RESUME_WEBSITE", "{\"sessionId\":\"${finalSession.sessionId}\",\"videoId\":\"${finalSession.videoElementId}\"}", tabId)
+        viewModelScope.launch(Dispatchers.Main) {
+            Toast.makeText(appContext, "This stream format is not currently supported for native player", Toast.LENGTH_SHORT).show()
+        }
         return
     }
 
-    // Accept: tell JS to pause, then launch native player
-    Log.i(TAG, "🎬 Handoff accepted — launching native player for $videoUrl")
-    sendJsMessage("PAUSE_AND_LAUNCH", "{\"handoffId\":\"${handoff.handoffId}\"}")
+    // Accept: transition state to HANDOFF_TO_NATIVE, pause webpage video, then launch native player
+    finalSession.state = WebVideoSessionState.HANDOFF_TO_NATIVE
+    activeVideoSession = finalSession
+    pendingHandoff = finalSession.toMediaHandoff()
+    if (!effectiveCookies.isNullOrEmpty()) {
+        activeVideoCookies = effectiveCookies
+    }
 
-    // Store the handoff in the ViewModel for consumption by VideoPlayerScreen
-    pendingHandoff = handoff
+    Log.i(TAG, "🎬 Handoff accepted — pausing webpage video and launching native player for $effectiveSourceUri at ${finalSession.currentPositionMs}ms")
+    sendJsMessage(
+        "PAUSE_AND_LAUNCH",
+        "{\"handoffId\":\"${finalSession.sessionId}\",\"sessionId\":\"${finalSession.sessionId}\",\"videoId\":\"${finalSession.videoElementId}\"}",
+        tabId
+    )
 
     viewModelScope.launch(Dispatchers.Main) {
         if (onPlayVideoRequestReceived == null) {
             Log.e(TAG, "onPlayVideoRequestReceived is NULL! Cannot navigate to VideoPlayerScreen.")
         } else {
-            onPlayVideoRequestReceived?.invoke(videoUrl, pageUrl)
+            onPlayVideoRequestReceived?.invoke(effectiveSourceUri, pageUrl)
         }
     }
+}
+
+/**
+ * Handles REQUEST_DOWNLOAD directly from the Quetta overlay without opening the player.
+ */
+private fun BrowserViewModel.handleRequestDownload(message: Any) {
+    val rawUrl = if (message is org.json.JSONObject) {
+        if (message.has("url")) message.getString("url") else null
+    } else {
+        (message as? Map<*, *>)?.get("url") as? String
+    } ?: ""
+
+    val pageUrl = (if (message is org.json.JSONObject) {
+        if (message.has("pageUrl")) message.getString("pageUrl") else null
+    } else {
+        (message as? Map<*, *>)?.get("pageUrl") as? String
+    }) ?: currentUrl
+
+    var mimeType = (if (message is org.json.JSONObject) {
+        if (message.has("mimeType")) message.getString("mimeType") else null
+    } else {
+        (message as? Map<*, *>)?.get("mimeType") as? String
+    }) ?: "video/mp4"
+
+    val title = (if (message is org.json.JSONObject) {
+        if (message.has("title")) message.getString("title") else null
+    } else {
+        (message as? Map<*, *>)?.get("title") as? String
+    }) ?: "video_${System.currentTimeMillis()}"
+
+    var cookies = if (message is org.json.JSONObject) {
+        if (message.has("cookies")) message.getString("cookies") else null
+    } else {
+        (message as? Map<*, *>)?.get("cookies") as? String
+    }
+
+    // Resolve blob: or empty URLs against mediaInterceptor sniffed streams
+    var effectiveUrl = rawUrl
+    if (effectiveUrl.startsWith("blob:") || effectiveUrl.isEmpty()) {
+        val sniffed = mediaInterceptor.playableMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
+            ?: mediaInterceptor.detectedMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
+        if (sniffed != null) {
+            effectiveUrl = sniffed.url
+            mimeType = when (sniffed.type) {
+                MediaInterceptor.MediaType.HLS -> "application/x-mpegURL"
+                MediaInterceptor.MediaType.DASH -> "application/dash+xml"
+                MediaInterceptor.MediaType.MP4 -> "video/mp4"
+                MediaInterceptor.MediaType.WEBM -> "video/webm"
+                MediaInterceptor.MediaType.AUDIO -> "audio/mpeg"
+            }
+            if (cookies.isNullOrEmpty()) cookies = sniffed.cookies
+            Log.i(TAG, "📥 Resolved blob download URL to sniffed stream: $effectiveUrl ($mimeType)")
+        }
+    }
+
+    if (effectiveUrl.startsWith("blob:") || effectiveUrl.isEmpty()) {
+        viewModelScope.launch(Dispatchers.Main) {
+            Toast.makeText(appContext, "Media stream is loading, please try again in a few seconds", Toast.LENGTH_SHORT).show()
+        }
+        return
+    }
+
+    Log.i(TAG, "📥 REQUEST_DOWNLOAD received for url=$effectiveUrl, mime=$mimeType")
+
+    val mediaType = when {
+        mimeType.contains("mpegurl") || effectiveUrl.contains(".m3u8") -> MediaInterceptor.MediaType.HLS
+        mimeType.contains("dash") || effectiveUrl.contains(".mpd") -> MediaInterceptor.MediaType.DASH
+        mimeType.contains("webm") || effectiveUrl.contains(".webm") -> MediaInterceptor.MediaType.WEBM
+        mimeType.contains("audio") -> MediaInterceptor.MediaType.AUDIO
+        else -> MediaInterceptor.MediaType.MP4
+    }
+
+    viewModelScope.launch(Dispatchers.Main) {
+        try {
+            val suggestedName = if (title.isNotBlank() && title != "Video") {
+                val clean = title.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+                val ext = when (mediaType) {
+                    MediaInterceptor.MediaType.HLS -> ".mp4"
+                    MediaInterceptor.MediaType.DASH -> ".mp4"
+                    MediaInterceptor.MediaType.WEBM -> ".webm"
+                    MediaInterceptor.MediaType.AUDIO -> ".mp3"
+                    MediaInterceptor.MediaType.MP4 -> ".mp4"
+                }
+                if (clean.endsWith(ext, ignoreCase = true)) clean else "$clean$ext"
+            } else {
+                "download_${System.currentTimeMillis()}.mp4"
+            }
+
+            streamDownloadEngine.startDownload(
+                url = effectiveUrl,
+                suggestedName = suggestedName,
+                type = mediaType,
+                saveToLocker = false,
+                referrerUrl = pageUrl,
+                cookies = cookies ?: activeVideoCookies,
+                audioUrl = null
+            )
+            Toast.makeText(appContext, "Download started: $suggestedName", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start download for $effectiveUrl", e)
+            Toast.makeText(appContext, "Failed to start download", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+/**
+ * Handles confirmation from the webpage video that it restored playback state.
+ */
+private fun BrowserViewModel.handleHandoffRestored(message: Any) {
+    val sessionId = if (message is org.json.JSONObject) {
+        if (message.has("sessionId")) message.getString("sessionId") else null
+    } else {
+        (message as? Map<*, *>)?.get("sessionId") as? String
+    }
+    val videoId = if (message is org.json.JSONObject) {
+        if (message.has("videoId")) message.getString("videoId") else null
+    } else {
+        (message as? Map<*, *>)?.get("videoId") as? String
+    }
+    val currentTimeMs = if (message is org.json.JSONObject) {
+        if (message.has("currentTimeMs")) message.optLong("currentTimeMs", 0L) else 0L
+    } else {
+        (message as? Map<*, *>)?.get("currentTimeMs") as? Long ?: 0L
+    }
+    val isPlaying = if (message is org.json.JSONObject) {
+        if (message.has("isPlaying")) message.optBoolean("isPlaying", false) else false
+    } else {
+        (message as? Map<*, *>)?.get("isPlaying") as? Boolean ?: false
+    }
+
+    Log.i(TAG, "🎬 HANDOFF_RESTORED confirmed by webpage video $videoId at ${currentTimeMs}ms, isPlaying=$isPlaying, session=$sessionId")
+    activeVideoSession?.state = WebVideoSessionState.RELEASED
+    activeVideoSession = null
+    pendingHandoff = null
 }
 
 /**
@@ -618,6 +815,7 @@ private fun BrowserViewModel.handleLegacyPlayInNative(message: Any) {
 private fun parseMediaHandoff(json: org.json.JSONObject): MediaHandoff {
     val handoffId = json.optString("handoffId", "")
     val tabId = json.optString("tabId", "")
+    val videoElementId = json.optString("videoId", json.optString("videoElementId", ""))
     val sourceUri = json.optString("sourceUri", "")
     val pageUrl = json.optString("pageUrl", "")
     val title = json.optString("title", "").takeIf { it.isNotEmpty() }
@@ -631,13 +829,17 @@ private fun parseMediaHandoff(json: org.json.JSONObject): MediaHandoff {
     val capturedAt = json.optLong("capturedAt", 0L)
     val videoWidth = json.optInt("videoWidth", 0)
     val videoHeight = json.optInt("videoHeight", 0)
+    val poster = json.optString("poster", "").takeIf { it.isNotEmpty() }
+    val cookies = json.optString("cookies", "").takeIf { it.isNotEmpty() }
+    val referrer = json.optString("referrer", "").takeIf { it.isNotEmpty() }
+    val origin = json.optString("origin", "").takeIf { it.isNotEmpty() }
 
-    // Classify the source type
     val sourceType = MediaSourceClassifier.classify(sourceUri, mimeType)
 
     return MediaHandoff(
         handoffId = handoffId,
         tabId = tabId,
+        videoElementId = videoElementId,
         sourceUri = sourceUri,
         pageUrl = pageUrl,
         title = title,
@@ -651,20 +853,27 @@ private fun parseMediaHandoff(json: org.json.JSONObject): MediaHandoff {
         sourceType = sourceType,
         capturedAt = capturedAt,
         videoWidth = videoWidth,
-        videoHeight = videoHeight
+        videoHeight = videoHeight,
+        poster = poster,
+        cookies = cookies,
+        referrer = referrer,
+        origin = origin
     )
 }
 
 /**
  * Sends a message to the JS extension via the native app message port.
+ * Can target a specific tab or default to the active tab.
  */
-internal fun BrowserViewModel.sendJsMessage(type: String, payload: String) {
-    // Find the active session to send the message
-    val activeTab = tabs.find { it.id == activeTabId }
-    val session = activeTab?.session ?: return
+internal fun BrowserViewModel.sendJsMessage(type: String, payload: String, targetTabId: String? = null) {
+    val tab = if (!targetTabId.isNullOrEmpty()) {
+        tabs.find { it.id == targetTabId } ?: tabs.find { it.id == activeTabId }
+    } else {
+        tabs.find { it.id == activeTabId }
+    }
+    val session = tab?.session ?: return
 
     try {
-        // Use javascript: URI to post a message that the inject.js listener will receive
         val js = "window.postMessage({ type: '$type', payload: $payload }, '*');"
         session.loadUri("javascript:$js")
     } catch (e: Exception) {

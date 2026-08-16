@@ -1,139 +1,683 @@
-// inject.js — Omni Media Detection + Native Player Takeover
-// Dual-mode: passively detects media URLs AND actively intercepts video playback
-// to redirect to the native ExoPlayer-based Omni Player with download button.
+// inject.js — Omni Media Detection + Quetta-style Video Control Overlay & Native Player Handoff
 (function() {
     'use strict';
 
-    // =========================================================
-    // Configuration — set from native side via postMessage
-    // =========================================================
-    let nativePlayerEnabled = true; // Default ON — intercept fullscreen + play
-    let youtubeEnabled = false; // Default OFF — play on original YouTube player by default
+    // Prevent duplicate injection in the same frame
+    if (window._omniMediaGrabberInjected) return;
+    window._omniMediaGrabberInjected = true;
 
-    // Pending handoff state — stores the handoff until native responds
+    // Configuration
+    let nativePlayerEnabled = true;
+    let youtubeEnabled = false;
+
+    // Tracked video elements: Map<videoId, VideoEntry>
+    const trackedVideos = new Map();
+    let videoIdCounter = 0;
+
+    // Active handoff tracking
     let pendingHandoffVideo = null;
     let pendingHandoffId = null;
+    let activeSessionId = null;
 
+    // URL validation helpers & caches
+    const detectedMediaUrls = new Set();
+    const reportedNativeUrls = new Set();
+    const dismissedVideoIds = new Set();
+
+    // =========================================================
+    // CSS for Quetta-Style Video Overlay
+    // =========================================================
+    function injectOverlayStyles() {
+        if (document.getElementById('_omni_video_overlay_styles')) return;
+        const style = document.createElement('style');
+        style.id = '_omni_video_overlay_styles';
+        style.textContent = `
+            .omni-video-overlay-wrapper {
+                position: absolute !important;
+                z-index: 2147483647 !important;
+                pointer-events: auto !important;
+                transform: translateZ(0);
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                box-sizing: border-box !important;
+                touch-action: manipulation !important;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+            }
+            .omni-video-overlay-pill {
+                pointer-events: auto !important;
+                touch-action: manipulation !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                padding: 5px 8px !important;
+                border-radius: 20px !important;
+                background: rgba(18, 22, 28, 0.94) !important;
+                -webkit-backdrop-filter: blur(16px) !important;
+                backdrop-filter: blur(16px) !important;
+                border: 1px solid rgba(255, 255, 255, 0.22) !important;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55) !important;
+                color: #ffffff !important;
+                font-size: 12px !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.2px !important;
+                opacity: 0;
+                transform: translateY(-4px) scale(0.95);
+                transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+                user-select: none !important;
+                -webkit-user-select: none !important;
+                -webkit-tap-highlight-color: transparent !important;
+            }
+            .omni-video-overlay-pill.omni-visible {
+                opacity: 1 !important;
+                transform: translateY(0) scale(1) !important;
+            }
+            .omni-btn {
+                pointer-events: auto !important;
+                touch-action: manipulation !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 5px !important;
+                border: none !important;
+                outline: none !important;
+                color: #ffffff !important;
+                padding: 5px 9px !important;
+                border-radius: 14px !important;
+                font-size: 11px !important;
+                font-weight: 600 !important;
+                line-height: 1 !important;
+                cursor: pointer !important;
+                background: rgba(255, 255, 255, 0.14) !important;
+                transition: background 0.15s, transform 0.1s;
+                -webkit-tap-highlight-color: transparent !important;
+                -webkit-user-select: none !important;
+                user-select: none !important;
+            }
+            .omni-btn:active {
+                transform: scale(0.94) !important;
+                background: rgba(255, 255, 255, 0.25) !important;
+            }
+            .omni-btn-player {
+                background: #00A5C4 !important;
+                color: #ffffff !important;
+            }
+            .omni-btn-player:active {
+                background: #008ba6 !important;
+            }
+            .omni-btn-download {
+                background: rgba(255, 255, 255, 0.16) !important;
+                color: #f0f0f0 !important;
+            }
+            .omni-btn-download:active {
+                background: rgba(255, 255, 255, 0.32) !important;
+            }
+            .omni-btn-close {
+                background: transparent !important;
+                padding: 4px 5px !important;
+                color: rgba(255, 255, 255, 0.6) !important;
+                font-size: 13px !important;
+                border-radius: 10px !important;
+            }
+            .omni-btn-close:active {
+                color: #ffffff !important;
+                background: rgba(255, 255, 255, 0.22) !important;
+            }
+            .omni-icon {
+                width: 14px !important;
+                height: 14px !important;
+                fill: currentColor !important;
+                display: block !important;
+                pointer-events: none !important;
+            }
+            .omni-btn span {
+                pointer-events: none !important;
+            }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    // =========================================================
+    // Message Bridge & Native Handlers
+    // =========================================================
     window.addEventListener('message', (event) => {
         if (event.source !== window) return;
-        if (event.data?.type === 'OMNI_SET_NATIVE_PLAYER') {
-            nativePlayerEnabled = !!event.data.enabled;
-            youtubeEnabled = !!event.data.youtubeEnabled;
-            console.log('[inject.js] Received OMNI_SET_NATIVE_PLAYER. nativePlayerEnabled set to:', nativePlayerEnabled, 'youtubeEnabled:', youtubeEnabled);
-        } else if (event.data?.type === 'EVAL_JS') {
-            const script = event.data.script;
+        const data = event.data;
+        if (!data || !data.type) return;
+
+        if (data.type === 'OMNI_SET_NATIVE_PLAYER') {
+            nativePlayerEnabled = !!data.enabled;
+            youtubeEnabled = !!data.youtubeEnabled;
+            updateAllOverlaysVisibility();
+        } else if (data.type === 'EVAL_JS') {
             try {
-                // Execute code in window scope
-                const result = window.eval(script);
+                const result = window.eval(data.script);
                 console.log("> " + (result === undefined ? 'undefined' : String(result)));
             } catch (err) {
                 console.error("Error: " + (err.message || err));
             }
-        } else if (event.data?.type === 'PAUSE_AND_LAUNCH') {
-            // Native accepted the handoff — pause the website player
-            const handoffId = event.data.handoffId;
-            if (handoffId && pendingHandoffId === handoffId && pendingHandoffVideo) {
-                console.log('[inject.js] Native accepted handoff', handoffId, '- pausing website player');
-                try { pendingHandoffVideo.pause(); } catch(e) {}
+        } else if (data.type === 'PAUSE_AND_LAUNCH') {
+            // Native accepted handoff — pause the website video
+            const handoffId = data.handoffId || data.sessionId;
+            activeSessionId = handoffId;
+            if (pendingHandoffVideo) {
+                try {
+                    pendingHandoffVideo.pause();
+                } catch(e) {}
                 pendingHandoffVideo._omniIntercepted = true;
                 pendingHandoffVideo = null;
                 pendingHandoffId = null;
             }
-        } else if (event.data?.type === 'RESUME_WEBSITE') {
-            // Native rejected the handoff — clear pending state, video keeps playing
-            console.log('[inject.js] Native rejected handoff — resuming website playback');
-            pendingHandoffVideo = null;
-            pendingHandoffId = null;
-        } else if (event.data?.type === 'HANDOFF_COMPLETE') {
-            // Native player closed — clear intercepted flags so future handoffs work
-            console.log('[inject.js] Handoff complete — clearing intercepted flags');
+        } else if (data.type === 'RESUME_WEBSITE') {
+            // Native rejected handoff or preparation failed — resume/unpause website video
+            console.log('[inject.js] Native rejected or failed handoff — resuming website video');
+            if (pendingHandoffVideo) {
+                try {
+                    if (pendingHandoffVideo._omniWasPlayingBeforeHandoff) {
+                        pendingHandoffVideo.play().catch(() => {});
+                    }
+                } catch(e) {}
+                delete pendingHandoffVideo._omniIntercepted;
+                pendingHandoffVideo = null;
+                pendingHandoffId = null;
+            }
+            activeSessionId = null;
+        } else if (data.type === 'RESTORE_VIDEO_STATE') {
+            // Native player minimized/exited — restore exact position and play state
+            handleRestoreVideoState(data.payload || data);
+        } else if (data.type === 'HANDOFF_COMPLETE') {
+            // Native session ended
+            console.log('[inject.js] Native session complete');
+            activeSessionId = null;
             document.querySelectorAll('video').forEach(v => {
                 delete v._omniIntercepted;
             });
+        } else if (data.type === 'ADD_DETECTED_MANIFEST') {
+            const url = data.url;
+            if (url && isDownloadableUrl(url) && isPlayableMediaUrl(url)) {
+                detectedMediaUrls.add(url);
+                reportMedia(url, getMimeType(url));
+            }
         }
     });
 
-    // =========================================================
-    // Pull-to-Refresh Inner Scroll Detection
-    // =========================================================
-    let isInnerScrolled = false;
-    const scrolledElements = new Set();
-    
-    window.addEventListener('scroll', function(e) {
-        let el = e.target;
-        if (el && el !== document && el !== document.body && el !== document.documentElement) {
-            // It's an inner scrollable element
-            if (el.scrollTop > 0) {
-                scrolledElements.add(el);
-            } else {
-                scrolledElements.delete(el);
-            }
-            
-            let newIsScrolled = scrolledElements.size > 0;
-            if (newIsScrolled !== isInnerScrolled) {
-                isInnerScrolled = newIsScrolled;
-                window.postMessage({ type: 'OMNI_INNER_SCROLL_STATE', isScrolled: isInnerScrolled }, '*');
-            }
-        }
-    }, { passive: true, capture: true });
+    /**
+     * Restores the webpage video state on return from native player.
+     */
+    function handleRestoreVideoState(payload) {
+        if (!payload) return;
+        const videoId = payload.videoId;
+        const sourceUri = payload.sourceUri;
+        const currentTimeSec = (payload.currentTimeMs !== undefined) ? (payload.currentTimeMs / 1000.0) : null;
+        const isPlaying = !!payload.isPlaying;
+        const playbackRate = payload.playbackRate || 1.0;
+        const volume = (payload.volume !== undefined) ? payload.volume : 1.0;
+        const muted = !!payload.muted;
+        const sessionId = payload.sessionId || activeSessionId;
 
-    // Expose a way to clear the scroll cache on SPA navigation
-    window._clearOmniScrollCache = function() {
-        scrolledElements.clear();
-        if (isInnerScrolled) {
-            isInnerScrolled = false;
-            window.postMessage({ type: 'OMNI_INNER_SCROLL_STATE', isScrolled: false }, '*');
+        console.log('[inject.js] RESTORE_VIDEO_STATE received:', {
+            videoId, sourceUri, currentTimeSec, isPlaying, playbackRate, volume, muted, sessionId
+        });
+
+        // 1. Locate video by ID or match by source
+        let targetVideo = null;
+        if (videoId && trackedVideos.has(videoId)) {
+            targetVideo = trackedVideos.get(videoId).video;
         }
+        if (!targetVideo) {
+            const videos = Array.from(document.querySelectorAll('video'));
+            targetVideo = videos.find(v => (v.currentSrc === sourceUri || v.src === sourceUri)) || videos[0];
+        }
+
+        if (!targetVideo) {
+            console.warn('[inject.js] No matching video element found to restore state.');
+            return;
+        }
+
+        // 2. Restore state atomically
+        try {
+            if (currentTimeSec !== null && isFinite(currentTimeSec) && currentTimeSec >= 0) {
+                targetVideo.currentTime = currentTimeSec;
+            }
+            if (playbackRate && isFinite(playbackRate)) {
+                targetVideo.playbackRate = playbackRate;
+            }
+            if (volume !== undefined && isFinite(volume)) {
+                targetVideo.volume = Math.max(0, Math.min(1, volume));
+            }
+            if (muted !== undefined) {
+                targetVideo.muted = muted;
+            }
+
+            if (isPlaying) {
+                targetVideo.play().catch(() => {});
+            } else {
+                targetVideo.pause();
+            }
+
+            delete targetVideo._omniIntercepted;
+        } catch(e) {
+            console.error('[inject.js] Error applying restored state to video:', e);
+        }
+
+        // 3. Acknowledge restore to native
+        window.postMessage({
+            type: 'HANDOFF_RESTORED',
+            sessionId: sessionId || '',
+            videoId: targetVideo._omniVideoId || videoId || '',
+            currentTimeMs: Math.floor(targetVideo.currentTime * 1000),
+            isPlaying: !targetVideo.paused
+        }, '*');
+
+        activeSessionId = null;
+    }
+
+    // =========================================================
+    // Quetta-Style Video Overlay Management
+    // =========================================================
+
+    const SVG_ICONS = {
+        player: `<svg class="omni-icon" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-9 11V9l5 3-5 3z"/></svg>`,
+        download: `<svg class="omni-icon" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>`,
+        close: `<svg class="omni-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`
     };
 
+    /**
+     * Reliable touch and click event binder for mobile web overlays.
+     * Prevents underlying video players from intercepting or cancelling button taps.
+     */
+    function bindButtonAction(btn, onTrigger) {
+        let lastTriggerTime = 0;
+
+        const handleAction = (e) => {
+            const now = Date.now();
+            if (now - lastTriggerTime < 450) return; // Debounce duplicate triggers
+            lastTriggerTime = now;
+
+            if (e) {
+                try { e.preventDefault(); } catch(_) {}
+                try { e.stopPropagation(); } catch(_) {}
+                if (e.stopImmediatePropagation) {
+                    try { e.stopImmediatePropagation(); } catch(_) {}
+                }
+            }
+            try {
+                onTrigger(e);
+            } catch(err) {
+                console.error('[inject.js] Error in button action:', err);
+            }
+        };
+
+        btn.addEventListener('click', handleAction, { capture: true });
+        btn.addEventListener('touchend', handleAction, { passive: false, capture: true });
+        btn.addEventListener('pointerup', handleAction, { passive: false, capture: true });
+
+        ['touchstart', 'pointerdown', 'mousedown'].forEach(evt => {
+            btn.addEventListener(evt, (e) => {
+                e.stopPropagation();
+                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            }, { passive: true, capture: true });
+        });
+    }
+
+    /**
+     * Checks if a video element is eligible for the Quetta overlay.
+     */
+    function isVideoEligible(video) {
+        if (!video || !video.isConnected) return false;
+        if (dismissedVideoIds.has(video._omniVideoId)) return false;
+
+        const rect = video.getBoundingClientRect();
+        if (rect.width < 140 || rect.height < 90) return false;
+
+        // Skip background video loops (muted + loop with near-zero controls)
+        if (video.loop && video.muted && !video.controls && rect.width >= window.innerWidth * 0.9) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Creates or updates the floating overlay for a video element.
+     */
+    function attachOverlayToVideo(video) {
+        if (!video._omniVideoId) {
+            video._omniVideoId = 'omni_vid_' + (++videoIdCounter) + '_' + Math.random().toString(36).substr(2, 6);
+        }
+        const videoId = video._omniVideoId;
+
+        if (trackedVideos.has(videoId)) {
+            const entry = trackedVideos.get(videoId);
+            positionOverlay(entry);
+            return;
+        }
+
+        injectOverlayStyles();
+
+        // Create overlay container
+        const wrapper = document.createElement('div');
+        wrapper.className = 'omni-video-overlay-wrapper';
+        wrapper.setAttribute('data-omni-for', videoId);
+
+        // Prevent underlying player from capturing touches on the overlay
+        wrapper.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        }, { passive: true, capture: true });
+        wrapper.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+        }, { passive: true, capture: true });
+
+        const pill = document.createElement('div');
+        pill.className = 'omni-video-overlay-pill';
+
+        // Play in Omni Button
+        const playBtn = document.createElement('button');
+        playBtn.className = 'omni-btn omni-btn-player';
+        playBtn.innerHTML = `${SVG_ICONS.player}<span>Omni Player</span>`;
+        playBtn.title = "Open in Omni Player";
+        bindButtonAction(playBtn, () => {
+            const url = getVideoUrl(video) || video.currentSrc || video.src || window.location.href;
+            console.log('[inject.js] Omni Player button clicked for URL:', url);
+            requestNativePlayback(video, url);
+        });
+
+        // Download Button
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'omni-btn omni-btn-download';
+        downloadBtn.innerHTML = `${SVG_ICONS.download}<span>Download</span>`;
+        downloadBtn.title = "Download Video";
+        bindButtonAction(downloadBtn, () => {
+            const url = getVideoUrl(video) || video.currentSrc || video.src || window.location.href;
+            console.log('[inject.js] Download button clicked for URL:', url);
+            requestDownload(video, url);
+        });
+
+        // Close Button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'omni-btn omni-btn-close';
+        closeBtn.innerHTML = SVG_ICONS.close;
+        closeBtn.title = "Dismiss";
+        bindButtonAction(closeBtn, () => {
+            dismissedVideoIds.add(videoId);
+            removeOverlay(videoId);
+        });
+
+        pill.appendChild(playBtn);
+        pill.appendChild(downloadBtn);
+        pill.appendChild(closeBtn);
+        wrapper.appendChild(pill);
+        
+        const parentContainer = document.fullscreenElement || document.webkitFullscreenElement || document.body || document.documentElement;
+        parentContainer.appendChild(wrapper);
+
+        const entry = {
+            video: video,
+            wrapper: wrapper,
+            pill: pill,
+            hideTimer: null,
+            isHovered: false
+        };
+        trackedVideos.set(videoId, entry);
+
+        // Position overlay
+        positionOverlay(entry);
+        showOverlay(entry);
+
+        // Event listeners for auto-hide and interaction
+        const resetHideTimer = () => {
+            if (entry.hideTimer) clearTimeout(entry.hideTimer);
+            showOverlay(entry);
+            if (!video.paused && !video.ended && !entry.isHovered) {
+                entry.hideTimer = setTimeout(() => {
+                    hideOverlay(entry);
+                }, 3500);
+            }
+        };
+
+        wrapper.addEventListener('mouseenter', () => {
+            entry.isHovered = true;
+            if (entry.hideTimer) clearTimeout(entry.hideTimer);
+            showOverlay(entry);
+        });
+        wrapper.addEventListener('mouseleave', () => {
+            entry.isHovered = false;
+            resetHideTimer();
+        });
+
+        video.addEventListener('play', resetHideTimer);
+        video.addEventListener('pause', () => {
+            if (entry.hideTimer) clearTimeout(entry.hideTimer);
+            showOverlay(entry);
+        });
+        video.addEventListener('mousemove', resetHideTimer);
+        video.addEventListener('touchstart', resetHideTimer, { passive: true });
+        video.addEventListener('loadedmetadata', () => positionOverlay(entry));
+        video.addEventListener('emptied', () => {
+            if (!isVideoEligible(video)) removeOverlay(videoId);
+        });
+
+        resetHideTimer();
+    }
+
+    function showOverlay(entry) {
+        if (!nativePlayerEnabled) return;
+        if (!entry.pill.classList.contains('omni-visible')) {
+            entry.pill.classList.add('omni-visible');
+        }
+    }
+
+    function hideOverlay(entry) {
+        if (entry.pill.classList.contains('omni-visible')) {
+            entry.pill.classList.remove('omni-visible');
+        }
+    }
+
+    function positionOverlay(entry) {
+        const video = entry.video;
+        if (!video.isConnected) {
+            removeOverlay(video._omniVideoId);
+            return;
+        }
+
+        const fullscreenEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        if (fullscreenEl) {
+            // Reparent inside fullscreen element if needed
+            if (entry.wrapper.parentNode !== fullscreenEl) {
+                try {
+                    fullscreenEl.appendChild(entry.wrapper);
+                } catch(e) {}
+            }
+            entry.wrapper.style.display = 'block';
+            entry.wrapper.style.position = 'fixed';
+            entry.wrapper.style.top = '16px';
+            entry.wrapper.style.right = '16px';
+            entry.wrapper.style.left = 'auto';
+            entry.wrapper.style.bottom = 'auto';
+            entry.wrapper.style.zIndex = '2147483647';
+            return;
+        }
+
+        // Non-fullscreen mode: ensure attached to document.body
+        if (entry.wrapper.parentNode !== document.body && document.body) {
+            try {
+                document.body.appendChild(entry.wrapper);
+            } catch(e) {}
+        }
+        entry.wrapper.style.position = 'absolute';
+        entry.wrapper.style.right = 'auto';
+        entry.wrapper.style.bottom = 'auto';
+        entry.wrapper.style.zIndex = '2147483647';
+
+        const rect = video.getBoundingClientRect();
+        if (rect.width < 140 || rect.height < 90 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
+            entry.wrapper.style.display = 'none';
+            return;
+        }
+
+        entry.wrapper.style.display = 'block';
+        const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+
+        // Position at top-right inside the video bounds
+        const top = rect.top + scrollY + 10;
+        const left = rect.right + scrollX - (entry.wrapper.offsetWidth || 190) - 10;
+
+        entry.wrapper.style.top = Math.max(scrollY + 4, top) + 'px';
+        entry.wrapper.style.left = Math.max(scrollX + 4, left) + 'px';
+    }
+
+    function removeOverlay(videoId) {
+        if (trackedVideos.has(videoId)) {
+            const entry = trackedVideos.get(videoId);
+            if (entry.hideTimer) clearTimeout(entry.hideTimer);
+            if (entry.wrapper && entry.wrapper.parentNode) {
+                entry.wrapper.parentNode.removeChild(entry.wrapper);
+            }
+            trackedVideos.delete(videoId);
+        }
+    }
+
+    function updateAllOverlays() {
+        if (!nativePlayerEnabled) {
+            trackedVideos.forEach(entry => hideOverlay(entry));
+            return;
+        }
+
+        document.querySelectorAll('video').forEach(video => {
+            if (isVideoEligible(video)) {
+                attachOverlayToVideo(video);
+            } else if (video._omniVideoId && trackedVideos.has(video._omniVideoId)) {
+                removeOverlay(video._omniVideoId);
+            }
+        });
+
+        trackedVideos.forEach(entry => {
+            positionOverlay(entry);
+        });
+    }
+
+    function updateAllOverlaysVisibility() {
+        if (!nativePlayerEnabled) {
+            trackedVideos.forEach(entry => hideOverlay(entry));
+        } else {
+            trackedVideos.forEach(entry => showOverlay(entry));
+        }
+    }
+
+    window.addEventListener('scroll', () => {
+        trackedVideos.forEach(entry => positionOverlay(entry));
+    }, { passive: true, capture: true });
+
+    window.addEventListener('resize', () => {
+        trackedVideos.forEach(entry => positionOverlay(entry));
+    }, { passive: true });
+
+    // Fullscreen event listeners
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
+        document.addEventListener(evt, () => {
+            setTimeout(updateAllOverlays, 60);
+        }, true);
+    });
+
     // =========================================================
-    // URL validation helpers
+    // Video Capture & Handoff
     // =========================================================
-    const detectedMediaUrls = new Set();
-    const reportedNativeUrls = new Set(); // Prevent duplicate PLAY_IN_NATIVE
-    let isYouTube = window.location.hostname.includes('youtube.com') || window.location.hostname.includes('youtu.be');
 
-    // Reset YouTube dedup set on SPA navigation (YouTube changes URL without full reload)
-    let lastYtHref = window.location.href;
-    setInterval(() => {
-        if (window.location.href !== lastYtHref) {
-            lastYtHref = window.location.href;
-            // Clear dedup caches so new video page can trigger native player
-            if (window._omniLaunchedYtIds) window._omniLaunchedYtIds.clear();
-            reportedNativeUrls.clear();
-            detectedMediaUrls.clear();
-            document.querySelectorAll('video').forEach(video => {
-                delete video._omniIntercepted;
-            });
-            if (window._clearOmniScrollCache) window._clearOmniScrollCache();
-            console.log('[inject.js] SPA navigation detected, cleared dedup caches and video intercept flags for:', window.location.href);
-        }
-    }, 500);
+    function captureVideoState(video) {
+        const duration = video.duration;
+        const videoUrl = getVideoUrl(video) || video.currentSrc || video.src || '';
+        return {
+            sessionId: 'h_' + Math.random().toString(36).substr(2, 9),
+            handoffId: 'h_' + Math.random().toString(36).substr(2, 9),
+            videoId: video._omniVideoId || '',
+            videoElementId: video._omniVideoId || '',
+            sourceUri: videoUrl,
+            pageUrl: window.location.href,
+            title: document.title || '',
+            currentPositionMs: Math.floor(video.currentTime * 1000),
+            durationMs: (isFinite(duration) && duration > 0) ? Math.floor(duration * 1000) : null,
+            isPaused: video.paused,
+            isPlaying: !video.paused,
+            playbackRate: video.playbackRate || 1.0,
+            volume: video.volume || 1.0,
+            muted: video.muted || false,
+            mimeType: video.type || getMimeType(videoUrl) || '',
+            videoWidth: video.videoWidth || 0,
+            videoHeight: video.videoHeight || 0,
+            poster: video.poster || ''
+        };
+    }
 
-    // Also clear intercept flag when a video element loads a new source
-    window.addEventListener('loadstart', (e) => {
-        if (e.target?.tagName === 'VIDEO') {
-            delete e.target._omniIntercepted;
-            console.log('[inject.js] Video loadstart detected, cleared _omniIntercepted flag.');
-        }
-    }, true);
+    function requestNativePlayback(video, videoUrl) {
+        console.log('[inject.js] requestNativePlayback called for videoUrl:', videoUrl);
+        if (!videoUrl) return false;
 
-    function getYoutubeIdFromUrl(url) {
-        if (!url) return null;
-        if (url.includes('youtube.com/watch')) {
-            const match = url.match(/[?&]v=([^&#]+)/);
-            return match ? match[1] : null;
+        // Capture live state BEFORE pausing
+        const handoff = captureVideoState(video);
+        handoff.capturedAt = Date.now();
+
+        pendingHandoffVideo = video;
+        pendingHandoffId = handoff.sessionId || handoff.handoffId;
+        video._omniWasPlayingBeforeHandoff = !video.paused;
+
+        // Exit full-screen if active
+        try {
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            }
+        } catch(e) {}
+
+        // Send to native bridge
+        window.postMessage({
+            type: 'REQUEST_HANDOFF',
+            url: videoUrl,
+            pageUrl: window.location.href,
+            handoff: handoff,
+            mimeType: getMimeType(videoUrl)
+        }, '*');
+
+        return true;
+    }
+
+    function requestDownload(video, videoUrl) {
+        if (!videoUrl) return;
+        window.postMessage({
+            type: 'REQUEST_DOWNLOAD',
+            url: videoUrl,
+            pageUrl: window.location.href,
+            mimeType: getMimeType(videoUrl),
+            title: document.title || 'Video'
+        }, '*');
+    }
+
+    function getVideoUrl(video) {
+        if (!video) return null;
+
+        const directSrc = video.currentSrc || video.src;
+        if (isDownloadableUrl(directSrc)) return directSrc;
+
+        const sources = video.querySelectorAll('source');
+        for (const source of sources) {
+            if (isDownloadableUrl(source.src)) return source.src;
         }
-        if (url.includes('youtu.be/')) {
-            return url.split('youtu.be/')[1]?.split('?')[0]?.split('/')[0] || null;
+
+        for (const attr of video.attributes) {
+            const val = attr.value;
+            if (isDownloadableUrl(val) && (val.includes('.mp4') || val.includes('.m3u8') || val.includes('.webm') || val.includes('.mpd'))) {
+                return val;
+            }
         }
-        if (url.includes('youtube.com/embed/')) {
-            return url.split('youtube.com/embed/')[1]?.split('?')[0]?.split('/')[0] || null;
+
+        if (detectedMediaUrls.size > 0) {
+            const urls = Array.from(detectedMediaUrls);
+            const manifests = urls.filter(u => u.includes('.m3u8') || u.includes('.mpd') || u.includes('/hls/') || u.includes('/dash/') || u.includes('mpegurl'));
+            if (manifests.length > 0) return manifests[0];
+            const playableUrl = urls.find(u => isPlayableMediaUrl(u));
+            if (playableUrl) return playableUrl;
         }
-        if (url.includes('youtube.com/shorts/')) {
-            return url.split('youtube.com/shorts/')[1]?.split('?')[0]?.split('/')[0] || null;
-        }
-        return null;
+
+        return directSrc || video.src || null;
     }
 
     function isDownloadableUrl(url) {
@@ -145,18 +689,9 @@
     function isPlayableMediaUrl(url) {
         if (!url) return false;
         const lower = url.toLowerCase();
-        
-        // Exclude tracking, telemetry, and segments/chunks that cannot be played directly
-        if (lower.includes('/segment') || 
-            lower.includes('/fragment') || 
-            lower.includes('.ts') || 
-            lower.includes('.m4s') ||
-            lower.includes('analytics') ||
-            lower.includes('telemetry')
-        ) {
+        if (lower.includes('/segment') || lower.includes('/fragment') || lower.includes('.ts') || lower.includes('.m4s') || lower.includes('analytics') || lower.includes('telemetry')) {
             return false;
         }
-        
         return lower.includes('.m3u8') ||
                lower.includes('.mpd')  ||
                lower.includes('.mp4')  ||
@@ -169,49 +704,6 @@
                lower.includes('videoplayback');
     }
 
-    function isLikelyAdOrBanner(video) {
-        if (!video) return true;
-        
-        // Loop + muted is almost always a background banner
-        if (video.loop && video.muted) return true;
-        
-        // Check size: very small videos are ads/tracking/anchors
-        const width = video.offsetWidth || video.clientWidth || 0;
-        const height = video.offsetHeight || video.clientHeight || 0;
-        if (width > 0 && width < 150) return true;
-        if (height > 0 && height < 100) return true;
-        
-        return false;
-    }
-
-    // =========================================================
-    // Media Handoff — Capture live <video> element state
-    // =========================================================
-
-    /**
-     * Captures the live playback state from an HTML5 <video> element.
-     * Returns a structured object that can be passed to the native player.
-     */
-    function captureVideoState(video) {
-        const duration = video.duration;
-        const videoUrl = getVideoUrl(video) || video.currentSrc || video.src || '';
-        return {
-            sourceUri: videoUrl,
-            pageUrl: window.location.href,
-            title: document.title || '',
-            currentPositionMs: Math.floor(video.currentTime * 1000),
-            durationMs: (isFinite(duration) && duration > 0) ? Math.floor(duration * 1000) : null,
-            isPaused: video.paused,
-            playbackRate: video.playbackRate || 1.0,
-            volume: video.volume || 1.0,
-            muted: video.muted || false,
-            mimeType: video.type || getMimeType(videoUrl) || '',
-            videoWidth: video.videoWidth || 0,
-            videoHeight: video.videoHeight || 0
-        };
-    }
-
-    // Post grabbed media URL back to the content script (passive — never blocks)
     function reportMedia(url, mimeType) {
         if (!isDownloadableUrl(url)) return;
         if (isPlayableMediaUrl(url)) {
@@ -224,27 +716,14 @@
         }, '*');
     }
 
-    // =========================================================
-    // 0. Intercept console logs (relay to native DevTools)
-    // =========================================================
-    const consoleMethods = ['log', 'warn', 'error', 'info'];
-    consoleMethods.forEach(method => {
-        const original = console[method];
-        console[method] = function(...args) {
-            try {
-                const message = args.map(a => {
-                    if (typeof a === 'object') { try { return JSON.stringify(a); } catch(e) { return String(a); } }
-                    return String(a);
-                }).join(' ');
-                window.postMessage({ type: 'OMNI_CONSOLE_LOG', level: method.toUpperCase(), message }, '*');
-            } catch (e) { /* ignore */ }
-            return original.apply(console, args);
-        };
-    });
+    function reportVideoState(isPlaying) {
+        window.postMessage({ type: 'VIDEO_STATE_CHANGE', isPlaying }, '*');
+    }
 
     // =========================================================
-    // 1. Passive fetch intercept — detect HLS/DASH manifests
+    // Passive Network & Setter Interception
     // =========================================================
+
     const originalFetch = window.fetch;
     window.fetch = async function(...args) {
         const requestUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
@@ -254,9 +733,6 @@
         return originalFetch.apply(this, args);
     };
 
-    // =========================================================
-    // 2. Passive XHR intercept — detect HLS/DASH manifests
-    // =========================================================
     const originalXhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url, ...args) {
         if (typeof url === 'string' && isPlayableMediaUrl(url)) {
@@ -265,9 +741,6 @@
         return originalXhrOpen.call(this, method, url, ...args);
     };
 
-    // =========================================================
-    // 3. Passive src setter intercept — detect direct video srcs
-    // =========================================================
     try {
         const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
         if (srcDescriptor && srcDescriptor.set) {
@@ -282,237 +755,89 @@
                 }
             });
         }
-    } catch(e) { /* ignore */ }
+    } catch(e) {}
 
-    // =========================================================
-    // 4. Listen for network manifests forwarded from background.js
-    // =========================================================
-    window.addEventListener('message', (event) => {
-        if (event.source !== window) return;
-        if (event.data?.type === 'ADD_DETECTED_MANIFEST') {
-            const url = event.data.url;
-            if (url && isDownloadableUrl(url) && isPlayableMediaUrl(url)) {
-                detectedMediaUrls.add(url);
-                reportMedia(url, getMimeType(url));
-            }
-        }
-    });
+    // Event listeners
+    window.addEventListener('playing', e => { if (e.target?.tagName === 'VIDEO') reportVideoState(true); }, true);
+    window.addEventListener('pause', e => { if (e.target?.tagName === 'VIDEO') reportVideoState(false); }, true);
+    window.addEventListener('ended', e => { if (e.target?.tagName === 'VIDEO') reportVideoState(false); }, true);
 
-    // =========================================================
-    // 5. VIDEO_STATE_CHANGE — report play/pause to native so the
-    //    fullscreen download overlay auto-fades while playing and
-    //    stays visible while paused.
-    //    Completely passive — never modifies playback.
-    // =========================================================
-    function reportVideoState(isPlaying) {
-        window.postMessage({ type: 'VIDEO_STATE_CHANGE', isPlaying }, '*');
-    }
-
-    window.addEventListener('playing', e => { if (e.target?.tagName === 'VIDEO') reportVideoState(true);  }, true);
-    window.addEventListener('pause',   e => { if (e.target?.tagName === 'VIDEO') reportVideoState(false); }, true);
-    window.addEventListener('ended',   e => { if (e.target?.tagName === 'VIDEO') reportVideoState(false); }, true);
-
-    // Listen to focus/click events on input elements to trigger native password manager/autofill bottom sheet
-    document.addEventListener('focusin', (e) => {
-        try {
-            const input = e.target;
-            if (!input || input.tagName !== 'INPUT') return;
-            const type = (input.getAttribute('type') || 'text').toLowerCase();
-            
-            // Check if it's a potential login field (text, email, password)
-            if (['text', 'email', 'password'].indexOf(type) !== -1) {
-                // If it's already filled, don't trigger autofill
-                if (input.value && input.value.trim().length > 0) {
-                    console.log('[inject.js] Input focused but already has value, skipping autofill trigger.');
-                    return;
-                }
-                
-                // Check if there is a password field on the page/form (indicates a login page)
-                const hasPasswordField = document.querySelector('input[type="password"]') !== null;
-                if (hasPasswordField || type === 'password' || input.name.includes('user') || input.name.includes('login') || input.id.includes('user') || input.id.includes('login') || input.name.includes('email') || input.id.includes('email')) {
-                    console.log('[inject.js] Login input focused, notifying native app...');
-                    window.postMessage({ type: 'OMNI_FOCUS_LOGIN_INPUT' }, '*');
-                }
-            }
-        } catch (e) { /* ignore */ }
-    }, true);
-
-    // Also report the video URL when it starts playing (so the banner shows even
-    // if the background.js webRequest hook missed it — e.g. blob-backed MSE streams).
     window.addEventListener('play', (event) => {
         try {
             const video = event.target;
             if (!video || video.tagName !== 'VIDEO') return;
             reportVideoState(true);
 
-            // Always report current video src for the media download/playback menu
             const src = video.currentSrc || video.src;
             if (isDownloadableUrl(src)) {
                 reportMedia(src, getMimeType(src));
             } else if (src && src.startsWith('blob:')) {
-                // For MSE blob sources, report the last known manifest instead
                 const urls = Array.from(detectedMediaUrls);
-                if (urls.length > 0) {
-                    reportMedia(urls[0], getMimeType(urls[0]));
-                }
+                if (urls.length > 0) reportMedia(urls[0], getMimeType(urls[0]));
             }
-        } catch(e) { /* ignore */ }
+        } catch(e) {}
     }, true);
 
     // =========================================================
-    // 6. NATIVE PLAYER TAKEOVER — Aloha-style
-    //    Intercepts requestFullscreen() on video elements and
-    //    redirects playback to the native Omni Player.
+    // MutationObserver & Lifecycle Management
     // =========================================================
 
-    /**
-     * Get the best downloadable URL for a video element.
-     * Returns null if no downloadable URL can be found (e.g. DRM blob).
-     */
-    function getVideoUrl(video) {
-        if (!video) return null;
-
-        // 1. Try direct src
-        const directSrc = video.currentSrc || video.src;
-        if (isDownloadableUrl(directSrc)) return directSrc;
-
-        // 2. Try <source> children
-        const sources = video.querySelectorAll('source');
-        for (const source of sources) {
-            if (isDownloadableUrl(source.src)) return source.src;
-        }
-
-        // 2b. Try video element attributes (like data-src, data-video-src, data-config, etc.)
-        for (const attr of video.attributes) {
-            const val = attr.value;
-            if (isDownloadableUrl(val) && (val.includes('.mp4') || val.includes('.m3u8') || val.includes('.webm') || val.includes('.mpd'))) {
-                return val;
-            }
-        }
-
-        // 3. Fall back to first detected manifest (prioritizing master manifest for MSE/blob-backed players)
-        if (detectedMediaUrls.size > 0) {
-            const urls = Array.from(detectedMediaUrls);
-            // Prioritize actual HLS/DASH manifest streams for MSE/blob-backed video elements
-            if (directSrc && directSrc.startsWith('blob:')) {
-                const manifests = urls.filter(u => u.includes('.m3u8') || u.includes('.mpd') || u.includes('/hls/') || u.includes('/dash/') || u.includes('mpegurl'));
-                if (manifests.length > 0) {
-                    return manifests[0]; // Return FIRST manifest (master)
+    const observer = new MutationObserver((mutations) => {
+        let shouldUpdate = false;
+        for (const mutation of mutations) {
+            if (mutation.type === 'childList') {
+                for (const node of mutation.addedNodes) {
+                    if (node.tagName === 'VIDEO' || (node.querySelector && node.querySelector('video'))) {
+                        shouldUpdate = true;
+                        break;
+                    }
+                }
+                for (const node of mutation.removedNodes) {
+                    if (node.tagName === 'VIDEO' || (node.querySelector && node.querySelector('video'))) {
+                        shouldUpdate = true;
+                        break;
+                    }
                 }
             }
-            // Fallback to first playable media URL
-            const playableUrl = urls.find(u => isPlayableMediaUrl(u));
-            if (playableUrl) return playableUrl;
         }
+        if (shouldUpdate) {
+            updateAllOverlays();
+        }
+    });
 
-        return null;
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
     }
 
-    /**
-     * Request the native app to play a video in the Omni Player.
-     * NEW: Two-phase handoff — capture state first, pause only after native accepts.
-     */
-    function requestNativePlayback(video, videoUrl) {
-        console.log('[inject.js] requestNativePlayback called for videoUrl:', videoUrl);
-        if (!videoUrl) {
-            console.warn('[inject.js] requestNativePlayback: videoUrl is empty!');
-            return false;
+    // Periodic check for responsive changes
+    setInterval(updateAllOverlays, 1800);
+    window.addEventListener('DOMContentLoaded', updateAllOverlays);
+
+    // Reset dedup on SPA navigation
+    let lastHref = window.location.href;
+    setInterval(() => {
+        if (window.location.href !== lastHref) {
+            lastHref = window.location.href;
+            reportedNativeUrls.clear();
+            detectedMediaUrls.clear();
+            dismissedVideoIds.clear();
+            trackedVideos.forEach((_, id) => removeOverlay(id));
+            updateAllOverlays();
         }
-        if (reportedNativeUrls.has(videoUrl)) {
-            console.log('[inject.js] requestNativePlayback: videoUrl already reported recently, skipping to prevent loop.');
-            return false;
-        }
-        reportedNativeUrls.add(videoUrl);
+    }, 600);
 
-        // Clear after 2s so re-tapping fullscreen works again
-        setTimeout(() => {
-            reportedNativeUrls.delete(videoUrl);
-            console.log('[inject.js] Cleared reported videoUrl from rate-limit cache:', videoUrl);
-        }, 2000);
-
-        // Capture live state BEFORE pausing
-        const handoff = captureVideoState(video);
-        handoff.handoffId = 'h_' + Math.random().toString(36).substr(2, 9);
-        handoff.tabId = window.location.href;
-        handoff.capturedAt = Date.now();
-
-        // Store pending handoff so we can pause the correct video when native responds
-        pendingHandoffVideo = video;
-        pendingHandoffId = handoff.handoffId;
-
-        // Exit any in-page fullscreen (safe to do before native responds)
-        try {
-            if (document.fullscreenElement) {
-                document.exitFullscreen();
-                console.log('[inject.js] Exited browser-level fullscreen.');
-            }
-        } catch(e) { 
-            console.error('[inject.js] Failed to exit browser fullscreen:', e); 
-        }
-
-        console.log('[inject.js] Posting REQUEST_HANDOFF message to window context...');
-        // Send to native — do NOT pause yet. Native will respond with PAUSE_AND_LAUNCH or RESUME_WEBSITE.
-        window.postMessage({
-            type: 'REQUEST_HANDOFF',
-            url: videoUrl,
-            pageUrl: window.location.href,
-            handoff: handoff,
-            mimeType: getMimeType(videoUrl)
-        }, '*');
-
-        return true;
-    }
-
-    // (play() hijack removed to allow normal browser in-page video playback, ad skipping, and prevent loops on back navigation)
-
-
-
-    // Standard HTML5 fullscreen is preserved natively so video fullscreen works on all websites.
-
-    // =========================================================
-    // 7. Periodic DOM scanner — catches dynamically-rendered videos
-    //    Completely passive — never touches playback state.
-    // =========================================================
-    function scanVideos() {
-        try {
-            let anyPlaying = false;
-            document.querySelectorAll('video').forEach(video => {
-                const src = video.currentSrc || video.src;
-                // Always report video src for banner (all sites)
-                if (isDownloadableUrl(src)) reportMedia(src, getMimeType(src));
-                // Also report blob-backed MSE videos via last known manifest
-                if (src && src.startsWith('blob:') && detectedMediaUrls.size > 0) {
-                    const urls = Array.from(detectedMediaUrls);
-                    const lastUrl = urls[0]; // FIRST manifest
-                    if (lastUrl) reportMedia(lastUrl, getMimeType(lastUrl));
-                }
-                video.querySelectorAll('source').forEach(s => {
-                    if (isDownloadableUrl(s.src)) reportMedia(s.src, getMimeType(s.src));
-                });
-                
-                if (video.currentTime > 0 && !video.paused && !video.ended && video.readyState > 2) {
-                    anyPlaying = true;
-                }
-            });
-            if (anyPlaying) {
-                reportVideoState(true);
-            }
-        } catch(e) { /* ignore */ }
-    }
-
-    setInterval(scanVideos, 2000);
-    window.addEventListener('DOMContentLoaded', scanVideos);
-
-    // =========================================================
-    // Helper functions
-    // =========================================================
     function getMimeType(url) {
+        if (!url) return 'video/mp4';
         const lower = url.toLowerCase();
-        if (lower.includes('m3u8'))  return 'application/x-mpegURL';
-        if (lower.includes('mpd'))   return 'application/dash+xml';
-        if (lower.includes('mime=video/webm') || lower.includes('mime=audio/webm') || lower.includes('.webm')) return 'video/webm';
-        if (lower.includes('mime=video/mp4') || lower.includes('mime=audio/mp4') || lower.includes('.mp4')) return 'video/mp4';
-        if (lower.includes('mime=audio/')) return 'audio/mpeg';
+        if (lower.includes('m3u8')) return 'application/x-mpegURL';
+        if (lower.includes('mpd')) return 'application/dash+xml';
+        if (lower.includes('.webm')) return 'video/webm';
+        if (lower.includes('.mp4')) return 'video/mp4';
+        if (lower.includes('.m4a') || lower.includes('.mp3') || lower.includes('.aac') || lower.includes('.ogg')) return 'audio/mpeg';
         return 'video/mp4';
     }
 })();

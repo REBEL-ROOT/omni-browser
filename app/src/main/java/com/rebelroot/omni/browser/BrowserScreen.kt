@@ -2140,26 +2140,168 @@ fun BrowserScreen(
                                                 )
                                                 
                                                 val runtime = viewModel.getGeckoRuntime(ctx)
-                                                if (!activeTab.session.isOpen) {
-                                                    activeTab.session.open(runtime)
+                                                try {
+                                                    if (!activeTab.session.isOpen) {
+                                                        activeTab.session.open(runtime)
+                                                    }
+                                                } catch (e: Exception) {
+                                                    android.util.Log.w("BrowserScreen", "Failed to open session in factory, resuming tab ${activeTab.id}", e)
+                                                    viewModel.resumeTab(activeTab.id, ctx)
                                                 }
-                                                setSession(activeTab.session)
-                                                activeTab.session.setActive(true)
+                                                val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session ?: activeTab.session
+                                                try {
+                                                    setSession(currentSession)
+                                                    currentSession.setActive(true)
+                                                } catch (e: Exception) {
+                                                    android.util.Log.w("BrowserScreen", "Failed to setSession in factory", e)
+                                                }
                                                 viewModel.setActiveGeckoView(this)
                                             }
                                         },
                                         update = { geckoView ->
                                             val runtime = viewModel.getGeckoRuntime(geckoView.context)
-                                            if (!activeTab.session.isOpen) {
-                                                activeTab.session.open(runtime)
+                                            try {
+                                                if (!activeTab.session.isOpen) {
+                                                    activeTab.session.open(runtime)
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.w("BrowserScreen", "Failed to open session in update, resuming tab ${activeTab.id}", e)
+                                                viewModel.resumeTab(activeTab.id, geckoView.context)
                                             }
-                                            if (geckoView.session != activeTab.session) {
-                                                geckoView.setSession(activeTab.session)
+                                            val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session ?: activeTab.session
+                                            if (geckoView.session != currentSession) {
+                                                try {
+                                                    geckoView.setSession(currentSession)
+                                                } catch (e: Exception) {
+                                                    android.util.Log.w("BrowserScreen", "Failed to setSession in update", e)
+                                                }
                                             }
-                                            activeTab.session.setActive(true)
+                                            try {
+                                                currentSession.setActive(true)
+                                            } catch (_: Exception) {}
                                             viewModel.setActiveGeckoView(geckoView)
+                                        },
+                                        onRelease = { geckoView ->
+                                            try {
+                                                geckoView.releaseSession()
+                                            } catch (_: Exception) {}
+                                            viewModel.clearActiveGeckoView(geckoView)
                                         }
                                     )
+
+                                    // Session recovery overlay — never show a blank screen.
+                                    // While the active tab is being recovered (onKill / process death),
+                                    // show "Restoring your page…" with the last-known title as a hint.
+                                    if (viewModel.isRecoveringActiveTab) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                            ) {
+                                                androidx.compose.material3.CircularProgressIndicator(
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    strokeWidth = 3.dp
+                                                )
+                                                Text(
+                                                    text = "Restoring your page…",
+                                                    color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                if (activeTab.title.isNotBlank() && activeTab.title != "New Tab") {
+                                                    Text(
+                                                        text = activeTab.title,
+                                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 13.sp,
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                        modifier = Modifier.padding(horizontal = 32.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (viewModel.lastRecoveryFailed && !viewModel.isRecoveringActiveTab) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(MaterialTheme.colorScheme.background),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Card(
+                                                shape = RoundedCornerShape(32.dp),
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                                                colors = CardDefaults.cardColors(containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface),
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.85f)
+                                                    .padding(16.dp)
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(24.dp),
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Warning,
+                                                        contentDescription = "Recovery failed",
+                                                        tint = Color(0xFFFF4444),
+                                                        modifier = Modifier.size(48.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(16.dp))
+                                                    Text(
+                                                        text = "We couldn't restore this page",
+                                                        color = if (viewModel.isDarkThemeEnabled) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 18.sp,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = activeTab.url,
+                                                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 14.sp,
+                                                        maxLines = 2,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                    )
+                                                    Spacer(modifier = Modifier.height(24.dp))
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Button(
+                                                            onClick = {
+                                                                viewModel.lastRecoveryFailed = false
+                                                                viewModel.reload()
+                                                            },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                                            shape = RoundedCornerShape(20.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "Reload",
+                                                                color = Color.White,
+                                                                fontWeight = FontWeight.SemiBold
+                                                            )
+                                                        }
+                                                        OutlinedButton(
+                                                            onClick = { viewModel.lastRecoveryFailed = false },
+                                                            shape = RoundedCornerShape(20.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "Dismiss",
+                                                                fontWeight = FontWeight.SemiBold
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
 
                                     activeTab.loadError?.let { errorMsg ->
                                         Box(
@@ -2175,7 +2317,7 @@ fun BrowserScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth(0.85f)
                                                     .padding(16.dp)
-                                            ) {
+                                             ) {
                                                 Column(
                                                     modifier = Modifier.padding(24.dp),
                                                     horizontalAlignment = Alignment.CenterHorizontally
@@ -2251,9 +2393,13 @@ fun BrowserScreen(
                                                     currentSession?.let { session ->
                                                         val geckoView = viewModel.activeGeckoViewRef?.get()
                                                         if (geckoView != null && geckoView.session != session) {
-                                                            geckoView.setSession(session)
+                                                            try {
+                                                                geckoView.setSession(session)
+                                                            } catch (_: Exception) {}
                                                         }
-                                                        session.setActive(true)
+                                                        try {
+                                                            session.setActive(true)
+                                                        } catch (_: Exception) {}
                                                     }
                                                 }
                                                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {

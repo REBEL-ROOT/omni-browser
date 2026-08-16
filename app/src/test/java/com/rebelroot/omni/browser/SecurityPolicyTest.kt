@@ -357,4 +357,25 @@ class SecurityPolicyTest {
         assertFalse(OriginVerifier.isExactOriginMatch("https://accounts.google.com.attacker.com", "accounts.google.com"))
         assertFalse(OriginVerifier.isExactOriginMatch("https://attacker-accounts.google.com", "accounts.google.com"))
     }
+
+    // ── Incognito Video Playback & Media Isolation (Issue #94) ─────────────
+
+    @Test
+    fun isSubdomainOf_videoStreamingDomains() {
+        assertTrue(OriginVerifier.isSubdomainOf("https://www.youtube.com/watch?v=123", "youtube.com"))
+        assertTrue(OriginVerifier.isSubdomainOf("https://m.youtube.com/watch?v=123", "youtube.com"))
+        assertTrue(OriginVerifier.isSubdomainOf("https://youtu.be/123", "youtu.be"))
+        assertTrue(OriginVerifier.isSubdomainOf("https://vimeo.com/123", "vimeo.com"))
+        assertTrue(OriginVerifier.isSubdomainOf("https://player.vimeo.com/video/123", "vimeo.com"))
+        assertTrue(OriginVerifier.isSubdomainOf("https://video.twimg.com/ext_tw_video/123", "twimg.com"))
+        assertFalse(OriginVerifier.isSubdomainOf("https://notyoutube.com", "youtube.com"))
+        assertFalse(OriginVerifier.isSubdomainOf("https://evil-youtube.com", "youtube.com"))
+    }
+
+    @Test
+    fun isExactOriginMatch_mediaAndDrmOrigins() {
+        assertTrue(OriginVerifier.isExactOriginMatch("https://accounts.youtube.com/accounts/SetSID", "accounts.youtube.com"))
+        assertTrue(OriginVerifier.isExactOriginMatch("https://www.youtube.com/watch", "www.youtube.com"))
+        assertFalse(OriginVerifier.isExactOriginMatch("https://youtube.com.attacker.com", "youtube.com"))
+    }
 }

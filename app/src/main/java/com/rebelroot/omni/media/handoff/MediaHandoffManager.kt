@@ -4,8 +4,6 @@
  *
  * Manages the lifecycle of a media handoff: creation, validation,
  * staleness detection, and consume-once semantics.
- *
- * Phase 5-7: Handoff lifecycle management.
  */
 
 package com.rebelroot.omni.media.handoff
@@ -15,9 +13,9 @@ import java.util.UUID
 /**
  * Manages handoff lifecycle and validation.
  *
- * This is a stateless utility class. The actual [pendingHandoff] mutable state
- * lives in [BrowserViewModel] so it survives configuration changes and is
- * scoped to the browser session.
+ * This is a stateless utility class. The actual [activeVideoSession] / [pendingHandoff]
+ * mutable state lives in [BrowserViewModel] so it survives configuration changes and
+ * is scoped to the browser session.
  */
 object MediaHandoffManager {
 
@@ -27,7 +25,7 @@ object MediaHandoffManager {
     /**
      * Generates a new unique handoff ID.
      */
-    fun createHandoffId(): String = UUID.randomUUID().toString()
+    fun createHandoffId(): String = "h_${UUID.randomUUID().toString().replace("-", "").take(12)}"
 
     /**
      * Returns true if the handoff is older than [maxAgeMs].
@@ -40,10 +38,24 @@ object MediaHandoffManager {
     }
 
     /**
+     * Returns true if the session is older than [maxAgeMs].
+     */
+    fun isSessionStale(session: WebVideoSession, maxAgeMs: Long = DEFAULT_MAX_AGE_MS): Boolean {
+        return (System.currentTimeMillis() - session.lastUpdatedMs) > maxAgeMs
+    }
+
+    /**
      * Returns true if the handoff originated from the given [tabId].
      */
     fun matchesCurrentTab(handoff: MediaHandoff, currentTabId: String): Boolean {
-        return handoff.tabId == currentTabId
+        return handoff.tabId == currentTabId || handoff.tabId.isEmpty() || currentTabId.isEmpty()
+    }
+
+    /**
+     * Returns true if the session originated from the given [tabId].
+     */
+    fun matchesCurrentTab(session: WebVideoSession, currentTabId: String): Boolean {
+        return session.tabId == currentTabId || session.tabId.isEmpty() || currentTabId.isEmpty()
     }
 
     /**
@@ -63,11 +75,27 @@ object MediaHandoffManager {
         if (!matchesCurrentTab(handoff, currentTabId)) {
             return "Handoff tab mismatch (expected $currentTabId, got ${handoff.tabId})"
         }
-        if (handoff.sourceUri != expectedSourceUri) {
+        if (handoff.sourceUri != expectedSourceUri && expectedSourceUri.isNotEmpty()) {
             return "Handoff source URI mismatch (expected $expectedSourceUri, got ${handoff.sourceUri})"
         }
         if (!MediaSourceClassifier.isSupported(handoff.sourceType)) {
             return "Unsupported source type: ${handoff.sourceType}"
+        }
+        return null
+    }
+
+    /**
+     * Validates a session before restore.
+     */
+    fun validateForRestore(
+        session: WebVideoSession,
+        currentTabId: String
+    ): String? {
+        if (!matchesCurrentTab(session, currentTabId)) {
+            return "Session tab mismatch (expected $currentTabId, got ${session.tabId})"
+        }
+        if (session.state == WebVideoSessionState.RELEASED || session.state == WebVideoSessionState.FAILED) {
+            return "Session is already terminated with state ${session.state}"
         }
         return null
     }

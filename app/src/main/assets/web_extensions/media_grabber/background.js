@@ -1,4 +1,4 @@
-// background.js — media detection using webRequest network interception and MSE hooks
+// background.js — media detection and Quetta-style video handoff bridge
 
 const api = typeof browser !== "undefined" ? browser : chrome;
 var chrome = api;
@@ -13,8 +13,8 @@ const MEDIA_URL_PATTERNS = [
     /\.mp3(\?|$|#)/i,
     /\.m4a(\?|$|#)/i,
     /\.m4v(\?|$|#)/i,
-    /\/\d+\.ts(\?|$|#)/i,   // HLS transport segments (e.g., /001.ts, /segment123.ts)
-    /seg[\w-]*\.ts(\?|$|#)/i, // Named segments (e.g., seg1.ts, segment-001.ts)
+    /\/\d+\.ts(\?|$|#)/i,
+    /seg[\w-]*\.ts(\?|$|#)/i,
     /\.aac(\?|$|#)/i,
     /\.ogg(\?|$|#)/i,
     /\.flv(\?|$|#)/i,
@@ -71,9 +71,7 @@ function classifyUrl(url) {
 
 function isMediaUrl(url) {
     if (!url || url.startsWith('blob:') || url.startsWith('data:')) return false;
-    // Skip very small tracking pixel / beacon URLs
     if (url.includes('pixel') || url.includes('beacon') || url.includes('analytics')) return false;
-    // Skip extension internal URLs
     if (url.startsWith('moz-extension:') || url.startsWith('chrome-extension:')) return false;
     
     return MEDIA_URL_PATTERNS.some(pattern => pattern.test(url));
@@ -83,16 +81,12 @@ function reportToNative(url, mimeType, tabId) {
     if (reportedUrls.has(url)) return;
     reportedUrls.add(url);
     
-    // Limit set size to prevent memory leaks
     if (reportedUrls.size > 500) {
         const first = reportedUrls.values().next().value;
         reportedUrls.delete(first);
     }
 
-    console.log('[MediaGrabber] Detected media:', mimeType, url.substring(0, 120));
-    
     const sendReport = (cookieString) => {
-        // Cache the media URL for this tab
         if (tabId !== undefined && tabId !== null && tabId >= 0) {
             if (!tabMediaMap.has(tabId)) {
                 tabMediaMap.set(tabId, new Set());
@@ -101,7 +95,6 @@ function reportToNative(url, mimeType, tabId) {
             const tabSet = tabMediaMap.get(tabId);
             tabSet.add(mediaItem);
             
-            // Limit tab cache size to 50
             if (tabSet.size > 50) {
                 const firstItem = tabSet.values().next().value;
                 tabSet.delete(firstItem);
@@ -113,7 +106,8 @@ function reportToNative(url, mimeType, tabId) {
                 type: 'MEDIA_GRABBED',
                 url: url,
                 mimeType: mimeType || 'video/mp4',
-                cookies: cookieString || ''
+                cookies: cookieString || '',
+                tabId: (tabId !== undefined && tabId !== null) ? String(tabId) : ''
             }).catch(() => {});
         } catch (e) {
             console.error('[MediaGrabber] Native message failed:', e);
@@ -127,9 +121,7 @@ function reportToNative(url, mimeType, tabId) {
                     mimeType: mimeType || 'video/mp4',
                     cookies: cookieString || ''
                 });
-            } catch (e) {
-                // Ignore if tab is not ready
-            }
+            } catch (e) {}
         }
     };
 
@@ -142,18 +134,15 @@ function reportToNative(url, mimeType, tabId) {
             sendReport(cookiesStr);
         });
     } catch (e) {
-        console.error('[MediaGrabber] Error getting cookies:', e);
         sendReport("");
     }
 }
 
-// Intercept ALL network requests and check for media URLs/content-types
+// Intercept network requests
 chrome.webRequest.onBeforeRequest.addListener(
     function(details) {
         const url = details.url;
         if (!url) return;
-        
-        // Check URL patterns
         if (isMediaUrl(url)) {
             reportToNative(url, classifyUrl(url), details.tabId);
         }
@@ -162,7 +151,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     []
 );
 
-// Also intercept response headers to detect media by Content-Type
+// Intercept response headers
 chrome.webRequest.onHeadersReceived.addListener(
     function(details) {
         const url = details.url;
@@ -174,10 +163,9 @@ chrome.webRequest.onHeadersReceived.addListener(
                 const contentType = (header.value || '').toLowerCase();
                 const isMedia = MEDIA_CONTENT_TYPES.some(mt => contentType.includes(mt));
                 if (isMedia) {
-                    // Skip tiny responses (tracking pixels etc.)
                     const contentLength = responseHeaders.find(h => h.name.toLowerCase() === 'content-length');
                     const size = contentLength ? parseInt(contentLength.value, 10) : -1;
-                    if (size > 0 && size < 50000) return; // Skip files under 50KB
+                    if (size > 0 && size < 50000) return;
                     
                     reportToNative(url, contentType, details.tabId);
                 }
@@ -189,9 +177,9 @@ chrome.webRequest.onHeadersReceived.addListener(
     ["responseHeaders"]
 );
 
-// Path 2: Content script MSE hook communication
-let nativePlayerEnabled = true; // Default to true
-let youtubeEnabled = false; // Default OFF — play on original YouTube player by default
+// Path 2: Native Player preferences & command polling
+let nativePlayerEnabled = true;
+let youtubeEnabled = false;
 
 function broadcastStateToTabs() {
     chrome.tabs.query({}, (tabs) => {
@@ -203,7 +191,7 @@ function broadcastStateToTabs() {
                         enabled: nativePlayerEnabled,
                         youtubeEnabled: youtubeEnabled
                     });
-                } catch (e) { /* ignore */ }
+                } catch (e) {}
             }
         }
     });
@@ -218,14 +206,12 @@ function pollNativeSettings() {
                     const newState = !!response.enabled;
                     if (newState !== nativePlayerEnabled) {
                         nativePlayerEnabled = newState;
-                        console.log('[background.js] Native player preference updated from app:', nativePlayerEnabled);
                         broadcastStateToTabs();
                     }
                     if (response.hasOwnProperty('youtubeEnabled')) {
                         const newYt = !!response.youtubeEnabled;
                         if (newYt !== youtubeEnabled) {
                             youtubeEnabled = newYt;
-                            console.log('[background.js] YouTube preference updated from app:', youtubeEnabled);
                             broadcastStateToTabs();
                         }
                     }
@@ -243,16 +229,16 @@ function pollNativeSettings() {
                 }
             })
             .catch(() => {});
-    } catch (e) {
-        // Polling failed (app might be starting up), ignore and retry
-    }
+    } catch (e) {}
 }
 
-// Poll settings every 800ms for fast console response
 setInterval(pollNativeSettings, 800);
-pollNativeSettings(); // Run immediately on start
+pollNativeSettings();
 
+// Message listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || !message.type) return;
+
     if (message.type === 'GET_NATIVE_PLAYER_STATE') {
         sendResponse({ enabled: nativePlayerEnabled, youtubeEnabled: youtubeEnabled });
         return true;
@@ -265,9 +251,100 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse([]);
         }
         return true;
+    } else if (message.type === 'REQUEST_HANDOFF') {
+        const url = message.url;
+        const pageUrl = message.pageUrl || (sender.tab ? sender.tab.url : '');
+        const tabId = sender.tab ? String(sender.tab.id) : '';
+
+        const sendHandoff = (cookieString) => {
+            const handoffObj = message.handoff || {};
+            handoffObj.cookies = cookieString || '';
+            handoffObj.tabId = tabId || handoffObj.tabId || '';
+            handoffObj.pageUrl = pageUrl || handoffObj.pageUrl || '';
+
+            try {
+                chrome.runtime.sendNativeMessage('omniApp', {
+                    type: 'REQUEST_HANDOFF',
+                    url: url,
+                    pageUrl: pageUrl,
+                    tabId: tabId,
+                    mimeType: message.mimeType || 'video/mp4',
+                    handoff: handoffObj
+                }).catch((err) => {
+                    console.error('[background.js] Error sending REQUEST_HANDOFF:', err);
+                });
+            } catch (e) {
+                console.error('[background.js] Native message failed for REQUEST_HANDOFF:', e);
+            }
+        };
+
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            try {
+                chrome.cookies.getAll({ url: url }, (cookiesList) => {
+                    let cookiesStr = "";
+                    if (cookiesList && cookiesList.length > 0) {
+                        cookiesStr = cookiesList.map(c => `${c.name}=${c.value}`).join('; ');
+                    }
+                    sendHandoff(cookiesStr);
+                });
+            } catch (e) {
+                sendHandoff("");
+            }
+        } else {
+            sendHandoff("");
+        }
+    } else if (message.type === 'REQUEST_DOWNLOAD') {
+        const url = message.url;
+        const pageUrl = message.pageUrl || (sender.tab ? sender.tab.url : '');
+        const tabId = sender.tab ? String(sender.tab.id) : '';
+
+        const sendDownload = (cookiesStr) => {
+            try {
+                chrome.runtime.sendNativeMessage('omniApp', {
+                    type: 'REQUEST_DOWNLOAD',
+                    url: url,
+                    pageUrl: pageUrl,
+                    tabId: tabId,
+                    mimeType: message.mimeType || 'video/mp4',
+                    title: message.title || '',
+                    cookies: cookiesStr || ''
+                }).catch((err) => {
+                    console.error('[background.js] Error sending REQUEST_DOWNLOAD:', err);
+                });
+            } catch (e) {
+                console.error('[background.js] Native message failed for REQUEST_DOWNLOAD:', e);
+            }
+        };
+
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            try {
+                chrome.cookies.getAll({ url: url }, (cookiesList) => {
+                    let cookiesStr = "";
+                    if (cookiesList && cookiesList.length > 0) {
+                        cookiesStr = cookiesList.map(c => `${c.name}=${c.value}`).join('; ');
+                    }
+                    sendDownload(cookiesStr);
+                });
+            } catch (e) {
+                sendDownload("");
+            }
+        } else {
+            sendDownload("");
+        }
+    } else if (message.type === 'HANDOFF_RESTORED') {
+        try {
+            chrome.runtime.sendNativeMessage('omniApp', {
+                type: 'HANDOFF_RESTORED',
+                sessionId: message.sessionId,
+                videoId: message.videoId,
+                currentTimeMs: message.currentTimeMs,
+                isPlaying: message.isPlaying
+            }).catch(() => {});
+        } catch (e) {
+            console.error('[background.js] Native message failed for HANDOFF_RESTORED:', e);
+        }
     } else if (message.type === 'MEDIA_GRABBED') {
         const url = message.url;
-        // Skip blob: URLs as they can't be downloaded via HTTP
         if (url && !url.startsWith('blob:')) {
             reportToNative(url, message.mimeType || 'video/mp4', sender.tab ? sender.tab.id : undefined);
         }
@@ -277,35 +354,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 type: 'VIDEO_STATE_CHANGE',
                 isPlaying: message.isPlaying
             }).catch(() => {});
-        } catch (e) {
-            console.error('[Omni] Native message failed for video state:', e);
-        }
+        } catch (e) {}
     } else if (message.type === 'INNER_SCROLL_STATE') {
         try {
             chrome.runtime.sendNativeMessage('omniApp', {
                 type: 'INNER_SCROLL_STATE',
                 isScrolled: message.isScrolled
             }).catch(() => {});
-        } catch (e) {
-            console.error('[Omni] Native message failed for INNER_SCROLL_STATE:', e);
-        }
+        } catch (e) {}
     } else if (message.type === 'PLAY_IN_NATIVE') {
-        // Relay to native app — this triggers navigation to the native VideoPlayerScreen
-        console.log('[background.js] Received PLAY_IN_NATIVE from content script for URL:', message.url);
         const sendPlayInNative = (cookieString) => {
             try {
-                console.log('[background.js] Dispatching sendNativeMessage to omniApp with PLAY_IN_NATIVE...');
                 chrome.runtime.sendNativeMessage('omniApp', {
                     type: 'PLAY_IN_NATIVE',
                     url: message.url,
                     pageUrl: message.pageUrl,
                     mimeType: message.mimeType || 'video/mp4',
-                    cookies: cookieString || ''
+                    cookies: cookieString || '',
+                    tabId: sender.tab ? String(sender.tab.id) : ''
                 }).catch(() => {});
-                console.log('[background.js] sendNativeMessage successfully dispatched.');
-            } catch (e) {
-                console.error('[Omni] Native message failed for PLAY_IN_NATIVE:', e);
-            }
+            } catch (e) {}
         };
 
         try {
@@ -317,7 +385,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendPlayInNative(cookiesStr);
             });
         } catch (e) {
-            console.error('[MediaGrabber] Error getting cookies for play in native:', e);
             sendPlayInNative("");
         }
     } else if (message.type === 'CONSOLE_LOG') {
@@ -327,17 +394,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 level: message.level,
                 message: message.message
             }).catch(() => {});
-        } catch (e) {
-            console.error('[Omni] Native message failed:', e);
-        }
+        } catch (e) {}
     } else if (message.type === 'FOCUS_LOGIN_INPUT') {
         try {
             chrome.runtime.sendNativeMessage('omniApp', {
                 type: 'FOCUS_LOGIN_INPUT',
                 url: sender.tab ? sender.tab.url : ''
             }).catch(() => {});
-        } catch (e) {
-            console.error('[Omni] Native message failed for FOCUS_LOGIN_INPUT:', e);
-        }
+        } catch (e) {}
     }
 });
