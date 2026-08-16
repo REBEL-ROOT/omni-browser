@@ -24,124 +24,15 @@
     const reportedNativeUrls = new Set();
     const dismissedVideoIds = new Set();
 
-    // =========================================================
-    // CSS for Quetta-Style Video Overlay
-    // =========================================================
-    function injectOverlayStyles() {
-        if (document.getElementById('_omni_video_overlay_styles')) return;
-        const style = document.createElement('style');
-        style.id = '_omni_video_overlay_styles';
-        style.textContent = `
-            .omni-video-overlay-wrapper {
-                position: absolute !important;
-                z-index: 2147483647 !important;
-                pointer-events: auto !important;
-                transform: translateZ(0);
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                box-sizing: border-box !important;
-                touch-action: manipulation !important;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-            }
-            .omni-video-overlay-pill {
-                pointer-events: auto !important;
-                touch-action: manipulation !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 6px !important;
-                padding: 5px 8px !important;
-                border-radius: 20px !important;
-                background: rgba(18, 22, 28, 0.94) !important;
-                -webkit-backdrop-filter: blur(16px) !important;
-                backdrop-filter: blur(16px) !important;
-                border: 1px solid rgba(255, 255, 255, 0.22) !important;
-                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55) !important;
-                color: #ffffff !important;
-                font-size: 12px !important;
-                font-weight: 500 !important;
-                letter-spacing: 0.2px !important;
-                opacity: 0;
-                transform: translateY(-4px) scale(0.95);
-                transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-                user-select: none !important;
-                -webkit-user-select: none !important;
-                -webkit-tap-highlight-color: transparent !important;
-            }
-            .omni-video-overlay-pill.omni-visible {
-                opacity: 1 !important;
-                transform: translateY(0) scale(1) !important;
-            }
-            .omni-btn {
-                pointer-events: auto !important;
-                touch-action: manipulation !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                gap: 5px !important;
-                border: none !important;
-                outline: none !important;
-                color: #ffffff !important;
-                padding: 5px 9px !important;
-                border-radius: 14px !important;
-                font-size: 11px !important;
-                font-weight: 600 !important;
-                line-height: 1 !important;
-                cursor: pointer !important;
-                background: rgba(255, 255, 255, 0.14) !important;
-                transition: background 0.15s, transform 0.1s;
-                -webkit-tap-highlight-color: transparent !important;
-                -webkit-user-select: none !important;
-                user-select: none !important;
-            }
-            .omni-btn:active {
-                transform: scale(0.94) !important;
-                background: rgba(255, 255, 255, 0.25) !important;
-            }
-            .omni-btn-player {
-                background: #00A5C4 !important;
-                color: #ffffff !important;
-            }
-            .omni-btn-player:active {
-                background: #008ba6 !important;
-            }
-            .omni-btn-download {
-                background: rgba(255, 255, 255, 0.16) !important;
-                color: #f0f0f0 !important;
-            }
-            .omni-btn-download:active {
-                background: rgba(255, 255, 255, 0.32) !important;
-            }
-            .omni-btn-close {
-                background: transparent !important;
-                padding: 4px 5px !important;
-                color: rgba(255, 255, 255, 0.6) !important;
-                font-size: 13px !important;
-                border-radius: 10px !important;
-            }
-            .omni-btn-close:active {
-                color: #ffffff !important;
-                background: rgba(255, 255, 255, 0.22) !important;
-            }
-            .omni-icon {
-                width: 14px !important;
-                height: 14px !important;
-                fill: currentColor !important;
-                display: block !important;
-                pointer-events: none !important;
-            }
-            .omni-btn span {
-                pointer-events: none !important;
-            }
-        `;
-        (document.head || document.documentElement).appendChild(style);
-    }
-
     // Video-to-stream associations for MSE blob resolution
     const videoStreamAssociations = new Map(); // videoId -> Set<string>
 
     function associateStreamWithActiveVideos(streamUrl) {
         if (!streamUrl) return;
         document.querySelectorAll('video').forEach(video => {
+            if (!video._omniVideoId) {
+                video._omniVideoId = 'omni_vid_' + (++videoIdCounter) + '_' + Math.random().toString(36).substr(2, 6);
+            }
             const id = video._omniVideoId;
             if (id && (!video.paused || trackedVideos.has(id))) {
                 if (!videoStreamAssociations.has(id)) {
@@ -162,32 +53,6 @@
         return Array.from(set);
     }
 
-    function disableOverlayButtons(videoId) {
-        if (videoId && trackedVideos.has(videoId)) {
-            const entry = trackedVideos.get(videoId);
-            if (entry && entry.pill) {
-                entry.pill.querySelectorAll('button').forEach(btn => {
-                    btn.disabled = true;
-                    btn.style.opacity = '0.6';
-                    btn.style.pointerEvents = 'none';
-                });
-            }
-        }
-        setTimeout(enableOverlayButtons, 6000); // Safety timeout
-    }
-
-    function enableOverlayButtons() {
-        trackedVideos.forEach(entry => {
-            if (entry.pill) {
-                entry.pill.querySelectorAll('button').forEach(btn => {
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.pointerEvents = 'auto';
-                });
-            }
-        });
-    }
-
     // =========================================================
     // Message Bridge & Native Handlers
     // =========================================================
@@ -199,7 +64,6 @@
         if (data.type === 'OMNI_SET_NATIVE_PLAYER') {
             nativePlayerEnabled = !!data.enabled;
             youtubeEnabled = !!data.youtubeEnabled;
-            updateAllOverlaysVisibility();
         } else if (data.type === 'EVAL_JS') {
             try {
                 const result = window.eval(data.script);
@@ -216,7 +80,7 @@
 
             let targetVideo = null;
             if (targetVideoId && trackedVideos.has(targetVideoId)) {
-                targetVideo = trackedVideos.get(targetVideoId).video;
+                targetVideo = trackedVideos.get(targetVideoId);
             } else if (pendingHandoffVideo) {
                 targetVideo = pendingHandoffVideo;
             }
@@ -237,7 +101,7 @@
 
             let targetVideo = null;
             if (targetVideoId && trackedVideos.has(targetVideoId)) {
-                targetVideo = trackedVideos.get(targetVideoId).video;
+                targetVideo = trackedVideos.get(targetVideoId);
             } else if (pendingHandoffVideo) {
                 targetVideo = pendingHandoffVideo;
             }
@@ -253,17 +117,13 @@
             pendingHandoffVideo = null;
             pendingHandoffId = null;
             activeSessionId = null;
-            enableOverlayButtons();
         } else if (data.type === 'DOWNLOAD_STARTED') {
             console.log('[inject.js] Download started:', data.payload || data);
-            enableOverlayButtons();
         } else if (data.type === 'DOWNLOAD_REJECTED' || data.type === 'DOWNLOAD_ERROR') {
             console.log('[inject.js] Download rejected or failed:', data.payload || data);
-            enableOverlayButtons();
         } else if (data.type === 'RESTORE_VIDEO_STATE') {
             // Native player minimized/exited — restore exact position and play state
             handleRestoreVideoState(data.payload || data);
-            enableOverlayButtons();
         } else if (data.type === 'HANDOFF_COMPLETE') {
             // Native session ended
             console.log('[inject.js] Native session complete');
@@ -271,7 +131,6 @@
             document.querySelectorAll('video').forEach(v => {
                 delete v._omniIntercepted;
             });
-            enableOverlayButtons();
         } else if (data.type === 'ADD_DETECTED_MANIFEST') {
             const url = data.url;
             if (url && isDownloadableUrl(url) && isPlayableMediaUrl(url)) {
@@ -302,7 +161,7 @@
         // 1. Locate video strictly by ID or exact source URI — NEVER blind videos[0] fallback
         let targetVideo = null;
         if (videoId && trackedVideos.has(videoId)) {
-            targetVideo = trackedVideos.get(videoId).video;
+            targetVideo = trackedVideos.get(videoId);
         }
         if (!targetVideo && sourceUri) {
             const videos = Array.from(document.querySelectorAll('video'));
@@ -352,314 +211,19 @@
         activeSessionId = null;
     }
 
-    // =========================================================
-    // Quetta-Style Video Overlay Management
-    // =========================================================
-
-    const SVG_ICONS = {
-        player: `<svg class="omni-icon" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-9 11V9l5 3-5 3z"/></svg>`,
-        download: `<svg class="omni-icon" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>`,
-        close: `<svg class="omni-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`
-    };
-
-    /**
-     * Reliable touch and click event binder for mobile web overlays.
-     * Prevents underlying video players from intercepting or cancelling button taps.
-     */
-    function bindButtonAction(btn, onTrigger) {
-        let lastTriggerTime = 0;
-
-        const handleAction = (e) => {
-            const now = Date.now();
-            if (now - lastTriggerTime < 450) return; // Debounce duplicate triggers
-            lastTriggerTime = now;
-
-            if (e) {
-                try { e.preventDefault(); } catch(_) {}
-                try { e.stopPropagation(); } catch(_) {}
-                if (e.stopImmediatePropagation) {
-                    try { e.stopImmediatePropagation(); } catch(_) {}
-                }
-            }
-            try {
-                onTrigger(e);
-            } catch(err) {
-                console.error('[inject.js] Error in button action:', err);
-            }
-        };
-
-        btn.addEventListener('click', handleAction, { capture: true });
-        btn.addEventListener('touchend', handleAction, { passive: false, capture: true });
-        btn.addEventListener('pointerup', handleAction, { passive: false, capture: true });
-
-        ['touchstart', 'pointerdown', 'mousedown'].forEach(evt => {
-            btn.addEventListener(evt, (e) => {
-                e.stopPropagation();
-                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            }, { passive: true, capture: true });
-        });
-    }
-
-    /**
-     * Checks if a video element is eligible for the Quetta overlay.
-     */
-    function isVideoEligible(video) {
-        if (!video || !video.isConnected) return false;
-        if (dismissedVideoIds.has(video._omniVideoId)) return false;
-
-        const rect = video.getBoundingClientRect();
-        if (rect.width < 140 || rect.height < 90) return false;
-
-        // Skip background video loops (muted + loop with near-zero controls)
-        if (video.loop && video.muted && !video.controls && rect.width >= window.innerWidth * 0.9) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Creates or updates the floating overlay for a video element.
-     */
-    function attachOverlayToVideo(video) {
+    function registerVideo(video) {
+        if (!video || !video.isConnected) return;
         if (!video._omniVideoId) {
             video._omniVideoId = 'omni_vid_' + (++videoIdCounter) + '_' + Math.random().toString(36).substr(2, 6);
         }
-        const videoId = video._omniVideoId;
-
-        if (trackedVideos.has(videoId)) {
-            const entry = trackedVideos.get(videoId);
-            positionOverlay(entry);
-            return;
-        }
-
-        injectOverlayStyles();
-
-        // Create overlay container
-        const wrapper = document.createElement('div');
-        wrapper.className = 'omni-video-overlay-wrapper';
-        wrapper.setAttribute('data-omni-for', videoId);
-
-        // Prevent underlying player from capturing touches on the overlay
-        wrapper.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-        }, { passive: true, capture: true });
-        wrapper.addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-        }, { passive: true, capture: true });
-
-        const pill = document.createElement('div');
-        pill.className = 'omni-video-overlay-pill';
-
-        // Play in Omni Button
-        const playBtn = document.createElement('button');
-        playBtn.className = 'omni-btn omni-btn-player';
-        playBtn.innerHTML = `${SVG_ICONS.player}<span>Omni Player</span>`;
-        playBtn.title = "Open in Omni Player";
-        bindButtonAction(playBtn, () => {
-            const url = getVideoUrl(video) || video.currentSrc || video.src || window.location.href;
-            console.log('[inject.js] Omni Player button clicked for URL:', url);
-            requestNativePlayback(video, url);
-        });
-
-        // Download Button
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'omni-btn omni-btn-download';
-        downloadBtn.innerHTML = `${SVG_ICONS.download}<span>Download</span>`;
-        downloadBtn.title = "Download Video";
-        bindButtonAction(downloadBtn, () => {
-            const url = getVideoUrl(video) || video.currentSrc || video.src || window.location.href;
-            console.log('[inject.js] Download button clicked for URL:', url);
-            requestDownload(video, url);
-        });
-
-        // Close Button
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'omni-btn omni-btn-close';
-        closeBtn.innerHTML = SVG_ICONS.close;
-        closeBtn.title = "Dismiss";
-        bindButtonAction(closeBtn, () => {
-            dismissedVideoIds.add(videoId);
-            removeOverlay(videoId);
-        });
-
-        pill.appendChild(playBtn);
-        pill.appendChild(downloadBtn);
-        pill.appendChild(closeBtn);
-        wrapper.appendChild(pill);
-        
-        const parentContainer = document.fullscreenElement || document.webkitFullscreenElement || document.body || document.documentElement;
-        parentContainer.appendChild(wrapper);
-
-        const entry = {
-            video: video,
-            wrapper: wrapper,
-            pill: pill,
-            hideTimer: null,
-            isHovered: false
-        };
-        trackedVideos.set(videoId, entry);
-
-        // Position overlay
-        positionOverlay(entry);
-        showOverlay(entry);
-
-        // Event listeners for auto-hide and interaction
-        const resetHideTimer = () => {
-            if (entry.hideTimer) clearTimeout(entry.hideTimer);
-            showOverlay(entry);
-            if (!video.paused && !video.ended && !entry.isHovered) {
-                entry.hideTimer = setTimeout(() => {
-                    hideOverlay(entry);
-                }, 3500);
-            }
-        };
-
-        wrapper.addEventListener('mouseenter', () => {
-            entry.isHovered = true;
-            if (entry.hideTimer) clearTimeout(entry.hideTimer);
-            showOverlay(entry);
-        });
-        wrapper.addEventListener('mouseleave', () => {
-            entry.isHovered = false;
-            resetHideTimer();
-        });
-
-        video.addEventListener('play', resetHideTimer);
-        video.addEventListener('pause', () => {
-            if (entry.hideTimer) clearTimeout(entry.hideTimer);
-            showOverlay(entry);
-        });
-        video.addEventListener('mousemove', resetHideTimer);
-        video.addEventListener('touchstart', resetHideTimer, { passive: true });
-        video.addEventListener('loadedmetadata', () => positionOverlay(entry));
-        video.addEventListener('emptied', () => {
-            if (!isVideoEligible(video)) removeOverlay(videoId);
-        });
-
-        resetHideTimer();
+        trackedVideos.set(video._omniVideoId, video);
     }
 
-    function showOverlay(entry) {
-        if (!nativePlayerEnabled) return;
-        if (!entry.pill.classList.contains('omni-visible')) {
-            entry.pill.classList.add('omni-visible');
-        }
-    }
-
-    function hideOverlay(entry) {
-        if (entry.pill.classList.contains('omni-visible')) {
-            entry.pill.classList.remove('omni-visible');
-        }
-    }
-
-    function positionOverlay(entry) {
-        const video = entry.video;
-        if (!video.isConnected) {
-            removeOverlay(video._omniVideoId);
-            return;
-        }
-
-        const fullscreenEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-
-        if (fullscreenEl) {
-            // Reparent inside fullscreen element if needed
-            if (entry.wrapper.parentNode !== fullscreenEl) {
-                try {
-                    fullscreenEl.appendChild(entry.wrapper);
-                } catch(e) {}
-            }
-            entry.wrapper.style.display = 'block';
-            entry.wrapper.style.position = 'fixed';
-            entry.wrapper.style.top = '16px';
-            entry.wrapper.style.right = '16px';
-            entry.wrapper.style.left = 'auto';
-            entry.wrapper.style.bottom = 'auto';
-            entry.wrapper.style.zIndex = '2147483647';
-            return;
-        }
-
-        // Non-fullscreen mode: ensure attached to document.body
-        if (entry.wrapper.parentNode !== document.body && document.body) {
-            try {
-                document.body.appendChild(entry.wrapper);
-            } catch(e) {}
-        }
-        entry.wrapper.style.position = 'absolute';
-        entry.wrapper.style.right = 'auto';
-        entry.wrapper.style.bottom = 'auto';
-        entry.wrapper.style.zIndex = '2147483647';
-
-        const rect = video.getBoundingClientRect();
-        if (rect.width < 140 || rect.height < 90 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
-            entry.wrapper.style.display = 'none';
-            return;
-        }
-
-        entry.wrapper.style.display = 'block';
-        const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
-        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-
-        // Position at top-right inside the video bounds
-        const top = rect.top + scrollY + 10;
-        const left = rect.right + scrollX - (entry.wrapper.offsetWidth || 190) - 10;
-
-        entry.wrapper.style.top = Math.max(scrollY + 4, top) + 'px';
-        entry.wrapper.style.left = Math.max(scrollX + 4, left) + 'px';
-    }
-
-    function removeOverlay(videoId) {
-        if (trackedVideos.has(videoId)) {
-            const entry = trackedVideos.get(videoId);
-            if (entry.hideTimer) clearTimeout(entry.hideTimer);
-            if (entry.wrapper && entry.wrapper.parentNode) {
-                entry.wrapper.parentNode.removeChild(entry.wrapper);
-            }
-            trackedVideos.delete(videoId);
-        }
-    }
-
-    function updateAllOverlays() {
-        if (!nativePlayerEnabled) {
-            trackedVideos.forEach(entry => hideOverlay(entry));
-            return;
-        }
-
+    function updateAllTrackedVideos() {
         document.querySelectorAll('video').forEach(video => {
-            if (isVideoEligible(video)) {
-                attachOverlayToVideo(video);
-            } else if (video._omniVideoId && trackedVideos.has(video._omniVideoId)) {
-                removeOverlay(video._omniVideoId);
-            }
-        });
-
-        trackedVideos.forEach(entry => {
-            positionOverlay(entry);
+            registerVideo(video);
         });
     }
-
-    function updateAllOverlaysVisibility() {
-        if (!nativePlayerEnabled) {
-            trackedVideos.forEach(entry => hideOverlay(entry));
-        } else {
-            trackedVideos.forEach(entry => showOverlay(entry));
-        }
-    }
-
-    window.addEventListener('scroll', () => {
-        trackedVideos.forEach(entry => positionOverlay(entry));
-    }, { passive: true, capture: true });
-
-    window.addEventListener('resize', () => {
-        trackedVideos.forEach(entry => positionOverlay(entry));
-    }, { passive: true });
-
-    // Fullscreen event listeners
-    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
-        document.addEventListener(evt, () => {
-            setTimeout(updateAllOverlays, 60);
-        }, true);
-    });
 
     // =========================================================
     // Video Capture & Handoff
@@ -705,9 +269,6 @@
         // Collect streams specifically associated with this video element
         const associatedStreams = getAssociatedStreamsForVideo(video);
 
-        // Temporarily disable overlay buttons to prevent rapid repeat taps
-        disableOverlayButtons(video._omniVideoId);
-
         // Exit full-screen if active
         try {
             if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -731,7 +292,6 @@
     function requestDownload(video, videoUrl) {
         if (!videoUrl) return;
         const associatedStreams = getAssociatedStreamsForVideo(video);
-        disableOverlayButtons(video._omniVideoId);
 
         window.postMessage({
             type: 'REQUEST_DOWNLOAD',
@@ -896,7 +456,7 @@
             }
         }
         if (shouldUpdate) {
-            updateAllOverlays();
+            updateAllTrackedVideos();
         }
     });
 
@@ -908,9 +468,9 @@
         });
     }
 
-    // Periodic check for responsive changes
-    setInterval(updateAllOverlays, 1800);
-    window.addEventListener('DOMContentLoaded', updateAllOverlays);
+    // Periodic check for video elements
+    setInterval(updateAllTrackedVideos, 2000);
+    window.addEventListener('DOMContentLoaded', updateAllTrackedVideos);
 
     // Reset dedup on SPA navigation
     let lastHref = window.location.href;
@@ -920,8 +480,9 @@
             reportedNativeUrls.clear();
             detectedMediaUrls.clear();
             dismissedVideoIds.clear();
-            trackedVideos.forEach((_, id) => removeOverlay(id));
-            updateAllOverlays();
+            trackedVideos.clear();
+            videoStreamAssociations.clear();
+            updateAllTrackedVideos();
         }
     }, 600);
 
