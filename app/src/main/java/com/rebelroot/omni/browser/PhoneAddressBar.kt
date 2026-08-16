@@ -590,26 +590,7 @@ fun PhoneAddressBar(
             }
         }
 
-        // Issue #73: dedicated media button. Hidden unless playable media is detected
-        // for the current page, so the website's own player is never disturbed by default.
-        val hasPlayableMedia by viewModel.mediaInterceptor.hasPlayableMedia.collectAsState()
-        AnimatedVisibility(
-            visible = !isInputFocused && viewModel.isMediaButtonEnabled && hasPlayableMedia,
-            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandHorizontally(),
-            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkHorizontally()
-        ) {
-            IconButton(
-                onClick = onOpenMediaSheet,
-                modifier = Modifier.size(config.barIconSize)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayCircle,
-                    contentDescription = stringResource(R.string.media_open_detected),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(config.innerIconSize)
-                )
-            }
-        }
+
 
         AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             val infiniteTransition = rememberInfiniteTransition(label = "tabPulse")

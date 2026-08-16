@@ -312,11 +312,14 @@ fun BrowserScreen(
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     
-    // Video detection states (Issue #73: detection is silent; UI is on-demand only)
+    // Video detection states
     val detectedMedia by viewModel.mediaInterceptor.detectedMedia.collectAsState()
     val playableMedia by viewModel.mediaInterceptor.playableMedia.collectAsState()
     val hasPlayableMedia by viewModel.mediaInterceptor.hasPlayableMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
+    var isAlohaBannerDismissed by remember { mutableStateOf(false) }
+    val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
+    val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled && !viewModel.isUrlBlockedByMediaSniffer(viewModel.currentUrl)
     var isScrollNavBarVisible by remember { mutableStateOf(true) }
     var isNavHideEnabled by remember { mutableStateOf(true) }
     var currentScrollPos by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -342,6 +345,7 @@ fun BrowserScreen(
     }
     LaunchedEffect(viewModel.currentUrl) {
         isScrollNavBarVisible = true
+        isAlohaBannerDismissed = false
     }
     LaunchedEffect(isNavHideEnabled) {
         if (!isNavHideEnabled) {
@@ -361,7 +365,6 @@ fun BrowserScreen(
     var isAutoScrollPaused by remember { mutableStateOf(false) }
     var autoScrollSpeed by remember { mutableStateOf(1) }
     var showPlayerSettingsDialog by remember { mutableStateOf(false) }
-    var showMediaSnifferSettingsDialog by remember { mutableStateOf(false) }
     var isReaderSettingsExpanded by remember { mutableStateOf(true) }
     var isAutoScrollHUDExpanded by remember { mutableStateOf(true) }
 
@@ -853,6 +856,11 @@ fun BrowserScreen(
     // composed on top, so this handler is only active when the browser is the top destination.
     androidx.activity.compose.BackHandler(enabled = true) {
         val activity = context as? android.app.Activity
+        if (viewModel.isFullscreen) {
+            activeTab?.session?.exitFullScreen()
+            viewModel.isFullscreen = false
+            return@BackHandler
+        }
         if (!showHomeScreen) {
             if (viewModel.canGoBack) {
                 // Navigate the active tab's GeckoSession back safely
@@ -1052,6 +1060,14 @@ fun BrowserScreen(
                 }
             }
         }
+
+        // The Media Sniffer banner lives inside Scaffold's topBar/bottomBar slots and
+        // toggles these dialog/sheet triggers. Reading them here, in BrowserScreen's own
+        // composition scope, forces a recomposition so the content slot and root dialogs
+        // re-execute and show them reliably.
+        val _observeDialogTriggers = viewModel.showMediaSnifferSettingsDialog ||
+            showDownloadSheet || showVideoOverviewDialog
+        if (_observeDialogTriggers) { /* observation only */ }
 
         Scaffold(
         topBar = {
@@ -1485,6 +1501,21 @@ fun BrowserScreen(
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
                                 )
                             }
+
+                            AnimatedVisibility(
+                                visible = showAlohaBanner && viewModel.addressBarPosition != "Bottom",
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                MediaSnifferBanner(
+                                    viewModel = viewModel,
+                                    nonDrmMedia = nonDrmMedia,
+                                    onDismiss = { isAlohaBannerDismissed = true },
+                                    onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
+                                    onDownloadClick = { showDownloadSheet = true },
+                                    onOpenSettings = { viewModel.showMediaSnifferSettingsDialog = true }
+                                )
+                            }
                         }
                     }
                 }
@@ -1912,6 +1943,21 @@ fun BrowserScreen(
                     )
                 }
 
+                AnimatedVisibility(
+                    visible = showAlohaBanner && viewModel.addressBarPosition == "Bottom",
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    MediaSnifferBanner(
+                        viewModel = viewModel,
+                        nonDrmMedia = nonDrmMedia,
+                        onDismiss = { isAlohaBannerDismissed = true },
+                        onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
+                        onDownloadClick = { showDownloadSheet = true },
+                        onOpenSettings = { viewModel.showMediaSnifferSettingsDialog = true }
+                    )
+                }
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -1970,8 +2016,12 @@ fun BrowserScreen(
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                                 val topBarMeasuredDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
                                 val topBarTotalHeight = topBarMeasuredDp + statusBarHeightDp
-                                
-                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarTotalHeight else 0.dp
+
+                                // Banner is inside Scaffold's topBar but measured separately; add its height
+                                // so GeckoView offset is correct when the banner is visible.
+                                val bannerHeight = if (showAlohaBanner && viewModel.addressBarPosition != "Bottom") 48.dp else 0.dp
+
+                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarTotalHeight + bannerHeight else 0.dp
                                 val geckoBottomPad = if (!viewModel.isFullscreen && !isLandscape) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
                                 
                                 val geckoTopPad = 0.dp
@@ -3183,15 +3233,9 @@ fun BrowserScreen(
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
             if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
                 if (viewModel.isFullscreen) {
-                    // Fullscreen mode — overlay with auto-fade controls
-                    // Transparent tap-catcher; restores controls on any tap
+                    // Fullscreen mode — overlay with non-blocking floating controls
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ) { showFullscreenDownloadBtn = true }
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         // Top-left controls: Back + Exit Fullscreen
                         androidx.compose.animation.AnimatedVisibility(
@@ -6422,7 +6466,7 @@ fun BrowserScreen(
                                     extMediaSnifferDesc,
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
                                     { viewModel.toggleMediaGrabber(context) },
-                                    { showMediaSnifferSettingsDialog = true }),
+                                    { viewModel.showMediaSnifferSettingsDialog = true }),
                                 BuiltInExt(Icons.Rounded.Translate, extOmniTranslate, extTeamAuthor,
                                     extOmniTranslateDesc,
                                     true, false,
@@ -6866,7 +6910,7 @@ fun BrowserScreen(
                 onDismissRequest = { showPlayerSettingsDialog = false },
                 onShowSnifferSettings = {
                     showPlayerSettingsDialog = false
-                    showMediaSnifferSettingsDialog = true
+                    viewModel.showMediaSnifferSettingsDialog = true
                 }
             )
         }
@@ -7562,9 +7606,10 @@ fun BrowserScreen(
                     label = "capsuleWidth"
                 )
 
-                // Touch strip width: thin (14.dp) when idle so it hugs the screen edge
+                // Touch strip: 44dp idle / 56dp dragging — wide enough to sit outside the
+                // ~20dp system back-gesture zone and give a reliable hit target.
                 val touchStripWidth by animateDpAsState(
-                    targetValue = if (isDragging) 44.dp else 14.dp,
+                    targetValue = if (isDragging) 56.dp else 44.dp,
                     animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
                     label = "touchStripWidth"
                 )
@@ -7604,14 +7649,17 @@ fun BrowserScreen(
                                     val bounds = coords.boundsInWindow()
                                     pillLocalView.post {
                                         try {
-                                            pillLocalView.systemGestureExclusionRects = listOf(
-                                                android.graphics.Rect(
-                                                    bounds.left.toInt(),
-                                                    0,
-                                                    bounds.right.toInt(),
-                                                    pillLocalView.height
+                                            val h = pillLocalView.height
+                                            if (h > 0) {
+                                                pillLocalView.systemGestureExclusionRects = listOf(
+                                                    android.graphics.Rect(
+                                                        bounds.left.toInt(),
+                                                        0,
+                                                        bounds.right.toInt(),
+                                                        h
+                                                    )
                                                 )
-                                            )
+                                            }
                                         } catch (_: Exception) {}
                                     }
                                 }
@@ -7943,14 +7991,6 @@ fun BrowserScreen(
 
 
 
-            // Media Sniffer Settings dialog
-            if (showMediaSnifferSettingsDialog) {
-                MediaSnifferSettingsDialog(
-                    viewModel = viewModel,
-                    onDismissRequest = { showMediaSnifferSettingsDialog = false }
-                )
-            }
-
             // QR Scan Result Composer Overlay
             if (showQrScanResult) {
                 QrScanResultComposer(
@@ -8116,41 +8156,13 @@ fun BrowserScreen(
             }
         }
 
-        // ── Google OAuth Native Account Picker ─────────────────────────────────
-        val accountLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode == android.app.Activity.RESULT_OK) {
-                val accountName = result.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
-                android.util.Log.i("BrowserScreen", "🔑 User selected Google account: $accountName")
-                viewModel.resumeGoogleOAuth(accountName)
-            } else {
-                android.util.Log.i("BrowserScreen", "🔑 Google account picker dismissed/cancelled by user")
-                viewModel.dismissGoogleOAuth()
-            }
-        }
 
-        val pendingOAuth = viewModel.pendingGoogleOAuthRequest
-        LaunchedEffect(pendingOAuth) {
-            if (pendingOAuth != null) {
-                try {
-                    val intent = android.accounts.AccountManager.newChooseAccountIntent(
-                        null, // selectedAccount
-                        null, // allowableAccounts
-                        arrayOf("com.google"), // allowableAccountTypes
-                        true, // alwaysPromptForAccount
-                        null, // descriptionOverrideText
-                        null, // addAccountRequiredFeatures
-                        null, // addAccountAuthTokenType
-                        null  // options
-                    )
-                    accountLauncher.launch(intent)
-                } catch (e: Exception) {
-                    android.util.Log.e("BrowserScreen", "🔑 Error launching system account picker: ${e.message}")
-                    // Fallback: resume without hint so the user can sign in manually
-                    viewModel.resumeGoogleOAuth(null)
-                }
-            }
+        // Media Sniffer Settings dialog (rendered at root of BrowserScreen)
+        if (viewModel.showMediaSnifferSettingsDialog) {
+            MediaSnifferSettingsDialog(
+                viewModel = viewModel,
+                onDismissRequest = { viewModel.showMediaSnifferSettingsDialog = false }
+            )
         }
     }
 }
@@ -8430,5 +8442,198 @@ private fun formatRelativeTime(timestamp: Long, now: Long): String {
             val fmt = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
             fmt.format(java.util.Date(timestamp))
         }
+    }
+}
+
+@Composable
+private fun MediaSnifferBanner(
+    viewModel: BrowserViewModel,
+    nonDrmMedia: List<com.rebelroot.omni.media.MediaInterceptor.DetectedMedia>,
+    onDismiss: () -> Unit,
+    onPlay: (String) -> Unit,
+    onDownloadClick: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    var showBlockConfirm by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val currentHost = remember(viewModel.currentUrl) {
+        try {
+            android.net.Uri.parse(viewModel.currentUrl).host ?: ""
+        } catch (_: Exception) { "" }
+    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        color = Color(0xFF1B2234)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = androidx.compose.ui.res.stringResource(R.string.browser_dismiss),
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            if (viewModel.isVideoPlayingInPage) {
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.size(32.dp).align(Alignment.CenterVertically)
+                ) {
+                    EqualizerIcon(
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else {
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayCircle,
+                        contentDescription = androidx.compose.ui.res.stringResource(R.string.browser_video_detected),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            val hasOnlyAudio = nonDrmMedia.all { it.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO }
+            val bannerText = when {
+                viewModel.isVideoPlayingInPage && hasOnlyAudio -> androidx.compose.ui.res.stringResource(R.string.media_sniffer_banner_audio_playing)
+                viewModel.isVideoPlayingInPage -> androidx.compose.ui.res.stringResource(R.string.media_sniffer_banner_video_playing)
+                hasOnlyAudio -> androidx.compose.ui.res.stringResource(R.string.media_sniffer_banner_audio_detected)
+                else -> androidx.compose.ui.res.stringResource(R.string.media_sniffer_banner_media_detected)
+            }
+            Text(
+                text = bannerText,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+
+            IconButton(
+                onClick = {
+                    val firstMedia = nonDrmMedia.firstOrNull()
+                    if (firstMedia != null) {
+                        onPlay(firstMedia.url)
+                    }
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = androidx.compose.ui.res.stringResource(R.string.browser_play_premium),
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = onDownloadClick,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Download,
+                    contentDescription = androidx.compose.ui.res.stringResource(R.string.browser_download_options),
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Settings,
+                    contentDescription = androidx.compose.ui.res.stringResource(R.string.media_sniffer_settings_title),
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            if (currentHost.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = { showBlockConfirm = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Block,
+                        contentDescription = androidx.compose.ui.res.stringResource(R.string.media_sniffer_block_site),
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showBlockConfirm && currentHost.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showBlockConfirm = false },
+            title = {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.media_sniffer_block_confirm_title),
+                    color = if (viewModel.isDarkThemeEnabled) Color.White else Color.Black
+                )
+            },
+            text = {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.media_sniffer_block_confirm_message, currentHost),
+                    color = if (viewModel.isDarkThemeEnabled) Color(0xFFC5D1DE) else Color.DarkGray
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.addDomainToMediaSnifferBlocklist(context, currentHost)
+                        showBlockConfirm = false
+                        onDismiss()
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.media_sniffer_blocked_toast, currentHost),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                ) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.media_sniffer_block_confirm_block),
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBlockConfirm = false }) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.media_sniffer_block_confirm_cancel),
+                        color = if (viewModel.isDarkThemeEnabled) Color(0xFF8E9AA8) else Color.Gray
+                    )
+                }
+            },
+            containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(24.dp)
+        )
     }
 }

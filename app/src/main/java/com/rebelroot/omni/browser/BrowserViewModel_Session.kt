@@ -705,68 +705,19 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 mediaInterceptor.onMediaRequestDetected(uri)
             }
 
-            // ── Google OAuth Native Account Picker ─────────────────────────────────
-            // MUST be the first check — before popup blocker — so that OAuth windows
-            // opened via window.open() (TARGET_WINDOW_NEW) are caught here and shown
-            // in the native account picker instead of being silently blocked.
-            //
-            // Grace period: after the user picks an account, oauthGracePeriodByTab[tab.id]
-            // is set for 15 seconds. During that window, ALL accounts.google.com navigations
-            // on this tab pass through — covering multi-hop redirect chains like:
-            //   site → accounts.google.com → site-callback → accounts.google.com (again) → site
-            // When the tab reaches a non-Google URL, the grace period is cleared so the
-            // next "Sign in with Google" on any site shows the picker again normally.
+            // ── Authentication & OAuth Diagnostic Logging ───────────────────────────
+            // Allow standard web authentication (Google, YouTube, Apple, Microsoft, GitHub, OAuth)
+            // to execute natively in GeckoView without interception or denial.
             val isGoogleAuthHost = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com")
+            val isAuthHost = isGoogleAuthHost ||
+                             OriginVerifier.isExactOriginMatch(uri, "accounts.youtube.com") ||
+                             OriginVerifier.isExactOriginMatch(uri, "appleid.apple.com") ||
+                             OriginVerifier.isExactOriginMatch(uri, "login.microsoftonline.com") ||
+                             OriginVerifier.isExactOriginMatch(uri, "github.com")
 
-            // Clear grace period once the OAuth redirect chain lands on a non-Google page
-            if (!isGoogleAuthHost && oauthGracePeriodByTab.containsKey(tab.id)) {
-                oauthGracePeriodByTab.remove(tab.id)
-                Log.i(TAG, "🔑 Google OAuth grace period cleared for tab ${tab.id} (reached non-Google URL)")
-            }
-
-            // If we are within the grace period for this tab, allow all accounts.google.com through
-            val gracePeriodExpiry = oauthGracePeriodByTab[tab.id]
-            val isInGracePeriod = gracePeriodExpiry != null && System.currentTimeMillis() < gracePeriodExpiry
-            if (isInGracePeriod && isGoogleAuthHost) {
-                Log.i(TAG, "🔑 Google Auth grace pass-through (${((gracePeriodExpiry!! - System.currentTimeMillis()) / 1000)}s remaining): $uri")
-                return null  // ALLOW — part of the active OAuth redirect chain
-            }
-            // Expired grace periods are cleaned up lazily
-            if (gracePeriodExpiry != null && !isInGracePeriod) {
-                oauthGracePeriodByTab.remove(tab.id)
-            }
-
-            // Intercept first-time navigation to Google sign-in and show native account picker.
-            // Covers all Google sign-in entry points:
-            //  - accounts.google.com/o/oauth2/       (classic OAuth 2.0 redirect)
-            //  - accounts.google.com/v3/signin/      (modern Gmail / Google app login)
-            //  - accounts.google.com/signin/v2/      (legacy Google login)
-            //  - accounts.google.com/ServiceLogin    (service login page)
-            //  - accounts.google.com/AccountChooser (account chooser)
-            //  - accounts.google.com/gsi/            (Google Sign-In JS library)
-            //  - accounts.google.com with client_id / response_type / continue params
-            val isGoogleOAuth = tab.id == activeTabId && isGoogleAuthHost &&
-                (lowerUri.contains("/o/oauth2/") ||
-                 lowerUri.contains("/v3/signin/") ||
-                 lowerUri.contains("/signin/v2/") ||
-                 lowerUri.contains("/signin/oauth") ||
-                 lowerUri.contains("/servicelogin") ||
-                 lowerUri.contains("/accountchooser") ||
-                 lowerUri.contains("/addsession") ||
-                 lowerUri.contains("/gsi/select") ||
-                 lowerUri.contains("/gsi/issue") ||
-                 lowerUri.contains("client_id=") ||
-                 lowerUri.contains("response_type=") ||
-                 lowerUri.contains("continue="))
-            if (isGoogleOAuth) {
-                Log.i(TAG, "🔑 Google Auth intercepted: $uri")
-                viewModelScope.launch(Dispatchers.Main) {
-                    pendingGoogleOAuthRequest = BrowserViewModel.PendingGoogleOAuthRequest(
-                        oauthUrl = uri,
-                        tabId = tab.id
-                    )
-                }
-                return GeckoResult.fromValue(AllowOrDeny.DENY)
+            if (isAuthHost) {
+                val effectiveHost = SecurityPolicy.extractEffectiveHost(uri)
+                Log.i(TAG, "AUTH_NAV: host=$effectiveHost, target=${request.target}, isDirect=${request.isDirectNavigation}, hasGesture=${request.hasUserGesture}, tab=${tab.id}")
             }
 
             if (request.target == org.mozilla.geckoview.GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW) {
@@ -774,7 +725,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
 
             val host = SecurityPolicy.extractEffectiveHost(uri)
-            if (host.isNotEmpty() && adBlockManager.isHostBlocked(host)) {
+            if (host.isNotEmpty() && !isAuthHost && adBlockManager.isHostBlocked(host)) {
                 Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker sub-navigation: $uri")
                 incrementTrackersBlocked(context, 1)
                 try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
@@ -999,9 +950,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
             
             // Check if this error is an ERROR_UNKNOWN (17) caused by us returning DENY
-            // in onLoadRequest for OAuth pages, direct videos, spam calendars, or external app links.
+            // in onLoadRequest for direct videos, spam calendars, or external app links.
             val isDeniedByCustomIntercept = error.code == org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN && (
-                isGoogleAuthHost ||
                 (isNativePlayerEnabled && isDirectVideoUrl(uri ?: "")) ||
                 (!lowerUri.startsWith("http://") && !lowerUri.startsWith("https://") && !lowerUri.startsWith("about:") && !lowerUri.startsWith("javascript:") && !lowerUri.startsWith("data:"))
             )
@@ -1035,10 +985,13 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             try {
                 val lowerUri = uri.lowercase().trim()
 
-                Log.i(TAG, "onNewSession: opening new tab for popup URI $uri")
+                Log.i(TAG, "onNewSession: opening new tab for popup URI $uri (opener tabId=${tab.id})")
                 val runtime = getGeckoRuntime(context)
                 val isAuthUri = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com") ||
-                                  lowerUri.contains("oauth") || lowerUri.contains("gsi")
+                                OriginVerifier.isExactOriginMatch(uri, "accounts.youtube.com") ||
+                                OriginVerifier.isExactOriginMatch(uri, "appleid.apple.com") ||
+                                OriginVerifier.isExactOriginMatch(uri, "login.microsoftonline.com") ||
+                                lowerUri.contains("oauth") || lowerUri.contains("gsi")
                 val isJsAllowed = isAuthUri || getSitePermissionValue(uri, "javascript") == "allow"
                 val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                     .usePrivateMode(isIncognitoMode)
@@ -1054,7 +1007,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     title = "New Tab",
                     url = uri,
                     isIncognito = isIncognitoMode,
-                    settingsVersion = currentSettingsVersion
+                    settingsVersion = currentSettingsVersion,
+                    parentId = tab.id
                 )
 
                 setupTabSessionListeners(newTab, context)
@@ -1063,6 +1017,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 selectTab(newTab.id)
                 saveTabs()
 
+                Log.i(TAG, "AUTH_POPUP: created new tab $tabId with parentId ${tab.id} for uri $uri")
                 return GeckoResult.fromValue(newSession)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onNewSession popup", e)
@@ -1108,10 +1063,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     if (accessibilityForceZoom) {
                         injectZoomEnabler()
                     }
-                    val cosmeticCss = try { adBlockManager.getCosmeticAdBlockCss() } catch(_: Exception) { "" }
-                    if (cosmeticCss.isNotEmpty()) {
-                        val cleanCss = cosmeticCss.replace("\n", " ").replace("'", "\\'")
-                        tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.innerHTML='$cleanCss';document.head.appendChild(s);}catch(e){}})();")
+                    val isAuthPage = OriginVerifier.isExactOriginMatch(tab.url, "accounts.google.com") ||
+                                     OriginVerifier.isExactOriginMatch(tab.url, "accounts.youtube.com") ||
+                                     OriginVerifier.isExactOriginMatch(tab.url, "appleid.apple.com") ||
+                                     OriginVerifier.isExactOriginMatch(tab.url, "login.microsoftonline.com") ||
+                                     OriginVerifier.isExactOriginMatch(tab.url, "apis.google.com")
+                    if (!isAuthPage) {
+                        val cosmeticCss = try { adBlockManager.getCosmeticAdBlockCss() } catch(_: Exception) { "" }
+                        if (cosmeticCss.isNotEmpty()) {
+                            val cleanCss = cosmeticCss.replace("\n", " ").replace("'", "\\'")
+                            tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.innerHTML='$cleanCss';document.head.appendChild(s);}catch(e){}})();")
+                        }
                     }
                     if (tab.url.contains(".translate.goog")) {
                         injectTranslateBadgeSuppressor()
@@ -1148,6 +1110,14 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
 internal fun BrowserViewModel.injectStealthDefuserScriptlet(tab: TabState) {
     try {
+        val url = tab.url
+        val isAuthOrigin = OriginVerifier.isExactOriginMatch(url, "accounts.google.com") ||
+                           OriginVerifier.isExactOriginMatch(url, "accounts.youtube.com") ||
+                           OriginVerifier.isExactOriginMatch(url, "appleid.apple.com") ||
+                           OriginVerifier.isExactOriginMatch(url, "login.microsoftonline.com") ||
+                           OriginVerifier.isExactOriginMatch(url, "apis.google.com")
+        if (isAuthOrigin) return
+
         val defuserJs = adBlockManager.getStealthDefuserJs()
         if (defuserJs.isNotBlank()) {
             val cleanJs = defuserJs.replace("\n", " ")

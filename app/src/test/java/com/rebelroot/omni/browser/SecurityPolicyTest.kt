@@ -334,4 +334,27 @@ class SecurityPolicyTest {
     fun matchesAnySubdomain_noMatch_returnsFalse() {
         assertFalse(OriginVerifier.matchesAnySubdomain("https://evil.com", "youtube.com", "google.com"))
     }
+
+    // ── Authentication Pipeline Tests (Issue #85) ──────────────────────────
+
+    @Test
+    fun exactOriginMatch_googleAuthOrigins() {
+        assertTrue(OriginVerifier.isExactOriginMatch("https://accounts.google.com/ServiceLogin?service=youtube", "accounts.google.com"))
+        assertTrue(OriginVerifier.isExactOriginMatch("https://accounts.google.com/v3/signin/identifier", "accounts.google.com"))
+        assertTrue(OriginVerifier.isExactOriginMatch("https://accounts.youtube.com/accounts/SetSID", "accounts.youtube.com"))
+        assertTrue(OriginVerifier.isExactOriginMatch("https://apis.google.com/js/api.js", "apis.google.com"))
+    }
+
+    @Test
+    fun exactOriginMatch_oauthProviders() {
+        assertTrue(OriginVerifier.isExactOriginMatch("https://appleid.apple.com/auth/authorize", "appleid.apple.com"))
+        assertTrue(OriginVerifier.isExactOriginMatch("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", "login.microsoftonline.com"))
+        assertTrue(OriginVerifier.isExactOriginMatch("https://github.com/login/oauth/authorize", "github.com"))
+    }
+
+    @Test
+    fun exactOriginMatch_subdomainSpoofingRejected() {
+        assertFalse(OriginVerifier.isExactOriginMatch("https://accounts.google.com.attacker.com", "accounts.google.com"))
+        assertFalse(OriginVerifier.isExactOriginMatch("https://attacker-accounts.google.com", "accounts.google.com"))
+    }
 }

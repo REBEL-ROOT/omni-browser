@@ -29,6 +29,12 @@
                 "*://*.yahoo.com/*",
                 "*://*.search.yahoo.com/*"
             ],
+            "exclude_matches": [
+                "*://accounts.google.com/*",
+                "*://accounts.youtube.com/*",
+                "*://myaccount.google.com/*",
+                "*://apis.google.com/*"
+            ],
             "css": ["override.css"],
             "js": ["background.js"],
             "run_at": "document_start",

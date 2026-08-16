@@ -347,7 +347,21 @@ class AdBlockManager(private val context: Context) {
 
     fun isHostBlocked(host: String?): Boolean {
         if (!isMasterEnabled || host.isNullOrEmpty()) return false
-        val cleanHost = host.lowercase()
+        val cleanHost = host.lowercase().trim().removePrefix("www.")
+
+        // Essential authentication & identity domains must never be blocked
+        if (cleanHost == "accounts.google.com" ||
+            cleanHost == "apis.google.com" ||
+            cleanHost == "ssl.gstatic.com" ||
+            cleanHost == "accounts.youtube.com" ||
+            cleanHost == "appleid.apple.com" ||
+            cleanHost == "login.microsoftonline.com" ||
+            cleanHost == "login.live.com" ||
+            cleanHost == "github.com"
+        ) {
+            return false
+        }
+
         if (blockedDomains.contains(cleanHost)) return true
 
         val parts = cleanHost.split(".")

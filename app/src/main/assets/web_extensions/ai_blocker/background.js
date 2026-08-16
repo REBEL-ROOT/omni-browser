@@ -10,6 +10,12 @@
 
 "use strict";
 
+// Do not run on authentication or account management pages
+const host = window.location.hostname || "";
+if (host.includes("accounts.google.") || host.includes("myaccount.google.") || host.includes("apis.google.")) {
+  return;
+}
+
 // CSS selectors that identify AI answer/overview containers.
 // Keep in sync with override.css.
 const AI_SELECTORS = [

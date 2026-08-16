@@ -29,5 +29,8 @@ data class TabState(
     val suspendThumbnail: android.graphics.Bitmap? = null,
     /** Serialized GeckoSession state preserved during suspension to restore
      *  exact page state, form inputs, scroll position, and history stack. */
-    val savedSessionState: GeckoSession.SessionState? = null
+    val savedSessionState: GeckoSession.SessionState? = null,
+    /** ID of the opener tab that spawned this tab (e.g., auth popups via window.open).
+     *  When this tab closes, the browser smoothly switches back to the opener tab. */
+    val parentId: String? = null
 )

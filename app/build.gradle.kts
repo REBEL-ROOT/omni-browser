@@ -43,7 +43,10 @@ android {
     productFlavors {
         create("universal") {
             dimension = "abi"
-            // Includes all architectures
+            // Bundles all physical device architectures (ARM64 + ARM32), excluding emulator x86/x86_64
+            ndk {
+                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+            }
         }
         create("arm") {
             dimension = "abi"
@@ -220,7 +223,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.4")
     // ui-tooling-preview only needed in debug — never include in release APK
@@ -261,7 +263,6 @@ dependencies {
     // === Image Loading ===
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-gif:2.7.0")
-    implementation("io.coil-kt:coil-video:2.7.0")
 
     // === AndroidX Media3 / ExoPlayer ===
     val media3Version = "1.3.1"
@@ -269,7 +270,6 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
-    implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
 
     // === Vosk on-device speech recognition (runtime lib, no model weights) ===
     // Loads downloaded/verified models from application-private storage.

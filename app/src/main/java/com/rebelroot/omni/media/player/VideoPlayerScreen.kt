@@ -433,18 +433,38 @@ fun VideoPlayerScreen(
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     // Track that the player screen is active so MainActivity can auto-enter PiP on home-press
+    // and enable edge-to-edge cutout display mode so video spans the full screen.
     DisposableEffect(Unit) {
         viewModel?.isVideoPlayerScreenActive = true
+        activity?.let { act ->
+            act.runOnUiThread {
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        val lp = act.window.attributes
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                        } else {
+                            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                        }
+                        act.window.attributes = lp
+                    }
+                } catch (_: Exception) {}
+            }
+        }
         onDispose {
             viewModel?.isVideoPlayerScreenActive = false
-            // Reset screen brightness override to default on exit
             activity?.let { act ->
                 act.runOnUiThread {
                     try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            val lp = act.window.attributes
+                            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                            act.window.attributes = lp
+                        }
                         val lp = act.window.attributes
                         lp.screenBrightness = -1f // BRIGHTNESS_OVERRIDE_NONE
                         act.window.attributes = lp
-                    } catch (e: Exception) {}
+                    } catch (_: Exception) {}
                 }
             }
         }

@@ -434,6 +434,7 @@ class BrowserViewModel : ViewModel() {
     var isYouTubeEnabled by mutableStateOf(false)
     var mediaSnifferBlocklist by mutableStateOf<Set<String>>(emptySet())
     var mediaSnifferMinDurationSec by mutableStateOf(0)
+    var showMediaSnifferSettingsDialog by mutableStateOf(false)
     var neverSavePasswordDomains by mutableStateOf<Set<String>>(emptySet())
     var pendingVideoUrl: String? = null
     internal var passwordVaultManager: PasswordVaultManager? = null
@@ -1286,92 +1287,7 @@ class BrowserViewModel : ViewModel() {
 
     // ── Google OAuth Native Account Picker ──────────────────────────────────────
     // When a site triggers Google OAuth, we intercept the navigation and show a
-    // native Android account picker. Google only processes the site's token.
-    // The browser never calls any Google SDK — it uses standard AccountManager.
 
-    data class PendingGoogleOAuthRequest(
-        /** The original accounts.google.com OAuth URL intercepted from GeckoView */
-        val oauthUrl: String,
-        /** The tab ID that initiated the OAuth */
-        val tabId: String
-    )
-
-    var pendingGoogleOAuthRequest by mutableStateOf<PendingGoogleOAuthRequest?>(null)
-
-    /**
-     * Per-tab OAuth grace period: maps tabId → expiry epoch-ms.
-     * After the user picks an account (or taps "Continue"), ALL accounts.google.com
-     * navigations on that tab are allowed through until the expiry time.
-     * This covers multi-hop redirect chains (site → Google → callback → Google again → site).
-     * Cleared automatically when the tab navigates to a non-Google URL.
-     */
-    internal val oauthGracePeriodByTab = mutableMapOf<String, Long>()
-
-    /**
-     * Called when the user picks an account from the native picker.
-     * Injects the email as `login_hint` into the OAuth URL and loads it.
-     * If [email] is null, navigates to the raw OAuth URL without a hint.
-     */
-    fun resumeGoogleOAuth(email: String?) {
-        val pending = pendingGoogleOAuthRequest ?: return
-        pendingGoogleOAuthRequest = null
-        val finalUrl = if (email != null) {
-            try {
-                val uri = android.net.Uri.parse(pending.oauthUrl)
-                val encodedQuery = uri.encodedQuery
-                val newQueryParts = mutableListOf<String>()
-                
-                if (!encodedQuery.isNullOrEmpty()) {
-                    // Split the raw query by '&' to preserve all original encodings (+, %, etc.)
-                    encodedQuery.split("&").forEach { part ->
-                        val eqIdx = part.indexOf('=')
-                        val key = if (eqIdx != -1) part.substring(0, eqIdx) else part
-                        val decodedKey = try {
-                            java.net.URLDecoder.decode(key, "UTF-8")
-                        } catch (e: Exception) {
-                            key
-                        }
-                        if (!decodedKey.equals("login_hint", ignoreCase = true) && 
-                            !decodedKey.equals("Email", ignoreCase = true)) {
-                            newQueryParts.add(part)
-                        }
-                    }
-                }
-                
-                // Safely encode and append the new pre-fill hints
-                val encodedEmail = java.net.URLEncoder.encode(email, "UTF-8")
-                newQueryParts.add("login_hint=$encodedEmail")
-                newQueryParts.add("Email=$encodedEmail")
-                
-                val rebuiltQuery = newQueryParts.joinToString("&")
-                uri.buildUpon().encodedQuery(rebuiltQuery).build().toString()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to inject email hints into OAuth URL: ${e.message}")
-                pending.oauthUrl
-            }
-        } else {
-            pending.oauthUrl
-        }
-        viewModelScope.launch(Dispatchers.Main) {
-            Log.i(TAG, "🔑 Resuming Google OAuth${if (email != null) " with hint=$email" else " without hint"}: $finalUrl")
-            // Start a 15-second grace period so ALL subsequent accounts.google.com hops
-            // in the redirect chain are allowed through without triggering the picker again.
-            oauthGracePeriodByTab[pending.tabId] = System.currentTimeMillis() + 15_000L
-            // Use the specific tab's session so we load in the correct tab
-            // even if the user switched tabs while the picker was showing.
-            val targetSession = tabs.firstOrNull { it.id == pending.tabId }?.session ?: geckoSession
-            targetSession.loadUri(finalUrl)
-        }
-    }
-
-    /**
-     * Called when the user cancels the native account picker entirely.
-     * Clears the pending request without loading any URL.
-     */
-    fun dismissGoogleOAuth() {
-        Log.i(TAG, "🔑 Google OAuth account picker dismissed by user")
-        pendingGoogleOAuthRequest = null
-    }
 
     fun deliverFilePickerResult(uris: List<android.net.Uri>) {
         val pending = pendingFilePrompt ?: return
@@ -1472,9 +1388,6 @@ class BrowserViewModel : ViewModel() {
         if (pendingDatePrompt != null) {
             pendingDatePrompt = null
         }
-        if (pendingGoogleOAuthRequest?.tabId == tabId) {
-            pendingGoogleOAuthRequest = null
-        }
     }
 
     /**
@@ -1497,7 +1410,6 @@ class BrowserViewModel : ViewModel() {
             pendingDatePrompt = null
             p?.geckoResult?.complete(p.prompt.dismiss())
         }
-        pendingGoogleOAuthRequest = null
     }
 
     // ── Find In Page ─────────────────────────────────────────────────────────────
@@ -2343,7 +2255,10 @@ class BrowserViewModel : ViewModel() {
         if (activeTabId == tabId) {
             val remainingModeTabs = tabs.filter { it.isIncognito == tabToClose.isIncognito }
             if (remainingModeTabs.isNotEmpty()) {
-                val nextSelect = remainingModeTabs.find { it.id == (if (tabToClose.isIncognito) activeIncognitoTabId else activeNormalTabId) } 
+                // If this tab was opened as a popup from a parent tab, return focus to the parent tab
+                val parentTab = tabToClose.parentId?.let { pId -> remainingModeTabs.find { it.id == pId } }
+                val nextSelect = parentTab
+                    ?: remainingModeTabs.find { it.id == (if (tabToClose.isIncognito) activeIncognitoTabId else activeNormalTabId) } 
                     ?: remainingModeTabs.first()
                 selectTab(nextSelect.id)
             }

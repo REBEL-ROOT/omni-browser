@@ -91,7 +91,6 @@ fun SettingsScreen(
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var showMediaSnifferSettingsDialog by remember { mutableStateOf(false) }
 
     BackHandler {
         if (isSearchActive) {
@@ -820,7 +819,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.PlayCircle, stringResource(id = R.string.native_player_title), stringResource(id = R.string.native_player_desc), viewModel.isNativePlayerEnabled) { viewModel.toggleNativePlayer(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    NavRow(Icons.Rounded.VideoLibrary, stringResource(id = R.string.media_sniffer_title), stringResource(id = R.string.media_sniffer_desc), onClick = { showMediaSnifferSettingsDialog = true })
+                    NavRow(Icons.Rounded.VideoLibrary, stringResource(id = R.string.media_sniffer_title), stringResource(id = R.string.media_sniffer_desc), onClick = { viewModel.showMediaSnifferSettingsDialog = true })
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Sensors, stringResource(id = R.string.media_detection_title), stringResource(id = R.string.media_detection_desc), viewModel.isMediaDetectionEnabled) { viewModel.toggleMediaDetection(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
@@ -1589,10 +1588,10 @@ fun SettingsScreen(
         )
     }
 
-    if (showMediaSnifferSettingsDialog) {
+    if (viewModel.showMediaSnifferSettingsDialog) {
         MediaSnifferSettingsDialog(
             viewModel = viewModel,
-            onDismissRequest = { showMediaSnifferSettingsDialog = false }
+            onDismissRequest = { viewModel.showMediaSnifferSettingsDialog = false }
         )
     }
 }

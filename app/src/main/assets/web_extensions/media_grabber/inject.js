@@ -345,43 +345,7 @@
             if (!video || video.tagName !== 'VIDEO') return;
             reportVideoState(true);
 
-            // Guard against infinite loop when returning from native player
-            if (video._omniIntercepted) {
-                console.log('[inject.js] Video already intercepted recently, skipping native takeover.');
-                return;
-            }
-
-            if (nativePlayerEnabled) {
-                // Native player takeover for YouTube (gated on youtubeEnabled from settings)
-                if (isYouTube && youtubeEnabled) {
-                    const ytId = getYoutubeIdFromUrl(window.location.href);
-                    if (ytId) {
-                        window._omniLaunchedYtIds = window._omniLaunchedYtIds || new Set();
-                        if (!window._omniLaunchedYtIds.has(ytId)) {
-                            window._omniLaunchedYtIds.add(ytId);
-                            video._omniIntercepted = true;
-                            try { video.pause(); } catch(e) {}
-                            requestNativePlayback(video, window.location.href);
-                            return;
-                        }
-                    }
-                } else if (!isYouTube && !isLikelyAdOrBanner(video)) {
-                    // Native player takeover for other sites (direct ExoPlayer open on play event)
-                    if (video.duration && video.duration > 0 && video.duration < 10) {
-                        console.log('[inject.js] Ignoring video due to short duration (< 10s):', video.duration);
-                    } else {
-                        const videoUrl = getVideoUrl(video);
-                        if (videoUrl) {
-                            video._omniIntercepted = true;
-                            try { video.pause(); } catch(e) {}
-                            requestNativePlayback(video, videoUrl);
-                            return;
-                        }
-                    }
-                }
-            }
-
-            // Always report current video src for the banner (all sites, not just YouTube)
+            // Always report current video src for the media download/playback menu
             const src = video.currentSrc || video.src;
             if (isDownloadableUrl(src)) {
                 reportMedia(src, getMimeType(src));
@@ -503,102 +467,7 @@
 
 
 
-    // --- Intercept requestFullscreen() on video elements and their containers ---
-    const originalRequestFullscreen = Element.prototype.requestFullscreen;
-    Element.prototype.requestFullscreen = function(...args) {
-        if (nativePlayerEnabled && (!isYouTube || youtubeEnabled)) {
-            // Check if this element IS a video or CONTAINS a video
-            const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
-            if (video && !isLikelyAdOrBanner(video)) {
-                if (video.duration && video.duration > 0 && video.duration < 15) {
-                    console.log('[inject.js] Ignoring video due to short duration (< 15s):', video.duration);
-                } else {
-                    // For YouTube: always use the page URL so VideoPlayerScreen can extract
-                    // the video ID and open the YouTube embed player. Googlevideo stream URLs
-                    // do not reliably contain the video ID as a query parameter.
-                    if (isYouTube && youtubeEnabled) {
-                        const ytId = getYoutubeIdFromUrl(window.location.href);
-                        if (ytId) {
-                            window._omniLaunchedYtIds = window._omniLaunchedYtIds || new Set();
-                            window._omniLaunchedYtIds.add(ytId);
-                            requestNativePlayback(video, window.location.href);
-                            return Promise.resolve(); // Prevent fullscreen
-                        }
-                    }
-                    const videoUrl = getVideoUrl(video);
-                    if (videoUrl) {
-                        // Hijack: open in native player instead of fullscreen
-                        requestNativePlayback(video, videoUrl);
-                        return Promise.resolve(); // Prevent fullscreen
-                    }
-                }
-            }
-        }
-        // Not a video or native player disabled — allow normal fullscreen
-        return originalRequestFullscreen.apply(this, args);
-    };
-
-    // Also intercept webkit-prefixed fullscreen (older Android WebViews)
-    if (Element.prototype.webkitRequestFullscreen) {
-        const originalWebkit = Element.prototype.webkitRequestFullscreen;
-        Element.prototype.webkitRequestFullscreen = function(...args) {
-            if (nativePlayerEnabled && (!isYouTube || youtubeEnabled)) {
-                const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
-                if (video && !isLikelyAdOrBanner(video)) {
-                    if (video.duration && video.duration > 0 && video.duration < 15) {
-                        console.log('[inject.js] Ignoring webkit video due to short duration (< 15s):', video.duration);
-                    } else {
-                        if (isYouTube && youtubeEnabled) {
-                            const ytId = getYoutubeIdFromUrl(window.location.href);
-                            if (ytId) {
-                                window._omniLaunchedYtIds = window._omniLaunchedYtIds || new Set();
-                                window._omniLaunchedYtIds.add(ytId);
-                                requestNativePlayback(video, window.location.href);
-                                return;
-                            }
-                        }
-                        const videoUrl = getVideoUrl(video);
-                        if (videoUrl) {
-                            requestNativePlayback(video, videoUrl);
-                            return;
-                        }
-                    }
-                }
-            }
-            return originalWebkit.apply(this, args);
-        };
-    }
-
-    // Also intercept webkitRequestFullScreen (camelCase variant)
-    if (Element.prototype.webkitRequestFullScreen) {
-        const originalWebkitAlt = Element.prototype.webkitRequestFullScreen;
-        Element.prototype.webkitRequestFullScreen = function(...args) {
-            if (nativePlayerEnabled && (!isYouTube || youtubeEnabled)) {
-                const video = (this.tagName === 'VIDEO') ? this : this.querySelector('video');
-                if (video && !isLikelyAdOrBanner(video)) {
-                    if (video.duration && video.duration > 0 && video.duration < 15) {
-                        console.log('[inject.js] Ignoring webkit video alt due to short duration (< 15s):', video.duration);
-                    } else {
-                        if (isYouTube && youtubeEnabled) {
-                            const ytId = getYoutubeIdFromUrl(window.location.href);
-                            if (ytId) {
-                                window._omniLaunchedYtIds = window._omniLaunchedYtIds || new Set();
-                                window._omniLaunchedYtIds.add(ytId);
-                                requestNativePlayback(video, window.location.href);
-                                return;
-                            }
-                        }
-                        const videoUrl = getVideoUrl(video);
-                        if (videoUrl) {
-                            requestNativePlayback(video, videoUrl);
-                            return;
-                        }
-                    }
-                }
-            }
-            return originalWebkitAlt.apply(this, args);
-        };
-    }
+    // Standard HTML5 fullscreen is preserved natively so video fullscreen works on all websites.
 
     // =========================================================
     // 7. Periodic DOM scanner — catches dynamically-rendered videos
@@ -621,37 +490,8 @@
                     if (isDownloadableUrl(s.src)) reportMedia(s.src, getMimeType(s.src));
                 });
                 
-                // If a video is currently playing, check for native player takeover
                 if (video.currentTime > 0 && !video.paused && !video.ended && video.readyState > 2) {
                     anyPlaying = true;
-
-                    if (nativePlayerEnabled && !video._omniIntercepted && !isLikelyAdOrBanner(video)) {
-                        // YouTube takeover (gated on youtubeEnabled from settings)
-                        if (isYouTube && youtubeEnabled) {
-                            const ytId = getYoutubeIdFromUrl(window.location.href);
-                            if (ytId) {
-                                window._omniLaunchedYtIds = window._omniLaunchedYtIds || new Set();
-                                if (!window._omniLaunchedYtIds.has(ytId)) {
-                                    window._omniLaunchedYtIds.add(ytId);
-                                    video._omniIntercepted = true;
-                                    try { video.pause(); } catch(e) {}
-                                    requestNativePlayback(video, window.location.href);
-                                }
-                            }
-                        } else if (!isYouTube) {
-                            // Takeover for other sites on play detection
-                            if (video.duration && video.duration > 0 && video.duration < 10) {
-                                // Ignore short videos
-                            } else {
-                                const videoUrl = getVideoUrl(video);
-                                if (videoUrl) {
-                                    video._omniIntercepted = true;
-                                    try { video.pause(); } catch(e) {}
-                                    requestNativePlayback(video, videoUrl);
-                                }
-                            }
-                        }
-                    }
                 }
             });
             if (anyPlaying) {
