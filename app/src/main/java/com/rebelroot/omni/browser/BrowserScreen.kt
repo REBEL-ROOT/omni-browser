@@ -400,17 +400,9 @@ fun BrowserScreen(
         }
     }
 
-    // Auto-fade after 3 s while playing; reappear immediately on pause
-    LaunchedEffect(showFullscreenDownloadBtn, viewModel.isVideoPlayingInPage) {
-        if (showFullscreenDownloadBtn && viewModel.isVideoPlayingInPage) {
-            kotlinx.coroutines.delay(3000)
-            showFullscreenDownloadBtn = false
-        }
-    }
-    LaunchedEffect(viewModel.isVideoPlayingInPage) {
-        if (!viewModel.isVideoPlayingInPage) {
-            showFullscreenDownloadBtn = true
-        }
+    // Ensure fullscreen controls are always ready and visible when video is playing or fullscreen
+    LaunchedEffect(viewModel.isVideoPlayingInPage, viewModel.isFullscreen) {
+        showFullscreenDownloadBtn = true
     }
     // Issue #73: The site's own video player is NEVER overridden automatically.
     // The native player is launched only when the user taps the dedicated media
@@ -756,6 +748,9 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(viewModel.isFullscreen) {
+        if (viewModel.isFullscreen) {
+            showFullscreenDownloadBtn = true
+        }
         val activity = run {
             var ctx = context
             while (ctx is android.content.ContextWrapper) {
@@ -3373,11 +3368,10 @@ fun BrowserScreen(
             }
 
             // ─── Unified smart download button ─────────────────────────────────────
-            // • Fullscreen: fades while playing, stays / reappears while paused or on tap
-            // Issue #73: use the deduped/validated playable list rather than raw detection.
-            val nonDrmMedia = playableMedia
+            // • Fullscreen: floating controls for native player handoff and download
+            val fullscreenMedia = if (playableMedia.isNotEmpty()) playableMedia else nonDrmMedia
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-            if (nonDrmMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
+            if (fullscreenMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
                 if (viewModel.isFullscreen) {
                     // Fullscreen mode — overlay with non-blocking floating controls
                     Box(
@@ -3445,7 +3439,7 @@ fun BrowserScreen(
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 horizontalAlignment = Alignment.End
                             ) {
-                                val firstMedia = nonDrmMedia.firstOrNull()
+                                val firstMedia = fullscreenMedia.firstOrNull()
                                 if (firstMedia != null) {
                                     FloatingActionButton(
                                         onClick = {
