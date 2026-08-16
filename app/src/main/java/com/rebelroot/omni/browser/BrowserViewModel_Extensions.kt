@@ -824,8 +824,7 @@ private fun BrowserViewModel.handleRequestDownload(message: Any, sender: WebExte
             val mediaType = when (resolution.sourceType) {
                 MediaSourceType.HLS -> MediaInterceptor.MediaType.HLS
                 MediaSourceType.DASH -> MediaInterceptor.MediaType.DASH
-                MediaSourceType.PROGRESSIVE_WEBM -> MediaInterceptor.MediaType.WEBM
-                MediaSourceType.AUDIO_STREAM -> MediaInterceptor.MediaType.AUDIO
+                MediaSourceType.DIRECT_WEBM -> MediaInterceptor.MediaType.WEBM
                 else -> MediaInterceptor.MediaType.MP4
             }
 

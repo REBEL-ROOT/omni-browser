@@ -246,9 +246,8 @@ object WebVideoSourceResolver {
         return when (sourceType) {
             MediaSourceType.HLS -> "application/x-mpegURL"
             MediaSourceType.DASH -> "application/dash+xml"
-            MediaSourceType.PROGRESSIVE_MP4 -> "video/mp4"
-            MediaSourceType.PROGRESSIVE_WEBM -> "video/webm"
-            MediaSourceType.AUDIO_STREAM -> "audio/*"
+            MediaSourceType.DIRECT_MP4 -> "video/mp4"
+            MediaSourceType.DIRECT_WEBM -> "video/webm"
             else -> "video/mp4"
         }
     }
