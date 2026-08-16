@@ -268,6 +268,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     url: url,
                     pageUrl: pageUrl,
                     tabId: tabId,
+                    associatedStreams: message.associatedStreams || [],
                     mimeType: message.mimeType || 'video/mp4',
                     handoff: handoffObj
                 }).catch((err) => {
@@ -305,8 +306,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     url: url,
                     pageUrl: pageUrl,
                     tabId: tabId,
+                    associatedStreams: message.associatedStreams || [],
                     mimeType: message.mimeType || 'video/mp4',
                     title: message.title || '',
+                    videoId: message.videoId || '',
+                    requestId: message.requestId || '',
                     cookies: cookiesStr || ''
                 }).catch((err) => {
                     console.error('[background.js] Error sending REQUEST_DOWNLOAD:', err);

@@ -4748,6 +4748,7 @@ class BrowserViewModel : ViewModel() {
     /**
      * Seamless return from native player back to the webpage video player.
      * Takes the final state from ExoPlayer and sends RESTORE_VIDEO_STATE to the originating tab's video.
+     * Revalidates that the originating tab is still on the expected document before restoring.
      */
     fun returnFromNativePlayer(
         positionMs: Long,
@@ -4761,9 +4762,23 @@ class BrowserViewModel : ViewModel() {
         if (session != null) {
             session.updateNativeProgress(positionMs, isPlaying, playbackRate, volume, muted)
             session.state = com.rebelroot.omni.media.handoff.WebVideoSessionState.HANDOFF_TO_SITE
-            val payload = session.toRestoreJson().toString()
-            Log.i(TAG, "🎬 returnFromNativePlayer: restoring website video at ${positionMs}ms, isPlaying=$isPlaying, payload=$payload")
-            sendJsMessage("RESTORE_VIDEO_STATE", payload, session.tabId)
+
+            val targetTab = tabs.find { it.id == session.tabId }
+            val isSamePage = targetTab != null && (
+                targetTab.url.substringBefore("#") == session.pageUrl.substringBefore("#") ||
+                targetTab.url.isEmpty() ||
+                session.pageUrl.isEmpty()
+            )
+
+            if (isSamePage) {
+                val payload = session.toRestoreJson().toString()
+                Log.i(TAG, "🎬 returnFromNativePlayer: restoring website video at ${positionMs}ms, isPlaying=$isPlaying in tab ${session.tabId}")
+                sendJsMessage("RESTORE_VIDEO_STATE", payload, session.tabId)
+            } else {
+                Log.w(TAG, "⚠️ returnFromNativePlayer: target tab ${session.tabId} navigated away (current: ${targetTab?.url}, session: ${session.pageUrl}) — skipping restore")
+            }
+            activeVideoSession = null
+            pendingHandoff = null
         }
         onComplete?.invoke()
     }
@@ -4771,13 +4786,13 @@ class BrowserViewModel : ViewModel() {
     /**
      * Cancels native handoff and tells the webpage video to resume playback (e.g. on player error).
      */
-    fun cancelNativeHandoffAndResumeWeb() {
+    fun cancelNativeHandoffAndResumeWeb(reason: String = "Native playback unavailable") {
         val session = activeVideoSession
         val sessionId = session?.sessionId ?: pendingHandoff?.handoffId ?: ""
         val videoId = session?.videoElementId ?: pendingHandoff?.videoElementId ?: ""
         val tabId = session?.tabId ?: pendingHandoff?.tabId ?: ""
-        Log.i(TAG, "🎬 cancelNativeHandoffAndResumeWeb: resuming website video, sessionId=$sessionId, videoId=$videoId")
-        sendJsMessage("RESUME_WEBSITE", "{\"sessionId\":\"$sessionId\",\"videoId\":\"$videoId\"}", tabId)
+        Log.i(TAG, "🎬 cancelNativeHandoffAndResumeWeb: reason=$reason, resuming website video, sessionId=$sessionId, videoId=$videoId, tabId=$tabId")
+        sendJsMessage("RESUME_WEBSITE", "{\"sessionId\":\"$sessionId\",\"videoId\":\"$videoId\",\"reason\":\"$reason\"}", tabId)
         session?.state = com.rebelroot.omni.media.handoff.WebVideoSessionState.FAILED
         activeVideoSession = null
         pendingHandoff = null

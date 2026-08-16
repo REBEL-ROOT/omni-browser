@@ -107,6 +107,7 @@ window.addEventListener('message', (event) => {
             type: 'REQUEST_HANDOFF',
             url: data.url,
             pageUrl: data.pageUrl,
+            associatedStreams: data.associatedStreams || [],
             handoff: data.handoff,
             mimeType: data.mimeType
         });
@@ -115,8 +116,11 @@ window.addEventListener('message', (event) => {
             type: 'REQUEST_DOWNLOAD',
             url: data.url,
             pageUrl: data.pageUrl,
+            associatedStreams: data.associatedStreams || [],
             mimeType: data.mimeType,
-            title: data.title
+            title: data.title,
+            videoId: data.videoId,
+            requestId: data.requestId
         });
     } else if (data.type === 'HANDOFF_RESTORED') {
         chrome.runtime.sendMessage({

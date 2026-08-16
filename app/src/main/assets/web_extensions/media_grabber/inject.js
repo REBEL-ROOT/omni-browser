@@ -136,6 +136,58 @@
         (document.head || document.documentElement).appendChild(style);
     }
 
+    // Video-to-stream associations for MSE blob resolution
+    const videoStreamAssociations = new Map(); // videoId -> Set<string>
+
+    function associateStreamWithActiveVideos(streamUrl) {
+        if (!streamUrl) return;
+        document.querySelectorAll('video').forEach(video => {
+            const id = video._omniVideoId;
+            if (id && (!video.paused || trackedVideos.has(id))) {
+                if (!videoStreamAssociations.has(id)) {
+                    videoStreamAssociations.set(id, new Set());
+                }
+                videoStreamAssociations.get(id).add(streamUrl);
+            }
+        });
+    }
+
+    function getAssociatedStreamsForVideo(video) {
+        const set = new Set();
+        const id = video ? video._omniVideoId : null;
+        if (id && videoStreamAssociations.has(id)) {
+            videoStreamAssociations.get(id).forEach(u => set.add(u));
+        }
+        detectedMediaUrls.forEach(u => set.add(u));
+        return Array.from(set);
+    }
+
+    function disableOverlayButtons(videoId) {
+        if (videoId && trackedVideos.has(videoId)) {
+            const entry = trackedVideos.get(videoId);
+            if (entry && entry.pill) {
+                entry.pill.querySelectorAll('button').forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                    btn.style.pointerEvents = 'none';
+                });
+            }
+        }
+        setTimeout(enableOverlayButtons, 6000); // Safety timeout
+    }
+
+    function enableOverlayButtons() {
+        trackedVideos.forEach(entry => {
+            if (entry.pill) {
+                entry.pill.querySelectorAll('button').forEach(btn => {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                });
+            }
+        });
+    }
+
     // =========================================================
     // Message Bridge & Native Handlers
     // =========================================================
@@ -155,35 +207,63 @@
             } catch (err) {
                 console.error("Error: " + (err.message || err));
             }
-        } else if (data.type === 'PAUSE_AND_LAUNCH') {
+        } else if (data.type === 'HANDOFF_ACCEPTED' || data.type === 'PAUSE_AND_LAUNCH') {
             // Native accepted handoff — pause the website video
-            const handoffId = data.handoffId || data.sessionId;
+            const payload = data.payload || data;
+            const targetVideoId = payload.videoId;
+            const handoffId = payload.sessionId || payload.handoffId;
             activeSessionId = handoffId;
-            if (pendingHandoffVideo) {
-                try {
-                    pendingHandoffVideo.pause();
-                } catch(e) {}
-                pendingHandoffVideo._omniIntercepted = true;
-                pendingHandoffVideo = null;
-                pendingHandoffId = null;
+
+            let targetVideo = null;
+            if (targetVideoId && trackedVideos.has(targetVideoId)) {
+                targetVideo = trackedVideos.get(targetVideoId).video;
+            } else if (pendingHandoffVideo) {
+                targetVideo = pendingHandoffVideo;
             }
-        } else if (data.type === 'RESUME_WEBSITE') {
-            // Native rejected handoff or preparation failed — resume/unpause website video
-            console.log('[inject.js] Native rejected or failed handoff — resuming website video');
-            if (pendingHandoffVideo) {
+
+            if (targetVideo) {
                 try {
-                    if (pendingHandoffVideo._omniWasPlayingBeforeHandoff) {
-                        pendingHandoffVideo.play().catch(() => {});
+                    targetVideo.pause();
+                } catch(e) {}
+                targetVideo._omniIntercepted = true;
+            }
+            pendingHandoffVideo = null;
+            pendingHandoffId = null;
+        } else if (data.type === 'HANDOFF_REJECTED' || data.type === 'RESUME_WEBSITE' || data.type === 'HANDOFF_ERROR') {
+            // Native rejected handoff or preparation failed — resume/unpause website video
+            const payload = data.payload || data;
+            const targetVideoId = payload.videoId;
+            console.log('[inject.js] Native rejected or failed handoff — resuming website video:', payload);
+
+            let targetVideo = null;
+            if (targetVideoId && trackedVideos.has(targetVideoId)) {
+                targetVideo = trackedVideos.get(targetVideoId).video;
+            } else if (pendingHandoffVideo) {
+                targetVideo = pendingHandoffVideo;
+            }
+
+            if (targetVideo) {
+                try {
+                    if (targetVideo._omniWasPlayingBeforeHandoff) {
+                        targetVideo.play().catch(() => {});
                     }
                 } catch(e) {}
-                delete pendingHandoffVideo._omniIntercepted;
-                pendingHandoffVideo = null;
-                pendingHandoffId = null;
+                delete targetVideo._omniIntercepted;
             }
+            pendingHandoffVideo = null;
+            pendingHandoffId = null;
             activeSessionId = null;
+            enableOverlayButtons();
+        } else if (data.type === 'DOWNLOAD_STARTED') {
+            console.log('[inject.js] Download started:', data.payload || data);
+            enableOverlayButtons();
+        } else if (data.type === 'DOWNLOAD_REJECTED' || data.type === 'DOWNLOAD_ERROR') {
+            console.log('[inject.js] Download rejected or failed:', data.payload || data);
+            enableOverlayButtons();
         } else if (data.type === 'RESTORE_VIDEO_STATE') {
             // Native player minimized/exited — restore exact position and play state
             handleRestoreVideoState(data.payload || data);
+            enableOverlayButtons();
         } else if (data.type === 'HANDOFF_COMPLETE') {
             // Native session ended
             console.log('[inject.js] Native session complete');
@@ -191,6 +271,7 @@
             document.querySelectorAll('video').forEach(v => {
                 delete v._omniIntercepted;
             });
+            enableOverlayButtons();
         } else if (data.type === 'ADD_DETECTED_MANIFEST') {
             const url = data.url;
             if (url && isDownloadableUrl(url) && isPlayableMediaUrl(url)) {
@@ -218,18 +299,18 @@
             videoId, sourceUri, currentTimeSec, isPlaying, playbackRate, volume, muted, sessionId
         });
 
-        // 1. Locate video by ID or match by source
+        // 1. Locate video strictly by ID or exact source URI — NEVER blind videos[0] fallback
         let targetVideo = null;
         if (videoId && trackedVideos.has(videoId)) {
             targetVideo = trackedVideos.get(videoId).video;
         }
-        if (!targetVideo) {
+        if (!targetVideo && sourceUri) {
             const videos = Array.from(document.querySelectorAll('video'));
-            targetVideo = videos.find(v => (v.currentSrc === sourceUri || v.src === sourceUri)) || videos[0];
+            targetVideo = videos.find(v => (v.currentSrc === sourceUri || v.src === sourceUri));
         }
 
         if (!targetVideo) {
-            console.warn('[inject.js] No matching video element found to restore state.');
+            console.warn('[inject.js] No matching video element found for videoId=' + videoId + ' — skipping restore.');
             return;
         }
 
@@ -621,6 +702,12 @@
         pendingHandoffId = handoff.sessionId || handoff.handoffId;
         video._omniWasPlayingBeforeHandoff = !video.paused;
 
+        // Collect streams specifically associated with this video element
+        const associatedStreams = getAssociatedStreamsForVideo(video);
+
+        // Temporarily disable overlay buttons to prevent rapid repeat taps
+        disableOverlayButtons(video._omniVideoId);
+
         // Exit full-screen if active
         try {
             if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -633,6 +720,7 @@
             type: 'REQUEST_HANDOFF',
             url: videoUrl,
             pageUrl: window.location.href,
+            associatedStreams: associatedStreams,
             handoff: handoff,
             mimeType: getMimeType(videoUrl)
         }, '*');
@@ -642,12 +730,18 @@
 
     function requestDownload(video, videoUrl) {
         if (!videoUrl) return;
+        const associatedStreams = getAssociatedStreamsForVideo(video);
+        disableOverlayButtons(video._omniVideoId);
+
         window.postMessage({
             type: 'REQUEST_DOWNLOAD',
             url: videoUrl,
             pageUrl: window.location.href,
+            associatedStreams: associatedStreams,
             mimeType: getMimeType(videoUrl),
-            title: document.title || 'Video'
+            title: document.title || 'Video',
+            videoId: video._omniVideoId || '',
+            requestId: 'dl_' + Math.random().toString(36).substr(2, 9)
         }, '*');
     }
 
@@ -708,6 +802,7 @@
         if (!isDownloadableUrl(url)) return;
         if (isPlayableMediaUrl(url)) {
             detectedMediaUrls.add(url);
+            associateStreamWithActiveVideos(url);
         }
         window.postMessage({
             type: 'MSE_MEDIA_STREAM_GRABBED',

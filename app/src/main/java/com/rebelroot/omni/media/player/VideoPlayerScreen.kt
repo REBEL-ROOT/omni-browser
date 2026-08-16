@@ -700,6 +700,7 @@ fun VideoPlayerScreen(
                         }
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                             android.util.Log.e("VideoPlayer", "ExoPlayer playback error: ${error.message}", error)
+                            viewModel?.cancelNativeHandoffAndResumeWeb("ExoPlayer error: ${error.message}")
                             coroutineScope.launch {
                                 Toast.makeText(context, "${context.getString(R.string.video_player_playback_error)}: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
                             }

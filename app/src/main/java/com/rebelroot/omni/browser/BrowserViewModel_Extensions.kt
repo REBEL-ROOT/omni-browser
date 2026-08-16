@@ -22,6 +22,53 @@ import com.rebelroot.omni.media.handoff.MediaSourceClassifier
 import com.rebelroot.omni.media.handoff.MediaSourceType
 import com.rebelroot.omni.media.handoff.WebVideoSession
 import com.rebelroot.omni.media.handoff.WebVideoSessionState
+import com.rebelroot.omni.media.handoff.WebVideoSourceResolver
+
+internal val extensionTabIdToOmniTabId = java.util.concurrent.ConcurrentHashMap<String, String>()
+internal val omniTabIdToExtensionTabId = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+internal fun BrowserViewModel.resolveOmniTabId(
+    extensionTabId: String?,
+    pageUrl: String?,
+    senderSession: GeckoSession? = null
+): String? {
+    if (senderSession != null) {
+        val tab = tabs.find { it.session === senderSession }
+        if (tab != null) {
+            if (!extensionTabId.isNullOrEmpty()) {
+                extensionTabIdToOmniTabId[extensionTabId] = tab.id
+                omniTabIdToExtensionTabId[tab.id] = extensionTabId
+            }
+            return tab.id
+        }
+    }
+
+    if (!extensionTabId.isNullOrEmpty()) {
+        val mapped = extensionTabIdToOmniTabId[extensionTabId]
+        if (mapped != null && tabs.any { it.id == mapped }) {
+            return mapped
+        }
+    }
+
+    if (!pageUrl.isNullOrEmpty()) {
+        val cleanPageUrl = pageUrl.substringBefore("#")
+        val tab = tabs.find { it.url.substringBefore("#") == cleanPageUrl }
+        if (tab != null) {
+            if (!extensionTabId.isNullOrEmpty()) {
+                extensionTabIdToOmniTabId[extensionTabId] = tab.id
+                omniTabIdToExtensionTabId[tab.id] = extensionTabId
+            }
+            return tab.id
+        }
+    }
+
+    val active = activeTabId
+    if (active != null && !extensionTabId.isNullOrEmpty()) {
+        extensionTabIdToOmniTabId[extensionTabId] = active
+        omniTabIdToExtensionTabId[active] = extensionTabId
+    }
+    return active
+}
 
 fun BrowserViewModel.registerExtensionAction(id: String, session: GeckoSession?, action: WebExtension.Action) {
     extensionActions[id] = action
@@ -273,9 +320,9 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                         mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies)
                     }
                 } else if (type == "REQUEST_HANDOFF") {
-                    handleRequestHandoff(message)
+                    handleRequestHandoff(message, sender)
                 } else if (type == "REQUEST_DOWNLOAD") {
-                    handleRequestDownload(message)
+                    handleRequestDownload(message, sender)
                 } else if (type == "HANDOFF_RESTORED") {
                     handleHandoffRestored(message)
                 } else if (type == "PLAY_IN_NATIVE") {
@@ -526,10 +573,10 @@ internal fun BrowserViewModel.getMediaSnifferMinDurationSecPreference(context: C
 /**
  * Handles the REQUEST_HANDOFF message from the JS extension.
  * Creates an authoritative WebVideoSession, classifies the source, and either:
- *   (a) Accepts: sends PAUSE_AND_LAUNCH to JS, stores session, launches native player
- *   (b) Rejects: sends RESUME_WEBSITE to JS, leaves webpage playing
+ *   (a) Accepts: sends HANDOFF_ACCEPTED and PAUSE_AND_LAUNCH to JS, stores session, launches native player
+ *   (b) Rejects: sends HANDOFF_REJECTED and RESUME_WEBSITE to JS, leaves webpage playing
  */
-private fun BrowserViewModel.handleRequestHandoff(message: Any) {
+private fun BrowserViewModel.handleRequestHandoff(message: Any, sender: WebExtension.MessageSender? = null) {
     val videoUrl = if (message is org.json.JSONObject) {
         if (message.has("url")) message.getString("url") else null
     } else {
@@ -542,11 +589,13 @@ private fun BrowserViewModel.handleRequestHandoff(message: Any) {
         (message as? Map<*, *>)?.get("pageUrl") as? String
     }) ?: currentUrl
 
-    val tabId = (if (message is org.json.JSONObject) {
+    val rawTabId = (if (message is org.json.JSONObject) {
         if (message.has("tabId")) message.getString("tabId") else null
     } else {
         (message as? Map<*, *>)?.get("tabId") as? String
-    }) ?: activeTabId ?: ""
+    }) ?: ""
+
+    val omniTabId = resolveOmniTabId(rawTabId, pageUrl, sender?.session) ?: activeTabId ?: ""
 
     val handoffJson = if (message is org.json.JSONObject) {
         if (message.has("handoff")) message.getJSONObject("handoff") else null
@@ -554,98 +603,131 @@ private fun BrowserViewModel.handleRequestHandoff(message: Any) {
         null
     }
 
-    Log.i(TAG, "🎬 REQUEST_HANDOFF received. url=$videoUrl, pageUrl=$pageUrl, tabId=$tabId")
+    val associatedStreams = mutableListOf<String>()
+    if (message is org.json.JSONObject && message.has("associatedStreams")) {
+        val arr = message.getJSONArray("associatedStreams")
+        for (i in 0 until arr.length()) {
+            val s = arr.optString(i)
+            if (s.isNotEmpty()) associatedStreams.add(s)
+        }
+    } else if (handoffJson != null && handoffJson.has("associatedStreams")) {
+        val arr = handoffJson.getJSONArray("associatedStreams")
+        for (i in 0 until arr.length()) {
+            val s = arr.optString(i)
+            if (s.isNotEmpty()) associatedStreams.add(s)
+        }
+    }
+
+    Log.i(TAG, "🎬 REQUEST_HANDOFF received: videoUrl=$videoUrl, pageUrl=$pageUrl, omniTabId=$omniTabId (extTab=$rawTabId), streams=${associatedStreams.size}")
 
     // Parse authoritative WebVideoSession from JSON if present
     val rawSession = if (handoffJson != null) {
         try {
-            WebVideoSession.fromJson(handoffJson).copy(tabId = tabId.ifEmpty { activeTabId ?: "" })
+            WebVideoSession.fromJson(handoffJson).copy(tabId = omniTabId)
         } catch (e: Exception) {
             Log.e(TAG, "🎬 Failed to parse WebVideoSession from JSON", e)
             null
         }
     } else null
 
-    // Resolve blob: or empty URLs against mediaInterceptor sniffed streams
-    var effectiveSourceUri = rawSession?.sourceUri ?: videoUrl
-    var effectiveMimeType = rawSession?.mimeType
-    var effectiveCookies = rawSession?.cookies ?: activeVideoCookies
-    var effectiveHeaders = rawSession?.headers ?: emptyMap()
-
-    if (effectiveSourceUri.startsWith("blob:") || effectiveSourceUri.isEmpty() || rawSession?.sourceType?.isSupported == false) {
-        val sniffed = mediaInterceptor.playableMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
-            ?: mediaInterceptor.detectedMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
-        if (sniffed != null) {
-            effectiveSourceUri = sniffed.url
-            effectiveMimeType = when (sniffed.type) {
-                MediaInterceptor.MediaType.HLS -> "application/x-mpegURL"
-                MediaInterceptor.MediaType.DASH -> "application/dash+xml"
-                MediaInterceptor.MediaType.MP4 -> "video/mp4"
-                MediaInterceptor.MediaType.WEBM -> "video/webm"
-                MediaInterceptor.MediaType.AUDIO -> "audio/mpeg"
-            }
-            if (effectiveCookies.isNullOrEmpty()) effectiveCookies = sniffed.cookies
-            if (effectiveHeaders.isEmpty()) effectiveHeaders = sniffed.headers
-            Log.i(TAG, "🎬 Resolved blob sourceUri to sniffed media stream: $effectiveSourceUri ($effectiveMimeType)")
-        }
-    }
-
-    val finalSession = if (rawSession != null) {
-        rawSession.copy(
-            sourceUri = effectiveSourceUri,
-            mimeType = effectiveMimeType,
-            cookies = effectiveCookies,
-            headers = effectiveHeaders,
-            sourceType = MediaSourceClassifier.classify(effectiveSourceUri, effectiveMimeType)
-        )
-    } else {
-        val st = MediaSourceClassifier.classify(effectiveSourceUri, effectiveMimeType)
-        WebVideoSession(
-            sessionId = "h_" + System.currentTimeMillis(),
-            tabId = tabId.ifEmpty { activeTabId ?: "" },
-            videoElementId = "omni_vid_resolved",
-            sourceUri = effectiveSourceUri,
-            pageUrl = pageUrl,
-            mimeType = effectiveMimeType,
-            sourceType = st,
-            cookies = effectiveCookies,
-            headers = effectiveHeaders
-        )
-    }
-
-    val sourceType = finalSession.sourceType
-    Log.i(TAG, "🎬 Handoff source classified as: $sourceType (supported=${sourceType.isSupported})")
-
-    if (!MediaSourceClassifier.isSupported(sourceType)) {
-        // Reject: tell JS to keep website playing
-        Log.i(TAG, "🎬 Handoff rejected — unsupported source type $sourceType for URI $effectiveSourceUri")
-        sendJsMessage("RESUME_WEBSITE", "{\"sessionId\":\"${finalSession.sessionId}\",\"videoId\":\"${finalSession.videoElementId}\"}", tabId)
-        viewModelScope.launch(Dispatchers.Main) {
-            Toast.makeText(appContext, "This stream format is not currently supported for native player", Toast.LENGTH_SHORT).show()
-        }
-        return
-    }
-
-    // Accept: transition state to HANDOFF_TO_NATIVE, pause webpage video, then launch native player
-    finalSession.state = WebVideoSessionState.HANDOFF_TO_NATIVE
-    activeVideoSession = finalSession
-    pendingHandoff = finalSession.toMediaHandoff()
-    if (!effectiveCookies.isNullOrEmpty()) {
-        activeVideoCookies = effectiveCookies
-    }
-
-    Log.i(TAG, "🎬 Handoff accepted — pausing webpage video and launching native player for $effectiveSourceUri at ${finalSession.currentPositionMs}ms")
-    sendJsMessage(
-        "PAUSE_AND_LAUNCH",
-        "{\"handoffId\":\"${finalSession.sessionId}\",\"sessionId\":\"${finalSession.sessionId}\",\"videoId\":\"${finalSession.videoElementId}\"}",
-        tabId
+    val baseSession = rawSession ?: WebVideoSession(
+        sessionId = "h_" + System.currentTimeMillis(),
+        tabId = omniTabId,
+        videoElementId = "omni_vid_handoff",
+        sourceUri = videoUrl,
+        pageUrl = pageUrl,
+        mimeType = null,
+        sourceType = MediaSourceType.UNKNOWN,
+        cookies = activeVideoCookies
     )
 
-    viewModelScope.launch(Dispatchers.Main) {
-        if (onPlayVideoRequestReceived == null) {
-            Log.e(TAG, "onPlayVideoRequestReceived is NULL! Cannot navigate to VideoPlayerScreen.")
-        } else {
-            onPlayVideoRequestReceived?.invoke(effectiveSourceUri, pageUrl)
+    // Filter detected media strictly scoped to this tab / page
+    val tabMedia = mediaInterceptor.detectedMedia.value.filter { item ->
+        item.pageId == omniTabId || item.pageId == rawTabId ||
+        (item.referrer != null && item.referrer.substringBefore("#") == pageUrl.substringBefore("#")) ||
+        (item.url.isNotEmpty() && !item.url.startsWith("blob:"))
+    }
+
+    val resolution = WebVideoSourceResolver.resolve(
+        session = baseSession,
+        associatedStreams = associatedStreams,
+        tabDetectedMedia = tabMedia
+    )
+
+    when (resolution) {
+        is WebVideoSourceResolver.ResolutionResult.Success -> {
+            val finalSession = baseSession.copy(
+                sourceUri = resolution.resolvedUri,
+                mimeType = resolution.mimeType,
+                sourceType = resolution.sourceType,
+                cookies = resolution.cookies ?: baseSession.cookies,
+                headers = resolution.headers.ifEmpty { baseSession.headers },
+                referrer = resolution.referrer ?: baseSession.referrer,
+                origin = resolution.origin ?: baseSession.origin
+            )
+
+            finalSession.state = WebVideoSessionState.HANDOFF_TO_NATIVE
+            activeVideoSession = finalSession
+            pendingHandoff = finalSession.toMediaHandoff()
+            if (!resolution.cookies.isNullOrEmpty()) {
+                activeVideoCookies = resolution.cookies
+            }
+
+            Log.i(TAG, "🎬 Handoff accepted — pausing webpage video and launching native player for ${resolution.resolvedUri} at ${finalSession.currentPositionMs}ms")
+
+            // Send explicit structured HANDOFF_ACCEPTED and PAUSE_AND_LAUNCH
+            sendJsMessage(
+                "HANDOFF_ACCEPTED",
+                "{\"sessionId\":\"${finalSession.sessionId}\",\"videoId\":\"${finalSession.videoElementId}\",\"tabId\":\"$omniTabId\",\"url\":\"${finalSession.sourceUri}\"}",
+                omniTabId
+            )
+            sendJsMessage(
+                "PAUSE_AND_LAUNCH",
+                "{\"handoffId\":\"${finalSession.sessionId}\",\"sessionId\":\"${finalSession.sessionId}\",\"videoId\":\"${finalSession.videoElementId}\"}",
+                omniTabId
+            )
+
+            viewModelScope.launch(Dispatchers.Main) {
+                if (onPlayVideoRequestReceived == null) {
+                    Log.e(TAG, "onPlayVideoRequestReceived is NULL! Cannot navigate to VideoPlayerScreen.")
+                } else {
+                    onPlayVideoRequestReceived?.invoke(finalSession.sourceUri, pageUrl)
+                }
+            }
+        }
+        is WebVideoSourceResolver.ResolutionResult.Unsupported -> {
+            Log.w(TAG, "🎬 Handoff rejected — ${resolution.reason}")
+            sendJsMessage(
+                "HANDOFF_REJECTED",
+                "{\"sessionId\":\"${baseSession.sessionId}\",\"videoId\":\"${baseSession.videoElementId}\",\"reason\":\"${resolution.reason}\"}",
+                omniTabId
+            )
+            sendJsMessage(
+                "RESUME_WEBSITE",
+                "{\"sessionId\":\"${baseSession.sessionId}\",\"videoId\":\"${baseSession.videoElementId}\"}",
+                omniTabId
+            )
+            viewModelScope.launch(Dispatchers.Main) {
+                Toast.makeText(appContext, "Native playback is unavailable for this video format", Toast.LENGTH_SHORT).show()
+            }
+        }
+        is WebVideoSourceResolver.ResolutionResult.UnresolvedBlob,
+        is WebVideoSourceResolver.ResolutionResult.NoMediaFound -> {
+            val msg = if (resolution is WebVideoSourceResolver.ResolutionResult.UnresolvedBlob) resolution.message else "No media stream found"
+            Log.w(TAG, "🎬 Handoff rejected — $msg")
+            sendJsMessage(
+                "HANDOFF_REJECTED",
+                "{\"sessionId\":\"${baseSession.sessionId}\",\"videoId\":\"${baseSession.videoElementId}\",\"reason\":\"$msg\"}",
+                omniTabId
+            )
+            sendJsMessage(
+                "RESUME_WEBSITE",
+                "{\"sessionId\":\"${baseSession.sessionId}\",\"videoId\":\"${baseSession.videoElementId}\"}",
+                omniTabId
+            )
+            viewModelScope.launch(Dispatchers.Main) {
+                Toast.makeText(appContext, "Native playback is unavailable for this video", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
@@ -653,7 +735,7 @@ private fun BrowserViewModel.handleRequestHandoff(message: Any) {
 /**
  * Handles REQUEST_DOWNLOAD directly from the Quetta overlay without opening the player.
  */
-private fun BrowserViewModel.handleRequestDownload(message: Any) {
+private fun BrowserViewModel.handleRequestDownload(message: Any, sender: WebExtension.MessageSender? = null) {
     val rawUrl = if (message is org.json.JSONObject) {
         if (message.has("url")) message.getString("url") else null
     } else {
@@ -666,7 +748,27 @@ private fun BrowserViewModel.handleRequestDownload(message: Any) {
         (message as? Map<*, *>)?.get("pageUrl") as? String
     }) ?: currentUrl
 
-    var mimeType = (if (message is org.json.JSONObject) {
+    val rawTabId = (if (message is org.json.JSONObject) {
+        if (message.has("tabId")) message.getString("tabId") else null
+    } else {
+        (message as? Map<*, *>)?.get("tabId") as? String
+    }) ?: ""
+
+    val omniTabId = resolveOmniTabId(rawTabId, pageUrl, sender?.session) ?: activeTabId ?: ""
+
+    val videoId = (if (message is org.json.JSONObject) {
+        if (message.has("videoId")) message.getString("videoId") else null
+    } else {
+        (message as? Map<*, *>)?.get("videoId") as? String
+    }) ?: "vid_${System.currentTimeMillis()}"
+
+    val requestId = (if (message is org.json.JSONObject) {
+        if (message.has("requestId")) message.getString("requestId") else null
+    } else {
+        (message as? Map<*, *>)?.get("requestId") as? String
+    }) ?: "dl_${System.currentTimeMillis()}"
+
+    val mimeType = (if (message is org.json.JSONObject) {
         if (message.has("mimeType")) message.getString("mimeType") else null
     } else {
         (message as? Map<*, *>)?.get("mimeType") as? String
@@ -678,77 +780,104 @@ private fun BrowserViewModel.handleRequestDownload(message: Any) {
         (message as? Map<*, *>)?.get("title") as? String
     }) ?: "video_${System.currentTimeMillis()}"
 
-    var cookies = if (message is org.json.JSONObject) {
+    val cookies = if (message is org.json.JSONObject) {
         if (message.has("cookies")) message.getString("cookies") else null
     } else {
         (message as? Map<*, *>)?.get("cookies") as? String
     }
 
-    // Resolve blob: or empty URLs against mediaInterceptor sniffed streams
-    var effectiveUrl = rawUrl
-    if (effectiveUrl.startsWith("blob:") || effectiveUrl.isEmpty()) {
-        val sniffed = mediaInterceptor.playableMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
-            ?: mediaInterceptor.detectedMedia.value.firstOrNull { it.url.isNotEmpty() && !it.url.startsWith("blob:") }
-        if (sniffed != null) {
-            effectiveUrl = sniffed.url
-            mimeType = when (sniffed.type) {
-                MediaInterceptor.MediaType.HLS -> "application/x-mpegURL"
-                MediaInterceptor.MediaType.DASH -> "application/dash+xml"
-                MediaInterceptor.MediaType.MP4 -> "video/mp4"
-                MediaInterceptor.MediaType.WEBM -> "video/webm"
-                MediaInterceptor.MediaType.AUDIO -> "audio/mpeg"
-            }
-            if (cookies.isNullOrEmpty()) cookies = sniffed.cookies
-            Log.i(TAG, "📥 Resolved blob download URL to sniffed stream: $effectiveUrl ($mimeType)")
+    val associatedStreams = mutableListOf<String>()
+    if (message is org.json.JSONObject && message.has("associatedStreams")) {
+        val arr = message.getJSONArray("associatedStreams")
+        for (i in 0 until arr.length()) {
+            val s = arr.optString(i)
+            if (s.isNotEmpty()) associatedStreams.add(s)
         }
     }
 
-    if (effectiveUrl.startsWith("blob:") || effectiveUrl.isEmpty()) {
-        viewModelScope.launch(Dispatchers.Main) {
-            Toast.makeText(appContext, "Media stream is loading, please try again in a few seconds", Toast.LENGTH_SHORT).show()
-        }
-        return
+    val tempSession = WebVideoSession(
+        sessionId = requestId,
+        tabId = omniTabId,
+        videoElementId = videoId,
+        sourceUri = rawUrl,
+        pageUrl = pageUrl,
+        mimeType = mimeType,
+        sourceType = MediaSourceClassifier.classify(rawUrl, mimeType),
+        cookies = cookies ?: activeVideoCookies
+    )
+
+    val tabMedia = mediaInterceptor.detectedMedia.value.filter { item ->
+        item.pageId == omniTabId || item.pageId == rawTabId ||
+        (item.referrer != null && item.referrer.substringBefore("#") == pageUrl.substringBefore("#")) ||
+        (item.url.isNotEmpty() && !item.url.startsWith("blob:"))
     }
 
-    Log.i(TAG, "📥 REQUEST_DOWNLOAD received for url=$effectiveUrl, mime=$mimeType")
+    val resolution = WebVideoSourceResolver.resolve(
+        session = tempSession,
+        associatedStreams = associatedStreams,
+        tabDetectedMedia = tabMedia
+    )
 
-    val mediaType = when {
-        mimeType.contains("mpegurl") || effectiveUrl.contains(".m3u8") -> MediaInterceptor.MediaType.HLS
-        mimeType.contains("dash") || effectiveUrl.contains(".mpd") -> MediaInterceptor.MediaType.DASH
-        mimeType.contains("webm") || effectiveUrl.contains(".webm") -> MediaInterceptor.MediaType.WEBM
-        mimeType.contains("audio") -> MediaInterceptor.MediaType.AUDIO
-        else -> MediaInterceptor.MediaType.MP4
-    }
-
-    viewModelScope.launch(Dispatchers.Main) {
-        try {
-            val suggestedName = if (title.isNotBlank() && title != "Video") {
-                val clean = title.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
-                val ext = when (mediaType) {
-                    MediaInterceptor.MediaType.HLS -> ".mp4"
-                    MediaInterceptor.MediaType.DASH -> ".mp4"
-                    MediaInterceptor.MediaType.WEBM -> ".webm"
-                    MediaInterceptor.MediaType.AUDIO -> ".mp3"
-                    MediaInterceptor.MediaType.MP4 -> ".mp4"
-                }
-                if (clean.endsWith(ext, ignoreCase = true)) clean else "$clean$ext"
-            } else {
-                "download_${System.currentTimeMillis()}.mp4"
+    when (resolution) {
+        is WebVideoSourceResolver.ResolutionResult.Success -> {
+            val effectiveUrl = resolution.resolvedUri
+            val mediaType = when (resolution.sourceType) {
+                MediaSourceType.HLS -> MediaInterceptor.MediaType.HLS
+                MediaSourceType.DASH -> MediaInterceptor.MediaType.DASH
+                MediaSourceType.PROGRESSIVE_WEBM -> MediaInterceptor.MediaType.WEBM
+                MediaSourceType.AUDIO_STREAM -> MediaInterceptor.MediaType.AUDIO
+                else -> MediaInterceptor.MediaType.MP4
             }
 
-            streamDownloadEngine.startDownload(
-                url = effectiveUrl,
-                suggestedName = suggestedName,
-                type = mediaType,
-                saveToLocker = false,
-                referrerUrl = pageUrl,
-                cookies = cookies ?: activeVideoCookies,
-                audioUrl = null
+            Log.i(TAG, "📥 Download accepted: requestId=$requestId, url=$effectiveUrl, type=$mediaType")
+            sendJsMessage(
+                "DOWNLOAD_STARTED",
+                "{\"requestId\":\"$requestId\",\"videoId\":\"$videoId\",\"url\":\"$effectiveUrl\"}",
+                omniTabId
             )
-            Toast.makeText(appContext, "Download started: $suggestedName", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start download for $effectiveUrl", e)
-            Toast.makeText(appContext, "Failed to start download", Toast.LENGTH_SHORT).show()
+
+            viewModelScope.launch(Dispatchers.Main) {
+                try {
+                    val suggestedName = if (title.isNotBlank() && title != "Video") {
+                        val clean = title.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+                        val ext = when (mediaType) {
+                            MediaInterceptor.MediaType.HLS -> ".mp4"
+                            MediaInterceptor.MediaType.DASH -> ".mp4"
+                            MediaInterceptor.MediaType.WEBM -> ".webm"
+                            MediaInterceptor.MediaType.AUDIO -> ".mp3"
+                            MediaInterceptor.MediaType.MP4 -> ".mp4"
+                        }
+                        if (clean.endsWith(ext, ignoreCase = true)) clean else "$clean$ext"
+                    } else {
+                        "download_${System.currentTimeMillis()}.mp4"
+                    }
+
+                    streamDownloadEngine.startDownload(
+                        url = effectiveUrl,
+                        suggestedName = suggestedName,
+                        type = mediaType,
+                        saveToLocker = false,
+                        referrerUrl = resolution.referrer ?: pageUrl,
+                        cookies = resolution.cookies ?: cookies ?: activeVideoCookies,
+                        audioUrl = null
+                    )
+                    Toast.makeText(appContext, "Download started: $suggestedName", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start download for $effectiveUrl", e)
+                    Toast.makeText(appContext, "Failed to start download", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        else -> {
+            Log.w(TAG, "📥 Download rejected — unresolved or unsupported media source")
+            sendJsMessage(
+                "DOWNLOAD_REJECTED",
+                "{\"requestId\":\"$requestId\",\"videoId\":\"$videoId\",\"reason\":\"Media stream unavailable for download\"}",
+                omniTabId
+            )
+            viewModelScope.launch(Dispatchers.Main) {
+                Toast.makeText(appContext, "Media stream is unavailable for download", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
@@ -867,7 +996,9 @@ private fun parseMediaHandoff(json: org.json.JSONObject): MediaHandoff {
  */
 internal fun BrowserViewModel.sendJsMessage(type: String, payload: String, targetTabId: String? = null) {
     val tab = if (!targetTabId.isNullOrEmpty()) {
-        tabs.find { it.id == targetTabId } ?: tabs.find { it.id == activeTabId }
+        tabs.find { it.id == targetTabId }
+            ?: extensionTabIdToOmniTabId[targetTabId]?.let { mappedId -> tabs.find { it.id == mappedId } }
+            ?: tabs.find { it.id == activeTabId }
     } else {
         tabs.find { it.id == activeTabId }
     }
@@ -876,7 +1007,8 @@ internal fun BrowserViewModel.sendJsMessage(type: String, payload: String, targe
     try {
         val js = "window.postMessage({ type: '$type', payload: $payload }, '*');"
         session.loadUri("javascript:$js")
+        Log.d(TAG, "📤 Sent JS message: type=$type to tabId=${tab.id}")
     } catch (e: Exception) {
-        Log.e(TAG, "Failed to send JS message: $type", e)
+        Log.e(TAG, "Failed to send JS message: $type to tabId=${tab.id}", e)
     }
 }
