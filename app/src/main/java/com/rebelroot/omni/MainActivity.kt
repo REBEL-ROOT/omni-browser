@@ -935,13 +935,6 @@ class MainActivity : FragmentActivity() {
     // (from the fullscreen button) incorrectly triggered onUserLeaveHint on some devices,
     // causing PiP to be entered instead of going fullscreen. Use the PiP button in the player.
 
-    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-        if (ev.action == android.view.MotionEvent.ACTION_DOWN) {
-            browserViewModel.registerUserTouch()
-        }
-        return super.dispatchTouchEvent(ev)
-    }
-
     override fun onDestroy() {
         if (activeActivity?.get() == this) {
             activeActivity = null

@@ -493,11 +493,6 @@ class BrowserViewModel : ViewModel() {
     var isFullscreen by mutableStateOf(false)
     var isVideoPlayingInPage by mutableStateOf(false)
     var isInnerScrolled by mutableStateOf(false)
-    var lastUserInteractionTime by androidx.compose.runtime.mutableLongStateOf(0L)
-
-    fun registerUserTouch() {
-        lastUserInteractionTime = System.currentTimeMillis()
-    }
     
     /** Flag set when the browser activity/session was launched via an external ACTION_VIEW intent (e.g., RSS reader, email) */
     var isExternalIntentLaunch by mutableStateOf(false)

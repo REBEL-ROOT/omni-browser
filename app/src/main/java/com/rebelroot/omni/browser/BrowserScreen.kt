@@ -36,7 +36,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
@@ -360,6 +359,7 @@ fun BrowserScreen(
     // Fullscreen download overlay — hoisted outside the if-block so state survives
     // fullscreen entry/exit transitions and doesn't reset on every recomposition.
     var showFullscreenDownloadBtn by remember { mutableStateOf(true) }
+    var fullscreenControlsLastActivityMs by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
     
     // Auto-Scroll and Player Settings states
     var isAutoScrollActive by remember { mutableStateOf(false) }
@@ -401,20 +401,16 @@ fun BrowserScreen(
         }
     }
 
-    // Auto-hide fullscreen controls while video is playing; keep visible when paused or on user touch
-    LaunchedEffect(viewModel.isVideoPlayingInPage, viewModel.lastUserInteractionTime, viewModel.isFullscreen) {
-        if (!viewModel.isFullscreen) {
-            showFullscreenDownloadBtn = true
-            return@LaunchedEffect
-        }
-
-        // Show controls immediately upon state change or user touch
-        showFullscreenDownloadBtn = true
-
-        if (viewModel.isVideoPlayingInPage) {
-            // While playing, auto-hide after 3.5 seconds of inactivity
-            kotlinx.coroutines.delay(3500)
+    // Auto-fade controls after 3.5s while video is playing; stay visible indefinitely while paused
+    LaunchedEffect(showFullscreenDownloadBtn, viewModel.isVideoPlayingInPage, fullscreenControlsLastActivityMs) {
+        if (showFullscreenDownloadBtn && viewModel.isVideoPlayingInPage) {
+            delay(3500L)
             showFullscreenDownloadBtn = false
+        }
+    }
+    LaunchedEffect(viewModel.isVideoPlayingInPage) {
+        if (!viewModel.isVideoPlayingInPage) {
+            showFullscreenDownloadBtn = true
         }
     }
     // Issue #73: The site's own video player is NEVER overridden automatically.
@@ -763,6 +759,7 @@ fun BrowserScreen(
     LaunchedEffect(viewModel.isFullscreen) {
         if (viewModel.isFullscreen) {
             showFullscreenDownloadBtn = true
+            fullscreenControlsLastActivityMs = System.currentTimeMillis()
         }
         val activity = run {
             var ctx = context
@@ -2077,9 +2074,6 @@ fun BrowserScreen(
                                                 private val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
 
                                                 override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-                                                    if (ev.action == android.view.MotionEvent.ACTION_DOWN) {
-                                                        viewModel.registerUserTouch()
-                                                    }
                                                     val scrollY = currentScrollPos
                                                     when (ev.action) {
                                                         android.view.MotionEvent.ACTION_DOWN -> {
@@ -3389,14 +3383,19 @@ fun BrowserScreen(
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
             if (fullscreenMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
                 if (viewModel.isFullscreen) {
-                    // Fullscreen mode — overlay with non-blocking floating controls
+                    // Fullscreen mode — overlay with auto-fade and tap-to-reveal controls
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    awaitFirstDown(pass = PointerEventPass.Initial)
-                                    viewModel.registerUserTouch()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                            ) {
+                                if (showFullscreenDownloadBtn && viewModel.isVideoPlayingInPage) {
+                                    showFullscreenDownloadBtn = false
+                                } else {
+                                    showFullscreenDownloadBtn = true
+                                    fullscreenControlsLastActivityMs = System.currentTimeMillis()
                                 }
                             }
                     ) {
