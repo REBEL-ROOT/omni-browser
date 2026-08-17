@@ -158,7 +158,7 @@
             videoId, sourceUri, currentTimeSec, isPlaying, playbackRate, volume, muted, sessionId
         });
 
-        // 1. Locate video strictly by ID or exact source URI — NEVER blind videos[0] fallback
+        // 1. Locate video strictly by ID or exact source URI, with reliable fallback for active video
         let targetVideo = null;
         if (videoId && trackedVideos.has(videoId)) {
             targetVideo = trackedVideos.get(videoId);
@@ -166,6 +166,14 @@
         if (!targetVideo && sourceUri) {
             const videos = Array.from(document.querySelectorAll('video'));
             targetVideo = videos.find(v => (v.currentSrc === sourceUri || v.src === sourceUri));
+        }
+        if (!targetVideo) {
+            const videos = Array.from(document.querySelectorAll('video'));
+            if (videos.length === 1) {
+                targetVideo = videos[0];
+            } else if (videos.length > 1) {
+                targetVideo = videos.find(v => !v.paused) || videos[0];
+            }
         }
 
         if (!targetVideo) {
@@ -190,8 +198,10 @@
 
             if (isPlaying) {
                 targetVideo.play().catch(() => {});
+                reportVideoState(true);
             } else {
                 targetVideo.pause();
+                reportVideoState(false);
             }
 
             delete targetVideo._omniIntercepted;
@@ -232,6 +242,7 @@
     function captureVideoState(video) {
         const duration = video.duration;
         const videoUrl = getVideoUrl(video) || video.currentSrc || video.src || '';
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
         return {
             sessionId: 'h_' + Math.random().toString(36).substr(2, 9),
             handoffId: 'h_' + Math.random().toString(36).substr(2, 9),
@@ -244,6 +255,7 @@
             durationMs: (isFinite(duration) && duration > 0) ? Math.floor(duration * 1000) : null,
             isPaused: video.paused,
             isPlaying: !video.paused,
+            wasFullscreen: isFs,
             playbackRate: video.playbackRate || 1.0,
             volume: video.volume || 1.0,
             muted: video.muted || false,
@@ -268,13 +280,6 @@
 
         // Collect streams specifically associated with this video element
         const associatedStreams = getAssociatedStreamsForVideo(video);
-
-        // Exit full-screen if active
-        try {
-            if (document.fullscreenElement || document.webkitFullscreenElement) {
-                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-            }
-        } catch(e) {}
 
         // Send to native bridge
         window.postMessage({

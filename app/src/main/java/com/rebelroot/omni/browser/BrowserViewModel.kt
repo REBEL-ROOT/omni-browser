@@ -4750,6 +4750,11 @@ class BrowserViewModel : ViewModel() {
      * Takes the final state from ExoPlayer and sends RESTORE_VIDEO_STATE to the originating tab's video.
      * Revalidates that the originating tab is still on the expected document before restoring.
      */
+    /**
+     * Seamless return from native player back to the webpage video player.
+     * Takes the final state from ExoPlayer and sends RESTORE_VIDEO_STATE to the originating tab's video.
+     * Revalidates that the originating tab is still on the expected document before restoring.
+     */
     fun returnFromNativePlayer(
         positionMs: Long,
         isPlaying: Boolean,
@@ -4758,28 +4763,36 @@ class BrowserViewModel : ViewModel() {
         muted: Boolean = false,
         onComplete: (() -> Unit)? = null
     ) {
-        val session = activeVideoSession
-        if (session != null) {
-            session.updateNativeProgress(positionMs, isPlaying, playbackRate, volume, muted)
-            session.state = com.rebelroot.omni.media.handoff.WebVideoSessionState.HANDOFF_TO_SITE
-
-            val targetTab = tabs.find { it.id == session.tabId }
-            val isSamePage = targetTab != null && (
-                targetTab.url.substringBefore("#") == session.pageUrl.substringBefore("#") ||
-                targetTab.url.isEmpty() ||
-                session.pageUrl.isEmpty()
-            )
-
-            if (isSamePage) {
-                val payload = session.toRestoreJson().toString()
-                Log.i(TAG, "🎬 returnFromNativePlayer: restoring website video at ${positionMs}ms, isPlaying=$isPlaying in tab ${session.tabId}")
-                sendJsMessage("RESTORE_VIDEO_STATE", payload, session.tabId)
-            } else {
-                Log.w(TAG, "⚠️ returnFromNativePlayer: target tab ${session.tabId} navigated away (current: ${targetTab?.url}, session: ${session.pageUrl}) — skipping restore")
-            }
-            activeVideoSession = null
-            pendingHandoff = null
+        viewModelScope.launch(Dispatchers.Main) {
+            isVideoPlayingInPage = isPlaying
         }
+        val session = activeVideoSession
+        val targetTabId = session?.tabId ?: activeTabId
+        val targetTab = tabs.find { it.id == targetTabId }
+        val isSamePage = targetTab != null && (
+            session == null ||
+            targetTab.url.substringBefore("#") == session.pageUrl.substringBefore("#") ||
+            targetTab.url.isEmpty() ||
+            session.pageUrl.isEmpty()
+        )
+
+        if (isSamePage) {
+            val payload = session?.toRestoreJson()?.apply {
+                put("positionMs", positionMs)
+                put("currentTimeMs", positionMs)
+                put("isPlaying", isPlaying)
+                put("playbackRate", playbackRate.toDouble())
+                put("volume", volume.toDouble())
+                put("muted", muted)
+            }?.toString() ?: "{\"currentTimeMs\":$positionMs,\"positionMs\":$positionMs,\"isPlaying\":$isPlaying,\"playbackRate\":$playbackRate,\"volume\":$volume,\"muted\":$muted}"
+
+            Log.i(TAG, "🎬 returnFromNativePlayer: restoring website video at ${positionMs}ms, isPlaying=$isPlaying in tab $targetTabId")
+            sendJsMessage("RESTORE_VIDEO_STATE", payload, targetTabId)
+        } else {
+            Log.w(TAG, "⚠️ returnFromNativePlayer: target tab $targetTabId navigated away (current: ${targetTab?.url}, session: ${session?.pageUrl}) — skipping restore")
+        }
+        activeVideoSession = null
+        pendingHandoff = null
         onComplete?.invoke()
     }
 
@@ -4868,6 +4881,32 @@ class BrowserViewModel : ViewModel() {
      */
     fun playMedia(request: MediaInterceptor.MediaPlaybackRequest) {
         activeVideoCookies = request.cookies
+        val activeId = activeTabId
+        val tab = tabs.find { it.id == activeId }
+        val currentUri = tab?.url ?: currentUrl
+
+        val session = com.rebelroot.omni.media.handoff.WebVideoSession(
+            sessionId = "h_" + System.currentTimeMillis(),
+            tabId = activeId ?: "",
+            videoElementId = "",
+            sourceUri = request.url,
+            pageUrl = currentUri,
+            cookies = request.cookies,
+            referrer = request.referrer,
+            headers = request.headers,
+            state = com.rebelroot.omni.media.handoff.WebVideoSessionState.HANDOFF_TO_NATIVE,
+            isPaused = !isVideoPlayingInPage
+        )
+        activeVideoSession = session
+        pendingHandoff = session.toMediaHandoff()
+
+        // Tell web video to pause
+        sendJsMessage(
+            "PAUSE_AND_LAUNCH",
+            "{\"handoffId\":\"${session.sessionId}\",\"sessionId\":\"${session.sessionId}\",\"url\":\"${request.url}\"}",
+            activeId
+        )
+
         val callback = onPlayVideoRequestReceived
         if (callback != null) {
             callback.invoke(request.url, request.referrer ?: "")

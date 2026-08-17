@@ -347,6 +347,11 @@ fun BrowserScreen(
         isScrollNavBarVisible = true
         isAlohaBannerDismissed = false
     }
+    LaunchedEffect(viewModel.isVideoPlayingInPage) {
+        if (viewModel.isVideoPlayingInPage) {
+            isAlohaBannerDismissed = false
+        }
+    }
     LaunchedEffect(isNavHideEnabled) {
         if (!isNavHideEnabled) {
             isScrollNavBarVisible = true
