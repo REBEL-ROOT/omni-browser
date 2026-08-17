@@ -128,6 +128,7 @@ import kotlin.math.abs
  import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -3392,15 +3393,15 @@ fun BrowserScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ) {
-                                if (showFullscreenDownloadBtn && viewModel.isVideoPlayingInPage) {
-                                    showFullscreenDownloadBtn = false
-                                } else {
-                                    showFullscreenDownloadBtn = true
-                                    fullscreenControlsLastActivityMs = System.currentTimeMillis()
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        if (event.changes.any { it.pressed }) {
+                                            showFullscreenDownloadBtn = true
+                                            fullscreenControlsLastActivityMs = System.currentTimeMillis()
+                                        }
+                                    }
                                 }
                             }
                     ) {
@@ -7711,38 +7712,49 @@ fun BrowserScreen(
                 // Fetch page dimensions when tab changes
                 LaunchedEffect(activeTab.id) {
                     activeTab.session.loadUri(
-                        "javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();"
+                        "javascript:(function(){try{var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}}catch(e){}})();"
                     )
                 }
 
                 val pageSH = viewModel.pageScrollHeight
                 val pageVH = viewModel.pageViewportHeight
 
-                val maxScroll: Float
-                val scrollFraction: Float
-                val thumbFraction: Float
+                val maxScroll = FastScrollMath.computeMaxDocumentScroll(
+                    pageScrollHeight = pageSH,
+                    pageViewportHeight = pageVH,
+                    scrollRange = viewModel.currentScrollRange,
+                    scrollExtent = viewModel.currentScrollExtent
+                )
 
-                if (pageSH > 0f && pageVH > 0f && pageSH > pageVH) {
-                    maxScroll = pageSH - pageVH
-                    scrollFraction = (currentScrollPos.toFloat() / maxScroll).coerceIn(0f, 1f)
-                    thumbFraction = (pageVH / pageSH).coerceIn(0.06f, 0.25f)
-                } else {
-                    val sRange = viewModel.currentScrollRange.toFloat()
-                    val sExtent = viewModel.currentScrollExtent.toFloat()
-                    if (sRange > 0f && sExtent > 0f && sRange > sExtent) {
-                        maxScroll = sRange - sExtent
-                        val sOffset = maxOf(currentScrollPos, viewModel.currentScrollOffset).toFloat()
-                        scrollFraction = (sOffset / maxScroll).coerceIn(0f, 1f)
-                        thumbFraction = (sExtent / sRange).coerceIn(0.06f, 0.25f)
-                    } else {
-                        maxScroll = 0f
-                        scrollFraction = 0f
-                        thumbFraction = 0.08f
-                    }
-                }
+                val currentOffset = maxOf(currentScrollPos, viewModel.currentScrollOffset).toFloat()
+                val scrollFraction = FastScrollMath.computeScrollFraction(
+                    currentScrollOffset = currentOffset,
+                    maxDocumentScroll = maxScroll
+                )
+
+                val thumbFraction = FastScrollMath.computeThumbFraction(
+                    pageScrollHeight = pageSH,
+                    pageViewportHeight = pageVH,
+                    scrollRange = viewModel.currentScrollRange,
+                    scrollExtent = viewModel.currentScrollExtent
+                )
 
                 var isDragging by remember { mutableStateOf(false) }
+                var dragFraction by remember { mutableStateOf(0f) }
                 var showScrollbar by remember { mutableStateOf(false) }
+
+                val coroutineScope = rememberCoroutineScope()
+                val scrollController = remember(activeTab.id) { FastScrollController(coroutineScope) }
+
+                LaunchedEffect(activeTab.session) {
+                    scrollController.attachSession(activeTab.session)
+                }
+
+                DisposableEffect(scrollController) {
+                    onDispose {
+                        scrollController.detach()
+                    }
+                }
 
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
@@ -7798,8 +7810,20 @@ fun BrowserScreen(
                 val updatedTopTrackOffset by rememberUpdatedState(topTrackOffset)
                 val updatedBotTrackOffset by rememberUpdatedState(bottomTrackOffset)
                 val updatedThumbFraction   by rememberUpdatedState(thumbFraction)
+                val updatedMaxScroll       by rememberUpdatedState(maxScroll)
 
                 val pillLocalView = LocalView.current
+                val density = androidx.compose.ui.platform.LocalDensity.current
+
+                DisposableEffect(activeTab.id, viewModel.showScrollButtons, viewModel.isFullscreen) {
+                    onDispose {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                            try {
+                                pillLocalView.systemGestureExclusionRects = emptyList()
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
@@ -7808,89 +7832,89 @@ fun BrowserScreen(
                             .width(touchStripWidth)
                             .align(Alignment.CenterEnd)
                             // Tell Android ≥ Q to exclude this right-edge strip from the
-                            // system back-gesture zone.  Without this, gesture nav on API 29+
-                            // injects competing synthetic pointer events alongside the real
-                            // drag — producing the "two fingers together" sensation on API 37.
+                            // system back-gesture zone using root view-local coordinates.
                             .onGloballyPositioned { coords ->
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                    val bounds = coords.boundsInWindow()
-                                    pillLocalView.post {
-                                        try {
-                                            val h = pillLocalView.height
-                                            if (h > 0) {
-                                                pillLocalView.systemGestureExclusionRects = listOf(
-                                                    android.graphics.Rect(
-                                                        bounds.left.toInt(),
-                                                        0,
-                                                        bounds.right.toInt(),
-                                                        h
-                                                    )
-                                                )
-                                            }
-                                        } catch (_: Exception) {}
-                                    }
+                                    try {
+                                        val bounds = coords.boundsInRoot()
+                                        val topPad = with(density) { updatedTopTrackOffset.toPx() }
+                                        val botPad = with(density) { updatedBotTrackOffset.toPx() }
+                                        val left = bounds.left.toInt()
+                                        val top = (bounds.top + topPad).toInt()
+                                        val right = bounds.right.toInt()
+                                        val bottom = (bounds.bottom - botPad).toInt()
+                                        if (right > left && bottom > top) {
+                                            pillLocalView.systemGestureExclusionRects = listOf(
+                                                android.graphics.Rect(left, top, right, bottom)
+                                            )
+                                        }
+                                    } catch (_: Exception) {}
                                 }
                             }
                             .pointerInput(activeTab.id) {
                                 awaitPointerEventScope {
                                     while (true) {
-                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                                         val downPos = down.position
                                         var dragStarted = false
                                         var pointerReleased = false
 
                                         // Snapshot track geometry at touch-down so animated
                                         // nav-bar offsets don't shift the thumb position mid-drag.
-                                        var snapTopOff  = updatedTopTrackOffset.toPx()
-                                        var snapBotOff  = updatedBotTrackOffset.toPx()
-                                        var snapThumbFr = updatedThumbFraction
+                                        val snapTopOff  = updatedTopTrackOffset.toPx()
+                                        val snapBotOff  = updatedBotTrackOffset.toPx()
+                                        val snapThumbFr = updatedThumbFraction
+                                        val fullH       = size.height.toFloat()
+                                        val trackH      = (fullH - snapTopOff - snapBotOff).coerceAtLeast(1f)
+                                        val minThumbH   = 36.dp.toPx()
+                                        val maxThumbH   = 90.dp.toPx()
+                                        val snapThumbH  = FastScrollMath.computeThumbHeight(trackH, snapThumbFr, minThumbH, maxThumbH)
+                                        val snapMaxThumbY = FastScrollMath.computeMaxThumbTravel(trackH, snapThumbH)
 
-                                        // Refresh page height on touch down
+                                        // Refresh page height on touch down (one-shot, non-blocking)
                                         activeTab.session.loadUri(
                                             "javascript:(function(){try{var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}}catch(e){}})();"
                                         )
 
                                         while (!pointerReleased) {
-                                            // PointerEventPass.Initial lets us intercept before
-                                            // the system gesture recognizer claims the event.
                                             val event = awaitPointerEvent(PointerEventPass.Initial)
                                             val change = event.changes.firstOrNull { it.id == down.id }
                                                 ?: break
                                             if (!change.pressed) {
                                                 pointerReleased = true
-                                                if (dragStarted) isDragging = false
+                                                if (dragStarted) {
+                                                    isDragging = false
+                                                }
                                                 continue
                                             }
 
                                             val dy = change.position.y - downPos.y
                                             val dx = change.position.x - downPos.x
 
-                                            if (!dragStarted &&
-                                                abs(dy) > (viewConfiguration.touchSlop * 0.5f) &&
-                                                abs(dy) >= abs(dx)
-                                            ) {
-                                                dragStarted = true
-                                                isDragging = true
-                                                // Re-snapshot when drag officially begins
-                                                snapTopOff  = updatedTopTrackOffset.toPx()
-                                                snapBotOff  = updatedBotTrackOffset.toPx()
-                                                snapThumbFr = updatedThumbFraction
-                                                haptic.performHapticFeedback(
-                                                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
-                                                )
+                                            if (!dragStarted) {
+                                                val touchSlop = viewConfiguration.touchSlop
+                                                if (abs(dy) > (touchSlop * 0.5f) && abs(dy) >= abs(dx)) {
+                                                    dragStarted = true
+                                                    isDragging = true
+                                                    haptic.performHapticFeedback(
+                                                        androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                                    )
+                                                } else if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.5f) {
+                                                    // Horizontal gesture (e.g. system back / edge swipe) -> cancel pill drag
+                                                    break
+                                                }
                                             }
 
                                             if (dragStarted) {
-                                                val fullH  = size.height.toFloat()
-                                                val trackH = (fullH - snapTopOff - snapBotOff).coerceAtLeast(1f)
-                                                val thumbH = (trackH * snapThumbFr).coerceIn(36.dp.toPx(), 90.dp.toPx())
-                                                val maxThumbY = (trackH - thumbH).coerceAtLeast(1f)
-                                                val relY = (change.position.y - snapTopOff - thumbH / 2f).coerceIn(0f, maxThumbY)
-                                                val frac = relY / maxThumbY
-                                                activeTab.session.loadUri(
-                                                    "javascript:(function(){try{var el=document.scrollingElement||document.documentElement||document.body;var max=el?(el.scrollHeight-window.innerHeight):0;if(max<=0&&document.body)max=document.body.scrollHeight-window.innerHeight;var t=Math.round($frac*max);if(t>=0){window.scrollTo(0,t);if(el)el.scrollTop=t;}}catch(e){}})();"
-                                                )
                                                 change.consume()
+                                                val frac = FastScrollMath.computeDragFraction(
+                                                    fingerY = change.position.y,
+                                                    topTrackOffset = snapTopOff,
+                                                    thumbHeight = snapThumbH,
+                                                    maxThumbTravel = snapMaxThumbY
+                                                )
+                                                dragFraction = frac
+                                                scrollController.dispatchDragFraction(frac, updatedMaxScroll)
                                             }
                                         }
                                     }
@@ -7900,6 +7924,7 @@ fun BrowserScreen(
                         // iOS capsule thumb — no track, just the pill
                         if (alphaAnim > 0.01f) {
                             val thumbHeightFraction = thumbFraction
+                            val displayedFraction = if (isDragging) dragFraction else scrollFraction
                             androidx.compose.foundation.Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -7909,10 +7934,11 @@ fun BrowserScreen(
                                 val topOff = topTrackOffset.toPx()
                                 val botOff = bottomTrackOffset.toPx()
                                 val trackH = (size.height - topOff - botOff).coerceAtLeast(1f)
-                                val thumbH = (trackH * thumbHeightFraction).coerceIn(36.dp.toPx(), 90.dp.toPx())
-                                val maxThumbY = (trackH - thumbH).coerceAtLeast(0f)
-                                // thumbY is offset by topOff so it starts below the top nav
-                                val thumbY = topOff + scrollFraction * maxThumbY
+                                val minThumbH = 36.dp.toPx()
+                                val maxThumbH = 90.dp.toPx()
+                                val thumbH = FastScrollMath.computeThumbHeight(trackH, thumbHeightFraction, minThumbH, maxThumbH)
+                                val maxThumbY = FastScrollMath.computeMaxThumbTravel(trackH, thumbH)
+                                val thumbY = topOff + displayedFraction * maxThumbY
                                 val w = capsuleWidth.toPx()
                                 val x = size.width - w
 
