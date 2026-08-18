@@ -58,6 +58,7 @@ fun DownloadSettingsScreen(
 
     var showDefaultDownloaderDialog by remember { mutableStateOf(false) }
     var showConcurrentLimitDialog by remember { mutableStateOf(false) }
+    var showExtensionPolicyDialog by remember { mutableStateOf(false) }
 
     val externalApps = remember(context) {
         viewModel.getAvailableExternalDownloaders(context)
@@ -257,6 +258,30 @@ fun DownloadSettingsScreen(
                                 color = textSecondaryColor,
                                 fontSize = 11.sp
                             )
+                        }
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
+                    }
+
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Extension downloads policy
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showExtensionPolicyDialog = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.Extension, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(id = R.string.extension_download_policy_title), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            val policyLabel = when (viewModel.extensionDownloadPolicy) {
+                                BrowserViewModel.ExtensionDownloadPolicy.ASK_EVERY_TIME -> stringResource(R.string.extension_download_policy_ask)
+                                BrowserViewModel.ExtensionDownloadPolicy.ALLOW_TRUSTED -> stringResource(R.string.extension_download_policy_allow)
+                                BrowserViewModel.ExtensionDownloadPolicy.NEVER_ALLOW -> stringResource(R.string.extension_download_policy_never)
+                            }
+                            Text(policyLabel, color = textSecondaryColor, fontSize = 11.sp)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = textSecondaryColor)
                     }
@@ -545,6 +570,67 @@ fun DownloadSettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showConcurrentLimitDialog = false }) {
                     Text("Close", color = accentColor)
+                }
+            }
+        )
+    }
+
+    // ── EXTENSION DOWNLOAD POLICY DIALOG ──────────────────────────────
+    if (showExtensionPolicyDialog) {
+        AlertDialog(
+            onDismissRequest = { showExtensionPolicyDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Rounded.Extension, contentDescription = null, tint = accentColor)
+                    Text(stringResource(id = R.string.extension_download_policy_title), color = textPrimaryColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = cardColor,
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                ) {
+                    listOf(
+                        Triple(BrowserViewModel.ExtensionDownloadPolicy.ASK_EVERY_TIME, stringResource(R.string.extension_download_policy_ask), "Prompt before each extension-initiated download"),
+                        Triple(BrowserViewModel.ExtensionDownloadPolicy.ALLOW_TRUSTED, stringResource(R.string.extension_download_policy_allow), "Automatically download from installed extensions without prompting"),
+                        Triple(BrowserViewModel.ExtensionDownloadPolicy.NEVER_ALLOW, stringResource(R.string.extension_download_policy_never), "Block all downloads initiated by extensions")
+                    ).forEach { (policy, label, desc) ->
+                        Surface(
+                            onClick = {
+                                viewModel.setExtensionDownloadPolicy(policy, context)
+                                showExtensionPolicyDialog = false
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (viewModel.extensionDownloadPolicy == policy) accentColor.copy(alpha = 0.12f) else Color.Transparent,
+                            border = BorderStroke(1.dp, if (viewModel.extensionDownloadPolicy == policy) accentColor else cardBorderColor.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(label, color = if (viewModel.extensionDownloadPolicy == policy) accentColor else textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(desc, color = textSecondaryColor, fontSize = 11.sp)
+                                }
+                                RadioButton(
+                                    selected = (viewModel.extensionDownloadPolicy == policy),
+                                    onClick = {
+                                        viewModel.setExtensionDownloadPolicy(policy, context)
+                                        showExtensionPolicyDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showExtensionPolicyDialog = false }) {
+                    Text(stringResource(R.string.cancel_text), color = accentColor)
                 }
             }
         )

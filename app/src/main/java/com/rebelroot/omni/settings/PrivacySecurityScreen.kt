@@ -69,6 +69,7 @@ fun PrivacySecurityScreen(
     var showAdPrivacyDialog by remember { mutableStateOf(false) }
     var showPreloadPagesDialog by remember { mutableStateOf(false) }
     var showSafeBrowsingDialog by remember { mutableStateOf(false) }
+    var showAutofillProviderDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -248,6 +249,22 @@ fun PrivacySecurityScreen(
                         subtitle = "Tap links open directly; auto-redirects ask per site",
                         checked = viewModel.isOpenExternalAppAllowed,
                         onCheckedChange = { viewModel.toggleOpenExternalAppAllowed(context) },
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Item 9: Autofill Provider
+                    SettingsRow(
+                        icon = Icons.Rounded.Password,
+                        title = stringResource(id = R.string.autofill_provider_title),
+                        subtitle = when (viewModel.autofillProviderMode) {
+                            BrowserViewModel.AutofillProviderMode.THIRD_PARTY -> stringResource(R.string.autofill_provider_system)
+                            BrowserViewModel.AutofillProviderMode.OMNI_VAULT -> stringResource(R.string.autofill_provider_omni)
+                            BrowserViewModel.AutofillProviderMode.BOTH -> stringResource(R.string.autofill_provider_both)
+                        },
+                        onClick = { showAutofillProviderDialog = true },
                         textPrimaryColor = textPrimaryColor,
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor
@@ -610,6 +627,45 @@ fun PrivacySecurityScreen(
                                 onClick = {
                                     viewModel.saveSafeBrowsingLevel(context, value)
                                     showSafeBrowsingDialog = false
+                                }
+                            )
+                            Text(label, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // Autofill Provider Mode Dialog
+    if (showAutofillProviderDialog) {
+        val autofillOptions = listOf(
+            BrowserViewModel.AutofillProviderMode.THIRD_PARTY to stringResource(R.string.autofill_provider_system),
+            BrowserViewModel.AutofillProviderMode.OMNI_VAULT to stringResource(R.string.autofill_provider_omni),
+            BrowserViewModel.AutofillProviderMode.BOTH to stringResource(R.string.autofill_provider_both)
+        )
+        AlertDialog(
+            onDismissRequest = { showAutofillProviderDialog = false },
+            title = { Text(stringResource(R.string.autofill_provider_title), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    autofillOptions.forEach { (mode, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setAutofillProviderMode(mode, context)
+                                    showAutofillProviderDialog = false
+                                }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = viewModel.autofillProviderMode == mode,
+                                onClick = {
+                                    viewModel.setAutofillProviderMode(mode, context)
+                                    showAutofillProviderDialog = false
                                 }
                             )
                             Text(label, modifier = Modifier.padding(start = 8.dp))

@@ -148,6 +148,8 @@ class BrowserViewModel : ViewModel() {
         val DOWNLOAD_NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("download_notifications_enabled")
         val DOWNLOAD_SOUND_ENABLED_KEY = booleanPreferencesKey("download_sound_enabled")
         val DOWNLOAD_VIBRATE_ENABLED_KEY = booleanPreferencesKey("download_vibrate_enabled")
+        val AUTOFILL_PROVIDER_MODE_KEY = stringPreferencesKey("autofill_provider_mode")
+        val EXTENSION_DOWNLOAD_POLICY_KEY = stringPreferencesKey("extension_download_policy")
         // Chrome-on-Android UA shared by the download hand-off (matches the one used by
         // StreamDownloadEngine so external managers see the same identity as the browser).
         const val CHROME_UA =
@@ -525,6 +527,36 @@ class BrowserViewModel : ViewModel() {
     var downloadNotificationsEnabled by mutableStateOf(true)
     var downloadSoundEnabled by mutableStateOf(true)
     var downloadVibrateEnabled by mutableStateOf(false)
+
+    enum class AutofillProviderMode {
+        THIRD_PARTY,
+        OMNI_VAULT,
+        BOTH
+    }
+
+    enum class ExtensionDownloadPolicy {
+        ASK_EVERY_TIME,
+        ALLOW_TRUSTED,
+        NEVER_ALLOW
+    }
+
+    data class PendingWebExtensionDownload(
+        val downloadId: Int,
+        val extensionId: String,
+        val extensionName: String?,
+        val filename: String,
+        val sourceUrl: String,
+        val mimeType: String,
+        val fileSize: Long,
+        val onConfirm: () -> Unit,
+        val onCancel: () -> Unit
+    )
+
+    var autofillProviderMode by mutableStateOf(AutofillProviderMode.THIRD_PARTY)
+    var extensionDownloadPolicy by mutableStateOf(ExtensionDownloadPolicy.ASK_EVERY_TIME)
+    var pendingWebExtensionDownload by mutableStateOf<PendingWebExtensionDownload?>(null)
+    internal val nextWebExtensionDownloadId = java.util.concurrent.atomic.AtomicInteger(100)
+
     var isNativePlayerEnabled by mutableStateOf(true)
     var isYouTubeEnabled by mutableStateOf(false)
     var mediaSnifferBlocklist by mutableStateOf<Set<String>>(emptySet())
@@ -642,6 +674,8 @@ class BrowserViewModel : ViewModel() {
     var fastScrollPillFraction by mutableStateOf(0f)
     var fastScrollPillTrackTop by mutableStateOf(0f)
     var fastScrollPillTrackBottom by mutableStateOf(0f)
+    var scrollPillState by mutableStateOf(ScrollPillState.FADED)
+    var fastScrollGeometry by mutableStateOf<ScrollGeometry?>(null)
     val fastScrollController = FastScrollController(viewModelScope)
     var navBarHideTop by mutableStateOf(true)
     var navBarHideBottom by mutableStateOf(true)
@@ -2731,6 +2765,9 @@ class BrowserViewModel : ViewModel() {
                 // Total Cookie Protection (dFPI): isolate cookies per top-level site
                 sb.append("  network.cookie.cookieBehavior: 5\n")
                 sb.append("  ui.useAccessibilityTheme: ${if (hc) 1 else 0}\n")
+                sb.append("  signon.autofillForms: true\n")
+                sb.append("  dom.forms.autocomplete.formautofill: true\n")
+                sb.append("  extensions.formautofill.available: true\n")
                 if (pl == 0) {
                     sb.append("  network.dns.disablePrefetch: true\n")
                     sb.append("  network.prefetch-next: false\n")
@@ -3261,6 +3298,12 @@ class BrowserViewModel : ViewModel() {
                     showPrivacyStatsWidget = prefs[SHOW_PRIVACY_STATS_KEY] ?: true
                     isMinimalistFocusMode = prefs[MINIMALIST_FOCUS_MODE_KEY] ?: false
                     trackersBlockedCount = prefs[TRACKERS_BLOCKED_COUNT_KEY] ?: 0
+                    autofillProviderMode = prefs[AUTOFILL_PROVIDER_MODE_KEY]?.let {
+                        try { AutofillProviderMode.valueOf(it) } catch (e: Exception) { AutofillProviderMode.THIRD_PARTY }
+                    } ?: AutofillProviderMode.THIRD_PARTY
+                    extensionDownloadPolicy = prefs[EXTENSION_DOWNLOAD_POLICY_KEY]?.let {
+                        try { ExtensionDownloadPolicy.valueOf(it) } catch (e: Exception) { ExtensionDownloadPolicy.ASK_EVERY_TIME }
+                    } ?: ExtensionDownloadPolicy.ASK_EVERY_TIME
                     quickToolsOrder = run {
                         val saved = prefs[QUICK_TOOLS_ORDER_KEY]
                         val default = DEFAULT_QUICK_TOOLS_ORDER
@@ -5096,6 +5139,32 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun setAutofillProviderMode(mode: AutofillProviderMode, context: Context) {
+        autofillProviderMode = mode
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.dataStore.edit { prefs ->
+                    prefs[AUTOFILL_PROVIDER_MODE_KEY] = mode.name
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save autofillProviderMode", e)
+            }
+        }
+    }
+
+    fun setExtensionDownloadPolicy(policy: ExtensionDownloadPolicy, context: Context) {
+        extensionDownloadPolicy = policy
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.dataStore.edit { prefs ->
+                    prefs[EXTENSION_DOWNLOAD_POLICY_KEY] = policy.name
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save extensionDownloadPolicy", e)
+            }
+        }
+    }
+
     fun saveCustomSocksHost(context: Context, host: String) {
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
@@ -5669,6 +5738,9 @@ class BrowserViewModel : ViewModel() {
             sb.append("  security.fileuri.strict_origin_policy: true\n")
             sb.append("  privacy.partition.network_state: true\n")
             sb.append("  network.cookie.cookieBehavior: 5\n")
+            sb.append("  signon.autofillForms: true\n")
+            sb.append("  dom.forms.autocomplete.formautofill: true\n")
+            sb.append("  extensions.formautofill.available: true\n")
             if (preloadPages == 0) {
                 sb.append("  network.dns.disablePrefetch: true\n")
                 sb.append("  network.prefetch-next: false\n")
@@ -6490,6 +6562,7 @@ class BrowserViewModel : ViewModel() {
                         }
 
                         filtered.forEach { ext ->
+                            setupWebExtensionDelegates(ext)
                             runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
                              if (ext.id == FORCE_DARK_EXTENSION_ID) {
                                  if (forceDarkWebsites) {

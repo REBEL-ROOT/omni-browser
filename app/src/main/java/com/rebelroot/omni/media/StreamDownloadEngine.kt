@@ -81,7 +81,15 @@ class StreamDownloadEngine(
         val url: String,
         val saveToLocker: Boolean,
         val progress: StateFlow<DownloadProgress>,
-        val isGeneric: Boolean = false
+        val isGeneric: Boolean = false,
+        val contentType: String? = null,
+        val referrerUrl: String? = null,
+        val cookies: String? = null,
+        val audioUrl: String? = null,
+        val mediaType: MediaInterceptor.MediaType = MediaInterceptor.MediaType.MP4,
+        val sourceOrigin: String? = null,
+        val canResume: Boolean = false,
+        val bytesDownloaded: Long = 0L
     )
 
     private val _jobs = MutableStateFlow<List<DownloadJob>>(emptyList())
@@ -377,37 +385,7 @@ class StreamDownloadEngine(
         return false
     }
 
-    suspend fun startDownload(
-        url: String,
-        suggestedName: String,
-        type: MediaInterceptor.MediaType,
-        saveToLocker: Boolean,
-        referrerUrl: String? = null,
-        cookies: String? = null,
-        audioUrl: String? = null
-    ): String {
-        val jobId = UUID.randomUUID().toString()
-        val extension = when (type) {
-            MediaInterceptor.MediaType.AUDIO -> ".mp3"
-            MediaInterceptor.MediaType.WEBM -> ".webm"
-            else -> ".mp4"
-        }
-        val baseName = suggestedName.removeSuffix(".mp4").removeSuffix(".ts").removeSuffix(".mp3").removeSuffix(".webm")
-        val filename = "$baseName$extension"
-        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
-
-        val job = DownloadJob(
-            id = jobId,
-            filename = filename,
-            url = url,
-            saveToLocker = saveToLocker,
-            progress = progressFlow
-        )
-
-        _jobs.update { it + job }
-        saveDownloadHistory()
-
-        // Start listening to the job progress flow to update notifications dynamically
+    private fun setupNotificationObserver(jobId: String, filename: String, progressFlow: StateFlow<DownloadProgress>) {
         kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main) {
             var lastPercent = -2
             progressFlow.collect { progress ->
@@ -438,8 +416,46 @@ class StreamDownloadEngine(
                 }
             }
         }
+    }
 
-        // Launch asynchronous downloader in Coroutine Dispatcher context
+    suspend fun startDownload(
+        url: String,
+        suggestedName: String,
+        type: MediaInterceptor.MediaType,
+        saveToLocker: Boolean,
+        referrerUrl: String? = null,
+        cookies: String? = null,
+        audioUrl: String? = null,
+        sourceOrigin: String? = null
+    ): String {
+        val jobId = UUID.randomUUID().toString()
+        val extension = when (type) {
+            MediaInterceptor.MediaType.AUDIO -> ".mp3"
+            MediaInterceptor.MediaType.WEBM -> ".webm"
+            else -> ".mp4"
+        }
+        val baseName = suggestedName.removeSuffix(".mp4").removeSuffix(".ts").removeSuffix(".mp3").removeSuffix(".webm")
+        val filename = "$baseName$extension"
+        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
+
+        val job = DownloadJob(
+            id = jobId,
+            filename = filename,
+            url = url,
+            saveToLocker = saveToLocker,
+            progress = progressFlow,
+            referrerUrl = referrerUrl,
+            cookies = cookies,
+            audioUrl = audioUrl,
+            mediaType = type,
+            sourceOrigin = sourceOrigin
+        )
+
+        _jobs.update { it + job }
+        saveDownloadHistory()
+
+        setupNotificationObserver(jobId, filename, progressFlow)
+
         val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
                 if (!audioUrl.isNullOrEmpty()) {
@@ -467,7 +483,8 @@ class StreamDownloadEngine(
         contentType: String?,
         saveToLocker: Boolean,
         cookies: String? = null,
-        referrerUrl: String? = null
+        referrerUrl: String? = null,
+        sourceOrigin: String? = null
     ): String {
         val jobId = UUID.randomUUID().toString()
         val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
@@ -478,37 +495,17 @@ class StreamDownloadEngine(
             url = url,
             saveToLocker = saveToLocker,
             progress = progressFlow,
-            isGeneric = true
+            isGeneric = true,
+            contentType = contentType,
+            cookies = cookies,
+            referrerUrl = referrerUrl,
+            sourceOrigin = sourceOrigin
         )
 
         _jobs.update { it + job }
         saveDownloadHistory()
 
-        // Notification observer
-        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main) {
-            progressFlow.collect { progress ->
-                when (progress) {
-                    is DownloadProgress.Downloading -> {
-                        val pct = progress.percent
-                        val text = if (pct >= 0) context.getString(R.string.download_progress_completed, pct) else context.getString(R.string.download_progress_downloading)
-                        updateNotification(jobId, filename, text, pct)
-                    }
-                    is DownloadProgress.Muxing -> {
-                        updateNotification(jobId, filename, progress.message, -1, isIndeterminate = true)
-                    }
-                    is DownloadProgress.Complete -> {
-                        showCompleteNotification(jobId, filename, context.getString(R.string.download_saved_successfully))
-                        jobNotificationIds.remove(jobId)
-                        saveDownloadHistory()
-                    }
-                    is DownloadProgress.Error -> {
-                        showErrorNotification(jobId, filename, progress.message)
-                        jobNotificationIds.remove(jobId)
-                        saveDownloadHistory()
-                    }
-                }
-            }
-        }
+        setupNotificationObserver(jobId, filename, progressFlow)
 
         val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -525,6 +522,48 @@ class StreamDownloadEngine(
         return jobId
     }
 
+    fun retryDownload(jobId: String) {
+        val job = _jobs.value.find { it.id == jobId } ?: return
+        if (runningJobs.containsKey(jobId)) return
+
+        val progressFlow = (job.progress as? MutableStateFlow) ?: MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
+        progressFlow.value = DownloadProgress.Downloading(0, job.bytesDownloaded)
+
+        setupNotificationObserver(jobId, job.filename, progressFlow)
+
+        val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                if (job.isGeneric) {
+                    downloadGenericFile(job.id, job.url, job.filename, job.contentType, job.saveToLocker, progressFlow, job.cookies, job.referrerUrl)
+                } else if (!job.audioUrl.isNullOrEmpty()) {
+                    downloadSplitMux(job.id, job.url, job.audioUrl, job.filename, job.saveToLocker, job.referrerUrl, progressFlow, job.cookies)
+                } else if (job.mediaType == MediaInterceptor.MediaType.HLS) {
+                    downloadHLS(job.id, job.url, job.filename, job.saveToLocker, job.referrerUrl, progressFlow, job.cookies)
+                } else {
+                    downloadDirect(job.id, job.url, job.filename, job.saveToLocker, job.referrerUrl, progressFlow, job.cookies)
+                }
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Retry download failed for job $jobId", e)
+                progressFlow.value = DownloadProgress.Error(e.message ?: context.getString(R.string.download_unknown_error))
+            } finally {
+                runningJobs.remove(jobId)
+            }
+        }
+        runningJobs[jobId] = jobCoroutine
+    }
+
+    fun pauseDownload(jobId: String) {
+        val job = _jobs.value.find { it.id == jobId } ?: return
+        runningJobs[jobId]?.cancel()
+        runningJobs.remove(jobId)
+        (job.progress as? MutableStateFlow)?.value = DownloadProgress.Error(context.getString(R.string.download_paused))
+        saveDownloadHistory()
+    }
+
+    fun resumeDownload(jobId: String) {
+        retryDownload(jobId)
+    }
+
     private suspend fun downloadGenericFile(
         jobId: String,
         urlStr: String,
@@ -538,7 +577,8 @@ class StreamDownloadEngine(
         val safeFilename = SecurityPolicy.sanitizeFilename(filename)
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
         val targetFile = File(targetDir, safeFilename)
-        if (targetFile.exists()) targetFile.delete()
+
+        var existingBytes = if (targetFile.exists()) targetFile.length() else 0L
 
         try {
             val headers = mutableMapOf<String, String>()
@@ -549,8 +589,19 @@ class StreamDownloadEngine(
             if (!cookies.isNullOrEmpty()) {
                 headers["Cookie"] = cookies
             }
+            if (existingBytes > 0L) {
+                headers["Range"] = "bytes=$existingBytes-"
+            }
 
-            val connection = openConnectionWithRedirects(urlStr, headers)
+            var connection = openConnectionWithRedirects(urlStr, headers)
+
+            if (connection.responseCode == 416 && existingBytes > 0L) {
+                targetFile.delete()
+                existingBytes = 0L
+                headers.remove("Range")
+                connection.disconnect()
+                connection = openConnectionWithRedirects(urlStr, headers)
+            }
 
             if (connection.responseCode !in 200..299) {
                 progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_server_code_error, connection.responseCode))
@@ -558,19 +609,35 @@ class StreamDownloadEngine(
                 return@withContext
             }
 
-            val totalLength = connection.contentLengthLong
+            val isPartial = connection.responseCode == 206
+            val appendMode = isPartial && existingBytes > 0L
+            val totalLength = if (isPartial) {
+                val cl = connection.contentLengthLong
+                if (cl > 0) existingBytes + cl else -1L
+            } else {
+                connection.contentLengthLong
+            }
+
+            val acceptsRanges = isPartial || (connection.getHeaderField("Accept-Ranges")?.contains("bytes", ignoreCase = true) == true)
+            _jobs.update { list ->
+                list.map { if (it.id == jobId) it.copy(canResume = acceptsRanges) else it }
+            }
+
             val input = BufferedInputStream(connection.inputStream, 65536)
-            val output = FileOutputStream(targetFile)
+            val output = FileOutputStream(targetFile, appendMode)
 
             val buffer = ByteArray(65536)
             var count = 0
-            var totalBytes = 0L
+            var totalBytes = if (appendMode) existingBytes else 0L
 
             while (isActive && input.read(buffer).also { count = it } != -1) {
                 totalBytes += count
                 output.write(buffer, 0, count)
                 val percent = if (totalLength > 0) ((totalBytes * 100) / totalLength).toInt() else -1
                 progressFlow.value = DownloadProgress.Downloading(percent, totalBytes)
+                _jobs.update { list ->
+                    list.map { if (it.id == jobId) it.copy(bytesDownloaded = totalBytes) else it }
+                }
             }
 
             output.flush()
@@ -579,7 +646,6 @@ class StreamDownloadEngine(
             connection.disconnect()
 
             if (!isActive) {
-                targetFile.delete()
                 return@withContext
             }
 
@@ -598,7 +664,8 @@ class StreamDownloadEngine(
                 progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes, savedUri)
             }
         } finally {
-            if (progressFlow.value !is DownloadProgress.Complete && targetFile.exists()) {
+            val job = _jobs.value.find { it.id == jobId }
+            if (progressFlow.value !is DownloadProgress.Complete && targetFile.exists() && (job?.canResume != true)) {
                 targetFile.delete()
             }
         }
@@ -678,7 +745,8 @@ class StreamDownloadEngine(
         val safeFilename = SecurityPolicy.sanitizeFilename(filename)
         val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
         val targetFile = File(targetDir, safeFilename)
-        if (targetFile.exists()) targetFile.delete()
+
+        var existingBytes = if (targetFile.exists()) targetFile.length() else 0L
 
         try {
             val headers = mutableMapOf<String, String>()
@@ -689,8 +757,19 @@ class StreamDownloadEngine(
             if (!cookies.isNullOrEmpty()) {
                 headers["Cookie"] = cookies
             }
+            if (existingBytes > 0L) {
+                headers["Range"] = "bytes=$existingBytes-"
+            }
 
-            val connection = openConnectionWithRedirects(urlStr, headers)
+            var connection = openConnectionWithRedirects(urlStr, headers)
+
+            if (connection.responseCode == 416 && existingBytes > 0L) {
+                targetFile.delete()
+                existingBytes = 0L
+                headers.remove("Range")
+                connection.disconnect()
+                connection = openConnectionWithRedirects(urlStr, headers)
+            }
 
             if (connection.responseCode !in 200..299) {
                 progressFlow.value = DownloadProgress.Error(context.getString(R.string.download_server_code_error, connection.responseCode))
@@ -698,13 +777,26 @@ class StreamDownloadEngine(
                 return@withContext
             }
 
-            val totalLength = connection.contentLengthLong
+            val isPartial = connection.responseCode == 206
+            val appendMode = isPartial && existingBytes > 0L
+            val totalLength = if (isPartial) {
+                val cl = connection.contentLengthLong
+                if (cl > 0) existingBytes + cl else -1L
+            } else {
+                connection.contentLengthLong
+            }
+
+            val acceptsRanges = isPartial || (connection.getHeaderField("Accept-Ranges")?.contains("bytes", ignoreCase = true) == true)
+            _jobs.update { list ->
+                list.map { if (it.id == jobId) it.copy(canResume = acceptsRanges) else it }
+            }
+
             val input = BufferedInputStream(connection.inputStream, 65536)
-            val output = FileOutputStream(targetFile)
+            val output = FileOutputStream(targetFile, appendMode)
 
             val buffer = ByteArray(65536)
             var count = 0
-            var totalBytes = 0L
+            var totalBytes = if (appendMode) existingBytes else 0L
 
             while (isActive && input.read(buffer).also { count = it } != -1) {
                 totalBytes += count
@@ -712,6 +804,9 @@ class StreamDownloadEngine(
                 
                 val percent = if (totalLength > 0) ((totalBytes * 100) / totalLength).toInt() else -1
                 progressFlow.value = DownloadProgress.Downloading(percent, totalBytes)
+                _jobs.update { list ->
+                    list.map { if (it.id == jobId) it.copy(bytesDownloaded = totalBytes) else it }
+                }
             }
 
             output.flush()
@@ -720,7 +815,6 @@ class StreamDownloadEngine(
             connection.disconnect()
 
             if (!isActive) {
-                targetFile.delete()
                 return@withContext
             }
 
@@ -738,7 +832,8 @@ class StreamDownloadEngine(
                 progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes)
             }
         } finally {
-            if (progressFlow.value !is DownloadProgress.Complete && targetFile.exists()) {
+            val job = _jobs.value.find { it.id == jobId }
+            if (progressFlow.value !is DownloadProgress.Complete && targetFile.exists() && (job?.canResume != true)) {
                 targetFile.delete()
             }
         }
@@ -1733,6 +1828,15 @@ class StreamDownloadEngine(
                     put("filename", job.filename)
                     put("url", job.url)
                     put("saveToLocker", job.saveToLocker)
+                    put("isGeneric", job.isGeneric)
+                    put("contentType", job.contentType ?: "")
+                    put("referrerUrl", job.referrerUrl ?: "")
+                    put("cookies", job.cookies ?: "")
+                    put("audioUrl", job.audioUrl ?: "")
+                    put("mediaType", job.mediaType.name)
+                    put("sourceOrigin", job.sourceOrigin ?: "")
+                    put("canResume", job.canResume)
+                    put("bytesDownloaded", job.bytesDownloaded)
                     
                     when (progressVal) {
                         is DownloadProgress.Downloading -> {
@@ -1777,6 +1881,16 @@ class StreamDownloadEngine(
                 val filename = obj.getString("filename")
                 val url = obj.getString("url")
                 val saveToLocker = obj.getBoolean("saveToLocker")
+                val isGeneric = obj.optBoolean("isGeneric", false)
+                val contentType = obj.optString("contentType").ifEmpty { null }
+                val referrerUrl = obj.optString("referrerUrl").ifEmpty { null }
+                val cookies = obj.optString("cookies").ifEmpty { null }
+                val audioUrl = obj.optString("audioUrl").ifEmpty { null }
+                val mediaTypeName = obj.optString("mediaType", MediaInterceptor.MediaType.MP4.name)
+                val mediaType = try { MediaInterceptor.MediaType.valueOf(mediaTypeName) } catch (e: Exception) { MediaInterceptor.MediaType.MP4 }
+                val sourceOrigin = obj.optString("sourceOrigin").ifEmpty { null }
+                val canResume = obj.optBoolean("canResume", false)
+                val bytesDownloaded = obj.optLong("bytesDownloaded", 0L)
                 val status = obj.optString("status", "")
                 
                 val progressFlow = when (status) {
@@ -1802,7 +1916,16 @@ class StreamDownloadEngine(
                         filename = filename,
                         url = url,
                         saveToLocker = saveToLocker,
-                        progress = progressFlow
+                        progress = progressFlow,
+                        isGeneric = isGeneric,
+                        contentType = contentType,
+                        referrerUrl = referrerUrl,
+                        cookies = cookies,
+                        audioUrl = audioUrl,
+                        mediaType = mediaType,
+                        sourceOrigin = sourceOrigin,
+                        canResume = canResume,
+                        bytesDownloaded = bytesDownloaded
                     )
                 )
             }

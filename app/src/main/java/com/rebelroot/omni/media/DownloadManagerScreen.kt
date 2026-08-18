@@ -18,6 +18,8 @@
 
 package com.rebelroot.omni.media
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.rebelroot.omni.R
+import kotlinx.coroutines.launch
 import java.io.File
 
 private enum class DownloadCategory(@StringRes val labelRes: Int) {
@@ -75,10 +78,12 @@ private enum class DownloadCategory(@StringRes val labelRes: Int) {
 fun DownloadManagerScreen(
     engine: StreamDownloadEngine,
     onNavigateBack: () -> Unit,
-    onPlayVideo: (File) -> Unit
+    onPlayVideo: (File) -> Unit,
+    onOpenSourcePage: ((String) -> Unit)? = null
 ) {
     val jobs by engine.jobs.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
@@ -258,7 +263,23 @@ fun DownloadManagerScreen(
                             onDeleteClick = {
                                 deleteJob = job
                                 deleteFromDiskChecked = true
-                            }
+                            },
+                            onRetryClick = {
+                                coroutineScope.launch {
+                                    engine.retryDownload(job.id)
+                                }
+                            },
+                            onResumeClick = {
+                                coroutineScope.launch {
+                                    engine.resumeDownload(job.id)
+                                }
+                            },
+                            onPauseClick = {
+                                coroutineScope.launch {
+                                    engine.pauseDownload(job.id)
+                                }
+                            },
+                            onOpenSourcePage = onOpenSourcePage
                         )
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
@@ -362,7 +383,11 @@ private fun DownloadListItem(
     onOpenFile: (File, Uri?) -> Unit,
     onShareFile: (File, Uri?) -> Unit,
     onRenameClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onRetryClick: () -> Unit,
+    onResumeClick: () -> Unit,
+    onPauseClick: () -> Unit,
+    onOpenSourcePage: ((String) -> Unit)? = null
 ) {
     val progressState by job.progress.collectAsState()
     val context = LocalContext.current
@@ -471,12 +496,40 @@ private fun DownloadListItem(
                         )
                     }
                     is StreamDownloadEngine.DownloadProgress.Error -> {
-                        Text(
-                            text = stringResource(R.string.downloads_failed_prefix, progress.message),
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.downloads_failed_prefix, progress.message),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            TextButton(
+                                onClick = { if (job.canResume) onResumeClick() else onRetryClick() },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.height(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (job.canResume) stringResource(R.string.download_resume) else stringResource(R.string.download_retry),
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -500,6 +553,28 @@ private fun DownloadListItem(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
+                    // Retry / Resume
+                    if (progressState is StreamDownloadEngine.DownloadProgress.Error) {
+                        DropdownMenuItem(
+                            text = { Text(if (job.canResume) stringResource(R.string.download_resume) else stringResource(R.string.download_retry)) },
+                            leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                if (job.canResume) onResumeClick() else onRetryClick()
+                            }
+                        )
+                    }
+                    // Pause
+                    if (progressState is StreamDownloadEngine.DownloadProgress.Downloading) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.download_paused)) },
+                            leadingIcon = { Icon(Icons.Rounded.Pause, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onPauseClick()
+                            }
+                        )
+                    }
                     // Share
                     if (progressState is StreamDownloadEngine.DownloadProgress.Complete && !job.saveToLocker) {
                         DropdownMenuItem(
@@ -512,6 +587,29 @@ private fun DownloadListItem(
                             }
                         )
                     }
+                    // Open source page
+                    if (!job.referrerUrl.isNullOrEmpty() || job.url.isNotBlank()) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.download_open_source_page)) },
+                            leadingIcon = { Icon(Icons.Rounded.OpenInBrowser, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                val target = job.referrerUrl?.takeIf { it.isNotBlank() } ?: job.url
+                                onOpenSourcePage?.invoke(target)
+                            }
+                        )
+                    }
+                    // Copy URL
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.download_copy_url)) },
+                        leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
+                        onClick = {
+                            showMenu = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Download URL", job.url))
+                            Toast.makeText(context, "Download link copied", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                     // Rename
                     if (progressState is StreamDownloadEngine.DownloadProgress.Complete) {
                         DropdownMenuItem(

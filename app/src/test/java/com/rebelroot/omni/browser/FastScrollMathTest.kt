@@ -262,4 +262,106 @@ class FastScrollMathTest {
         assertEquals(4000f, updatedTarget, eps)
         assertTrue(updatedTarget <= updatedMaxScroll)
     }
+
+    @Test
+    fun testComputeGeometry_unifiedCoordinatesAndHitbox() {
+        val geom = FastScrollMath.computeGeometry(
+            viewportWidth = 1080f,
+            viewportHeight = 2400f,
+            topTrackOffset = 18f,
+            bottomTrackOffset = 18f,
+            pageScrollHeight = 10000f,
+            pageViewportHeight = 2000f,
+            scrollRange = 0,
+            scrollExtent = 0,
+            currentScrollOffset = 4000f, // 50% scrolled (4000 / 8000)
+            isDragging = false,
+            dragFraction = 0f,
+            minThumbPx = 36f,
+            maxThumbPx = 90f,
+            hitboxWidthPx = 144f, // ~48dp at 3x density
+            hitboxTolerancePx = 60f, // ~20dp at 3x density
+            minHitboxHeightPx = 192f // ~64dp at 3x density
+        )
+
+        assertTrue(geom.isScrollable)
+        assertEquals(8000f, geom.maxDocumentScroll, eps)
+        assertEquals(0.5f, geom.scrollFraction, eps)
+
+        val expectedTrackH = 2400f - 18f - 18f // 2364f
+        val expectedThumbH = (expectedTrackH * 0.20f).coerceIn(36f, 90f) // 90f
+        assertEquals(expectedThumbH, geom.thumbHeight, eps)
+
+        val expectedMaxTravel = expectedTrackH - expectedThumbH // 2274f
+        val expectedThumbY = 18f + 0.5f * expectedMaxTravel // 1155f
+        assertEquals(expectedThumbY, geom.thumbY, eps)
+
+        // Hitbox must surround thumbY with tolerance 60f and min height 192f
+        val thumbCenter = expectedThumbY + expectedThumbH / 2f
+        val expectedHitboxTop = minOf(expectedThumbY - 60f, thumbCenter - 192f / 2f).coerceAtLeast(18f)
+        val expectedHitboxBottom = maxOf(expectedThumbY + expectedThumbH + 60f, thumbCenter + 192f / 2f).coerceAtMost(18f + expectedTrackH)
+        assertEquals(expectedHitboxTop, geom.hitboxTop, eps)
+        assertEquals(expectedHitboxBottom, geom.hitboxBottom, eps)
+        assertEquals(1080f - 144f, geom.hitboxLeft, eps)
+        assertEquals(1080f, geom.hitboxRight, eps)
+    }
+
+    @Test
+    fun testIsTouchInsideHitbox_rightEdgeButtonsPassThrough() {
+        val geom = FastScrollMath.computeGeometry(
+            viewportWidth = 1080f,
+            viewportHeight = 2400f,
+            topTrackOffset = 18f,
+            bottomTrackOffset = 18f,
+            pageScrollHeight = 10000f,
+            pageViewportHeight = 2000f,
+            scrollRange = 0,
+            scrollExtent = 0,
+            currentScrollOffset = 0f, // Top of page (fraction = 0)
+            isDragging = false,
+            dragFraction = 0f,
+            minThumbPx = 36f,
+            maxThumbPx = 90f,
+            hitboxWidthPx = 144f,
+            hitboxTolerancePx = 60f,
+            minHitboxHeightPx = 192f
+        )
+
+        // Thumb is at top: thumbY ~ 18f, hitboxTop ~ 18f, hitboxBottom ~ 210f
+        // 1. Touch inside pill hitbox (e.g. top-right corner) -> true
+        assertTrue(FastScrollMath.isTouchInsideHitbox(touchX = 1000f, touchY = 50f, geometry = geom))
+        assertTrue(FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 100f, geometry = geom))
+
+        // 2. Touch on a floating button in the middle of right edge (e.g. y = 1200f) -> FALSE!
+        // This ensures the button receives normal touch/click!
+        org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 1200f, geometry = geom))
+
+        // 3. Touch on a video control or bottom-right button (e.g. y = 2000f) -> FALSE!
+        org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 1050f, touchY = 2000f, geometry = geom))
+
+        // 4. Touch in middle of screen (e.g. x = 500f, y = 50f) -> FALSE!
+        org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 500f, touchY = 50f, geometry = geom))
+    }
+
+    @Test
+    fun testNonScrollablePage_hitboxDisabled() {
+        val geom = FastScrollMath.computeGeometry(
+            viewportWidth = 1080f,
+            viewportHeight = 2400f,
+            topTrackOffset = 18f,
+            bottomTrackOffset = 18f,
+            pageScrollHeight = 1000f,
+            pageViewportHeight = 2000f, // Content fits inside viewport
+            scrollRange = 1000,
+            scrollExtent = 2000,
+            currentScrollOffset = 0f,
+            isDragging = false,
+            dragFraction = 0f
+        )
+
+        org.junit.Assert.assertFalse(geom.isScrollable)
+        // Hitbox must NEVER intercept when page is non-scrollable
+        org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 50f, geometry = geom))
+        org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 1200f, geometry = geom))
+    }
 }

@@ -1770,4 +1770,24 @@
     <string name="lottie_searching">Searching…</string>
     <string name="lottie_privacy_secure">Secure connection</string>
     <string name="lottie_privacy_insecure">Connection not secure</string>
+    <!-- Download confirmation and management strings -->
+    <string name="download_confirmation_title">Download file?</string>
+    <string name="download_confirmation_desc">The extension \"%1$s\" wants to download a file to your device.</string>
+    <string name="download_file_label">File</string>
+    <string name="download_type_label">Type</string>
+    <string name="download_source_label">Source</string>
+    <string name="download_btn">Download</string>
+    <string name="download_retry">Retry</string>
+    <string name="download_resume">Resume</string>
+    <string name="download_paused">Paused</string>
+    <string name="download_open_source_page">Open source page</string>
+    <string name="download_copy_url">Copy download link</string>
+    <string name="autofill_provider_title">Autofill provider</string>
+    <string name="autofill_provider_system">Android system (Bitwarden, etc.)</string>
+    <string name="autofill_provider_omni">Omni password vault</string>
+    <string name="autofill_provider_both">Both</string>
+    <string name="extension_download_policy_title">Extension downloads</string>
+    <string name="extension_download_policy_ask">Ask every time</string>
+    <string name="extension_download_policy_allow">Always allow trusted extensions</string>
+    <string name="extension_download_policy_never">Never allow</string>
 </resources>

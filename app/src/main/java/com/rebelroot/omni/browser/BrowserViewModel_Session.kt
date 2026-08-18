@@ -506,9 +506,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             session: GeckoSession,
             prompt: GeckoSession.PromptDelegate.AutocompleteRequest<org.mozilla.geckoview.Autocomplete.LoginSelectOption>
         ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
-            // Dismiss Gecko's native auto-fill prompt so it doesn't automatically overwrite 
-            // input fields when the user types or edits text (e.g. backspacing).
-            // Password autofill is handled explicitly via our Compose UI.
+            Log.d(TAG, "🔑 [AutofillDiagnostics] onLoginSelect received with ${prompt.options.size} option(s), handled via native/Compose autofill")
             return GeckoResult.fromValue(prompt.dismiss())
         }
 
@@ -528,6 +526,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             } catch (e: Exception) {
                 try { java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: "" } catch (ex: Exception) { "" }
             }
+            Log.d(TAG, "🔑 [AutofillDiagnostics] onLoginSave triggered for origin host: $host")
             if (neverSavePasswordDomains.contains(host)) {
                 Log.i(TAG, "Suppression rule active for $host — ignoring password save prompt")
                 return GeckoResult.fromValue(prompt.dismiss())

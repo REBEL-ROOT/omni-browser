@@ -114,13 +114,11 @@ fun BrowserViewModel.checkAutofillForFocus(url: String) {
         val matches = savedPasswords.filter {
             it.domain == domain || domain.contains(it.domain) || it.domain.contains(domain)
         }
-        if (matches.isNotEmpty()) {
-            autofillMatches = matches
-            // Only open the sheet automatically; don't reset autofillWasPerformed
-            // so the "Switch account" chip can still be tapped again
+        autofillMatches = matches
+        if (matches.isNotEmpty() && autofillProviderMode == BrowserViewModel.AutofillProviderMode.OMNI_VAULT) {
+            // Only pop the sheet automatically in Omni-only mode so Bitwarden/Gboard can operate uninterrupted
             showAutofillBottomSheet = true
         } else {
-            autofillMatches = emptyList()
             showAutofillBottomSheet = false
         }
     } catch (e: Exception) {

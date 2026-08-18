@@ -244,6 +244,105 @@ fun SystemPermissionRationaleDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WebExtensionDownloadConfirmationDialog(
+    prompt: BrowserViewModel.PendingWebExtensionDownload,
+    onDismiss: () -> Unit
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val surfaceColor = MaterialTheme.colorScheme.surface
+
+    AlertDialog(
+        onDismissRequest = {
+            prompt.onCancel()
+            onDismiss()
+        },
+        containerColor = surfaceColor,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Download, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
+            }
+        },
+        title = {
+            Text(
+                text = stringResource(R.string.download_confirmation_title),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.download_confirmation_desc, prompt.extensionName ?: prompt.extensionId),
+                    fontSize = 13.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(stringResource(R.string.download_file_label), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(prompt.filename, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(start = 8.dp))
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(stringResource(R.string.download_type_label), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(prompt.mimeType, fontSize = 12.sp, color = onSurface)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(stringResource(R.string.download_source_label), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val host = try { android.net.Uri.parse(prompt.sourceUrl).host ?: prompt.extensionId } catch (e: Exception) { prompt.extensionId }
+                            Text(host, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = onSurface, modifier = Modifier.weight(1f, fill = false).padding(start = 8.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    prompt.onConfirm()
+                    onDismiss()
+                },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent)
+            ) {
+                Text(stringResource(R.string.download_btn), fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    prompt.onCancel()
+                    onDismiss()
+                }
+            ) {
+                Text(stringResource(R.string.cancel_text))
+            }
+        }
+    )
+}
+
 @Composable
 fun PermissionPromptDialog(
     prompt: com.rebelroot.omni.browser.ContentPermissionPrompt,

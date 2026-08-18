@@ -2,6 +2,25 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.3.0] - 2026-08-18
+
+### Added
+- **Android Autofill Framework & Third-Party Password Manager Integration**: Enabled standard Android Autofill Framework on GeckoView (`setAutofillEnabled(true)` and `IMPORTANT_FOR_AUTOFILL_YES`) alongside form autofill prefs (`signon.autofillForms`, `dom.forms.autocomplete.formautofill`, `extensions.formautofill.available`). Full compatibility with Bitwarden, 1Password, KeePass, Proton Pass, and Google Autofill.
+- **Autofill Provider Preference Selector**: Added configuration option in *Settings > Privacy & Security* to choose between Android System Autofill, Omni Password Vault, or Both without input focus theft.
+- **WebExtension `browser.downloads` Native Bridge**: Connected GeckoView 145's `WebExtension.DownloadDelegate` into Omni's `StreamDownloadEngine`, enabling WebExtensions (like Media Grabber) to initiate and manage native downloads.
+- **Extension Download Security & Policy**: Added download confirmation prompts, filename sanitization against path traversal, safe URI scheme validation (`http`, `https`, `blob`, `data`), and configurable extension download policies (*Ask every time*, *Always allow trusted extensions*, *Never allow*).
+- **HTTP Range Resumable Downloads**: Upgraded `StreamDownloadEngine` with `Range: bytes=X-` partial content resumption, automatic fallback on HTTP 200, Range Not Satisfiable (HTTP 416) handling, and download persistence across browser restarts.
+- **Enhanced Download Manager UX**: Added inline Retry/Resume buttons on interrupted downloads and 3-dot dropdown menu actions (Retry/Resume, Pause, Open source page, Copy download link, Share, Rename, Delete).
+- **Quetta-Style Native Video Integration & Handoff**: Seamless two-way state and position restoration when switching between web players and native ExoPlayer, with 3.5s auto-hide controls, tap-to-reveal, and gesture pass-through.
+- **Fast Scroll Pill Geometry & Touch Controls**: Unified Safari-style fast scroll capsule indicator with smooth geometry calculation, draggable native thumb, and edge touch filtering.
+- **100% Multilingual Localization Parity**: Synchronized and translated all new strings across 11 supported locales (`en`, `ar`, `de`, `es`, `fr`, `hi`, `ja`, `pl`, `pt`, `ru`, `zh`).
+
+### Fixed
+- **Google & YouTube OAuth Authentication**: Resolved popup and redirect handling for Google, YouTube, Apple, and Microsoft identity providers (#85).
+- **YouTube Web Fullscreen**: Fixed video fullscreen transitions and fallback injection in YouTube web player.
+
+---
+
 ## [1.2.8.3] - 2026-08-10
 
 ### Added

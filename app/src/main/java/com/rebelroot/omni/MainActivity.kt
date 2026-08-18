@@ -429,6 +429,10 @@ class MainActivity : FragmentActivity() {
                                 onPlayVideo = { file ->
                                     val encodedPath = android.util.Base64.encodeToString(file.absolutePath.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
                                     navController.navigate("video_player/$encodedPath")
+                                },
+                                onOpenSourcePage = { url ->
+                                    browserViewModel.loadUrl(url)
+                                    navController.popBackStack()
                                 }
                             )
                         }

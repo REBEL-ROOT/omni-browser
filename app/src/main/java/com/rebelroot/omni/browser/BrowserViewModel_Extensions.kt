@@ -24,6 +24,9 @@ import com.rebelroot.omni.media.handoff.WebVideoSession
 import com.rebelroot.omni.media.handoff.WebVideoSessionState
 import com.rebelroot.omni.media.handoff.WebVideoSourceResolver
 
+import android.content.Intent
+import com.rebelroot.omni.media.StreamDownloadEngine
+
 internal val extensionTabIdToOmniTabId = java.util.concurrent.ConcurrentHashMap<String, String>()
 internal val omniTabIdToExtensionTabId = java.util.concurrent.ConcurrentHashMap<String, String>()
 
@@ -257,7 +260,7 @@ internal fun BrowserViewModel.installGrabberExtension(runtime: GeckoRuntime) {
                 } else {
                     runtime.webExtensionController.disable(it, org.mozilla.geckoview.WebExtensionController.EnableSource.APP)
                 }
-                setupNativeAppMessageDelegate(it)
+                setupWebExtensionDelegates(it)
             }
             Log.i(TAG, "Aggressive Media Grabber active.")
         },
@@ -1009,5 +1012,258 @@ internal fun BrowserViewModel.sendJsMessage(type: String, payload: String, targe
         Log.d(TAG, "📤 Sent JS message: type=$type to tabId=${tab.id}")
     } catch (e: Exception) {
         Log.e(TAG, "Failed to send JS message: $type to tabId=${tab.id}", e)
+    }
+}
+
+/**
+ * Sets up all required delegates for a WebExtension (native messaging and downloads).
+ */
+internal fun BrowserViewModel.setupWebExtensionDelegates(extension: WebExtension) {
+    setupNativeAppMessageDelegate(extension)
+    setupWebExtensionDownloadDelegate(extension)
+}
+
+/**
+ * Registers GeckoView's DownloadDelegate on the WebExtension to bridge `browser.downloads.*`
+ * into Omni's native StreamDownloadEngine.
+ */
+internal fun BrowserViewModel.setupWebExtensionDownloadDelegate(extension: WebExtension) {
+    extension.setDownloadDelegate(object : WebExtension.DownloadDelegate {
+        override fun onDownload(
+            ext: WebExtension,
+            request: WebExtension.DownloadRequest
+        ): GeckoResult<WebExtension.DownloadInitData>? {
+            return handleWebExtensionDownload(ext, request)
+        }
+    })
+}
+
+/**
+ * Handles WebExtension download requests from standard `browser.downloads.download()`.
+ */
+internal fun BrowserViewModel.handleWebExtensionDownload(
+    ext: WebExtension,
+    request: WebExtension.DownloadRequest
+): GeckoResult<WebExtension.DownloadInitData> {
+    val result = GeckoResult<WebExtension.DownloadInitData>()
+
+    // 1. Permission check
+    val meta = ext.metaData
+    val hasDownloadPerm = ext.isBuiltIn ||
+            meta?.requiredPermissions?.contains("downloads") == true ||
+            meta?.optionalPermissions?.contains("downloads") == true ||
+            meta?.grantedOptionalPermissions?.contains("downloads") == true ||
+            ext.id == BrowserViewModel.GRABBER_ID
+
+    if (!hasDownloadPerm) {
+        Log.w(TAG, "🔒 [WebExtensionDownload] Extension [${ext.id}] attempted download without 'downloads' permission")
+        result.completeExceptionally(SecurityException("Extension lacks 'downloads' permission in manifest"))
+        return result
+    }
+
+    // 2. Validate URL and scheme
+    val rawUri = request.request.uri
+    val parsedUri = try { android.net.Uri.parse(rawUri) } catch (e: Exception) { null }
+    val scheme = parsedUri?.scheme?.lowercase()
+    if (parsedUri == null || scheme !in listOf("http", "https", "blob", "data")) {
+        Log.w(TAG, "🛡️ [WebExtensionDownload] Rejected dangerous/unsupported URI scheme: $rawUri")
+        result.completeExceptionally(IllegalArgumentException("Unsupported download scheme: $scheme"))
+        return result
+    }
+
+    // 3. Sanitize filename (prevent path traversal, dangerous chars)
+    val rawFilename = request.filename?.takeIf { it.isNotBlank() }
+        ?: parsedUri.lastPathSegment?.takeIf { it.isNotBlank() }
+        ?: "download_${System.currentTimeMillis()}"
+    val safeFilename = SecurityPolicy.sanitizeFilename(rawFilename)
+    val extName = safeFilename.substringAfterLast('.', "").lowercase()
+    val mimeType = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extName) ?: "application/octet-stream"
+
+    // 4. Create live WebExtension.Download object via Gecko runtime
+    val downloadId = nextWebExtensionDownloadId.incrementAndGet()
+    val context = appContext
+    val runtime = if (context != null) getGeckoRuntime(context) else null
+    val geckoDownload = runtime?.webExtensionController?.createDownload(downloadId)
+    if (geckoDownload == null) {
+        Log.e(TAG, "❌ [WebExtensionDownload] Failed to create Gecko WebExtension.Download instance")
+        result.completeExceptionally(IllegalStateException("Failed to create Gecko WebExtension.Download"))
+        return result
+    }
+
+    val extDisplayName = meta?.name ?: ext.id
+
+    val initialInfo = object : WebExtension.Download.Info {
+        override fun filename() = safeFilename
+        override fun state() = WebExtension.Download.STATE_IN_PROGRESS
+        override fun bytesReceived() = 0L
+        override fun totalBytes() = -1L
+        override fun mime() = mimeType
+        override fun paused() = false
+        override fun canResume() = true
+    }
+    val initData = WebExtension.DownloadInitData(geckoDownload, initialInfo)
+
+    // Helper to start the native download engine and attach delegates
+    fun executeDownload() {
+        val headers = request.request.headers
+        val cookies = headers?.get("Cookie") ?: headers?.get("cookie")
+        val referrer = request.request.referrer ?: headers?.get("Referer") ?: headers?.get("referer")
+
+        Log.i(TAG, "📥 [WebExtensionDownload] Starting download: id=$downloadId, file=$safeFilename, ext=$extDisplayName")
+
+        val jobId = streamDownloadEngine.startGenericFileDownload(
+            url = rawUri,
+            filename = safeFilename,
+            contentType = mimeType,
+            saveToLocker = false,
+            cookies = cookies,
+            referrerUrl = referrer,
+            sourceOrigin = extDisplayName
+        )
+
+        // Attach WebExtension.Download.Delegate via reflection/proxy
+        attachDownloadDelegate(geckoDownload, jobId, safeFilename, mimeType)
+
+        // Observe progress from StreamDownloadEngine and propagate to geckoDownload.update(info)
+        viewModelScope.launch(Dispatchers.Main) {
+            val job = streamDownloadEngine.jobs.value.find { it.id == jobId }
+            job?.progress?.collect { progress ->
+                when (progress) {
+                    is StreamDownloadEngine.DownloadProgress.Downloading -> {
+                        geckoDownload.update(object : WebExtension.Download.Info {
+                            override fun filename() = safeFilename
+                            override fun state() = WebExtension.Download.STATE_IN_PROGRESS
+                            override fun bytesReceived() = progress.bytesDownloaded
+                            override fun totalBytes() = job.bytesDownloaded
+                            override fun mime() = mimeType
+                            override fun paused() = false
+                            override fun canResume() = job.canResume
+                        })
+                    }
+                    is StreamDownloadEngine.DownloadProgress.Complete -> {
+                        geckoDownload.update(object : WebExtension.Download.Info {
+                            override fun filename() = safeFilename
+                            override fun state() = WebExtension.Download.STATE_COMPLETE
+                            override fun bytesReceived() = progress.sizeBytes
+                            override fun totalBytes() = progress.sizeBytes
+                            override fun mime() = mimeType
+                            override fun fileExists() = true
+                        })
+                    }
+                    is StreamDownloadEngine.DownloadProgress.Error -> {
+                        geckoDownload.update(object : WebExtension.Download.Info {
+                            override fun filename() = safeFilename
+                            override fun state() = WebExtension.Download.STATE_INTERRUPTED
+                            override fun error(): Int? = null
+                        })
+                    }
+                    else -> {}
+                }
+            }
+        }
+
+        result.complete(initData)
+    }
+
+    // 5. Policy & Confirmation Check
+    when {
+        extensionDownloadPolicy == BrowserViewModel.ExtensionDownloadPolicy.NEVER_ALLOW -> {
+            Log.i(TAG, "🛡️ [WebExtensionDownload] Blocked by policy (NEVER_ALLOW)")
+            result.completeExceptionally(SecurityException("Extension downloads are disabled in settings"))
+        }
+        extensionDownloadPolicy == BrowserViewModel.ExtensionDownloadPolicy.ALLOW_TRUSTED || ext.isBuiltIn -> {
+            executeDownload()
+        }
+        else -> {
+            // Prompt user for confirmation before writing to storage
+            viewModelScope.launch(Dispatchers.Main) {
+                pendingWebExtensionDownload = BrowserViewModel.PendingWebExtensionDownload(
+                    downloadId = downloadId,
+                    extensionId = ext.id,
+                    extensionName = extDisplayName,
+                    filename = safeFilename,
+                    sourceUrl = rawUri,
+                    mimeType = mimeType,
+                    fileSize = -1L,
+                    onConfirm = {
+                        pendingWebExtensionDownload = null
+                        executeDownload()
+                    },
+                    onCancel = {
+                        pendingWebExtensionDownload = null
+                        result.completeExceptionally(SecurityException("Download canceled by user"))
+                    }
+                )
+            }
+        }
+    }
+
+    return result
+}
+
+private fun BrowserViewModel.attachDownloadDelegate(
+    geckoDownload: WebExtension.Download,
+    jobId: String,
+    safeFilename: String,
+    mimeType: String
+) {
+    try {
+        val delegateCls = Class.forName("org.mozilla.geckoview.WebExtension\$Download\$Delegate")
+        var proxyObj: Any? = null
+        val handler = java.lang.reflect.InvocationHandler { _, method, args ->
+            when (method.name) {
+                "onCancel" -> {
+                    Log.d(TAG, "⏹️ [WebExtensionDownload] onCancel for jobId=$jobId")
+                    streamDownloadEngine.cancelDownload(jobId)
+                    GeckoResult.fromValue(null)
+                }
+                "onPause" -> {
+                    Log.d(TAG, "⏸️ [WebExtensionDownload] onPause for jobId=$jobId")
+                    streamDownloadEngine.pauseDownload(jobId)
+                    GeckoResult.fromValue(null)
+                }
+                "onResume" -> {
+                    Log.d(TAG, "▶️ [WebExtensionDownload] onResume for jobId=$jobId")
+                    streamDownloadEngine.resumeDownload(jobId)
+                    GeckoResult.fromValue(null)
+                }
+                "onOpen" -> {
+                    val job = streamDownloadEngine.jobs.value.find { it.id == jobId }
+                    val progress = job?.progress?.value
+                    if (progress is StreamDownloadEngine.DownloadProgress.Complete) {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(progress.openUri ?: android.net.Uri.fromFile(progress.file), mimeType)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        try {
+                            appContext?.startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to open downloaded file", e)
+                        }
+                    }
+                    GeckoResult.fromValue(null)
+                }
+                "onErase", "onRemoveFile" -> {
+                    streamDownloadEngine.deleteDownload(jobId, true)
+                    GeckoResult.fromValue(null)
+                }
+                "hashCode" -> jobId.hashCode()
+                "equals" -> args?.getOrNull(0) === proxyObj
+                "toString" -> "WebExtensionDownloadDelegate(jobId=$jobId)"
+                else -> null
+            }
+        }
+        val proxy = java.lang.reflect.Proxy.newProxyInstance(
+            delegateCls.classLoader,
+            arrayOf(delegateCls),
+            handler
+        )
+        proxyObj = proxy
+
+        val setDelegateMethod = geckoDownload.javaClass.getDeclaredMethod("setDelegate", delegateCls)
+        setDelegateMethod.isAccessible = true
+        setDelegateMethod.invoke(geckoDownload, proxy)
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not attach WebExtension.Download.Delegate via reflection", e)
     }
 }
