@@ -2,7 +2,7 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
-## [1.3.0] - 2026-08-18
+## [1.2.9.2] - 2026-08-18
 
 ### Added
 - **Android Autofill Framework & Third-Party Password Manager Integration**: Enabled standard Android Autofill Framework on GeckoView (`setAutofillEnabled(true)` and `IMPORTANT_FOR_AUTOFILL_YES`) alongside form autofill prefs (`signon.autofillForms`, `dom.forms.autocomplete.formautofill`, `extensions.formautofill.available`). Full compatibility with Bitwarden, 1Password, KeePass, Proton Pass, and Google Autofill.
