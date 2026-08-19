@@ -2974,20 +2974,42 @@ fun TorrentDownloaderDialog(
         confirmButton = {
             val urlToDownload = magnetInput.trim()
             val isMagnet = urlToDownload.startsWith("magnet:", ignoreCase = true)
-            Button(
-                onClick = {
-                    if (urlToDownload.isNotBlank()) {
-                        if (isMagnet) {
-                            val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlToDownload)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            val hasExternalClient = try {
-                                context.packageManager.queryIntentActivities(magnetIntent, 0).isNotEmpty()
-                            } catch (_: Exception) { false }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlToDownload)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        try {
+                            val chooser = Intent.createChooser(magnetIntent, "Open with Torrent App")
+                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(chooser)
+                            onDismiss()
+                        } catch (_: Exception) {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Magnet Link", urlToDownload))
+                            Toast.makeText(context, "Magnet link copied to clipboard", Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        }
+                    },
+                    enabled = urlToDownload.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("External App")
+                }
 
-                            if (hasExternalClient) {
+                Button(
+                    onClick = {
+                        if (urlToDownload.isNotBlank()) {
+                            val started = com.rebelroot.omni.torrent.TorrentEngine.startDownload(urlToDownload, context)
+                            if (started) {
+                                Toast.makeText(context, "Downloading: ${parsedInfo.first}", Toast.LENGTH_LONG).show()
+                            } else {
+                                val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlToDownload)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
                                 try {
-                                    val chooser = Intent.createChooser(magnetIntent, "Open Magnet Link")
+                                    val chooser = Intent.createChooser(magnetIntent, "Open with Torrent App")
                                     chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     context.startActivity(chooser)
                                 } catch (_: Exception) {
@@ -2995,22 +3017,15 @@ fun TorrentDownloaderDialog(
                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Magnet Link", urlToDownload))
                                     Toast.makeText(context, "Magnet link copied to clipboard", Toast.LENGTH_SHORT).show()
                                 }
-                            } else {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Magnet Link", urlToDownload))
-                                Toast.makeText(context, "Magnet link copied to clipboard", Toast.LENGTH_SHORT).show()
                             }
-                        } else {
-                            viewModel.startGenericDownload(context, urlToDownload, parsedInfo.first, false)
-                            Toast.makeText(context, "Added download to queue", Toast.LENGTH_SHORT).show()
+                            onDismiss()
                         }
-                        onDismiss()
-                    }
-                },
-                enabled = urlToDownload.isNotBlank(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(if (isMagnet) "Open Magnet Link" else "Start Download")
+                    },
+                    enabled = urlToDownload.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Download in Omni")
+                }
             }
         },
         dismissButton = {

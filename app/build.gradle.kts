@@ -214,6 +214,13 @@ dependencies {
     "armImplementation"("org.mozilla.geckoview:geckoview-armeabi-v7a:$geckoviewVersion")
     "aarch64Implementation"("org.mozilla.geckoview:geckoview-arm64-v8a:$geckoviewVersion")
 
+    // === In-app BitTorrent engine (jlibtorrent) for magnet/torrent downloading ===
+    implementation("com.frostwire:jlibtorrent:1.2.0.18")
+    "universalImplementation"("com.frostwire:jlibtorrent-android-arm:1.2.0.18")
+    "universalImplementation"("com.frostwire:jlibtorrent-android-arm64:1.2.0.18")
+    "armImplementation"("com.frostwire:jlibtorrent-android-arm:1.2.0.18")
+    "aarch64Implementation"("com.frostwire:jlibtorrent-android-arm64:1.2.0.18")
+
     // === Jetpack Compose ===
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation("androidx.compose.ui:ui")
