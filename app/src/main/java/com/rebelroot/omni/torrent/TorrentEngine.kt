@@ -14,6 +14,7 @@ import com.frostwire.jlibtorrent.alerts.AlertType
 import com.frostwire.jlibtorrent.alerts.StateUpdateAlert
 import com.frostwire.jlibtorrent.alerts.TorrentErrorAlert
 import com.frostwire.jlibtorrent.alerts.TorrentFinishedAlert
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +39,7 @@ object TorrentEngine {
 
     private var sessionManager: SessionManager? = null
     private val started = AtomicBoolean(false)
+    private var updaterJob: kotlinx.coroutines.Job? = null
 
     /** Whether the native libtorrent session could be initialised. */
     var isAvailable = false
@@ -52,7 +54,10 @@ object TorrentEngine {
 
     @Synchronized
     fun ensureStarted(context: Context): Boolean {
-        if (started.get() && sessionManager?.isRunning() == true) return isAvailable
+        if (started.get() && sessionManager?.isRunning() == true) {
+            startUpdater()
+            return isAvailable
+        }
         return try {
             val settingsDir = File(context.filesDir, "torrent_session").also { it.mkdirs() }
             val sp = SettingsPack()
@@ -67,6 +72,7 @@ object TorrentEngine {
             sessionManager = sm
             isAvailable = true
             started.set(true)
+            startUpdater()
             Log.i(TAG, "libtorrent session started")
             true
         } catch (t: Throwable) {
@@ -74,6 +80,19 @@ object TorrentEngine {
             started.set(false)
             Log.e(TAG, "Failed to start libtorrent session", t)
             false
+        }
+    }
+
+    private fun startUpdater() {
+        if (updaterJob == null || updaterJob?.isActive != true) {
+            updaterJob = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                while (isActive) {
+                    kotlinx.coroutines.delay(1000)
+                    try {
+                        sessionManager?.postTorrentUpdates()
+                    } catch (_: Throwable) {}
+                }
+            }
         }
     }
 
@@ -95,6 +114,21 @@ object TorrentEngine {
 
         if (hashMatch != null) {
             names[hashMatch] = extractedName
+            // Publish initial progress so UI gets instant feedback
+            val initialItem = TorrentProgress(
+                infoHash = hashMatch,
+                name = extractedName,
+                progress = 0f,
+                downloadRate = 0,
+                uploadRate = 0,
+                numPeers = 0,
+                totalDone = 0L,
+                total = 0L,
+                state = "Downloading metadata",
+                hasMetadata = false,
+                isFinished = false
+            )
+            _activeTorrents.value = listOf(initialItem) + _activeTorrents.value.filter { it.infoHash != hashMatch }
         }
 
         return try {
@@ -155,7 +189,11 @@ object TorrentEngine {
         override fun types(): IntArray = intArrayOf(
             AlertType.STATE_UPDATE.swig(),
             AlertType.TORRENT_FINISHED.swig(),
-            AlertType.TORRENT_ERROR.swig()
+            AlertType.TORRENT_ERROR.swig(),
+            AlertType.METADATA_RECEIVED.swig(),
+            AlertType.ADD_TORRENT.swig(),
+            AlertType.PIECE_FINISHED.swig(),
+            AlertType.BLOCK_FINISHED.swig()
         )
 
         override fun alert(a: Alert<*>?) {
@@ -184,6 +222,19 @@ object TorrentEngine {
                             errors[hash] = runCatching { a.error()?.message() }.getOrNull() ?: "Torrent error"
                         }
                         publish()
+                    }
+                    else -> {
+                        // For metadata received or pieces finished, refresh status if handle available
+                        val handle = runCatching { 
+                            (a as? com.frostwire.jlibtorrent.alerts.TorrentAlert<*>)?.handle() 
+                        }.getOrNull()
+                        val hash = runCatching { handle?.infoHash()?.toHex()?.lowercase() }.getOrNull()
+                        if (hash != null && handle != null) {
+                            runCatching { handle.status() }?.getOrNull()?.let {
+                                statuses[hash] = it
+                                publish()
+                            }
+                        }
                     }
                 }
             } catch (t: Throwable) {

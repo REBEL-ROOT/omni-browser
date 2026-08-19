@@ -1032,6 +1032,14 @@ class BrowserViewModel : ViewModel() {
         )
     }
 
+    fun startTorrentDownload(url: String, filename: String, saveToLocker: Boolean = false) {
+        streamDownloadEngine.startTorrentDownload(
+            magnetOrTorrentUrl = url,
+            suggestedName = filename,
+            saveToLocker = saveToLocker
+        )
+    }
+
     /**
      * Hands a download URL to an external download manager (ADM, 1DM, …) via the system
      * chooser or directly to a target package.

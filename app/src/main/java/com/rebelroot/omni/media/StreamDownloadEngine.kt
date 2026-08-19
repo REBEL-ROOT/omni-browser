@@ -522,6 +522,73 @@ class StreamDownloadEngine(
         return jobId
     }
 
+    fun startTorrentDownload(
+        magnetOrTorrentUrl: String,
+        suggestedName: String,
+        saveToLocker: Boolean = false
+    ): String {
+        val jobId = UUID.randomUUID().toString()
+        val safeFilename = SecurityPolicy.sanitizeFilename(suggestedName).ifBlank { "Torrent Download" }
+        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
+
+        val job = DownloadJob(
+            id = jobId,
+            filename = safeFilename,
+            url = magnetOrTorrentUrl,
+            saveToLocker = saveToLocker,
+            progress = progressFlow,
+            isGeneric = false
+        )
+
+        _jobs.update { it + job }
+        saveDownloadHistory()
+
+        setupNotificationObserver(jobId, safeFilename, progressFlow)
+
+        val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val started = com.rebelroot.omni.torrent.TorrentEngine.startDownload(magnetOrTorrentUrl, context)
+                if (!started) {
+                    progressFlow.value = DownloadProgress.Error("Failed to start torrent engine")
+                    return@launch
+                }
+
+                val hashMatch = if (magnetOrTorrentUrl.startsWith("magnet:", ignoreCase = true)) {
+                    Regex("""xt=urn:btih:([^&]+)""").find(magnetOrTorrentUrl)?.groupValues?.get(1)?.lowercase()
+                } else null
+
+                com.rebelroot.omni.torrent.TorrentEngine.activeTorrents.collect { list ->
+                    val torrent = if (hashMatch != null) {
+                        list.find { it.infoHash.equals(hashMatch, ignoreCase = true) }
+                    } else {
+                        list.lastOrNull()
+                    }
+
+                    if (torrent != null) {
+                        if (torrent.isFinished) {
+                            val destFile = com.rebelroot.omni.torrent.TorrentEngine.firstFile(context, torrent.infoHash)
+                                ?: File(com.rebelroot.omni.torrent.TorrentEngine.saveDir(context), safeFilename)
+                            progressFlow.value = DownloadProgress.Complete(destFile, torrent.totalDone.coerceAtLeast(torrent.total))
+                        } else if (torrent.errorMessage != null) {
+                            progressFlow.value = DownloadProgress.Error(torrent.errorMessage)
+                        } else {
+                            val pct = (torrent.progress * 100).toInt().coerceIn(0, 99)
+                            progressFlow.value = DownloadProgress.Downloading(pct, torrent.totalDone)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Torrent download error for job $jobId", e)
+                progressFlow.value = DownloadProgress.Error(e.message ?: "Torrent error")
+            } finally {
+                runningJobs.remove(jobId)
+            }
+        }
+        runningJobs[jobId] = jobCoroutine
+
+        return jobId
+    }
+
     fun retryDownload(jobId: String) {
         val job = _jobs.value.find { it.id == jobId } ?: return
         if (runningJobs.containsKey(jobId)) return

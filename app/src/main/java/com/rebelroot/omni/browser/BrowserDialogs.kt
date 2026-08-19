@@ -3001,23 +3001,8 @@ fun TorrentDownloaderDialog(
                 Button(
                     onClick = {
                         if (urlToDownload.isNotBlank()) {
-                            val started = com.rebelroot.omni.torrent.TorrentEngine.startDownload(urlToDownload, context)
-                            if (started) {
-                                Toast.makeText(context, "Downloading: ${parsedInfo.first}", Toast.LENGTH_LONG).show()
-                            } else {
-                                val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlToDownload)).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                try {
-                                    val chooser = Intent.createChooser(magnetIntent, "Open with Torrent App")
-                                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    context.startActivity(chooser)
-                                } catch (_: Exception) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Magnet Link", urlToDownload))
-                                    Toast.makeText(context, "Magnet link copied to clipboard", Toast.LENGTH_SHORT).show()
-                                }
-                            }
+                            viewModel.startTorrentDownload(urlToDownload, parsedInfo.first)
+                            Toast.makeText(context, "Downloading: ${parsedInfo.first}", Toast.LENGTH_SHORT).show()
                             onDismiss()
                         }
                     },
