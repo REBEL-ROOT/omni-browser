@@ -44,6 +44,7 @@ object TorrentEngine {
         private set
 
     private val statuses = ConcurrentHashMap<String, TorrentStatus>()
+    private val names = ConcurrentHashMap<String, String>()
     private val errors = ConcurrentHashMap<String, String>()
 
     private val _activeTorrents = MutableStateFlow<List<TorrentProgress>>(emptyList())
@@ -79,6 +80,23 @@ object TorrentEngine {
     /** Start downloading a magnet link or a `.torrent` URL. Returns false if the engine is unavailable. */
     fun startDownload(link: String, context: Context): Boolean {
         if (!ensureStarted(context)) return false
+        val extractedName = if (link.startsWith("magnet:", ignoreCase = true)) {
+            val dnMatch = Regex("""dn=([^&]+)""").find(link)?.groupValues?.get(1)?.let {
+                runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)
+            }
+            dnMatch ?: "Torrent Download"
+        } else {
+            link.substringAfterLast("/").substringBefore("?").ifBlank { "Torrent Download" }
+        }
+
+        val hashMatch = if (link.startsWith("magnet:", ignoreCase = true)) {
+            Regex("""xt=urn:btih:([^&]+)""").find(link)?.groupValues?.get(1)?.lowercase()
+        } else null
+
+        if (hashMatch != null) {
+            names[hashMatch] = extractedName
+        }
+
         return try {
             sessionManager?.download(link, saveDir(context))
             Log.i(TAG, "Started download for: $link")
@@ -91,18 +109,25 @@ object TorrentEngine {
 
     fun pause(infoHash: String) {
         val sm = sessionManager ?: return
-        statuses[infoHash]?.let { sm.find(it.infoHash())?.pause() }
+        statuses[infoHash]?.let { 
+            runCatching { sm.find(it.infoHash())?.pause() }
+        }
     }
 
     fun resume(infoHash: String) {
         val sm = sessionManager ?: return
-        statuses[infoHash]?.let { sm.find(it.infoHash())?.resume() }
+        statuses[infoHash]?.let { 
+            runCatching { sm.find(it.infoHash())?.resume() }
+        }
     }
 
     fun remove(infoHash: String) {
         val sm = sessionManager ?: return
-        statuses[infoHash]?.let { sm.remove(sm.find(it.infoHash())) }
+        statuses[infoHash]?.let { 
+            runCatching { sm.remove(sm.find(it.infoHash())) }
+        }
         statuses.remove(infoHash)
+        names.remove(infoHash)
         errors.remove(infoHash)
         publish()
     }
@@ -135,44 +160,65 @@ object TorrentEngine {
 
         override fun alert(a: Alert<*>?) {
             if (a == null) return
-            when (a) {
-                is StateUpdateAlert -> {
-                    for (st in a.status()) {
-                        statuses[st.infoHash().toHex()] = st
+            try {
+                when (a) {
+                    is StateUpdateAlert -> {
+                        for (st in a.status()) {
+                            val hash = runCatching { st.infoHash()?.toHex()?.lowercase() }.getOrNull()
+                            if (hash != null) {
+                                statuses[hash] = st
+                            }
+                        }
+                        publish()
                     }
-                    publish()
+                    is TorrentFinishedAlert -> {
+                        val hash = runCatching { a.handle()?.infoHash()?.toHex()?.lowercase() }.getOrNull()
+                        if (hash != null) {
+                            statuses[hash]?.let { statuses[hash] = it }
+                        }
+                        publish()
+                    }
+                    is TorrentErrorAlert -> {
+                        val hash = runCatching { a.handle()?.infoHash()?.toHex()?.lowercase() }.getOrNull()
+                        if (hash != null) {
+                            errors[hash] = runCatching { a.error()?.message() }.getOrNull() ?: "Torrent error"
+                        }
+                        publish()
+                    }
                 }
-                is TorrentFinishedAlert -> {
-                    val hash = a.handle().infoHash().toHex()
-                    statuses[hash]?.let { statuses[hash] = it }
-                    publish()
-                }
-                is TorrentErrorAlert -> {
-                    val hash = a.handle().infoHash().toHex()
-                    errors[hash] = a.error().message()
-                    publish()
-                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Error in torrent alert processing", t)
             }
         }
     }
 
     private fun publish() {
-        val list = statuses.values.map { st ->
-            val hash = st.infoHash().toHex()
-            TorrentProgress(
-                infoHash = hash,
-                name = if (st.hasMetadata()) st.name() else "Fetching metadata…",
-                progress = st.progress(),
-                downloadRate = st.downloadRate(),
-                uploadRate = st.uploadRate(),
-                numPeers = st.numPeers(),
-                totalDone = st.totalDone(),
-                total = st.total(),
-                state = stateLabel(st.state()),
-                hasMetadata = st.hasMetadata(),
-                isFinished = st.isFinished(),
-                errorMessage = errors[hash]
-            )
+        val list = statuses.values.mapNotNull { st ->
+            try {
+                val hash = runCatching { st.infoHash()?.toHex()?.lowercase() }.getOrNull() ?: return@mapNotNull null
+                val displayName = names[hash] 
+                    ?: (if (st.hasMetadata()) {
+                        names[hash] ?: "Torrent ($hash)"
+                    } else "Fetching metadata…")
+
+                TorrentProgress(
+                    infoHash = hash,
+                    name = displayName,
+                    progress = st.progress(),
+                    downloadRate = st.downloadRate(),
+                    uploadRate = st.uploadRate(),
+                    numPeers = st.numPeers(),
+                    totalDone = st.totalDone(),
+                    total = st.total(),
+                    state = stateLabel(st.state()),
+                    hasMetadata = st.hasMetadata(),
+                    isFinished = st.isFinished(),
+                    errorMessage = errors[hash]
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "Error generating torrent progress", t)
+                null
+            }
         }
         _activeTorrents.value = list
     }
