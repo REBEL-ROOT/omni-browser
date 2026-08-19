@@ -2852,16 +2852,21 @@ fun SpoofIdentityChooserDialog(
 @Composable
 fun TorrentDownloaderDialog(
     viewModel: BrowserViewModel,
+    initialUrl: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var magnetInput by remember { mutableStateOf("") }
+    var magnetInput by remember(initialUrl) { mutableStateOf(initialUrl?.trim() ?: "") }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
-    LaunchedEffect(Unit) {
-        val clipText = clipboardManager.getText()?.text?.trim()
-        if (!clipText.isNullOrEmpty() && (clipText.startsWith("magnet:") || clipText.endsWith(".torrent"))) {
-            magnetInput = clipText
+    LaunchedEffect(initialUrl) {
+        if (!initialUrl.isNullOrBlank()) {
+            magnetInput = initialUrl.trim()
+        } else {
+            val clipText = clipboardManager.getText()?.text?.trim()
+            if (!clipText.isNullOrEmpty() && (clipText.startsWith("magnet:") || clipText.endsWith(".torrent"))) {
+                magnetInput = clipText
+            }
         }
     }
 
@@ -2967,19 +2972,45 @@ fun TorrentDownloaderDialog(
             }
         },
         confirmButton = {
+            val urlToDownload = magnetInput.trim()
+            val isMagnet = urlToDownload.startsWith("magnet:", ignoreCase = true)
             Button(
                 onClick = {
-                    val urlToDownload = magnetInput.trim()
                     if (urlToDownload.isNotBlank()) {
-                        viewModel.startGenericDownload(context, urlToDownload, parsedInfo.first, false)
-                        Toast.makeText(context, "Added torrent download to high-speed queue", Toast.LENGTH_SHORT).show()
+                        if (isMagnet) {
+                            val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(urlToDownload)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            val hasExternalClient = try {
+                                context.packageManager.queryIntentActivities(magnetIntent, 0).isNotEmpty()
+                            } catch (_: Exception) { false }
+
+                            if (hasExternalClient) {
+                                try {
+                                    val chooser = Intent.createChooser(magnetIntent, "Open Magnet Link")
+                                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(chooser)
+                                } catch (_: Exception) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Magnet Link", urlToDownload))
+                                    Toast.makeText(context, "Magnet link copied to clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Magnet Link", urlToDownload))
+                                Toast.makeText(context, "Magnet link copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            viewModel.startGenericDownload(context, urlToDownload, parsedInfo.first, false)
+                            Toast.makeText(context, "Added download to queue", Toast.LENGTH_SHORT).show()
+                        }
                         onDismiss()
                     }
                 },
-                enabled = magnetInput.trim().isNotBlank(),
+                enabled = urlToDownload.isNotBlank(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Start High-Speed Download")
+                Text(if (isMagnet) "Open Magnet Link" else "Start Download")
             }
         },
         dismissButton = {

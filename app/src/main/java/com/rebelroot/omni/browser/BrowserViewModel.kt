@@ -871,6 +871,7 @@ class BrowserViewModel : ViewModel() {
         val contentType: String?
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
+    var pendingTorrentUrl by mutableStateOf<String?>(null)
 
     fun handleGenericDownload(
         url: String,
@@ -5978,6 +5979,11 @@ class BrowserViewModel : ViewModel() {
         }
 
         val lower = formattedUrl.lowercase()
+        if (lower.startsWith("magnet:")) {
+            pendingTorrentUrl = formattedUrl
+            return
+        }
+
         if (lower == "omni:config" || lower == "omni://config" || lower == "about:config") {
             formattedUrl = "omni:config"
         }

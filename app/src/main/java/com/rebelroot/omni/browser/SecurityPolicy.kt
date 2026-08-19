@@ -386,7 +386,7 @@ object SecurityPolicy {
 
         val knownDownloadExtensions = setOf(
             // Archives & Packages
-            "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "dmg", "bin", "exe", "msi", "apk", "apks", "xapk", "jar", "deb", "rpm",
+            "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "dmg", "bin", "exe", "msi", "apk", "apks", "xapk", "jar", "deb", "rpm", "torrent",
             // Documents & Data
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "epub", "mobi", "json", "xml", "log", "md",
             // Audio

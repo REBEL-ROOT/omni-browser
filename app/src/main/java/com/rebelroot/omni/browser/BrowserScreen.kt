@@ -1072,7 +1072,7 @@ fun BrowserScreen(
         // composition scope, forces a recomposition so the content slot and root dialogs
         // re-execute and show them reliably.
         val _observeDialogTriggers = viewModel.showMediaSnifferSettingsDialog ||
-            showDownloadSheet || showVideoOverviewDialog || (viewModel.pendingGenericDownload != null)
+            showDownloadSheet || showVideoOverviewDialog || (viewModel.pendingGenericDownload != null) || (viewModel.pendingTorrentUrl != null)
         if (_observeDialogTriggers) { /* observation only */ }
 
         Scaffold(
@@ -4379,10 +4379,15 @@ fun BrowserScreen(
                 )
             }
 
-            if (showTorrentDownloaderDialog) {
+            if (showTorrentDownloaderDialog || viewModel.pendingTorrentUrl != null) {
+                val initialMagnet = viewModel.pendingTorrentUrl
                 TorrentDownloaderDialog(
                     viewModel = viewModel,
-                    onDismiss = { showTorrentDownloaderDialog = false }
+                    initialUrl = initialMagnet,
+                    onDismiss = {
+                        showTorrentDownloaderDialog = false
+                        viewModel.pendingTorrentUrl = null
+                    }
                 )
             }
 

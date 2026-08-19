@@ -29,6 +29,9 @@ class GenericWebsiteDownloadTest {
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/audio/podcast.mp3"))
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/video/sample.mp4"))
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/image/photo.png"))
+        // Torrents
+        assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/downloads/ubuntu-24.04.iso.torrent"))
+        assertTrue(SecurityPolicy.isGenericDownloadUrl("https://academictorrents.com/download/12345.torrent"))
     }
 
     @Test

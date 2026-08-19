@@ -67,6 +67,22 @@
         <package android:name="idm.internet.download.manager.adm.thirdparty" /> <!-- 1DM third-party -->
         <package android:name="com.idm.internet.download.manager" />       <!-- 1DM (alt) -->
 
+        <!-- For querying torrent and magnet links (Flud, BitTorrent, uTorrent, LibreTorrent, etc.) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="magnet" />
+        </intent>
+        <package android:name="com.delphicoder.flud" />
+        <package android:name="com.delphicoder.flud.paid" />
+        <package android:name="com.bittorrent.client" />
+        <package android:name="com.bittorrent.client.pro" />
+        <package android:name="com.utorrent.client" />
+        <package android:name="com.utorrent.client.pro" />
+        <package android:name="org.proninyaroslav.libretorrent" />
+        <package android:name="hu.tagsoft.ttorrent.lite" />
+        <package android:name="hu.tagsoft.ttorrent.pro" />
+        <package android:name="com.torrent.torrdroid" />
+
         <!-- For intent:// scheme links (payment gateways like Razorpay, PayU) -->
         <intent>
             <action android:name="android.intent.action.VIEW" />

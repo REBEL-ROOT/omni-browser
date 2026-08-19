@@ -852,6 +852,34 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
+            if (lowerUri.startsWith("magnet:")) {
+                Log.i(TAG, "🧲 Intercepted magnet link: $uri (tabId=${tab.id}, parentId=${tab.parentId})")
+                viewModelScope.launch(Dispatchers.Main) {
+                    if (tab.parentId != null) {
+                        closeTab(tab.id, context)
+                    }
+                    val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    val hasExternalApp = try {
+                        context.packageManager.queryIntentActivities(magnetIntent, 0).isNotEmpty()
+                    } catch (_: Exception) { false }
+
+                    if (hasExternalApp) {
+                        try {
+                            val chooser = Intent.createChooser(magnetIntent, "Open Magnet Link")
+                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(chooser)
+                        } catch (_: Exception) {
+                            pendingTorrentUrl = uri
+                        }
+                    } else {
+                        pendingTorrentUrl = uri
+                    }
+                }
+                return GeckoResult.fromValue(AllowOrDeny.DENY)
+            }
+
             // ── Native App Delegation: ordinary HTTP/HTTPS stays in Omni ─────────
             // An installed Android app must never take over merely because it can
             // handle the same HTTP/HTTPS URL (YouTube, Instagram, Maps, …). The
@@ -1066,6 +1094,31 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     viewModelScope.launch(Dispatchers.Main) {
                         val filename = guessDownloadFilename(uri, null)
                         handleGenericDownload(uri, filename, null, context)
+                    }
+                    return null
+                }
+
+                if (lowerUri.startsWith("magnet:")) {
+                    Log.i(TAG, "🧲 Intercepted new-window magnet link: $uri")
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        val hasExternalApp = try {
+                            context.packageManager.queryIntentActivities(magnetIntent, 0).isNotEmpty()
+                        } catch (_: Exception) { false }
+
+                        if (hasExternalApp) {
+                            try {
+                                val chooser = Intent.createChooser(magnetIntent, "Open Magnet Link")
+                                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(chooser)
+                            } catch (_: Exception) {
+                                pendingTorrentUrl = uri
+                            }
+                        } else {
+                            pendingTorrentUrl = uri
+                        }
                     }
                     return null
                 }
