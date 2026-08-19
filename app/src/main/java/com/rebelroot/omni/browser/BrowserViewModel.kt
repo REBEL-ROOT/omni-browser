@@ -885,11 +885,8 @@ class BrowserViewModel : ViewModel() {
             contentType = contentType
         )
 
-        if (askBeforeDownload) {
-            pendingGenericDownload = pending
-        } else {
-            startGenericDownload(pending, saveToLocker = false, context = context)
-        }
+        // Always open download options sheet first
+        pendingGenericDownload = pending
     }
 
     fun startSystemDownload(
