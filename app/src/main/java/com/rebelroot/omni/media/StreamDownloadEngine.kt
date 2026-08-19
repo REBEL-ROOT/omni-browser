@@ -571,6 +571,9 @@ class StreamDownloadEngine(
                             progressFlow.value = DownloadProgress.Complete(destFile, torrent.totalDone.coerceAtLeast(torrent.total))
                         } else if (torrent.errorMessage != null) {
                             progressFlow.value = DownloadProgress.Error(torrent.errorMessage)
+                        } else if (!torrent.hasMetadata) {
+                            val peerText = if (torrent.numPeers > 0) " (${torrent.numPeers} peers)" else ""
+                            progressFlow.value = DownloadProgress.Muxing("Connecting to swarm & metadata$peerText")
                         } else {
                             val pct = (torrent.progress * 100).toInt().coerceIn(0, 99)
                             progressFlow.value = DownloadProgress.Downloading(pct, torrent.totalDone)

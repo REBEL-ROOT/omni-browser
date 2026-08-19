@@ -61,19 +61,30 @@ object TorrentEngine {
         return try {
             val settingsDir = File(context.filesDir, "torrent_session").also { it.mkdirs() }
             val sp = SettingsPack()
-            // Enable the DHT so magnet links can resolve their metadata.
             sp.enableDht(true)
+            sp.downloadRateLimit(0)
+            sp.uploadRateLimit(0)
+            sp.maxPeerlistSize(500)
+            sp.connectionsLimit(200)
             // Listen on a random port on all interfaces.
             sp.listenInterfaces("0.0.0.0:0,[::]:0")
+            // Set DHT bootstrap nodes via settings pack string
+            runCatching {
+                sp.swig().set_str(
+                    com.frostwire.jlibtorrent.swig.settings_pack.string_types.dht_bootstrap_nodes.swigValue(),
+                    "router.bittorrent.com:6881,dht.transmissionbt.com:6881,router.utorrent.com:6881,dht.libtorrent.org:25401"
+                )
+            }
             val params = SessionParams(sp)
             val sm = SessionManager()
             sm.start(params)
             sm.addListener(alertListener)
+            runCatching { sm.startDht() }
             sessionManager = sm
             isAvailable = true
             started.set(true)
             startUpdater()
-            Log.i(TAG, "libtorrent session started")
+            Log.i(TAG, "libtorrent session started with DHT and peer discovery")
             true
         } catch (t: Throwable) {
             isAvailable = false
@@ -131,12 +142,25 @@ object TorrentEngine {
             _activeTorrents.value = listOf(initialItem) + _activeTorrents.value.filter { it.infoHash != hashMatch }
         }
 
+        // Enrich magnet link with reliable public trackers for faster peer discovery
+        val enrichedLink = if (link.startsWith("magnet:", ignoreCase = true)) {
+            val extraTrackers = listOf(
+                "udp://tracker.opentrackr.org:1337/announce",
+                "udp://open.stealth.si:80/announce",
+                "udp://tracker.torrent.eu.org:451/announce",
+                "udp://explodie.org:6969/announce",
+                "udp://tracker.openbittorrent.com:80/announce"
+            ).filter { !link.contains(it.substringAfter("://").substringBefore("/")) }
+                .joinToString("") { "&tr=" + java.net.URLEncoder.encode(it, "UTF-8") }
+            link + extraTrackers
+        } else link
+
         return try {
-            sessionManager?.download(link, saveDir(context))
-            Log.i(TAG, "Started download for: $link")
+            sessionManager?.download(enrichedLink, saveDir(context))
+            Log.i(TAG, "Started download for: $enrichedLink")
             true
         } catch (t: Throwable) {
-            Log.e(TAG, "download() failed for: $link", t)
+            Log.e(TAG, "download() failed for: $enrichedLink", t)
             false
         }
     }
