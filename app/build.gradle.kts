@@ -320,3 +320,62 @@ tasks.register("checkStringParity") {
         }
     }
 }
+
+// ── 16 KB page-size alignment fix for prebuilt native libraries ────────────────
+// Android 15+ (16 KB page size) requires every .so ELF program header p_align
+// to be >= 16 KB (0x4000). Prebuilt libraries (GeckoView, jlibtorrent, SQLCipher,
+// Tor, WireGuard, Vosk, etc.) were compiled with 4 KB alignment. This hook patches
+// all merged and stripped .so files before the APK is packaged.
+tasks.whenTaskAdded {
+    if (name.startsWith("strip") && name.endsWith("DebugSymbols")) {
+        doLast {
+            val script = file("elf-align-16kb.py")
+            if (script.exists()) {
+                val strippedDir = file("build/intermediates/stripped_native_libs")
+                if (strippedDir.exists()) {
+                    ProcessBuilder("python3", script.absolutePath, strippedDir.absolutePath)
+                        .inheritIO()
+                        .start()
+                        .waitFor()
+                }
+            }
+        }
+    } else if (name.startsWith("merge") && name.endsWith("NativeLibs")) {
+        doLast {
+            val script = file("elf-align-16kb.py")
+            if (script.exists()) {
+                val mergedDir = file("build/intermediates/merged_native_libs")
+                if (mergedDir.exists()) {
+                    ProcessBuilder("python3", script.absolutePath, mergedDir.absolutePath)
+                        .inheritIO()
+                        .start()
+                        .waitFor()
+                }
+            }
+        }
+    } else if (name.startsWith("package") && !name.contains("Resource") && !name.contains("Manifest")) {
+        doFirst {
+            val script = file("elf-align-16kb.py")
+            if (script.exists()) {
+                val intermediates = file("build/intermediates")
+                if (intermediates.exists()) {
+                    val strippedDir = file("build/intermediates/stripped_native_libs")
+                    if (strippedDir.exists()) {
+                        ProcessBuilder("python3", script.absolutePath, strippedDir.absolutePath)
+                            .inheritIO()
+                            .start()
+                            .waitFor()
+                    }
+                    val mergedDir = file("build/intermediates/merged_native_libs")
+                    if (mergedDir.exists()) {
+                        ProcessBuilder("python3", script.absolutePath, mergedDir.absolutePath)
+                            .inheritIO()
+                            .start()
+                            .waitFor()
+                    }
+                }
+            }
+        }
+    }
+}
+
