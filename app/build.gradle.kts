@@ -134,10 +134,6 @@ android {
             // alignment compatibility on Android 15+ (API 35+) and avoids native load crashes.
             useLegacyPackaging = false
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
-            excludes.addAll(listOf(
-                "**/libminidump_analyzer.so",
-                "**/libcrashhelper.so"
-            ))
         }
         resources {
             excludes += listOf(

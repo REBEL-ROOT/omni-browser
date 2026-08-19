@@ -2750,12 +2750,12 @@ class BrowserViewModel : ViewModel() {
                 val sb = java.lang.StringBuilder()
                 sb.append("pref:\n")
                 sb.append("  intl.accept_languages: \"${targetLocales.joinToString(", ")}\"\n")
-                // Security hardening: Enable Fission site isolation with multiple content
-                // processes. Each origin runs in its own process, preventing cross-origin
-                // data access even if a renderer is compromised.
-                sb.append("  fission.autostart: true\n")
-                sb.append("  fission.web_content_process_count: 8\n")
-                sb.append("  dom.ipc.processCount: 8\n")
+                // Mobile GeckoView multi-process configuration:
+                // Fission (out-of-process iframes) is kept false on Android to prevent process
+                // explosion and LMK kills when loading sites with multiple cross-origin iframes.
+                // Content process count is capped at 2 (standard for mobile GeckoView).
+                sb.append("  fission.autostart: false\n")
+                sb.append("  dom.ipc.processCount: 2\n")
                 sb.append("  dom.ipc.processCount.webIsolated: 1\n")
                 sb.append("  privacy.donottrackheader.enabled: ${dnt}\n")
                 sb.append("  dom.security.https_only_mode: ${hom || sbLevel == 2}\n")
@@ -5723,9 +5723,8 @@ class BrowserViewModel : ViewModel() {
         try {
             val sb = StringBuilder()
             sb.append("pref:\n")
-            sb.append("  fission.autostart: true\n")
-            sb.append("  fission.web_content_process_count: 8\n")
-            sb.append("  dom.ipc.processCount: 8\n")
+            sb.append("  fission.autostart: false\n")
+            sb.append("  dom.ipc.processCount: 2\n")
             sb.append("  dom.ipc.processCount.webIsolated: 1\n")
             sb.append("  gfx.webrender.all: ${isWebRenderEnabled}\n")
             sb.append("  layers.acceleration.force-enabled: ${isGpuAccelerationEnabled}\n")

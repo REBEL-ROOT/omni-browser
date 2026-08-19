@@ -2,7 +2,7 @@
 const api = typeof browser !== "undefined" ? browser : chrome;
 var chrome = api;
 
-// Inject our page context hook script to detect media URLs and render Quetta overlay
+// Inject our page context hook script to detect media URLs and manage native player handoff
 const script = document.createElement('script');
 script.src = chrome.runtime.getURL('inject.js');
 script.onload = function() { this.remove(); };

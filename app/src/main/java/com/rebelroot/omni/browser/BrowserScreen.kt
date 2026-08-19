@@ -363,11 +363,18 @@ fun BrowserScreen(
     var extensionToDelete by remember { mutableStateOf<org.mozilla.geckoview.WebExtension?>(null) }
     var builtInExtensionToDelete by remember { mutableStateOf<String?>(null) }
 
-    // Fullscreen download overlay — hoisted outside the if-block so state survives
-    // fullscreen entry/exit transitions and doesn't reset on every recomposition.
+    // Fullscreen video buttons overlay
     var showFullscreenDownloadBtn by remember { mutableStateOf(true) }
     var fullscreenControlsLastActivityMs by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
-    
+
+    // Auto-fade controls after 3.5s of inactivity in fullscreen
+    LaunchedEffect(showFullscreenDownloadBtn, fullscreenControlsLastActivityMs) {
+        if (showFullscreenDownloadBtn) {
+            delay(3500L)
+            showFullscreenDownloadBtn = false
+        }
+    }
+
     // Auto-Scroll and Player Settings states
     var isAutoScrollActive by remember { mutableStateOf(false) }
     var isAutoScrollPaused by remember { mutableStateOf(false) }
@@ -405,19 +412,6 @@ fun BrowserScreen(
                 activeTab.session.loadUri("javascript:(function(){ window.scrollBy(0, $pixels); })();")
                 delay(delayMs)
             }
-        }
-    }
-
-    // Auto-fade controls after 3.5s while video is playing; stay visible indefinitely while paused
-    LaunchedEffect(showFullscreenDownloadBtn, viewModel.isVideoPlayingInPage, fullscreenControlsLastActivityMs) {
-        if (showFullscreenDownloadBtn && viewModel.isVideoPlayingInPage) {
-            delay(3500L)
-            showFullscreenDownloadBtn = false
-        }
-    }
-    LaunchedEffect(viewModel.isVideoPlayingInPage) {
-        if (!viewModel.isVideoPlayingInPage) {
-            showFullscreenDownloadBtn = true
         }
     }
     // Issue #73: The site's own video player is NEVER overridden automatically.
@@ -1096,6 +1090,7 @@ fun BrowserScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
+                    // 1. Address bar Surface (slides out on scroll)
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1513,21 +1508,30 @@ fun BrowserScreen(
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
                                 )
                             }
+                        }
+                    }
 
-                            AnimatedVisibility(
-                                visible = showAlohaBanner && viewModel.addressBarPosition != "Bottom",
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
-                            ) {
-                                MediaSnifferBanner(
-                                    viewModel = viewModel,
-                                    nonDrmMedia = nonDrmMedia,
-                                    onDismiss = { isAlohaBannerDismissed = true },
-                                    onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
-                                    onDownloadClick = { showDownloadSheet = true },
-                                    onOpenSettings = { viewModel.showMediaSnifferSettingsDialog = true }
-                                )
-                            }
+                    // 2. Media Sniffer Banner (slides up to top below status bar and stays pinned on scroll!)
+                    AnimatedVisibility(
+                        visible = showAlohaBanner && viewModel.addressBarPosition != "Bottom",
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer { translationY = -topBarMeasuredDp.toPx() * topBarFraction },
+                            color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                            shadowElevation = 4.dp
+                        ) {
+                            MediaSnifferBanner(
+                                viewModel = viewModel,
+                                nonDrmMedia = nonDrmMedia,
+                                onDismiss = { isAlohaBannerDismissed = true },
+                                onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
+                                onDownloadClick = { showDownloadSheet = true },
+                                onOpenSettings = { viewModel.showMediaSnifferSettingsDialog = true }
+                            )
                         }
                     }
                 }
@@ -2033,7 +2037,10 @@ fun BrowserScreen(
                                 // so GeckoView offset is correct when the banner is visible.
                                 val bannerHeight = if (showAlohaBanner && viewModel.addressBarPosition != "Bottom") 48.dp else 0.dp
 
-                                val translationDistance = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarTotalHeight + bannerHeight else 0.dp
+                                val totalTopPad = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarTotalHeight + bannerHeight else 0.dp
+                                val geckoTopOffset = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) {
+                                    (statusBarHeightDp + bannerHeight) + (topBarMeasuredDp * (1f - topBarFraction))
+                                } else 0.dp
                                 val geckoBottomPad = if (!viewModel.isFullscreen && !isLandscape) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
                                 
                                 val geckoTopPad = 0.dp
@@ -2047,7 +2054,7 @@ fun BrowserScreen(
                                                     measurable: androidx.compose.ui.layout.Measurable,
                                                     constraints: androidx.compose.ui.unit.Constraints
                                                 ): androidx.compose.ui.layout.MeasureResult {
-                                                    val extraHeight = translationDistance.roundToPx()
+                                                    val extraHeight = totalTopPad.roundToPx()
                                                     val newConstraints = constraints.copy(
                                                         minHeight = constraints.minHeight + extraHeight,
                                                         maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + extraHeight else constraints.maxHeight
@@ -2059,7 +2066,7 @@ fun BrowserScreen(
                                                 }
                                             }
                                         )
-                                        .offset(y = translationDistance * (1f - topBarFraction))
+                                        .offset(y = geckoTopOffset)
                                         .padding(top = geckoTopPad, bottom = geckoBottomPad)
                                 ) {
                                     DisposableEffect(Unit) {
@@ -2112,6 +2119,10 @@ fun BrowserScreen(
 
                                                      when (ev.actionMasked) {
                                                          android.view.MotionEvent.ACTION_DOWN -> {
+                                                             if (viewModel.isFullscreen) {
+                                                                 showFullscreenDownloadBtn = true
+                                                                 fullscreenControlsLastActivityMs = System.currentTimeMillis()
+                                                             }
                                                              startY = ev.y
                                                              isPulling = false
                                                              if (isPillEnabled && geometry.isScrollable && FastScrollMath.isTouchInsideHitbox(ev.x, ev.y, geometry)) {
@@ -2147,7 +2158,7 @@ fun BrowserScreen(
                                                                  return true
                                                              }
                                                              val deltaY = ev.y - startY
-                                                             if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading) {
+                                                             if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading && !viewModel.isFullscreen) {
                                                                  // Only allow pull-to-refresh if the swipe started near the top edge
                                                                  // of the screen. This prevents accidental refreshes when scrolling up
                                                                  // inside internal scrollable elements on websites like MangaPlus.
@@ -3456,111 +3467,56 @@ fun BrowserScreen(
                 )
             }
 
-            // ─── Unified smart download button ─────────────────────────────────────
-            // • Fullscreen: floating controls for native player handoff and download
+
+
+            // ─── Fullscreen Center-Top Action Buttons ──────────────────────────────
             val fullscreenMedia = if (playableMedia.isNotEmpty()) playableMedia else nonDrmMedia
             val isYouTubePage = viewModel.currentUrl.lowercase().contains("youtube.com") || viewModel.currentUrl.lowercase().contains("youtu.be")
-            if (fullscreenMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled) {
-                if (viewModel.isFullscreen) {
-                    // Fullscreen mode — overlay with auto-fade and tap-to-reveal controls
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                                        if (event.changes.any { it.pressed }) {
-                                            showFullscreenDownloadBtn = true
-                                            fullscreenControlsLastActivityMs = System.currentTimeMillis()
-                                        }
-                                    }
-                                }
-                            }
+            if (fullscreenMedia.isNotEmpty() && !showHomeScreen && !viewModel.isReaderModeActive && !isYouTubePage && viewModel.isNativePlayerEnabled && viewModel.isFullscreen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showFullscreenDownloadBtn,
+                        enter = fadeIn() + slideInVertically { -it },
+                        exit = fadeOut() + slideOutVertically { -it }
                     ) {
-                        // Top-left controls: Back + Exit Fullscreen
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showFullscreenDownloadBtn,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .safeDrawingPadding()
-                                .padding(start = 12.dp, top = 12.dp)
+                        Surface(
+                            shape = RoundedCornerShape(28.dp),
+                            color = Color.Black.copy(alpha = 0.65f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                            shadowElevation = 8.dp
                         ) {
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Back to browser button
-                                IconButton(
-                                    onClick = { viewModel.goBack() },
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Color.Black.copy(alpha = 0.65f)
-                                    ),
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                // Exit fullscreen button — tells GeckoView to exit fullscreen
-                                IconButton(
-                                    onClick = {
-                                        activeTab?.session?.exitFullScreen()
-                                    },
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Color.Black.copy(alpha = 0.65f)
-                                    ),
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.FullscreenExit,
-                                        contentDescription = "Exit Fullscreen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Bottom-right controls: Play FAB + Download FAB
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showFullscreenDownloadBtn,
-                            enter = fadeIn(),
-                            exit = fadeOut(),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 20.dp, bottom = 32.dp)
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                horizontalAlignment = Alignment.End
                             ) {
                                 val firstMedia = fullscreenMedia.firstOrNull()
                                 if (firstMedia != null) {
-                                    FloatingActionButton(
+                                    FilledIconButton(
                                         onClick = {
                                             viewModel.playMedia(firstMedia.toPlaybackRequest())
                                         },
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = Color.White,
-                                        shape = RoundedCornerShape(32.dp),
-                                        modifier = Modifier.size(56.dp)
+                                        colors = IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = Color.White
+                                        ),
+                                        modifier = Modifier.size(42.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.PlayArrow,
                                             contentDescription = stringResource(R.string.browser_play_premium),
                                             tint = Color.White,
-                                            modifier = Modifier.size(32.dp)
+                                            modifier = Modifier.size(26.dp)
                                         )
                                     }
                                 }
 
-                                FloatingActionButton(
+                                FilledIconButton(
                                     onClick = {
                                         if (!viewModel.hasSeenVideoOverview) {
                                             pendingVideoAction = { showDownloadSheet = true }
@@ -3569,16 +3525,17 @@ fun BrowserScreen(
                                             showDownloadSheet = true
                                         }
                                     },
-                                    containerColor = Color.Black.copy(alpha = 0.78f),
-                                    contentColor = Color.White,
-                                    shape = RoundedCornerShape(32.dp),
-                                    modifier = Modifier.size(56.dp)
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = Color.White.copy(alpha = 0.22f),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.size(42.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Download,
                                         contentDescription = "Download Video",
                                         tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
@@ -3586,7 +3543,6 @@ fun BrowserScreen(
                     }
                 }
             }
-            // ───────────────────────────────────────────────────────────────────────
 
             // Safari-style Context Menu Bottom Sheet
             if (viewModel.activeContextMenu != null) {

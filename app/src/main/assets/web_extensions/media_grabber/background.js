@@ -232,7 +232,7 @@ function pollNativeSettings() {
     } catch (e) {}
 }
 
-setInterval(pollNativeSettings, 800);
+setInterval(pollNativeSettings, 2000);
 pollNativeSettings();
 
 // Message listener
