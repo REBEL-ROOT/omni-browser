@@ -549,7 +549,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         }
 
         override fun onExternalResponse(session: GeckoSession, response: org.mozilla.geckoview.WebResponse) {
-            if (tab.id != activeTabId) return
             handleExternalDownloadResponse(response, context)
         }
 
@@ -841,9 +840,12 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
-            if (tab.id == activeTabId && isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
-                Log.i(TAG, "📥 Intercepted file download URL: $uri")
+            if (isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
+                Log.i(TAG, "📥 Intercepted file download URL: $uri (tabId=${tab.id}, parentId=${tab.parentId})")
                 viewModelScope.launch(Dispatchers.Main) {
+                    if (tab.parentId != null) {
+                        closeTab(tab.id, context)
+                    }
                     val filename = guessDownloadFilename(uri, null)
                     handleGenericDownload(uri, filename, null, context)
                 }

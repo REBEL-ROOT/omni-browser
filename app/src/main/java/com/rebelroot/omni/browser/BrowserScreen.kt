@@ -3549,6 +3549,118 @@ fun BrowserScreen(
                 SafariContextMenuSheet(viewModel = viewModel, context = context)
             }
 
+            // Generic file download destination dialog (Root level)
+            viewModel.pendingGenericDownload?.let { pending ->
+                ModalBottomSheet(
+                    onDismissRequest = { viewModel.pendingGenericDownload = null },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        val ext = pending.filename.substringAfterLast('.').lowercase()
+                        val (fileIcon, fileColor) = when {
+                            ext == "pdf" -> Icons.Rounded.PictureAsPdf to Color(0xFFE53935)
+                            ext == "apk" -> Icons.Rounded.Android to Color(0xFF43A047)
+                            ext in setOf("zip", "rar", "7z", "tar", "gz") -> Icons.Rounded.FolderZip to Color(0xFFFF8F00)
+                            ext in setOf("mp3", "wav", "flac", "m4a", "ogg", "aac") -> Icons.Rounded.MusicNote to Color(0xFF8E24AA)
+                            ext in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> Icons.Rounded.Image to Color(0xFF039BE5)
+                            ext in setOf("doc", "docx", "txt", "rtf") -> Icons.Rounded.Description to Color(0xFF1E88E5)
+                            ext in setOf("xls", "xlsx", "csv") -> Icons.Rounded.TableChart to Color(0xFF43A047)
+                            else -> Icons.AutoMirrored.Rounded.InsertDriveFile to MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(fileColor.copy(alpha = 0.12f), RoundedCornerShape(24.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(fileIcon, contentDescription = null, tint = fileColor, modifier = Modifier.size(24.dp))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Download File",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = pending.filename,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Button(
+                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = false, context) },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(32.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.download_destination_local), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = true, context) },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(32.dp),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.download_destination_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+
+                        if (viewModel.isExternalDownloadManagerEnabled) {
+                            OutlinedButton(
+                                onClick = {
+                                    val current = pending
+                                    viewModel.pendingGenericDownload = null
+                                    viewModel.handOffToExternalDownloadManager(
+                                        context = context,
+                                        url = current.url,
+                                        filename = current.filename,
+                                        contentType = current.contentType
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                shape = RoundedCornerShape(32.dp),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                            ) {
+                                Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.external_download_manager_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+
+                        TextButton(
+                            onClick = { viewModel.pendingGenericDownload = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.cancel_text), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
 
             // Bottom options sheet for video downloading
             if (showDownloadSheet) {
@@ -8166,118 +8278,6 @@ fun BrowserScreen(
                 )
             }
 
-            // ── Generic file download destination dialog ───────────────────────────
-            viewModel.pendingGenericDownload?.let { pending ->
-                ModalBottomSheet(
-                    onDismissRequest = { viewModel.pendingGenericDownload = null },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        val ext = pending.filename.substringAfterLast('.').lowercase()
-                        val (fileIcon, fileColor) = when {
-                            ext == "pdf" -> Icons.Rounded.PictureAsPdf to Color(0xFFE53935)
-                            ext == "apk" -> Icons.Rounded.Android to Color(0xFF43A047)
-                            ext in setOf("zip", "rar", "7z", "tar", "gz") -> Icons.Rounded.FolderZip to Color(0xFFFF8F00)
-                            ext in setOf("mp3", "wav", "flac", "m4a", "ogg", "aac") -> Icons.Rounded.MusicNote to Color(0xFF8E24AA)
-                            ext in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> Icons.Rounded.Image to Color(0xFF039BE5)
-                            ext in setOf("doc", "docx", "txt", "rtf") -> Icons.Rounded.Description to Color(0xFF1E88E5)
-                            ext in setOf("xls", "xlsx", "csv") -> Icons.Rounded.TableChart to Color(0xFF43A047)
-                            else -> Icons.AutoMirrored.Rounded.InsertDriveFile to MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(fileColor.copy(alpha = 0.12f), RoundedCornerShape(24.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(fileIcon, contentDescription = null, tint = fileColor, modifier = Modifier.size(24.dp))
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Download File",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = pending.filename,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                        Button(
-                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = false, context) },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(32.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.download_destination_local), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                        }
-
-                        OutlinedButton(
-                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = true, context) },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(32.dp),
-                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
-                        ) {
-                            Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(stringResource(R.string.download_destination_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
-                        }
-
-                        if (viewModel.isExternalDownloadManagerEnabled) {
-                            OutlinedButton(
-                                onClick = {
-                                    val current = pending
-                                    viewModel.pendingGenericDownload = null
-                                    viewModel.handOffToExternalDownloadManager(
-                                        context = context,
-                                        url = current.url,
-                                        filename = current.filename,
-                                        contentType = current.contentType
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(32.dp),
-                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
-                            ) {
-                                Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.external_download_manager_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-
-                        TextButton(
-                            onClick = { viewModel.pendingGenericDownload = null },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.cancel_text), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
-            }
             }
 
 

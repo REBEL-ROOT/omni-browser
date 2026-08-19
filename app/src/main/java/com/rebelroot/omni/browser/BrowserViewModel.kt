@@ -885,8 +885,10 @@ class BrowserViewModel : ViewModel() {
             contentType = contentType
         )
 
-        // Always open download options sheet first
-        pendingGenericDownload = pending
+        Log.i(TAG, "🚀 [DownloadSheet] Opening generic download sheet: filename=$safeFilename, url=$url")
+        viewModelScope.launch(Dispatchers.Main) {
+            pendingGenericDownload = pending
+        }
     }
 
     fun startSystemDownload(
@@ -1230,18 +1232,15 @@ class BrowserViewModel : ViewModel() {
             return
         }
 
-        val isAttachment = disposition?.contains("attachment", true) == true
-        if (isAttachment || response.requestExternalApp || isGenericDownloadUrl(response.uri)) {
-            Log.i(TAG, "Handling external download response: ${response.uri}")
-            val filename = parseFilenameFromContentDisposition(disposition)
-                ?: guessDownloadFilename(response.uri, contentType)
-            viewModelScope.launch(Dispatchers.Main) {
-                val activeTab = tabs.find { it.id == activeTabId }
-                if (activeTab != null && activeTab.parentId != null && (activeTab.url.isBlank() || activeTab.url == "about:blank" || activeTab.url == response.uri)) {
-                    closeTab(activeTab.id, context)
-                }
-                handleGenericDownload(response.uri, filename, contentType, context)
+        Log.i(TAG, "Handling external download response: ${response.uri}")
+        val filename = parseFilenameFromContentDisposition(disposition)
+            ?: guessDownloadFilename(response.uri, contentType)
+        viewModelScope.launch(Dispatchers.Main) {
+            val activeTab = tabs.find { it.id == activeTabId }
+            if (activeTab != null && activeTab.parentId != null && (activeTab.url.isBlank() || activeTab.url == "about:blank" || activeTab.url == response.uri)) {
+                closeTab(activeTab.id, context)
             }
+            handleGenericDownload(response.uri, filename, contentType, context)
         }
     }
 
