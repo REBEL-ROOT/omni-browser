@@ -353,6 +353,83 @@ object SecurityPolicy {
             null
         }
     }
+
+    /**
+     * Checks if a URL points to a downloadable file (APK, ZIP, PDF, documents, media, etc.)
+     * as opposed to a normal renderable web page or bare domain.
+     */
+    fun isGenericDownloadUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val lower = url.lowercase(Locale.ROOT).trim()
+        if (lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("about:")) return false
+
+        // Drop fragment (#...) and query (?...)
+        val noFrag = lower.substringBeforeLast("#")
+        val pathAndQuery = noFrag.substringBeforeLast("?")
+
+        val afterScheme = if (pathAndQuery.contains("://")) pathAndQuery.substringAfter("://") else pathAndQuery
+        if (!afterScheme.contains("/")) {
+            // Bare domain without path
+            return false
+        }
+        val pathPart = afterScheme.substringAfter("/")
+        if (pathPart.isBlank() || pathPart == "/") {
+            return false
+        }
+
+        val lastSegment = pathAndQuery.substringAfterLast("/")
+        if (lastSegment.isBlank() || lastSegment.contains(" ")) {
+            return false
+        }
+
+        val ext = lastSegment.substringAfterLast('.', "")
+
+        val knownDownloadExtensions = setOf(
+            // Archives & Packages
+            "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "dmg", "bin", "exe", "msi", "apk", "apks", "xapk", "jar", "deb", "rpm",
+            // Documents & Data
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "epub", "mobi", "json", "xml", "log", "md",
+            // Audio
+            "mp3", "wav", "flac", "m4a", "ogg", "aac", "opus", "wma",
+            // Video
+            "mp4", "mkv", "webm", "avi", "mov", "wmv", "3gp", "flv",
+            // Images
+            "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff"
+        )
+        if (ext in knownDownloadExtensions) {
+            return true
+        }
+
+        if (ext.isEmpty()) {
+            val downloadWords = setOf("download", "file", "get", "serve", "attachment", "export", "report")
+            return lastSegment.substringBefore('/').lowercase(Locale.ROOT) in downloadWords
+        }
+        if (ext.length > 10) return false
+
+        val htmlExtensions = setOf("html", "htm", "php", "asp", "aspx", "jsp", "htmx", "xhtml")
+        if (ext in htmlExtensions) return false
+
+        val commonTlds = setOf(
+            "com","net","org","io","co","ai","app","dev","xyz","info","biz","me","tv",
+            "us","uk","de","fr","ru","jp","cn","in","ca","au","gov","edu","mil","int",
+            "pk","com.pk","edu.pk","gov.pk","net.pk","org.pk",
+            "name","pro","mobi","tech","online","store","site","website","blog","cloud",
+            "live","news","shop","email","press","wiki","design","game","gg","sh","top",
+            "vip","work","space","fun","club","world","cyou","bid","trade","wang","ren",
+            "group","luxe","art","fit","run","plus","zone","care","sale","life","fund",
+            "band","cool","best","realty","properties","agency","expert","center","digital",
+            "systems","solutions","today","farm","city","town","cash","money","bet",
+            "casino","poker","loan","credit","insurance","investments","finance","tax",
+            "legal","host","web","law","yoga","pro",
+            "moe","rip","link","click","party","racing","win","date",
+            "review","men","stream","accountant",
+            "science","gq","tk","ml","cf","ga","buzz","guru","ninja","pink","red",
+            "blue","black","kim","dad","foo","phd","nyc","one","two"
+        )
+        if (ext in commonTlds) return false
+
+        return true
+    }
 }
 
 /**
@@ -466,14 +543,6 @@ object OriginVerifier {
         return domains.any { isExactOriginMatch(uri, it) }
     }
 
-    /**
-     * Checks if the URI's host matches ANY of the provided domains
-     * using subdomain matching.
-     *
-     * @param uri Full URI string
-     * @param domains List of parent domains to check against
-     * @return true if the URI's host is any of the domains or their subdomains
-     */
     fun matchesAnySubdomain(uri: String?, vararg domains: String): Boolean {
         return domains.any { isSubdomainOf(uri, it) }
     }

@@ -1072,7 +1072,7 @@ fun BrowserScreen(
         // composition scope, forces a recomposition so the content slot and root dialogs
         // re-execute and show them reliably.
         val _observeDialogTriggers = viewModel.showMediaSnifferSettingsDialog ||
-            showDownloadSheet || showVideoOverviewDialog
+            showDownloadSheet || showVideoOverviewDialog || (viewModel.pendingGenericDownload != null)
         if (_observeDialogTriggers) { /* observation only */ }
 
         Scaffold(
@@ -8243,6 +8243,28 @@ fun BrowserScreen(
                             Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.download_destination_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+
+                        if (viewModel.isExternalDownloadManagerEnabled) {
+                            OutlinedButton(
+                                onClick = {
+                                    val current = pending
+                                    viewModel.pendingGenericDownload = null
+                                    viewModel.handOffToExternalDownloadManager(
+                                        context = context,
+                                        url = current.url,
+                                        filename = current.filename,
+                                        contentType = current.contentType
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                shape = RoundedCornerShape(32.dp),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                            ) {
+                                Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.external_download_manager_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                            }
                         }
 
                         TextButton(

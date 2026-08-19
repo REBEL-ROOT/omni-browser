@@ -845,11 +845,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 Log.i(TAG, "📥 Intercepted file download URL: $uri")
                 viewModelScope.launch(Dispatchers.Main) {
                     val filename = guessDownloadFilename(uri, null)
-                    pendingGenericDownload = BrowserViewModel.PendingGenericDownload(
-                        url = uri,
-                        filename = filename,
-                        contentType = null
-                    )
+                    handleGenericDownload(uri, filename, null, context)
                 }
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
@@ -1061,6 +1057,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession>? {
             try {
                 val lowerUri = uri.lowercase().trim()
+                val isYouTube = OriginVerifier.isSubdomainOf(uri, "youtube.com") || OriginVerifier.isSubdomainOf(uri, "youtu.be")
+
+                if (isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
+                    Log.i(TAG, "📥 Intercepted new-window file download URL: $uri")
+                    viewModelScope.launch(Dispatchers.Main) {
+                        val filename = guessDownloadFilename(uri, null)
+                        handleGenericDownload(uri, filename, null, context)
+                    }
+                    return null
+                }
 
                 Log.i(TAG, "onNewSession: opening new tab for popup URI $uri (opener tabId=${tab.id})")
                 val runtime = getGeckoRuntime(context)

@@ -517,11 +517,7 @@ private fun ActionsCard(
                     onClick = {
                         viewModel.dismissContextMenu()
                         val filename = guessFilename(targetUrl)
-                        viewModel.pendingGenericDownload = BrowserViewModel.PendingGenericDownload(
-                            url = targetUrl,
-                            filename = filename,
-                            contentType = null
-                        )
+                        viewModel.handleGenericDownload(targetUrl, filename, null, context)
                     }
                 )
 

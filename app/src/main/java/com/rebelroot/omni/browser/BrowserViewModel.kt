@@ -18,6 +18,7 @@
 
 package com.rebelroot.omni.browser
 
+import com.rebelroot.omni.R
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -861,79 +862,7 @@ class BrowserViewModel : ViewModel() {
         })
     }
 
-    internal fun isGenericDownloadUrl(url: String): Boolean {
-        val lower = url.lowercase().trim()
-        if (lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("about:")) return false
-
-        // Drop fragment (#...) and query (?...) — neither affects whether the
-        // *path* points at a downloadable file.
-        val noFrag = lower.substringBeforeLast("#")
-        val pathAndQuery = noFrag.substringBeforeLast("?")
-
-        // SAFETY: Check if there is any path component after the authority/domain host.
-        // For bare domain URLs (e.g. https://example.pk or https://sub.domain.pk/),
-        // path is empty or "/", which must NEVER be treated as a downloadable file.
-        val parsedUri = runCatching { Uri.parse(lower) }.getOrNull()
-        val path = parsedUri?.path
-        if (path.isNullOrBlank() || path == "/") {
-            return false
-        }
-
-        val afterScheme = pathAndQuery.substringAfter("://", "")
-        if (!afterScheme.contains("/")) {
-            return false
-        }
-        val pathPart = afterScheme.substringAfter("/", "")
-        if (pathPart.isBlank()) {
-            return false
-        }
-
-        // The final path segment (everything after the last '/').
-        val lastSegment = pathAndQuery.substringAfterLast("/")
-        if (lastSegment.isBlank() || lastSegment.contains(" ")) {
-            // URL ends in '/' (e.g. https://example.com/) or has no filename
-            // at all — it is a directory/domain, not a downloadable file.
-            return false
-        }
-
-        val ext = lastSegment.substringAfterLast('.', "").lowercase()
-
-        if (ext.isEmpty()) {
-            // No dot in the final segment at all (e.g. "/report", "/file").
-            // Treat as a page unless the segment is a known download endpoint word.
-            val downloadWords = setOf("download", "file", "get", "serve", "attachment", "export", "report")
-            return lastSegment.substringBefore('/').lowercase() in downloadWords
-        }
-        if (ext.length > 10) return false
-
-        val htmlExtensions = setOf("html", "htm", "php", "asp", "aspx", "jsp", "htmx", "xhtml")
-        if (ext in htmlExtensions) return false
-
-        // CRITICAL FIX: if the "extension" is actually a top-level domain
-        // (e.g. example.com, site.io, my.app, example.pk), this is a *bare domain*, not a
-        // file. Previously the TLD was mistaken for a file extension if missing from commonTlds.
-        val commonTlds = setOf(
-            "com","net","org","io","co","ai","app","dev","xyz","info","biz","me","tv",
-            "us","uk","de","fr","ru","jp","cn","in","ca","au","gov","edu","mil","int",
-            "pk","com.pk","edu.pk","gov.pk","net.pk","org.pk",
-            "name","pro","mobi","tech","online","store","site","website","blog","cloud",
-            "live","news","shop","email","press","wiki","design","game","gg","sh","top",
-            "vip","work","space","fun","club","world","cyou","bid","trade","wang","ren",
-            "group","luxe","art","fit","run","plus","zone","care","sale","life","fund",
-            "band","cool","best","realty","properties","agency","expert","center","digital",
-            "systems","solutions","today","farm","city","town","cash","money","bet",
-            "casino","poker","loan","credit","insurance","investments","finance","tax",
-            "legal","host","web","law","yoga","pro","tech",
-            // Additional TLDs commonly used
-            "moe","rip","link","click","download","party","racing","win","date",
-            "review","audio","video","photo","pics","pic","men","stream","accountant",
-            "science","gq","tk","ml","cf","ga","buzz","guru","ninja","pink","red",
-            "blue","black","kim","dad","foo","mov","zip","phd","nyc","one","two"
-        )
-        if (ext in commonTlds) return false
-
-        return true
-    }
+    internal fun isGenericDownloadUrl(url: String): Boolean = SecurityPolicy.isGenericDownloadUrl(url)
 
     // Download interceptor data struct
     data class PendingGenericDownload(
@@ -942,6 +871,26 @@ class BrowserViewModel : ViewModel() {
         val contentType: String?
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
+
+    fun handleGenericDownload(
+        url: String,
+        filename: String,
+        contentType: String?,
+        context: Context
+    ) {
+        val safeFilename = SecurityPolicy.sanitizeFilename(filename).ifBlank { "download.bin" }
+        val pending = PendingGenericDownload(
+            url = url,
+            filename = safeFilename,
+            contentType = contentType
+        )
+
+        if (askBeforeDownload) {
+            pendingGenericDownload = pending
+        } else {
+            startGenericDownload(pending, saveToLocker = false, context = context)
+        }
+    }
 
     fun startSystemDownload(
         context: Context,
@@ -979,15 +928,17 @@ class BrowserViewModel : ViewModel() {
 
     fun startGenericDownload(download: PendingGenericDownload, saveToLocker: Boolean, context: Context) {
         pendingGenericDownload = null
+        val safeFilename = SecurityPolicy.sanitizeFilename(download.filename).ifBlank { "download.bin" }
         if (saveToLocker) {
             streamDownloadEngine.startGenericFileDownload(
                 url = download.url,
-                filename = download.filename,
+                filename = safeFilename,
                 contentType = download.contentType,
                 saveToLocker = true,
                 cookies = activeVideoCookies,
                 referrerUrl = currentUrl
             )
+            Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -997,36 +948,40 @@ class BrowserViewModel : ViewModel() {
                 val success = startSystemDownload(
                     context = context,
                     url = download.url,
-                    filename = download.filename,
+                    filename = safeFilename,
                     mimeType = download.contentType
                 )
                 if (!success) {
                     streamDownloadEngine.startGenericFileDownload(
                         url = download.url,
-                        filename = download.filename,
+                        filename = safeFilename,
                         contentType = download.contentType,
                         saveToLocker = false,
                         cookies = activeVideoCookies,
                         referrerUrl = currentUrl
                     )
+                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
                 }
             }
             mode == "external_chooser" -> {
                 val handedOff = handOffToExternalDownloadManager(
                     context = context,
                     url = download.url,
-                    filename = download.filename,
+                    filename = safeFilename,
                     contentType = download.contentType
                 )
                 if (!handedOff) {
                     streamDownloadEngine.startGenericFileDownload(
                         url = download.url,
-                        filename = download.filename,
+                        filename = safeFilename,
                         contentType = download.contentType,
                         saveToLocker = false,
                         cookies = activeVideoCookies,
                         referrerUrl = currentUrl
                     )
+                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
                 }
             }
             mode.startsWith("package:") -> {
@@ -1034,30 +989,34 @@ class BrowserViewModel : ViewModel() {
                 val handedOff = handOffToExternalDownloadManager(
                     context = context,
                     url = download.url,
-                    filename = download.filename,
+                    filename = safeFilename,
                     contentType = download.contentType,
                     targetPackage = pkg
                 )
                 if (!handedOff) {
                     streamDownloadEngine.startGenericFileDownload(
                         url = download.url,
-                        filename = download.filename,
+                        filename = safeFilename,
                         contentType = download.contentType,
                         saveToLocker = false,
                         cookies = activeVideoCookies,
                         referrerUrl = currentUrl
                     )
+                    Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
                 }
             }
             else -> { // "internal"
                 streamDownloadEngine.startGenericFileDownload(
                     url = download.url,
-                    filename = download.filename,
+                    filename = safeFilename,
                     contentType = download.contentType,
                     saveToLocker = false,
                     cookies = activeVideoCookies,
                     referrerUrl = currentUrl
                 )
+                Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1275,20 +1234,16 @@ class BrowserViewModel : ViewModel() {
         }
 
         val isAttachment = disposition?.contains("attachment", true) == true
-        // Only treat this as a download when the server explicitly marks it as an
-        // attachment OR the URL clearly points at a downloadable file. This prevents
-        // normal HTML page navigations (content-type text/html) from being wrongly
-        // intercepted as a "downloaded-file.bin" download.
-        if ((isAttachment || response.requestExternalApp) && isGenericDownloadUrl(response.uri)) {
+        if (isAttachment || response.requestExternalApp || isGenericDownloadUrl(response.uri)) {
             Log.i(TAG, "Handling external download response: ${response.uri}")
             val filename = parseFilenameFromContentDisposition(disposition)
                 ?: guessDownloadFilename(response.uri, contentType)
             viewModelScope.launch(Dispatchers.Main) {
-                pendingGenericDownload = PendingGenericDownload(
-                    url = response.uri,
-                    filename = filename,
-                    contentType = contentType
-                )
+                val activeTab = tabs.find { it.id == activeTabId }
+                if (activeTab != null && activeTab.parentId != null && (activeTab.url.isBlank() || activeTab.url == "about:blank" || activeTab.url == response.uri)) {
+                    closeTab(activeTab.id, context)
+                }
+                handleGenericDownload(response.uri, filename, contentType, context)
             }
         }
     }
