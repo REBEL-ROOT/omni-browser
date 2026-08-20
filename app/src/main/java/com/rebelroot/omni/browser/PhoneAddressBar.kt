@@ -646,6 +646,161 @@ fun PhoneAddressBar(
         }
     }
 
+    // ── Address Bar Editing Quick Action Bar (Issue #88) ───────────────────────
+    if (isInputFocused) {
+        val clipboard = remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager }
+        val clipboardText = remember(isInputFocused) {
+            try {
+                clipboard?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val currentText = inputUrl.text.ifEmpty { viewModel.currentUrl }.takeIf { it.isNotEmpty() && it != "about:blank" }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = config.paddingHorizontal)
+                .offset(y = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = if (viewModel.isAmoledMode) Color(0xFF0C0D10) else if (viewModel.isDarkThemeEnabled) Color(0xFF20222A) else Color(0xFFF2F4F7),
+            tonalElevation = 2.dp,
+            shadowElevation = 4.dp,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!clipboardText.isNullOrBlank()) {
+                    AssistChip(
+                        onClick = {
+                            viewModel.loadUrl(clipboardText)
+                            onInputUrlChange(androidx.compose.ui.text.input.TextFieldValue(clipboardText))
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.ContentPaste,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.address_bar_paste_go),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            labelColor = MaterialTheme.colorScheme.primary
+                        ),
+                        border = null
+                    )
+                }
+
+                if (!currentText.isNullOrBlank()) {
+                    AssistChip(
+                        onClick = {
+                            val clip = ClipData.newPlainText("URL", currentText)
+                            clipboard?.setPrimaryClip(clip)
+                            Toast.makeText(context, context.getString(R.string.ctx_link_copied), Toast.LENGTH_SHORT).show()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.address_bar_copy),
+                                fontSize = 12.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = null
+                    )
+
+                    AssistChip(
+                        onClick = {
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                putExtra(Intent.EXTRA_TEXT, currentText)
+                                type = "text/plain"
+                            }
+                            val shareIntent = Intent.createChooser(sendIntent, null)
+                            context.startActivity(shareIntent)
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.address_bar_share),
+                                fontSize = 12.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = null
+                    )
+                }
+
+                if (inputUrl.text.isNotEmpty()) {
+                    AssistChip(
+                        onClick = {
+                            onInputUrlChange(androidx.compose.ui.text.input.TextFieldValue(""))
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.address_bar_clear),
+                                fontSize = 12.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = null
+                    )
+                }
+            }
+        }
+    }
+
     // ── History Suggestions Dropdown ─────────────────────────────────────────
     if (isInputFocused && viewModel.historySuggestions.isNotEmpty()) {
         val shape = RoundedCornerShape(16.dp)

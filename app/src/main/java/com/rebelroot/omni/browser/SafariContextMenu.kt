@@ -419,7 +419,21 @@ private fun ActionsCard(
                 iconTint = iconTint,
                 onClick = {
                     viewModel.dismissContextMenu()
-                    viewModel.createNewTab(context, targetUrl)
+                    viewModel.createNewTab(context, targetUrl, inBackground = false)
+                }
+            )
+            HorizontalDivider(color = divColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 16.dp))
+
+            // Open in Background Tab
+            SafariMenuItem(
+                label = stringResource(R.string.ctx_open_background_tab),
+                icon = Icons.Rounded.TabUnselected,
+                textColor = textPrimary,
+                iconTint = iconTint,
+                onClick = {
+                    viewModel.dismissContextMenu()
+                    viewModel.createNewTab(context, targetUrl, inBackground = true)
+                    Toast.makeText(context, context.getString(R.string.ctx_background_tab_opened), Toast.LENGTH_SHORT).show()
                 }
             )
             HorizontalDivider(color = divColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 16.dp))

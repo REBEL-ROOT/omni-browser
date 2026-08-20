@@ -100,13 +100,15 @@ fun ThemeScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(stringResource(id = R.string.theme_mode), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         val themeMode = when {
-                            viewModel.isAmoledMode -> 3
-                            viewModel.isDarkThemeEnabled -> 2
-                            viewModel.isCreamyMode -> 1
-                            else -> 0
+                            viewModel.followSystemTheme -> 0
+                            viewModel.isCreamyMode -> 2
+                            viewModel.isAmoledMode -> 4
+                            viewModel.isDarkThemeEnabled -> 3
+                            else -> 1
                         }
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                             val options = listOf(
+                                stringResource(id = R.string.theme_system),
                                 stringResource(id = R.string.theme_light),
                                 stringResource(id = R.string.theme_creamy),
                                 stringResource(id = R.string.theme_dark),
@@ -118,21 +120,28 @@ fun ThemeScreen(
                                     onClick = {
                                         when (index) {
                                             0 -> {
+                                                viewModel.saveFollowSystemTheme(context, true)
+                                            }
+                                            1 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
                                                 viewModel.saveCreamyMode(context, false)
                                             }
-                                            1 -> {
+                                            2 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
                                                 viewModel.saveCreamyMode(context, true)
                                             }
-                                            2 -> {
+                                            3 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, true)
                                                 viewModel.saveAmoledMode(context, false)
                                                 viewModel.saveCreamyMode(context, false)
                                             }
-                                            3 -> {
+                                            4 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, true)
                                                 viewModel.saveAmoledMode(context, true)
                                                 viewModel.saveCreamyMode(context, false)
@@ -144,7 +153,7 @@ fun ThemeScreen(
                                 ) {
                                     Text(
                                         text = label,
-                                        fontSize = 11.5.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = if (themeMode == index) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1,
                                         softWrap = false,

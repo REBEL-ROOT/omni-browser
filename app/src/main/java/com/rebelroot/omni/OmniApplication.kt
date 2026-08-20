@@ -93,6 +93,7 @@ class OmniApplication : Application() {
                 ThemeStateHolder.amoledMode        = prefs[AMOLED_MODE_KEY]        ?: false
                 ThemeStateHolder.accentTheme       = prefs[ACCENT_THEME_KEY]       ?: "Ocean Blue"
                 ThemeStateHolder.dynamicColorEnabled = prefs[DYNAMIC_COLOR_KEY]    ?: false
+                ThemeStateHolder.followSystemTheme = prefs[FOLLOW_SYSTEM_THEME_KEY] ?: false
             } catch (_: Exception) {
                 // Defaults already applied above; nothing else to do.
             }
@@ -104,6 +105,7 @@ class OmniApplication : Application() {
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color_enabled")
         val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
+        val FOLLOW_SYSTEM_THEME_KEY = booleanPreferencesKey("follow_system_theme")
         // UI layout & wallpaper — read synchronously at startup to prevent flash
         val UI_SCALE_KEY            = floatPreferencesKey("ui_scale")
         val HOME_UI_SCALE_KEY       = floatPreferencesKey("home_ui_scale")
@@ -122,6 +124,7 @@ object ThemeStateHolder {
     @Volatile var amoledMode: Boolean = false
     @Volatile var accentTheme: String = "Ocean Blue"
     @Volatile var dynamicColorEnabled: Boolean = false
+    @Volatile var followSystemTheme: Boolean = false
 }
 
 /**

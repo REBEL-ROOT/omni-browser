@@ -133,6 +133,19 @@ fun TabsSettingsScreen(
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor
                     )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Confirm before exit
+                    SettingsSwitchRow(
+                        icon = Icons.AutoMirrored.Rounded.Logout,
+                        title = stringResource(id = R.string.confirm_exit_title),
+                        subtitle = stringResource(id = R.string.confirm_exit_desc),
+                        checked = viewModel.confirmExit,
+                        onCheckedChange = { viewModel.saveConfirmExit(context, it) },
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
                 }
             }
         }
