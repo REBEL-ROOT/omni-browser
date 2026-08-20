@@ -176,6 +176,8 @@ class BrowserViewModel : ViewModel() {
         val CUSTOM_SUGGEST_URL_KEY = stringPreferencesKey("custom_suggest_url")
         val CUSTOM_SEARCH_ENGINES_KEY = stringPreferencesKey("custom_search_engines")
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
+        val FOLLOW_SYSTEM_THEME_KEY = booleanPreferencesKey("follow_system_theme")
+        val CONFIRM_EXIT_KEY = booleanPreferencesKey("confirm_exit_enabled")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color_enabled")
         val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
@@ -603,6 +605,8 @@ class BrowserViewModel : ViewModel() {
     val searchSuggestions = androidx.compose.runtime.mutableStateListOf<String>()
     val historySuggestions = androidx.compose.runtime.mutableStateListOf<HistoryEntry>()
     var isDarkThemeEnabled by mutableStateOf(true)
+    var followSystemTheme by mutableStateOf(false)
+    var confirmExit by mutableStateOf(true)
     var isAmoledMode by mutableStateOf(false)
     var isCreamyMode by mutableStateOf(false)
     var isDynamicColorEnabled by mutableStateOf(false)
@@ -2143,7 +2147,13 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    fun createNewTab(context: Context, url: String, groupId: String? = null, isIncognito: Boolean = isIncognitoMode) {
+    fun createNewTab(
+        context: Context,
+        url: String,
+        groupId: String? = null,
+        isIncognito: Boolean = isIncognitoMode,
+        inBackground: Boolean? = null
+    ) {
         val runtime = getGeckoRuntime(context)
         val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -2172,7 +2182,8 @@ class BrowserViewModel : ViewModel() {
             addTabToGroup(tabId, groupId)
         }
         session.open(runtime)
-        if (!openTabsInBackground || tabs.size == 1 || groupId != null) {
+        val shouldOpenInBackground = inBackground ?: (openTabsInBackground && tabs.size > 1 && groupId == null)
+        if (!shouldOpenInBackground || tabs.size == 1) {
             selectTab(newTab.id)
         } else {
             val isIncog = newTab.isIncognito
@@ -3106,6 +3117,8 @@ class BrowserViewModel : ViewModel() {
                 val darkThemePref = getDarkThemePreference(appCtx).first()
                 isDarkThemeEnabled = darkThemePref
                 ThemeStateHolder.darkThemeEnabled = darkThemePref
+                followSystemTheme = getFollowSystemThemePreference(appCtx).first()
+                ThemeStateHolder.followSystemTheme = followSystemTheme
                 updateGeckoColorScheme()
             }
 
@@ -3174,6 +3187,7 @@ class BrowserViewModel : ViewModel() {
                 tabLayoutMode = prefs[TAB_LAYOUT_MODE_KEY] ?: "Grid"
                 autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
                 openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
+                confirmExit = prefs[CONFIRM_EXIT_KEY] ?: true
                 accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
                 accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
                 accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
@@ -3927,6 +3941,38 @@ class BrowserViewModel : ViewModel() {
             if (enabled || forceDarkWebsites) {
                 injectForceDarkCssIfNeeded()
             }
+        }
+    }
+
+    fun getFollowSystemThemePreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[FOLLOW_SYSTEM_THEME_KEY] ?: false
+        }
+    }
+
+    fun saveFollowSystemTheme(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[FOLLOW_SYSTEM_THEME_KEY] = enabled
+            }
+            followSystemTheme = enabled
+            ThemeStateHolder.followSystemTheme = enabled
+            updateGeckoColorScheme()
+        }
+    }
+
+    fun getConfirmExitPreference(context: Context): Flow<Boolean> {
+        return context.dataStore.data.map { preferences ->
+            preferences[CONFIRM_EXIT_KEY] ?: true
+        }
+    }
+
+    fun saveConfirmExit(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[CONFIRM_EXIT_KEY] = enabled
+            }
+            confirmExit = enabled
         }
     }
 

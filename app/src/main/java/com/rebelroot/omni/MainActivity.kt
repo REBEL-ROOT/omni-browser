@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -125,9 +126,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val themeState = ThemeStateHolder
+        val isSystemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val effectiveStartupDark = if (themeState.followSystemTheme) isSystemDark else themeState.darkThemeEnabled
         val themeRes = when {
-            themeState.darkThemeEnabled && themeState.amoledMode -> R.style.Theme_OmniBrowser_Amoled
-            themeState.darkThemeEnabled -> R.style.Theme_OmniBrowser_Dark
+            effectiveStartupDark && themeState.amoledMode -> R.style.Theme_OmniBrowser_Amoled
+            effectiveStartupDark -> R.style.Theme_OmniBrowser_Dark
             else -> R.style.Theme_OmniBrowser_Light
         }
         setTheme(themeRes)
@@ -208,6 +211,7 @@ class MainActivity : FragmentActivity() {
         browserViewModel.isAmoledMode = themeState.amoledMode
         browserViewModel.selectedAccentTheme = themeState.accentTheme
         browserViewModel.isDynamicColorEnabled = themeState.dynamicColorEnabled
+        browserViewModel.followSystemTheme = themeState.followSystemTheme
 
         val intentAction = intent?.action
         val rawIntentUrl = intent?.dataString
@@ -248,6 +252,18 @@ class MainActivity : FragmentActivity() {
                 context.resources.updateConfiguration(config, context.resources.displayMetrics)
                 context.createConfigurationContext(config)
             }
+
+            val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val effectiveDarkTheme = if (browserViewModel.followSystemTheme) systemInDark else browserViewModel.isDarkThemeEnabled
+            val effectiveAmoledMode = if (browserViewModel.followSystemTheme) (browserViewModel.isAmoledMode && systemInDark) else browserViewModel.isAmoledMode
+            val effectiveCreamyMode = if (browserViewModel.followSystemTheme) (browserViewModel.isCreamyMode && !systemInDark) else browserViewModel.isCreamyMode
+
+            LaunchedEffect(effectiveDarkTheme, browserViewModel.followSystemTheme) {
+                if (browserViewModel.followSystemTheme) {
+                    browserViewModel.isDarkThemeEnabled = effectiveDarkTheme
+                }
+            }
+
             CompositionLocalProvider(
                 LocalContext provides localizedContext,
                 LocalConfiguration provides localizedContext.resources.configuration,
@@ -255,10 +271,10 @@ class MainActivity : FragmentActivity() {
                 androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides this@MainActivity
             ) {
                 OmniTheme(
-                    darkTheme = browserViewModel.isDarkThemeEnabled,
+                    darkTheme = effectiveDarkTheme,
                     accentTheme = browserViewModel.selectedAccentTheme,
-                    amoledMode = browserViewModel.isAmoledMode,
-                    creamyMode = browserViewModel.isCreamyMode,
+                    amoledMode = effectiveAmoledMode,
+                    creamyMode = effectiveCreamyMode,
                     dynamicColor = browserViewModel.isDynamicColorEnabled
                 ) {
                     Surface(

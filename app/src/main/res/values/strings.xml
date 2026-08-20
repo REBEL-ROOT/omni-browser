@@ -472,6 +472,7 @@
     <string name="add_new_engine">Add New</string>
     <string name="no_custom_search_engines">No custom search engines added yet.</string>
     <string name="theme_mode">Theme Mode</string>
+    <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_creamy">Creamy</string>
     <string name="theme_dark">Dark</string>
@@ -1703,6 +1704,7 @@
 
     <!-- Safari-style link/image context menu -->
     <string name="ctx_open_new_tab">Open in New Tab</string>
+    <string name="ctx_open_background_tab">Open in Background Tab</string>
     <string name="ctx_open_new_tab_group">Open in New Tab in Group</string>
     <string name="ctx_open_private_tab">Open in Private Tab</string>
     <string name="ctx_copy_link_address">Copy Link Address</string>
@@ -1720,10 +1722,21 @@
     <string name="ctx_clean_link_copied">Clean link copied</string>
     <string name="ctx_download_queued">Download queued</string>
     <string name="ctx_bookmark_saved">Saved to Bookmarks</string>
+    <string name="ctx_background_tab_opened">Tab opened in background</string>
     <string name="ctx_lens_not_installed">Google Lens app not installed</string>
     <string name="ctx_loading_preview">Loading preview…</string>
     <string name="ctx_image_option">Image</string>
     <string name="ctx_link_option">Link</string>
+
+    <!-- Address Bar Actions -->
+    <string name="address_bar_paste_go">Paste &amp; Go</string>
+    <string name="address_bar_copy">Copy</string>
+    <string name="address_bar_share">Share</string>
+    <string name="address_bar_clear">Clear</string>
+
+    <!-- Confirm on Exit Setting -->
+    <string name="confirm_exit_title">Confirm before Exit</string>
+    <string name="confirm_exit_desc">Show exit dialog when pressing Back on the home screen</string>
 
     <!-- Onboarding - Proxy Hub page -->
     <string name="onboarding_title_proxy">Choose Your Privacy Mode</string>

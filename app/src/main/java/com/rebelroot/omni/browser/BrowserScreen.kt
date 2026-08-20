@@ -890,8 +890,11 @@ fun BrowserScreen(
             if (viewModel.isExternalIntentLaunch && activity != null) {
                 if (activity.isTaskRoot) activity.finishAndRemoveTask() else activity.finish()
             } else {
-                // On home screen — open exit options sheet immediately (single press)
-                showExitSheet = true
+                if (viewModel.confirmExit) {
+                    showExitSheet = true
+                } else {
+                    if (activity?.isTaskRoot == true) activity.finishAndRemoveTask() else activity?.finish()
+                }
             }
         }
     }
