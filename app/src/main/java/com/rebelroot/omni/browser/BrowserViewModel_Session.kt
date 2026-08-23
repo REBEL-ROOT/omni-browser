@@ -736,8 +736,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     notifyPageNavigation()
                     isVideoPlayingInPage = false
                     applyUserAgentForTab(tab, it)
-                    injectStealthDefuserScriptlet(tab)
-                    applySiteStyleToTab(tab)
                     // Re-suppress the translate badge on SPA navigations within translate.goog
                     if (it.contains(".translate.goog")) {
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -1123,13 +1121,23 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     return null
                 }
 
-                Log.i(TAG, "onNewSession: opening new tab for popup URI $uri (opener tabId=${tab.id})")
-                val runtime = getGeckoRuntime(context)
+                // Block ad/tracker popup popups before creating sessions
+                val host = SecurityPolicy.extractEffectiveHost(uri)
                 val isAuthUri = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "accounts.youtube.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "appleid.apple.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "login.microsoftonline.com") ||
+                                OriginVerifier.isExactOriginMatch(uri, "github.com") ||
                                 lowerUri.contains("oauth") || lowerUri.contains("gsi")
+
+                if (host.isNotEmpty() && !isAuthUri && adBlockManager.isHostBlocked(host)) {
+                    Log.w(TAG, "🚫 onNewSession: Blocked ad/tracker popup to $uri")
+                    incrementTrackersBlocked(context, 1)
+                    try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
+                    return null
+                }
+
+                Log.i(TAG, "onNewSession: opening new tab for popup URI $uri (opener tabId=${tab.id})")
                 val isJsAllowed = isAuthUri || getSitePermissionValue(uri, "javascript") == "allow"
                 val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
                     .usePrivateMode(isIncognitoMode)
@@ -1139,6 +1147,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     .build()
                 val newSession = GeckoSession(settings)
                 val tabId = java.util.UUID.randomUUID().toString()
+                val gen = nextTabGeneration()
                 val newTab = TabState(
                     id = tabId,
                     session = newSession,
@@ -1146,14 +1155,22 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     url = uri,
                     isIncognito = isIncognitoMode,
                     settingsVersion = currentSettingsVersion,
+                    sessionGenerationId = gen,
                     parentId = tab.id
                 )
 
                 setupTabSessionListeners(newTab, context)
                 tabs.add(newTab)
-                newSession.open(runtime)
-                selectTab(newTab.id)
-                saveTabs()
+                recoveryCoordinator?.registerTab(tabId, gen, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
+
+                // GeckoView's NavigationDelegate.onNewSession contract mandates returning an UNOPENED
+                // GeckoSession instance. GeckoView opens and attaches it internally to the parent window.
+                // Calling newSession.open() here causes:
+                // "java.lang.AssertionError: Must use an unopened GeckoSession instance" and crashes the app.
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    selectTab(newTab.id)
+                    saveTabs()
+                }
 
                 Log.i(TAG, "AUTH_POPUP: created new tab $tabId with parentId ${tab.id} for uri $uri")
                 return GeckoResult.fromValue(newSession)
@@ -1177,10 +1194,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 tabs[idx] = tabs[idx].copy(loadError = null)
             }
             applyUserAgentForTab(tab, url)
-            applySiteStyleToTab(tab)
-            if (forceDarkWebsites || isDarkThemeEnabled) {
-                injectForceDarkCssIfNeeded(tab)
-            }
         }
 
         override fun onPageStop(session: GeckoSession, success: Boolean) {
@@ -1229,10 +1242,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             // Stale-callback protection: ignore callbacks from a dead/invalid session generation.
             if (recoveryCoordinator?.isStaleCallback(tab.id, tab.sessionGenerationId) == true) return
 
-            if (progress in 5..25) {
-                injectStealthDefuserScriptlet(tab)
-                applySiteStyleToTab(tab)
-            }
             if (tab.id == activeTabId) {
                 loadingProgress = (progress / 100f).coerceIn(0.05f, 1f)
             }

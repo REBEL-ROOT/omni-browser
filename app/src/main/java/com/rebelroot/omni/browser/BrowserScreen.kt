@@ -2084,8 +2084,20 @@ fun BrowserScreen(
                                     AndroidView(
                                         modifier = Modifier.fillMaxSize(),
                                         factory = { ctx ->
+                                            val activityCtx = if (ctx is android.app.Activity) ctx else {
+                                                var cur: android.content.Context? = ctx
+                                                var act: android.app.Activity? = null
+                                                while (cur is android.content.ContextWrapper) {
+                                                    if (cur is android.app.Activity) {
+                                                        act = cur
+                                                        break
+                                                    }
+                                                    cur = cur.baseContext
+                                                }
+                                                act ?: ctx
+                                            }
                                             val thresholdPx = with(density) { 80.dp.toPx() }
-                                            object : GeckoView(ctx) {
+                                            object : GeckoView(activityCtx) {
                                                 private var startY = 0f
                                                 private var isPulling = false
                                                 private var isFastScrolling = false

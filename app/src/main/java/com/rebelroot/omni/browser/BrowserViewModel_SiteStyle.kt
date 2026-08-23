@@ -3,9 +3,15 @@ package com.rebelroot.omni.browser
 import android.content.Context
 
 /**
- * Applies optimized, non-flashing custom site styles and dark/AMOLED theme presets to GeckoView tabs.
- * Features a Direct DOM Pitch-Black AMOLED engine (#000000) that turns off OLED pixels on all websites,
- * preserves media element colors, sets Google dark search cookies, and handles dynamic DOM cards.
+ * Applies Dark Reader-grade direct surface & CSS variable styling to GeckoView tabs.
+ * Features:
+ * 1. 100% Pure Pitch-Black OLED / AMOLED mode (#000000) that turns off OLED pixels on ALL websites.
+ * 2. High-clarity crisp white typography (#F1F5F9) — ZERO dark grey text wash across Wikipedia, Google, articles.
+ * 3. Natural border & outline handling: Clean, borderless icon buttons without artificial box clutter.
+ * 4. Comfortable Dark mode (#121214) with subtle card elevations.
+ * 5. Calibrated reading presets: Sepia (#FBF0D9) and Forest (#0F1C15).
+ * 6. Image, video, canvas, poster, thumbnail protection — ZERO negative color distortion.
+ * 7. Dynamic DOM mutation observer to style infinite scrolling feeds and SPAs.
  */
 fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
     val tab = targetTab ?: activeTab ?: return
@@ -24,15 +30,6 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
             siteStyleGrayscale || siteStyleWarmFilter
 
     if (!hasCustomStyles) {
-        val clearJs = """
-            javascript:(function() {
-                const s = document.getElementById('omni-custom-site-style');
-                if (s) s.remove();
-                const m = document.getElementById('omni-custom-site-style-meta');
-                if (m) m.remove();
-            })();
-        """.trimIndent()
-        try { session.loadUri(clearJs) } catch (_: Exception) {}
         return
     }
 
@@ -54,6 +51,33 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
             colorScheme = "dark"
             cssRules = """
                 :root, [data-theme], [data-color-mode], html, body {
+                    --bg: #000000 !important;
+                    --bg-color: #000000 !important;
+                    --background: #000000 !important;
+                    --background-color: #000000 !important;
+                    --bg-primary: #000000 !important;
+                    --bg-secondary: #000000 !important;
+                    --surface: #000000 !important;
+                    --surface-color: #000000 !important;
+                    --card-bg: #000000 !important;
+                    --header-bg: #000000 !important;
+                    --footer-bg: #000000 !important;
+                    --search-bg: #000000 !important;
+                    --ub-bg-color: #000000 !important;
+                    --theme-bg: #000000 !important;
+                    --theme-surface: #000000 !important;
+                    --theme-card: #000000 !important;
+                    --surface-background: #000000 !important;
+                    --yt-spec-base-background: #000000 !important;
+                    --yt-spec-raised-background: #000000 !important;
+                    --yt-spec-menu-background: #000000 !important;
+                    --yt-spec-static-overlay-background-solid: #000000 !important;
+                    --m3c-surface: #000000 !important;
+                    --m3c-surface-container: #000000 !important;
+                    --m3c-surface-container-high: #000000 !important;
+                    --m3c-surface-container-highest: #000000 !important;
+                    --m3c-surface-container-low: #000000 !important;
+                    --m3c-surface-container-lowest: #000000 !important;
                     --color-surface: #000000 !important;
                     --color-surface-1: #000000 !important;
                     --color-surface-2: #000000 !important;
@@ -63,95 +87,67 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                     --color-background: #000000 !important;
                     --color-primary-background: #000000 !important;
                     --color-secondary-background: #000000 !important;
-                    --search-bg: #000000 !important;
-                    --ub-bg-color: #000000 !important;
-                    --theme-bg: #000000 !important;
-                    --theme-surface: #000000 !important;
-                    --theme-card: #000000 !important;
-                    --surface-background: #000000 !important;
-                    --header-bg: #000000 !important;
-                    --footer-bg: #000000 !important;
-                    --bg-primary: #000000 !important;
-                    --bg-secondary: #000000 !important;
-                    --bg-tertiary: #000000 !important;
-                    --background-color: #000000 !important;
-                    --yt-spec-base-background: #000000 !important;
-                    --yt-spec-raised-background: #000000 !important;
-                    --yt-spec-menu-background: #000000 !important;
-                    --yt-spec-static-overlay-background-solid: #000000 !important;
+                    --text: #f1f5f9 !important;
+                    --text-color: #f1f5f9 !important;
+                    --text-primary: #f1f5f9 !important;
+                    --text-secondary: #e2e8f0 !important;
+                    --border-color: #26272b !important;
+                    --border: #26272b !important;
+                    color-scheme: dark !important;
                 }
-                :root, html, body, div, span, p,
-                section, article, main, header, footer, nav, aside, dialog,
-                form, table, tr, td, th, ul, ol, li, summary, details,
-                [class*="card" i], [class*="container" i], [class*="wrapper" i], [class*="box" i],
-                [class*="header" i], [class*="footer" i], [class*="nav" i], [class*="search" i], [class*="bar" i],
-                [class*="sidebar" i], [class*="modal" i], [class*="dialog" i], [class*="popup" i], [class*="menu" i], [class*="panel" i], [class*="block" i],
-                [role="main"], [role="article"], [role="navigation"], [role="region"], [role="dialog"], [role="search"],
+                html, body, #__next, #root, #app, main, [role="main"], [role="article"],
+                section, article, header, nav, footer, aside, dialog,
+                .container, .wrapper, .content, .main-content, .layout, .page,
+                [class*="container" i], [class*="wrapper" i], [class*="layout" i], [class*="content" i], [class*="page" i],
+                .card, .panel, .box, .sidebar, .modal, .dropdown, .menu,
+                [class*="card" i], [class*="panel" i], [class*="box" i], [class*="sidebar" i], [class*="modal" i], [class*="menu" i], [class*="list" i],
+                table, tr, td, th, ul, ol, li, dl, dt, dd,
                 g-card, g-inner-card, g-header, g-flat-button, g-expandable-card, c-wiz,
-                .g, .kp-blk, .xpd, .cUnBl, .MjjYud, .vdLWh, .wDYH0e, .K5qjJc, .g-blk, .sfbg, .e222eb, .minidiv, .appbar, #aria-main, #cnt, #rcnt, [data-async-context] {
+                .g, .kp-blk, .xpd, .cUnBl, .MjjYud, .vdLWh, .wDYH0e, .K5qjJc, .g-blk, .sfbg, .e222eb, .minidiv, .appbar, #aria-main, #cnt, #rcnt, [data-async-context],
+                .A8SBwf, #searchform, .tsf, .mJ2Mod, .PZPZlf, .QCzoEc, .Lj9dx, .ULSxyf {
                     background-color: #000000 !important;
                     background: #000000 !important;
-                    color: #E2E8F0 !important;
-                    border-color: #1A1A1A !important;
-                    box-shadow: none !important;
-                    color-scheme: dark !important;
+                    color: #f1f5f9 !important;
                 }
-                p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i, span, summary, dt, dd,
-                [role="button"], [role="heading"], [role="option"], [role="treeitem"], [role="accordion"],
-                [class*="question" i], [class*="title" i], [class*="heading" i], [class*="header" i], [class*="text" i] {
-                    color: #E2E8F0 !important;
+
+                .card, .panel, table, tr, td, th, hr, .divider, [class*="divider" i], [class*="separator" i] {
+                    border-color: #26272b !important;
                 }
-                [role="button"] *, summary *, [class*="question" i] *, c-wiz * {
-                    color: #E2E8F0 !important;
+
+                .RNNXgb, input, textarea, select, [contenteditable="true"], [role="searchbox"], [role="combobox"] {
+                    background-color: #000000 !important;
+                    background: #000000 !important;
+                    color: #ffffff !important;
+                    -webkit-text-fill-color: #ffffff !important;
+                    border: 1px solid #2d3036 !important;
+                    border-radius: 8px;
                 }
-                a, a * {
-                    color: #60A5FA !important;
+
+                button, [role="button"], .btn, [class*="btn" i], [class*="chip" i], [class*="pill" i] {
+                    background-color: #000000 !important;
+                    background: #000000 !important;
+                    color: #f1f5f9 !important;
                 }
-                a:visited, a:visited * {
-                    color: #A78BFA !important;
+
+                /* Crisp readable white typography across all text elements — zero grey */
+                p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i, span, dt, dd, summary,
+                small, blockquote, q, cite, code, pre, figcaption {
+                    color: #f1f5f9 !important;
                 }
-                a:hover {
-                    color: #93C5FD !important;
+
+                /* High-contrast crisp links */
+                a, a:visited {
+                    color: #8ab4f8 !important;
                 }
-                mark, .mark, [class*="highlight" i] {
-                    background-color: transparent !important;
-                    background: transparent !important;
-                    color: #60A5FA !important;
-                }
-                img, video, canvas, svg, picture, iframe, g-img, g-img *,
+
+                img, video, canvas, svg, picture, iframe,
                 [style*="background-image"], [style*="background: url"],
-                [class*="thumb" i], [class*="thumb" i] *,
-                [class*="thumbnail" i], [class*="thumbnail" i] *,
-                [class*="poster" i], [class*="poster" i] *,
-                [class*="avatar" i], [class*="avatar" i] *,
-                [class*="media" i], [class*="media" i] *,
-                [class*="video" i], [class*="video" i] *,
-                [class*="player" i], [class*="player" i] *,
-                [class*="image" i], [class*="image" i] *,
-                [class*="img" i], [class*="img" i] *,
-                [class*="photo" i], [class*="photo" i] *,
-                .v55W0e, .v55W0e *, .m652ud, .m652ud *, .Q83fi, .Q83fi *, .ctoDDe, .ctoDDe *, .Yk428, .Yk428 *, .vLffw, .vLffw *, .oJ3Ryb, .oJ3Ryb *, .B5e95, .B5e95 *, .rISNhc, .rISNhc *,
-                figure, figure * {
-                    background-color: transparent !important;
-                    background: transparent !important;
-                    opacity: 1 !important;
+                [class*="thumb" i], [class*="thumbnail" i], [class*="avatar" i], [class*="poster" i],
+                [class*="cover" i], [class*="media" i], [class*="image" i], [class*="photo" i],
+                g-img, figure {
                     filter: none !important;
-                }
-                input, textarea, select, [contenteditable="true"], [role="combobox"], [role="searchbox"] {
-                    background-color: #000000 !important;
-                    background: #000000 !important;
-                    color: #FFFFFF !important;
-                    -webkit-text-fill-color: #FFFFFF !important;
-                    border: none !important;
-                    outline: none !important;
-                    color-scheme: dark !important;
-                }
-                input::placeholder, textarea::placeholder {
-                    color: #8E8E93 !important;
-                    -webkit-text-fill-color: #8E8E93 !important;
-                }
-                button, [role="button"], [class*="chip" i], [class*="pill" i], [class*="badge" i] {
-                    color-scheme: dark !important;
+                    opacity: 1 !important;
+                    background: transparent !important;
                 }
                 *::-webkit-scrollbar {
                     background-color: #000000 !important;
@@ -159,11 +155,7 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                 }
                 *::-webkit-scrollbar-thumb {
                     background-color: #222222 !important;
-                    border-radius: 4px !important;
-                }
-                ::selection {
-                    background: #2563EB !important;
-                    color: #FFFFFF !important;
+                    border-radius: 3px !important;
                 }
             """.trimIndent()
         }
@@ -171,79 +163,77 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
         "DARK" -> {
             colorScheme = "dark"
             cssRules = """
-                :root, html, body {
-                    background-color: #121212 !important;
-                    background: #121212 !important;
-                    color: #E2E8F0 !important;
+                :root, [data-theme], [data-color-mode], html, body {
+                    --bg: #121214 !important;
+                    --bg-color: #121214 !important;
+                    --background: #121214 !important;
+                    --background-color: #121214 !important;
+                    --bg-primary: #121214 !important;
+                    --bg-secondary: #1a1c20 !important;
+                    --surface: #18191c !important;
+                    --surface-color: #18191c !important;
+                    --card-bg: #18191c !important;
+                    --header-bg: #121214 !important;
+                    --footer-bg: #121214 !important;
+                    --text: #f1f5f9 !important;
+                    --text-color: #f1f5f9 !important;
+                    --text-primary: #f1f5f9 !important;
+                    --text-secondary: #e2e8f0 !important;
+                    --border-color: #2e3035 !important;
+                    --border: #2e3035 !important;
                     color-scheme: dark !important;
                 }
-                section, article, main, header, footer, nav, aside, dialog,
-                form, table, tr, td, th, ul, ol, li,
-                [class*="card" i], [class*="container" i], [class*="wrapper" i],
-                [class*="sidebar" i], [class*="modal" i], [class*="dialog" i], [class*="popup" i], [class*="menu" i], [class*="panel" i],
-                [role="main"], [role="article"], [role="navigation"], [role="region"], [role="dialog"],
-                .g, .kp-blk, .xpd, .cUnBl, .MjjYud {
-                    background-color: #1E1E1E !important;
-                    color: #E2E8F0 !important;
-                    border-color: #2D2D2D !important;
+                html, body, #__next, #root, #app, main, [role="main"], [role="article"],
+                section, article, header, nav, footer, aside, dialog,
+                .container, .wrapper, .content, .main-content, .layout, .page,
+                [class*="container" i], [class*="wrapper" i], [class*="layout" i], [class*="content" i], [class*="page" i] {
+                    background-color: #121214 !important;
+                    background: #121214 !important;
+                    color: #f1f5f9 !important;
                 }
-                img, video, canvas, svg, picture, iframe, g-img, g-img *,
+                .card, .panel, .box, .sidebar, .modal, .dropdown, .menu,
+                [class*="card" i], [class*="panel" i], [class*="box" i], [class*="sidebar" i], [class*="modal" i], [class*="menu" i], [class*="list" i],
+                table, tr, td, th, ul, ol, li, dl, dt, dd {
+                    background-color: #18191c !important;
+                    background: #18191c !important;
+                    border-color: #2e3035 !important;
+                    color: #f1f5f9 !important;
+                }
+                p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i, span, dt, dd, summary,
+                small, blockquote, q, cite, code, pre, figcaption {
+                    color: #f1f5f9 !important;
+                }
+                a, a:visited {
+                    color: #8ab4f8 !important;
+                }
+                input, textarea, select, [contenteditable="true"], [role="searchbox"] {
+                    background-color: #1e2024 !important;
+                    background: #1e2024 !important;
+                    color: #ffffff !important;
+                    -webkit-text-fill-color: #ffffff !important;
+                    border: 1px solid #3c4043 !important;
+                }
+                button, [role="button"], .btn, [class*="btn" i], [class*="chip" i], [class*="pill" i] {
+                    background-color: #202228 !important;
+                    color: #f1f5f9 !important;
+                    border-color: #3c4043 !important;
+                }
+                img, video, canvas, svg, picture, iframe,
                 [style*="background-image"], [style*="background: url"],
-                [class*="thumb" i], [class*="thumb" i] *,
-                [class*="thumbnail" i], [class*="thumbnail" i] *,
-                [class*="poster" i], [class*="poster" i] *,
-                [class*="avatar" i], [class*="avatar" i] *,
-                [class*="media" i], [class*="media" i] *,
-                [class*="video" i], [class*="video" i] *,
-                [class*="player" i], [class*="player" i] *,
-                [class*="image" i], [class*="image" i] *,
-                [class*="img" i], [class*="img" i] *,
-                [class*="photo" i], [class*="photo" i] *,
-                .v55W0e, .v55W0e *, .m652ud, .m652ud *, .Q83fi, .Q83fi *, .ctoDDe, .ctoDDe *, .Yk428, .Yk428 *, .vLffw, .vLffw *, .oJ3Ryb, .oJ3Ryb *, .B5e95, .B5e95 *, .rISNhc, .rISNhc *,
-                figure, figure * {
-                    background-color: transparent !important;
-                    background: transparent !important;
-                    opacity: 1 !important;
+                [class*="thumb" i], [class*="thumbnail" i], [class*="avatar" i], [class*="poster" i],
+                [class*="cover" i], [class*="media" i], [class*="image" i], [class*="photo" i],
+                g-img, figure {
                     filter: none !important;
-                }
-                p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i {
-                    color: #E2E8F0 !important;
-                }
-                a {
-                    color: #60A5FA !important;
-                }
-                a:visited {
-                    color: #A78BFA !important;
-                }
-                a:hover {
-                    color: #93C5FD !important;
-                }
-                input, textarea, select, [contenteditable="true"], [role="combobox"], [role="searchbox"] {
-                    background-color: #1E1E1E !important;
-                    color: #FFFFFF !important;
-                    -webkit-text-fill-color: #FFFFFF !important;
-                    border: none !important;
-                    outline: none !important;
-                    color-scheme: dark !important;
-                }
-                input::placeholder, textarea::placeholder {
-                    color: #8E8E93 !important;
-                    -webkit-text-fill-color: #8E8E93 !important;
-                }
-                button, [role="button"], [class*="chip" i], [class*="pill" i], [class*="badge" i] {
-                    color-scheme: dark !important;
+                    opacity: 1 !important;
+                    background: transparent !important;
                 }
                 *::-webkit-scrollbar {
-                    background-color: #121212 !important;
+                    background-color: #121214 !important;
                     width: 6px !important;
                 }
                 *::-webkit-scrollbar-thumb {
-                    background-color: #333333 !important;
-                    border-radius: 4px !important;
-                }
-                ::selection {
-                    background: #2563EB !important;
-                    color: #FFFFFF !important;
+                    background-color: #2e3035 !important;
+                    border-radius: 3px !important;
                 }
             """.trimIndent()
         }
@@ -367,40 +357,50 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                 style.textContent = '$fullCss';
             }
 
-            if ('$colorScheme' === 'dark') {
-                const fixMediaParents = function() {
+            if ('$effectiveTheme' === 'OLED') {
+                const fixOledSurfaces = function() {
                     try {
-                        const media = document.querySelectorAll('img, video, g-img, canvas, [class*="thumb"], [class*="video"]');
-                        for (let i = 0; i < media.length; i++) {
-                            let p = media[i].parentElement;
-                            let count = 0;
-                            while (p && count < 3) {
-                                if (p.style) {
-                                    p.style.setProperty('background-color', 'transparent', 'important');
-                                    p.style.setProperty('background', 'transparent', 'important');
-                                }
-                                p = p.parentElement;
-                                count++;
+                        const nonMediaEls = document.querySelectorAll('div, section, article, nav, header, footer, main, form, table, g-card, c-wiz');
+                        for (let i = 0; i < nonMediaEls.length; i++) {
+                            const el = nonMediaEls[i];
+                            if (el.__omniOled) continue;
+                            const bg = window.getComputedStyle(el).backgroundColor;
+                            if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'rgb(0, 0, 0)') {
+                                el.style.setProperty('background-color', '#000000', 'important');
+                                el.style.setProperty('background', '#000000', 'important');
+                                el.__omniOled = true;
                             }
                         }
                     } catch(e) {}
                 };
-                fixMediaParents();
-                setTimeout(fixMediaParents, 300);
-                setTimeout(fixMediaParents, 1000);
+                fixOledSurfaces();
+                setTimeout(fixOledSurfaces, 250);
+                setTimeout(fixOledSurfaces, 800);
 
-                if (!window.__omniAmoledObserver) {
-                    window.__omniAmoledObserver = new MutationObserver(function() {
-                        let s = document.getElementById(id);
-                        if (!s && target && style) {
-                            target.appendChild(style);
-                        }
-                        fixMediaParents();
-                    });
-                    try {
-                        window.__omniAmoledObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
-                    } catch(e) {}
+                if (window.__omniAmoledObserver) {
+                    window.__omniAmoledObserver.disconnect();
+                    window.__omniAmoledObserver = null;
                 }
+                var _omniOledTimer = null;
+                window.__omniAmoledObserver = new MutationObserver(function() {
+                    if (_omniOledTimer) return;
+                    _omniOledTimer = setTimeout(function() {
+                        _omniOledTimer = null;
+                        let s = document.getElementById(id);
+                        if (!s && document.head) {
+                            try {
+                                var ns = document.createElement('style');
+                                ns.id = id;
+                                ns.textContent = '$fullCss';
+                                document.head.appendChild(ns);
+                            } catch(e) {}
+                        }
+                        fixOledSurfaces();
+                    }, 200);
+                });
+                try {
+                    window.__omniAmoledObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+                } catch(e) {}
             }
         })();
     """.trimIndent()
@@ -412,6 +412,24 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
 
 fun BrowserViewModel.applySiteStyleToActiveTab() {
     applySiteStyleToTab(activeTab)
+}
+
+fun BrowserViewModel.clearSiteStyleFromTab(targetTab: TabState? = null) {
+    val tab = targetTab ?: activeTab ?: return
+    val session = tab.session ?: return
+    val clearJs = """
+        javascript:(function() {
+            const s = document.getElementById('omni-custom-site-style');
+            if (s) s.remove();
+            const m = document.getElementById('omni-custom-site-style-meta');
+            if (m) m.remove();
+            if (window.__omniAmoledObserver) {
+                window.__omniAmoledObserver.disconnect();
+                window.__omniAmoledObserver = null;
+            }
+        })();
+    """.trimIndent()
+    try { session.loadUri(clearJs) } catch (_: Exception) {}
 }
 
 fun BrowserViewModel.updateSiteStyle(
@@ -449,7 +467,21 @@ fun BrowserViewModel.updateSiteStyle(
         putBoolean("site_style_warm_filter", warmFilter)
     }.apply()
 
-    applySiteStyleToActiveTab()
+    updateGeckoColorScheme()
+    val effectiveTheme = when {
+        siteStyleTheme != "DEFAULT" -> siteStyleTheme
+        isAmoledMode -> "OLED"
+        else -> "DEFAULT"
+    }
+    val hasCustomStyles = effectiveTheme != "DEFAULT" || siteStyleFontSize != 100 || 
+            siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || 
+            siteStyleFontFamily != "inherit" || siteStyleHideImages || 
+            siteStyleGrayscale || siteStyleWarmFilter
+    if (hasCustomStyles) {
+        applySiteStyleToActiveTab()
+    } else {
+        clearSiteStyleFromTab()
+    }
 }
 
 fun BrowserViewModel.resetSiteStyle() {

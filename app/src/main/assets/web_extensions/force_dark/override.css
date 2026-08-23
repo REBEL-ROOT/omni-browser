@@ -1,82 +1,166 @@
 /* ─────────────────────────────────────────────────────────────────────────────
- * Omni Smart Force Dark Engine
- * Applied ONLY when a site lacks native dark mode support (.omni-force-dark-active)
+ * Omni True Black & Dark Engine (Dark Reader Dynamic Architecture)
+ * Direct DOM & CSS Variable Engine — Crisp White Text, Zero Grey Wash
  * ───────────────────────────────────────────────────────────────────────────── */
 
-:root, html {
+html.omni-force-dark-active {
+    --bg: #121214 !important;
+    --bg-color: #121214 !important;
+    --background: #121214 !important;
+    --background-color: #121214 !important;
+    --bg-primary: #121214 !important;
+    --bg-secondary: #1a1c20 !important;
+    --surface: #18191c !important;
+    --surface-color: #18191c !important;
+    --card-bg: #18191c !important;
+    --header-bg: #121214 !important;
+    --footer-bg: #121214 !important;
+    --text: #f1f5f9 !important;
+    --text-color: #f1f5f9 !important;
+    --text-primary: #f1f5f9 !important;
+    --text-secondary: #e2e8f0 !important;
+    --border-color: #2e3035 !important;
+    --border: #2e3035 !important;
     color-scheme: dark !important;
 }
 
-/* Forced Dark Mode overrides - scoped to .omni-force-dark-active */
-html.omni-force-dark-active, 
-html.omni-force-dark-active body {
+html.omni-force-dark-active,
+html.omni-force-dark-active body,
+html.omni-force-dark-active #__next,
+html.omni-force-dark-active #root,
+html.omni-force-dark-active #app,
+html.omni-force-dark-active main,
+html.omni-force-dark-active [role="main"],
+html.omni-force-dark-active [role="article"],
+html.omni-force-dark-active section,
+html.omni-force-dark-active article,
+html.omni-force-dark-active header,
+html.omni-force-dark-active nav,
+html.omni-force-dark-active footer,
+html.omni-force-dark-active aside,
+html.omni-force-dark-active dialog,
+html.omni-force-dark-active .container,
+html.omni-force-dark-active .wrapper,
+html.omni-force-dark-active .content,
+html.omni-force-dark-active [class*="container" i],
+html.omni-force-dark-active [class*="wrapper" i],
+html.omni-force-dark-active [class*="content" i],
+html.omni-force-dark-active [class*="layout" i],
+html.omni-force-dark-active [class*="page" i] {
     background-color: #121214 !important;
-    color: #e8eaed !important;
+    background: #121214 !important;
+    color: #f1f5f9 !important;
 }
 
-html.omni-force-dark-active div:not([class*="player"]):not([class*="video"]):not([class*="canvas"]), 
-html.omni-force-dark-active section, 
-html.omni-force-dark-active article, 
-html.omni-force-dark-active main, 
-html.omni-force-dark-active header, 
-html.omni-force-dark-active footer, 
-html.omni-force-dark-active nav, 
-html.omni-force-dark-active aside, 
-html.omni-force-dark-active p, 
-html.omni-force-dark-active span, 
-html.omni-force-dark-active h1, 
-html.omni-force-dark-active h2, 
-html.omni-force-dark-active h3, 
-html.omni-force-dark-active h4, 
-html.omni-force-dark-active h5, 
-html.omni-force-dark-active h6, 
-html.omni-force-dark-active li, 
-html.omni-force-dark-active ul, 
-html.omni-force-dark-active ol, 
-html.omni-force-dark-active td, 
-html.omni-force-dark-active th, 
-html.omni-force-dark-active tr, 
-html.omni-force-dark-active table, 
-html.omni-force-dark-active form {
-    background-color: #121214 !important;
-    color: #e8eaed !important;
-    border-color: #2e2e38 !important;
+html.omni-force-dark-active .card,
+html.omni-force-dark-active .panel,
+html.omni-force-dark-active .box,
+html.omni-force-dark-active .sidebar,
+html.omni-force-dark-active .modal,
+html.omni-force-dark-active .dropdown,
+html.omni-force-dark-active .menu,
+html.omni-force-dark-active [class*="card" i],
+html.omni-force-dark-active [class*="panel" i],
+html.omni-force-dark-active [class*="box" i],
+html.omni-force-dark-active [class*="sidebar" i],
+html.omni-force-dark-active [class*="modal" i],
+html.omni-force-dark-active [class*="menu" i],
+html.omni-force-dark-active [class*="list" i],
+html.omni-force-dark-active table,
+html.omni-force-dark-active tr,
+html.omni-force-dark-active td,
+html.omni-force-dark-active th,
+html.omni-force-dark-active ul,
+html.omni-force-dark-active ol,
+html.omni-force-dark-active li,
+html.omni-force-dark-active dl,
+html.omni-force-dark-active dt,
+html.omni-force-dark-active dd {
+    background-color: #18191c !important;
+    background: #18191c !important;
+    border-color: #2e3035 !important;
+    color: #f1f5f9 !important;
 }
 
-html.omni-force-dark-active input, 
-html.omni-force-dark-active textarea, 
-html.omni-force-dark-active select, 
-html.omni-force-dark-active button {
-    background-color: #1e1e24 !important;
-    color: #ffffff !important;
-    border: 1px solid #3e3e4a !important;
+/* Crisp readable text across all elements — zero grey wash */
+html.omni-force-dark-active p,
+html.omni-force-dark-active h1,
+html.omni-force-dark-active h2,
+html.omni-force-dark-active h3,
+html.omni-force-dark-active h4,
+html.omni-force-dark-active h5,
+html.omni-force-dark-active h6,
+html.omni-force-dark-active label,
+html.omni-force-dark-active strong,
+html.omni-force-dark-active b,
+html.omni-force-dark-active em,
+html.omni-force-dark-active i,
+html.omni-force-dark-active span,
+html.omni-force-dark-active summary,
+html.omni-force-dark-active small,
+html.omni-force-dark-active blockquote,
+html.omni-force-dark-active q,
+html.omni-force-dark-active cite,
+html.omni-force-dark-active figcaption {
+    color: #f1f5f9 !important;
 }
 
-html.omni-force-dark-active a, 
-html.omni-force-dark-active a * {
+/* High-contrast crisp links */
+html.omni-force-dark-active a,
+html.omni-force-dark-active a:visited {
     color: #8ab4f8 !important;
 }
 
-html.omni-force-dark-active a:visited, 
-html.omni-force-dark-active a:visited * {
-    color: #c58af9 !important;
+html.omni-force-dark-active input,
+html.omni-force-dark-active textarea,
+html.omni-force-dark-active select,
+html.omni-force-dark-active [contenteditable="true"] {
+    background-color: #1e2024 !important;
+    background: #1e2024 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border: 1px solid #3c4043 !important;
 }
 
-html.omni-force-dark-active img, 
-html.omni-force-dark-active video, 
-html.omni-force-dark-active canvas, 
-html.omni-force-dark-active svg image, 
-html.omni-force-dark-active [style*="background-image"] {
+html.omni-force-dark-active button,
+html.omni-force-dark-active [role="button"],
+html.omni-force-dark-active .btn,
+html.omni-force-dark-active [class*="btn" i],
+html.omni-force-dark-active [class*="chip" i],
+html.omni-force-dark-active [class*="pill" i] {
+    background-color: #202228 !important;
+    color: #f1f5f9 !important;
+}
+
+/* Images, Videos, Canvases are NEVER inverted */
+html.omni-force-dark-active img,
+html.omni-force-dark-active video,
+html.omni-force-dark-active canvas,
+html.omni-force-dark-active svg,
+html.omni-force-dark-active picture,
+html.omni-force-dark-active iframe,
+html.omni-force-dark-active [style*="background-image"],
+html.omni-force-dark-active [style*="background: url"],
+html.omni-force-dark-active [class*="thumb" i],
+html.omni-force-dark-active [class*="thumbnail" i],
+html.omni-force-dark-active [class*="avatar" i],
+html.omni-force-dark-active [class*="poster" i],
+html.omni-force-dark-active [class*="cover" i],
+html.omni-force-dark-active [class*="media" i],
+html.omni-force-dark-active [class*="image" i],
+html.omni-force-dark-active [class*="photo" i],
+g-img, figure {
     filter: none !important;
-    background-color: transparent !important;
+    opacity: 1 !important;
+    background: transparent !important;
 }
 
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-    background-color: #121214;
+    width: 6px;
+    height: 6px;
+    background-color: #121214 !important;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: #2e2e38;
-    border-radius: 4px;
+    background-color: #2e3035 !important;
+    border-radius: 3px;
 }

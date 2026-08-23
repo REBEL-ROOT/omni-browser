@@ -2719,7 +2719,7 @@ class BrowserViewModel : ViewModel() {
             val configFile = File(appCtx.filesDir, "geckoview-config.yaml")
             try {
                 val sb = java.lang.StringBuilder()
-                sb.append("pref:\n")
+                sb.append("prefs:\n")
                 sb.append("  intl.accept_languages: \"${targetLocales.joinToString(", ")}\"\n")
                 // Mobile GeckoView multi-process configuration:
                 // Fission (out-of-process iframes) is kept false on Android to prevent process
@@ -2767,7 +2767,7 @@ class BrowserViewModel : ViewModel() {
                     sb.append("  network.proxy.socks_remote_dns: true\n")
                     sb.append("  network.proxy.failover_direct: false\n")
                 } else {
-                    sb.append("  network.proxy.type: 5\n")
+                    sb.append("  network.proxy.type: 0\n")
                 }
                 val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
                 if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
@@ -3335,6 +3335,7 @@ class BrowserViewModel : ViewModel() {
             // Always-on: routes traffic through the active Tor / SOCKS proxy via
             // the WebExtension `proxy` API. No user toggle.
             installProxyRouterExtension(runtime)
+            installOmniSyncExtension(runtime)
 
             isUniversalCopyEnabled = getUniversalCopyPreference(context).first()
             syncUniversalCopyState(shouldReload = false)
@@ -5594,12 +5595,12 @@ class BrowserViewModel : ViewModel() {
             GeckoPreferenceController.setGeckoPref("network.proxy.type", 1, branch)
                 .accept({ Log.d(TAG, "  set network.proxy.type = 1") }, { e -> Log.e(TAG, "  FAILED network.proxy.type", e) })
         } else {
-            Log.i(TAG, "applyProxyPrefsLive: -> SYSTEM (provider=$proxyProvider)")
-            // Clear stale user values first, then drop type to 5 (system proxy) last.
+            Log.i(TAG, "applyProxyPrefsLive: -> DIRECT (provider=$proxyProvider)")
+            // Clear stale user values first, then set type to 0 (direct connection).
             GeckoPreferenceController.clearGeckoUserPref("network.proxy.socks")
             GeckoPreferenceController.clearGeckoUserPref("network.proxy.socks_port")
-            GeckoPreferenceController.setGeckoPref("network.proxy.type", 5, branch)
-                .accept({ Log.d(TAG, "  set network.proxy.type = 5 (system)") }, { e -> Log.e(TAG, "  FAILED network.proxy.type=5", e) })
+            GeckoPreferenceController.setGeckoPref("network.proxy.type", 0, branch)
+                .accept({ Log.d(TAG, "  set network.proxy.type = 0 (direct)") }, { e -> Log.e(TAG, "  FAILED network.proxy.type=0", e) })
         }
 
         // ── Leak prevention: disable UDP-based protocols that bypass SOCKS ──
@@ -5728,12 +5729,10 @@ class BrowserViewModel : ViewModel() {
         val configFile = File(ctx.filesDir, "geckoview-config.yaml")
         try {
             val sb = StringBuilder()
-            sb.append("pref:\n")
+            sb.append("prefs:\n")
             sb.append("  fission.autostart: false\n")
             sb.append("  dom.ipc.processCount: 2\n")
             sb.append("  dom.ipc.processCount.webIsolated: 1\n")
-            sb.append("  gfx.webrender.all: ${isWebRenderEnabled}\n")
-            sb.append("  layers.acceleration.force-enabled: ${isGpuAccelerationEnabled}\n")
             if (isForceHighRefreshRate) {
                 sb.append("  layout.frame_rate: 120\n")
             }
@@ -5770,7 +5769,7 @@ class BrowserViewModel : ViewModel() {
                 sb.append("  network.proxy.socks_remote_dns: true\n")
                 sb.append("  network.proxy.failover_direct: false\n")
             } else {
-                sb.append("  network.proxy.type: 5\n")
+                sb.append("  network.proxy.type: 0\n")
             }
             // DoH - Disabled when using Tor or Custom SOCKS proxy to prevent DNS leak bypassing the proxy resolver.
             val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
