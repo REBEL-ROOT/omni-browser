@@ -91,11 +91,41 @@ fun BrowserViewModel.getActionForExtension(extensionId: String): WebExtension.Ac
     return sessionExtensionActions[activeId]?.get(extensionId) ?: defaultExtensionActions[extensionId] ?: extensionActions[extensionId]
 }
 
+fun BrowserViewModel.openUserExtension(extension: WebExtension, context: Context) {
+    val activeAction = extension.id?.let { getActionForExtension(it) }
+    if (activeAction != null) {
+        try {
+            activeAction.click()
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to click extension action for ${extension.id}", e)
+        }
+    }
+
+    // Fallback: If no action registered yet or click failed, open options or popup page in browser
+    val meta = extension.metaData
+    val rawOptions = meta?.optionsPageUrl
+    val baseUrl = meta?.baseUrl ?: ""
+    val targetUrl = when {
+        !rawOptions.isNullOrBlank() -> {
+            if (rawOptions.startsWith("moz-extension://") || rawOptions.startsWith("http://") || rawOptions.startsWith("https://")) rawOptions
+            else "${baseUrl.removeSuffix("/")}/${rawOptions.removePrefix("/")}"
+        }
+        baseUrl.isNotBlank() -> {
+            "${baseUrl.removeSuffix("/")}/popup/index.html"
+        }
+        else -> null
+    }
+
+    if (targetUrl != null) {
+        loadUrl(targetUrl)
+    } else {
+        Toast.makeText(context, "Extension active", Toast.LENGTH_SHORT).show()
+    }
+}
+
 fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession> {
     val result = GeckoResult<GeckoSession>()
-    if (isIncognitoMode) {
-        // Block extension popups in incognito if they are not explicitly allowed or for security
-    }
     if (isNativeSheetOpen) {
         result.completeExceptionally(IllegalStateException("Blocked: Native toolbox/notes sheet is active."))
         return result
@@ -113,6 +143,7 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
 
             // Use mobile viewport — desktop mode renders at ~1280px causing tiny popups on phones
             val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+                .usePrivateMode(isIncognitoMode)
                 .allowJavascript(true)
                 .userAgentMode(org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
                 .viewportMode(org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
@@ -129,6 +160,16 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         dismissExtensionPopup()
                     }
+                }
+            }
+
+            // Prompt delegate — handle alerts/confirms in extension popups gracefully
+            session.promptDelegate = object : GeckoSession.PromptDelegate {
+                override fun onAlertPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.AlertPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+                    return GeckoResult.fromValue(prompt.dismiss())
+                }
+                override fun onButtonPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.ButtonPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+                    return GeckoResult.fromValue(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
                 }
             }
 
@@ -187,8 +228,8 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
                 ): GeckoResult<AllowOrDeny>? {
                     val url = request.uri ?: return null
                     return when {
-                        // Allow all moz-extension:// and about: pages
-                        url.startsWith("moz-extension://") || url.startsWith("about:") -> null
+                        // Allow all moz-extension://, about:, blob:, and data: pages
+                        url.startsWith("moz-extension://") || url.startsWith("about:") || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("javascript:") -> null
                         // Intercept external http(s) links — open in main browser
                         url.startsWith("http://") || url.startsWith("https://") -> {
                             android.os.Handler(android.os.Looper.getMainLooper()).post {

@@ -121,6 +121,39 @@ object CuratedExtensionRepository {
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/decentraleyes/addon-674489-latest.xpi",
             iconVector = Icons.Rounded.Storage,
             accentColor = Color(0xFF6366F1)
+        ),
+        CuratedExtension(
+            id = "{446900e4-71c2-419f-a6a7-df9c091e268b}",
+            name = "Bitwarden Password Manager",
+            author = "Bitwarden Inc.",
+            description = "A secure, open source password manager. Store, generate, and auto-fill logins and secure notes seamlessly.",
+            category = "Privacy",
+            rating = 4.8f,
+            downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/addon-854744-latest.xpi",
+            iconVector = Icons.Rounded.Lock,
+            accentColor = Color(0xFF175DDC)
+        ),
+        CuratedExtension(
+            id = "78272b6fa5e24ba987ac@proton.me",
+            name = "Proton Pass",
+            author = "Proton AG",
+            description = "End-to-end encrypted password manager and email alias generator from the makers of Proton Mail.",
+            category = "Privacy",
+            rating = 4.7f,
+            downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/proton-pass/addon-1144005-latest.xpi",
+            iconVector = Icons.Rounded.Key,
+            accentColor = Color(0xFF6D4AFF)
+        ),
+        CuratedExtension(
+            id = "keepassxc-browser@keepassxc.org",
+            name = "KeePassXC-Browser",
+            author = "KeePassXC Team",
+            description = "Official browser integration for KeePassXC password manager to auto-fill logins securely.",
+            category = "Privacy",
+            rating = 4.6f,
+            downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/keepassxc-browser/addon-893540-latest.xpi",
+            iconVector = Icons.Rounded.VpnKey,
+            accentColor = Color(0xFF53A048)
         )
     )
 }

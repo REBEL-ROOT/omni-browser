@@ -255,7 +255,20 @@ fun PrivacySecurityScreen(
                     )
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
-                    // Item 9: Autofill Provider
+                    // Item 9: Omni Password Manager Master Switch
+                    SettingsSwitchRow(
+                        icon = Icons.Rounded.Key,
+                        title = "Omni Password Manager",
+                        subtitle = if (viewModel.isOmniPasswordManagerEnabled) "Save and autofill passwords with Omni Vault" else "Disabled",
+                        checked = viewModel.isOmniPasswordManagerEnabled,
+                        onCheckedChange = { viewModel.setOmniPasswordManagerEnabled(it, context) },
+                        textPrimaryColor = textPrimaryColor,
+                        textSecondaryColor = textSecondaryColor,
+                        accentColor = accentColor
+                    )
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Item 10: Autofill Provider
                     SettingsRow(
                         icon = Icons.Rounded.Password,
                         title = stringResource(id = R.string.autofill_provider_title),

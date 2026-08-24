@@ -149,6 +149,11 @@ class BrowserViewModel : ViewModel() {
         val DOWNLOAD_NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("download_notifications_enabled")
         val DOWNLOAD_SOUND_ENABLED_KEY = booleanPreferencesKey("download_sound_enabled")
         val DOWNLOAD_VIBRATE_ENABLED_KEY = booleanPreferencesKey("download_vibrate_enabled")
+        val OMNI_PASSWORD_MANAGER_ENABLED_KEY = booleanPreferencesKey("omni_password_manager_enabled")
+        const val CHANNEL_ID_APP_UPDATES = "omni_app_updates"
+        const val NOTIFICATION_ID_APP_UPDATE = 4001
+        val LAST_UPDATE_CHECK_TIME_KEY = longPreferencesKey("last_update_check_time")
+        val LAST_NOTIFIED_UPDATE_VERSION_KEY = stringPreferencesKey("last_notified_update_version")
         val AUTOFILL_PROVIDER_MODE_KEY = stringPreferencesKey("autofill_provider_mode")
         val EXTENSION_DOWNLOAD_POLICY_KEY = stringPreferencesKey("extension_download_policy")
         // Chrome-on-Android UA shared by the download hand-off (matches the one used by
@@ -556,6 +561,7 @@ class BrowserViewModel : ViewModel() {
         val onCancel: () -> Unit
     )
 
+    var isOmniPasswordManagerEnabled by mutableStateOf(true)
     var autofillProviderMode by mutableStateOf(AutofillProviderMode.THIRD_PARTY)
     var extensionDownloadPolicy by mutableStateOf(ExtensionDownloadPolicy.ASK_EVERY_TIME)
     var pendingWebExtensionDownload by mutableStateOf<PendingWebExtensionDownload?>(null)
@@ -776,6 +782,11 @@ class BrowserViewModel : ViewModel() {
     var openBrowserScreenEvent by mutableStateOf(false)
     fun triggerOpenBrowserScreen() { openBrowserScreenEvent = true }
     fun consumeOpenBrowserScreenEvent() { openBrowserScreenEvent = false }
+
+    // Navigation event: set true when tapping a download notification to open the Downloads screen
+    var openDownloadsScreenEvent by mutableStateOf(false)
+    fun triggerOpenDownloadsScreen() { openDownloadsScreenEvent = true }
+    fun consumeOpenDownloadsScreenEvent() { openDownloadsScreenEvent = false }
 
 
 
@@ -2970,14 +2981,8 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
-                    if (isBundledExtension(extension)) {
-                        Log.d(TAG, "Auto-granting optional permissions for bundled extension: ${extension.id}")
-                        return org.mozilla.geckoview.GeckoResult.fromValue(
-                            org.mozilla.geckoview.AllowOrDeny.ALLOW
-                        )
-                    }
-                    Log.w(TAG, "🛡️ Optional permissions NOT auto-granted for external extension: ${extension.id}")
-                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY)
+                    Log.i(TAG, "Granting optional permissions for extension: ${extension.id} (perms=${permissions.toList()}, origins=${origins.toList()})")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.ALLOW)
                 }
 
                 override fun onUpdatePrompt(
@@ -2986,14 +2991,8 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
-                    if (isBundledExtension(extension)) {
-                        Log.d(TAG, "Auto-granting update permissions for bundled extension: ${extension.id}")
-                        return org.mozilla.geckoview.GeckoResult.fromValue(
-                            org.mozilla.geckoview.AllowOrDeny.ALLOW
-                        )
-                    }
-                    Log.w(TAG, "🛡️ Update permissions NOT auto-granted for external extension: ${extension.id}")
-                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.DENY)
+                    Log.i(TAG, "Granting update permissions for extension: ${extension.id} (perms=${permissions.toList()}, origins=${origins.toList()})")
+                    return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.ALLOW)
                 }
             })
         }
@@ -3291,6 +3290,7 @@ class BrowserViewModel : ViewModel() {
                     showPrivacyStatsWidget = prefs[SHOW_PRIVACY_STATS_KEY] ?: true
                     isMinimalistFocusMode = prefs[MINIMALIST_FOCUS_MODE_KEY] ?: false
                     trackersBlockedCount = prefs[TRACKERS_BLOCKED_COUNT_KEY] ?: 0
+                    isOmniPasswordManagerEnabled = prefs[OMNI_PASSWORD_MANAGER_ENABLED_KEY] ?: true
                     autofillProviderMode = prefs[AUTOFILL_PROVIDER_MODE_KEY]?.let {
                         try { AutofillProviderMode.valueOf(it) } catch (e: Exception) { AutofillProviderMode.THIRD_PARTY }
                     } ?: AutofillProviderMode.THIRD_PARTY
@@ -3317,6 +3317,9 @@ class BrowserViewModel : ViewModel() {
 
             // Refresh and load all built-in extensions (grabber, ublock, universal copy, ai blocker)
             refreshAndLoadBuiltInExtensions(appCtx)
+
+            // Check for newer GitHub releases in the background (throttled to max 1 check per 12 hours)
+            checkForUpdatesInBackground(appCtx)
         }
         return geckoRuntime!!
     }
@@ -5167,6 +5170,24 @@ class BrowserViewModel : ViewModel() {
     fun getCustomSocksHost(context: Context): Flow<String> {
         return context.dataStore.data.map { preferences ->
             preferences[CUSTOM_SOCKS_HOST_KEY] ?: ""
+        }
+    }
+
+    fun setOmniPasswordManagerEnabled(enabled: Boolean, context: Context) {
+        isOmniPasswordManagerEnabled = enabled
+        if (!enabled) {
+            showAutofillBottomSheet = false
+            autofillMatches = emptyList()
+            pendingSaveCredential = null
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.dataStore.edit { prefs ->
+                    prefs[OMNI_PASSWORD_MANAGER_ENABLED_KEY] = enabled
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save isOmniPasswordManagerEnabled", e)
+            }
         }
     }
 
@@ -7809,6 +7830,121 @@ class BrowserViewModel : ViewModel() {
         data class Error(val message: String) : UpdateCheckResult
     }
 
+    fun createAppUpdateNotificationChannel(context: Context) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            if (notificationManager != null) {
+                val channel = android.app.NotificationChannel(
+                    CHANNEL_ID_APP_UPDATES,
+                    "App Updates",
+                    android.app.NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Notifications when a new version of Omni Browser is available on GitHub"
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    fun showUpdateNotification(context: Context, newVersion: String, releaseUrl: String) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                        context,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    Log.d(TAG, "POST_NOTIFICATIONS permission not granted, skipping update notification")
+                    return
+                }
+            }
+
+            createAppUpdateNotificationChannel(context)
+
+            val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+
+            val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val pendingViewIntent = android.app.PendingIntent.getActivity(
+                context,
+                0,
+                viewIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val updateTitle = "Omni Browser v$newVersion Available"
+            val updateText = "A new release (v$newVersion) is available on GitHub. Tap to view and install the latest APK."
+
+            val notification = androidx.core.app.NotificationCompat.Builder(context, CHANNEL_ID_APP_UPDATES)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle(updateTitle)
+                .setContentText(updateText)
+                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(updateText))
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingViewIntent)
+                .addAction(
+                    android.R.drawable.stat_sys_download,
+                    "Update Now",
+                    pendingViewIntent
+                )
+                .build()
+
+            notificationManager.notify(NOTIFICATION_ID_APP_UPDATE, notification)
+            Log.i(TAG, "📢 Showed app update notification for v$newVersion")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show app update notification", e)
+        }
+    }
+
+    fun checkForUpdatesInBackground(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val prefs = context.dataStore.data.first()
+                val lastCheck = prefs[LAST_UPDATE_CHECK_TIME_KEY] ?: 0L
+                val lastNotifiedVersion = prefs[LAST_NOTIFIED_UPDATE_VERSION_KEY] ?: ""
+                val now = System.currentTimeMillis()
+
+                // Check at most once every 12 hours
+                if (now - lastCheck < 12 * 60 * 60 * 1000L) {
+                    return@launch
+                }
+
+                // Record check time
+                context.dataStore.edit { it[LAST_UPDATE_CHECK_TIME_KEY] = now }
+
+                val pInfo = try { context.packageManager.getPackageInfo(context.packageName, 0) } catch (e: Exception) { null }
+                val currentVersionName = pInfo?.versionName ?: "1.0.0"
+
+                val apiUrl = java.net.URL("https://api.github.com/repos/REBEL-ROOT/omni-browser/releases/latest")
+                val apiConn = apiUrl.openConnection() as java.net.HttpURLConnection
+                apiConn.requestMethod = "GET"
+                apiConn.setRequestProperty("Accept", "application/vnd.github+json")
+                apiConn.setRequestProperty("User-Agent", "OmniBrowser-OTA-Checker")
+                apiConn.connectTimeout = 8000
+                apiConn.readTimeout = 8000
+                apiConn.connect()
+
+                if (apiConn.responseCode == 200) {
+                    val apiResponse = apiConn.inputStream.bufferedReader().use { it.readText() }
+                    val json = org.json.JSONObject(apiResponse)
+                    val tagName = json.optString("tag_name", "").removePrefix("v").trim()
+                    val htmlUrl = json.optString("html_url", "https://github.com/REBEL-ROOT/omni-browser/releases/latest")
+
+                    if (tagName.isNotEmpty() && compareVersionNames(tagName, currentVersionName) > 0) {
+                        if (tagName != lastNotifiedVersion) {
+                            showUpdateNotification(context, tagName, htmlUrl)
+                            context.dataStore.edit { it[LAST_NOTIFIED_UPDATE_VERSION_KEY] = tagName }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Background update check failed: ${e.message}")
+            }
+        }
+    }
+
     fun checkAppUpdates(context: Context, onResult: (UpdateCheckResult) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val pInfo = try { context.packageManager.getPackageInfo(context.packageName, 0) } catch (e: Exception) { null }
@@ -7845,6 +7981,7 @@ class BrowserViewModel : ViewModel() {
 
                     withContext(Dispatchers.Main) {
                         if (hasNewerVersion) {
+                            showUpdateNotification(context, tagName, htmlUrl)
                             onResult(UpdateCheckResult.NewUpdateAvailable(tagName, htmlUrl))
                         } else {
                             onResult(UpdateCheckResult.NoUpdateAvailable)

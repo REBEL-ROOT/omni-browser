@@ -239,6 +239,12 @@ class MainActivity : FragmentActivity() {
             browserViewModel.pendingIntentUrl = intentUrl
         }
 
+        val openDownloadsExtra = intent?.getBooleanExtra("extra_open_downloads", false) == true ||
+            intentAction == "com.rebelroot.omni.ACTION_OPEN_DOWNLOADS"
+        if (openDownloadsExtra) {
+            browserViewModel.triggerOpenDownloadsScreen()
+        }
+
         setContent {
             val context = LocalContext.current
             val currentLanguage = browserViewModel.selectedLanguageCode
@@ -756,6 +762,20 @@ class MainActivity : FragmentActivity() {
                             navController.popBackStack("browser", inclusive = false)
                         }
                     }
+
+                    // Listen for download notification taps to open the Downloads screen
+                    androidx.compose.runtime.LaunchedEffect(browserViewModel.openDownloadsScreenEvent) {
+                        if (browserViewModel.openDownloadsScreenEvent) {
+                            browserViewModel.consumeOpenDownloadsScreenEvent()
+                            try {
+                                navController.navigate("downloads") {
+                                    launchSingleTop = true
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("MainActivity", "Failed to navigate to downloads: $e")
+                            }
+                        }
+                    }
                 }
             }
             }
@@ -766,6 +786,12 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         val intentAction = intent.action
         val rawIntentUrl = intent.dataString
+
+        val openDownloadsExtra = intent.getBooleanExtra("extra_open_downloads", false) ||
+            intentAction == "com.rebelroot.omni.ACTION_OPEN_DOWNLOADS"
+        if (openDownloadsExtra) {
+            browserViewModel.triggerOpenDownloadsScreen()
+        }
 
         // Security: validate external intent URIs before accepting them
         val intentUrl = if (!rawIntentUrl.isNullOrEmpty() &&

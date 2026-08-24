@@ -526,7 +526,10 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             } catch (e: Exception) {
                 try { java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: "" } catch (ex: Exception) { "" }
             }
-            Log.d(TAG, "🔑 [AutofillDiagnostics] onLoginSave triggered for origin host: $host")
+            if (!isOmniPasswordManagerEnabled) {
+                Log.d(TAG, "Omni password manager is disabled — ignoring onLoginSave")
+                return GeckoResult.fromValue(prompt.dismiss())
+            }
             if (neverSavePasswordDomains.contains(host)) {
                 Log.i(TAG, "Suppression rule active for $host — ignoring password save prompt")
                 return GeckoResult.fromValue(prompt.dismiss())

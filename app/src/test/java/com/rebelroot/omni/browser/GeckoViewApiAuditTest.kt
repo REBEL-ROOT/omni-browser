@@ -41,5 +41,24 @@ class GeckoViewApiAuditTest {
         val metaCls = Class.forName("org.mozilla.geckoview.WebExtension\$MetaData")
         metaCls.declaredFields.forEach { println("  MetaData field: $it") }
         metaCls.declaredMethods.forEach { println("  MetaData method: $it") }
+
+        println("=== WebExtension methods ===")
+        WebExtension::class.java.declaredMethods.forEach { println("  WebExtension method: $it") }
+
+        println("=== WebExtension.Action methods ===")
+        val actionCls = Class.forName("org.mozilla.geckoview.WebExtension\$Action")
+        actionCls.declaredMethods.forEach { println("  Action method: $it") }
+
+        println("=== WebExtension.TabDelegate methods ===")
+        val tabDelCls = Class.forName("org.mozilla.geckoview.WebExtension\$TabDelegate")
+        tabDelCls.declaredMethods.forEach { println("  TabDelegate method: $it") }
+
+        println("=== WebExtension.ActionDelegate methods ===")
+        val actDelCls = Class.forName("org.mozilla.geckoview.WebExtension\$ActionDelegate")
+        actDelCls.declaredMethods.forEach { println("  ActionDelegate method: $it") }
+
+        println("=== WebExtensionController.PromptDelegate methods ===")
+        val promptDelCls = Class.forName("org.mozilla.geckoview.WebExtensionController\$PromptDelegate")
+        promptDelCls.declaredMethods.forEach { println("  PromptDelegate method: $it") }
     }
 }

@@ -145,10 +145,22 @@ class StreamDownloadEngine(
         val cancelIntent = Intent("ACTION_CANCEL_DOWNLOAD").apply {
             putExtra("job_id", jobId)
         }
-        val pendingIntent = PendingIntent.getBroadcast(
+        val pendingCancelIntent = PendingIntent.getBroadcast(
             context,
             notificationId,
             cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val openDownloadsIntent = Intent(context, com.rebelroot.omni.MainActivity::class.java).apply {
+            action = "com.rebelroot.omni.ACTION_OPEN_DOWNLOADS"
+            putExtra("extra_open_downloads", true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val pendingOpenDownloads = PendingIntent.getActivity(
+            context,
+            notificationId + 10000,
+            openDownloadsIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -159,7 +171,8 @@ class StreamDownloadEngine(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(progress in 0..99)
             .setAutoCancel(progress >= 100 || progress < 0)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, context.getString(R.string.cancel_text), pendingIntent)
+            .setContentIntent(pendingOpenDownloads)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, context.getString(R.string.cancel_text), pendingCancelIntent)
 
         if (progress in 0..100) {
             builder.setProgress(100, progress, isIndeterminate)
@@ -173,8 +186,73 @@ class StreamDownloadEngine(
         }
     }
 
-    private fun showCompleteNotification(jobId: String, title: String, filename: String) {
+    private fun showCompleteNotification(
+        jobId: String,
+        title: String,
+        filename: String,
+        file: File? = null,
+        openUri: Uri? = null
+    ) {
         val notificationId = getNotificationId(jobId)
+
+        val openDownloadsIntent = Intent(context, com.rebelroot.omni.MainActivity::class.java).apply {
+            action = "com.rebelroot.omni.ACTION_OPEN_DOWNLOADS"
+            putExtra("extra_open_downloads", true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val pendingOpenDownloads = PendingIntent.getActivity(
+            context,
+            notificationId + 10000,
+            openDownloadsIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val ext = filename.substringAfterLast('.', "").lowercase()
+        val mime = if (ext.isNotEmpty()) {
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+        } else {
+            "*/*"
+        }
+
+        val viewFileIntent = when {
+            openUri != null -> {
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(openUri, mime)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            file != null && file.exists() -> {
+                try {
+                    val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                    Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(contentUri, mime)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } catch (e: Exception) {
+                    Log.w("StreamDownloadEngine", "FileProvider URI creation failed: $e")
+                    null
+                }
+            }
+            else -> null
+        }
+
+        val pendingViewFile = if (viewFileIntent != null) {
+            PendingIntent.getActivity(
+                context,
+                notificationId + 20000,
+                viewFileIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            null
+        }
+
+        val mainPendingIntent = pendingViewFile ?: pendingOpenDownloads
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(context.getString(R.string.download_notification_complete))
@@ -182,6 +260,20 @@ class StreamDownloadEngine(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setOngoing(false)
+            .setContentIntent(mainPendingIntent)
+            .addAction(
+                android.R.drawable.ic_menu_view,
+                "Downloads",
+                pendingOpenDownloads
+            )
+
+        if (pendingViewFile != null) {
+            builder.addAction(
+                android.R.drawable.ic_menu_agenda,
+                "Open",
+                pendingViewFile
+            )
+        }
 
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -251,7 +343,7 @@ class StreamDownloadEngine(
         val job = _jobs.value.find { it.id == jobId }
         if (job != null) {
             (job.progress as? MutableStateFlow)?.value = DownloadProgress.Complete(file, sizeBytes, openUri)
-            showCompleteNotification(jobId, filename, filename)
+            showCompleteNotification(jobId, filename, filename, file, openUri)
             saveDownloadHistory()
         }
     }
@@ -404,7 +496,7 @@ class StreamDownloadEngine(
                         saveDownloadHistory()
                     }
                     is DownloadProgress.Complete -> {
-                        showCompleteNotification(jobId, filename, context.getString(R.string.download_saved_successfully))
+                        showCompleteNotification(jobId, filename, context.getString(R.string.download_saved_successfully), progress.file, progress.openUri)
                         jobNotificationIds.remove(jobId)
                         saveDownloadHistory()
                     }

@@ -34,6 +34,10 @@ internal fun BrowserViewModel.persistSavedPasswords() {
 }
 
 fun BrowserViewModel.savePassword(domain: String, username: String, password: String) {
+    if (!isOmniPasswordManagerEnabled) {
+        pendingSaveCredential = null
+        return
+    }
     // Replace existing entry for same domain+username, or add new
     val existing = savedPasswords.indexOfFirst { it.domain == domain && it.username == username }
     val entry = BrowserViewModel.SavedPassword(
@@ -89,8 +93,10 @@ fun BrowserViewModel.clearSavedPasswordsSince(cutoffTime: Long) {
     }
 }
 
-fun BrowserViewModel.getPasswordsForDomain(domain: String): List<BrowserViewModel.SavedPassword> =
-    savedPasswords.filter { it.domain.contains(domain, ignoreCase = true) || domain.contains(it.domain, ignoreCase = true) }
+fun BrowserViewModel.getPasswordsForDomain(domain: String): List<BrowserViewModel.SavedPassword> {
+    if (!isOmniPasswordManagerEnabled) return emptyList()
+    return savedPasswords.filter { it.domain.contains(domain, ignoreCase = true) || domain.contains(it.domain, ignoreCase = true) }
+}
 
 fun BrowserViewModel.checkAutofillForUrl(url: String) {
     // Reset post-fill chip on every new page load
@@ -100,7 +106,7 @@ fun BrowserViewModel.checkAutofillForUrl(url: String) {
 }
 
 fun BrowserViewModel.checkAutofillForFocus(url: String) {
-    if (url.isBlank() || url == "about:blank") {
+    if (!isOmniPasswordManagerEnabled || url.isBlank() || url == "about:blank") {
         autofillMatches = emptyList()
         showAutofillBottomSheet = false
         // Reset post-fill chip when navigating away
@@ -115,8 +121,7 @@ fun BrowserViewModel.checkAutofillForFocus(url: String) {
             it.domain == domain || domain.contains(it.domain) || it.domain.contains(domain)
         }
         autofillMatches = matches
-        if (matches.isNotEmpty() && autofillProviderMode == BrowserViewModel.AutofillProviderMode.OMNI_VAULT) {
-            // Only pop the sheet automatically in Omni-only mode so Bitwarden/Gboard can operate uninterrupted
+        if (matches.isNotEmpty() && (autofillProviderMode == BrowserViewModel.AutofillProviderMode.OMNI_VAULT || autofillProviderMode == BrowserViewModel.AutofillProviderMode.BOTH)) {
             showAutofillBottomSheet = true
         } else {
             showAutofillBottomSheet = false

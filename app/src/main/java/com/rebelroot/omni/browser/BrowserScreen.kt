@@ -6782,32 +6782,23 @@ fun BrowserScreen(
                                                         enabled = !viewModel.togglingUserExtensionIds.contains(ext.id),
                                                         onCheckedChange = { viewModel.toggleUserExtension(ext, context) },
                                                         onUninstall = { extensionToDelete = ext },
-                                                        onOptionsClick = if (!optionsUrl.isNullOrBlank()) {
-                                                            { showExtensionsSheet = false; viewModel.loadUrl(optionsUrl) }
-                                                        } else null,
-                                                        onPopupClick = run {
-                                                            val activeAction = ext.id?.let { viewModel.getActionForExtension(it) }
-                                                            if (activeAction != null || !ext.metaData?.optionsPageUrl.isNullOrBlank()) {
-                                                                {
-                                                                    showExtensionsSheet = false
-                                                                    if (activeAction != null) {
-                                                                        activeAction.click()
-                                                                    } else {
-                                                                        val optionsUrl = ext.metaData?.optionsPageUrl
-                                                                        if (!optionsUrl.isNullOrBlank()) {
-                                                                            viewModel.loadUrl(optionsUrl)
-                                                                        }
-                                                                    }
-                                                                }
-                                                            } else null
+                                                        onOptionsClick = {
+                                                            showExtensionsSheet = false
+                                                            if (!optionsUrl.isNullOrBlank()) {
+                                                                viewModel.loadUrl(optionsUrl)
+                                                            } else {
+                                                                viewModel.openUserExtension(ext, context)
+                                                            }
+                                                        },
+                                                        onPopupClick = {
+                                                            showExtensionsSheet = false
+                                                            viewModel.openUserExtension(ext, context)
                                                         },
                                                         iconBitmap = iconBitmap
                                                     )
                                                 }
                                             }
-                                            for (i in 0 until (3 - row.size)) {
-                                                Spacer(modifier = Modifier.weight(1f))
-                                            }
+                                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                                         }
                                     }
                                 }
@@ -6868,24 +6859,17 @@ fun BrowserScreen(
                                                 enabled = !viewModel.togglingUserExtensionIds.contains(ext.id),
                                                 onCheckedChange = { viewModel.toggleUserExtension(ext, context) },
                                                 onUninstall = { extensionToDelete = ext },
-                                                onOptionsClick = if (!optionsUrl.isNullOrBlank()) {
-                                                    { showExtensionsSheet = false; viewModel.loadUrl(optionsUrl) }
-                                                } else null,
-                                                onPopupClick = run {
-                                                    val activeAction = ext.id?.let { viewModel.getActionForExtension(it) }
-                                                    if (activeAction != null || !ext.metaData?.optionsPageUrl.isNullOrBlank()) {
-                                                        {
-                                                            showExtensionsSheet = false
-                                                            if (activeAction != null) {
-                                                                activeAction.click()
-                                                            } else {
-                                                                val optUrl = ext.metaData?.optionsPageUrl
-                                                                if (!optUrl.isNullOrBlank()) {
-                                                                    viewModel.loadUrl(optUrl)
-                                                                }
-                                                            }
-                                                        }
-                                                    } else null
+                                                onOptionsClick = {
+                                                    showExtensionsSheet = false
+                                                    if (!optionsUrl.isNullOrBlank()) {
+                                                        viewModel.loadUrl(optionsUrl)
+                                                    } else {
+                                                        viewModel.openUserExtension(ext, context)
+                                                    }
+                                                },
+                                                onPopupClick = {
+                                                    showExtensionsSheet = false
+                                                    viewModel.openUserExtension(ext, context)
                                                 },
                                                 iconBitmap = iconBitmap
                                             )

@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Switch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -129,7 +131,8 @@ fun PasswordManagerScreen(
             VaultScreen(
                 modifier = modifier,
                 context = context,
-                vaultManager = vaultManager
+                vaultManager = vaultManager,
+                browserViewModel = browserViewModel
             )
         }
     }
@@ -142,7 +145,8 @@ fun PasswordManagerScreen(
 private fun VaultScreen(
     modifier: Modifier,
     context: Context,
-    vaultManager: PasswordVaultManager
+    vaultManager: PasswordVaultManager,
+    browserViewModel: BrowserViewModel
 ) {
     val scope = rememberCoroutineScope()
 
@@ -265,6 +269,20 @@ private fun VaultScreen(
                             onDismissRequest = { overflowExpanded = false }
                         ) {
                             DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (browserViewModel.isOmniPasswordManagerEnabled)
+                                            "Turn off password manager"
+                                        else
+                                            "Turn on password manager"
+                                    )
+                                },
+                                onClick = {
+                                    overflowExpanded = false
+                                    browserViewModel.setOmniPasswordManagerEnabled(!browserViewModel.isOmniPasswordManagerEnabled, context)
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.pm_import_csv)) },
                                 onClick = {
                                     overflowExpanded = false
@@ -294,6 +312,76 @@ private fun VaultScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // Omni Password Manager Active Toggle Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (browserViewModel.isOmniPasswordManagerEnabled)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (browserViewModel.isOmniPasswordManagerEnabled)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.Lock,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (browserViewModel.isOmniPasswordManagerEnabled)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.padding(end = 8.dp)) {
+                            Text(
+                                text = "Omni Password Manager",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (browserViewModel.isOmniPasswordManagerEnabled)
+                                    "Active • Saves logins and offers autofill"
+                                else
+                                    "Turned off • No saving or autofill suggestions",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = browserViewModel.isOmniPasswordManagerEnabled,
+                        onCheckedChange = { enabled ->
+                            browserViewModel.setOmniPasswordManagerEnabled(enabled, context)
+                        }
+                    )
+                }
+            }
             // Animated search bar
             AnimatedVisibility(
                 visible = searchVisible,

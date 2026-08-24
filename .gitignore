@@ -60,9 +60,18 @@ secrets.properties
 # Local gradle cache directory
 gradle-user-home/
 
-# Local documents
+# Local / temporary documents & scratch markdown
 APK_SIZE_OPTIMIZATION_PLAN.md
 PasswordManagerChangelog.md
+implementation_plan.md
+walkthrough.md
+TODO.md
+NOTES.md
+*.scratch.md
+*.tmp.md
+*.draft.md
+*PLAN*.md
+*NOTES*.md
 
 # Build deliverables
 build_deliverables/
