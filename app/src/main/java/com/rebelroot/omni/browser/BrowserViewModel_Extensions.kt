@@ -27,6 +27,12 @@ import com.rebelroot.omni.media.handoff.WebVideoSourceResolver
 import android.content.Intent
 import com.rebelroot.omni.media.StreamDownloadEngine
 
+val WebExtension?.safeId: String?
+    get() = if (this == null) null else try { id } catch (_: Throwable) { null }
+
+val WebExtension?.safeMetaData: WebExtension.MetaData?
+    get() = if (this == null) null else try { metaData } catch (_: Throwable) { null }
+
 internal val extensionTabIdToOmniTabId = java.util.concurrent.ConcurrentHashMap<String, String>()
 internal val omniTabIdToExtensionTabId = java.util.concurrent.ConcurrentHashMap<String, String>()
 
@@ -312,7 +318,9 @@ internal fun BrowserViewModel.installGrabberExtension(runtime: GeckoRuntime) {
 }
 
 internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtension) {
-    extension.setMessageDelegate(object : WebExtension.MessageDelegate {
+    if (extension.id.isNullOrEmpty()) return
+    try {
+        extension.setMessageDelegate(object : WebExtension.MessageDelegate {
 
         // Maximum size for extension JSON messages to prevent DoS via memory exhaustion
         private val MAX_MESSAGE_STRING_LENGTH = 1_000_000 // 1 MB
@@ -420,6 +428,9 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
             return null
         }
     }, "omniApp")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to set native app message delegate for ${extension.id}", e)
+    }
 }
 
 internal fun BrowserViewModel.syncUniversalCopyState(shouldReload: Boolean = false) {
@@ -1060,7 +1071,13 @@ internal fun BrowserViewModel.sendJsMessage(type: String, payload: String, targe
  * Sets up all required delegates for a WebExtension (native messaging and downloads).
  */
 internal fun BrowserViewModel.setupWebExtensionDelegates(extension: WebExtension) {
-    setupNativeAppMessageDelegate(extension)
+    val extId = extension.safeId ?: return
+    // Only Omni's built-in media grabber requires the "omniApp" native messaging port.
+    // Registering third-party extensions with native messaging causes GeckoView's internal
+    // WebExtension.Sender HashMap to throw NullPointerException when comparing sender IDs.
+    if (extId == BrowserViewModel.GRABBER_ID) {
+        setupNativeAppMessageDelegate(extension)
+    }
     setupWebExtensionDownloadDelegate(extension)
 }
 
@@ -1069,14 +1086,19 @@ internal fun BrowserViewModel.setupWebExtensionDelegates(extension: WebExtension
  * into Omni's native StreamDownloadEngine.
  */
 internal fun BrowserViewModel.setupWebExtensionDownloadDelegate(extension: WebExtension) {
-    extension.setDownloadDelegate(object : WebExtension.DownloadDelegate {
-        override fun onDownload(
-            ext: WebExtension,
-            request: WebExtension.DownloadRequest
-        ): GeckoResult<WebExtension.DownloadInitData>? {
-            return handleWebExtensionDownload(ext, request)
-        }
-    })
+    val extId = extension.safeId ?: return
+    try {
+        extension.setDownloadDelegate(object : WebExtension.DownloadDelegate {
+            override fun onDownload(
+                ext: WebExtension,
+                request: WebExtension.DownloadRequest
+            ): GeckoResult<WebExtension.DownloadInitData>? {
+                return handleWebExtensionDownload(ext, request)
+            }
+        })
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to set download delegate for $extId", e)
+    }
 }
 
 /**

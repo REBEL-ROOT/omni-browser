@@ -2940,7 +2940,8 @@ class BrowserViewModel : ViewModel() {
                 )
 
                 private fun isBundledExtension(extension: org.mozilla.geckoview.WebExtension): Boolean {
-                    return BUNDLED_EXTENSION_IDS.contains(extension.id)
+                    val id = extension.safeId ?: return false
+                    return BUNDLED_EXTENSION_IDS.contains(id)
                 }
 
                 override fun onInstallPromptRequest(
@@ -2949,8 +2950,9 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.WebExtension.PermissionPromptResponse>? {
+                    val extId = extension.safeId
                     if (isBundledExtension(extension)) {
-                        Log.d(TAG, "Auto-approving install prompt for bundled extension: ${extension.id}")
+                        Log.d(TAG, "Auto-approving install prompt for bundled extension: $extId")
                         return org.mozilla.geckoview.GeckoResult.fromValue(
                             org.mozilla.geckoview.WebExtension.PermissionPromptResponse(
                                 true, // isPermissionsGranted
@@ -2959,19 +2961,23 @@ class BrowserViewModel : ViewModel() {
                             )
                         )
                     }
-                    Log.w(TAG, "🔔 Install prompt for external extension ${extension.id}: ${permissions.toList()}. Showing in-app dialog.")
+                    val safePermissions = (permissions as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    val safeOrigins = (origins as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    Log.w(TAG, "🔔 Install prompt for external extension $extId: $safePermissions (origins=$safeOrigins). Showing in-app dialog.")
                     // GeckoView has no native prompt UI: returning null here would
                     // abort the installation. Instead, surface the request through
                     // [pendingExtensionInstallPrompt] so the UI can ask the user and
                     // complete the result with their choice.
                     val result = org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.WebExtension.PermissionPromptResponse>()
-                    pendingExtensionInstallPrompt = PendingExtensionInstallPrompt(
-                        extensionId = extension.id,
-                        extensionName = extension.metaData?.name,
-                        permissions = permissions.toList(),
-                        origins = origins.toList(),
-                        geckoResult = result
-                    )
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        pendingExtensionInstallPrompt = PendingExtensionInstallPrompt(
+                            extensionId = extId ?: "unknown-extension",
+                            extensionName = extension.safeMetaData?.name,
+                            permissions = safePermissions,
+                            origins = safeOrigins,
+                            geckoResult = result
+                        )
+                    }
                     return result
                 }
 
@@ -2981,7 +2987,9 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
-                    Log.i(TAG, "Granting optional permissions for extension: ${extension.id} (perms=${permissions.toList()}, origins=${origins.toList()})")
+                    val safePerms = (permissions as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    val safeOrigins = (origins as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    Log.i(TAG, "Granting optional permissions for extension: ${extension.safeId} (perms=$safePerms, origins=$safeOrigins)")
                     return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.ALLOW)
                 }
 
@@ -2991,7 +2999,9 @@ class BrowserViewModel : ViewModel() {
                     origins: Array<String>,
                     dataCollectionPermissions: Array<String>
                 ): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
-                    Log.i(TAG, "Granting update permissions for extension: ${extension.id} (perms=${permissions.toList()}, origins=${origins.toList()})")
+                    val safePerms = (permissions as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    val safeOrigins = (origins as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    Log.i(TAG, "Granting update permissions for extension: ${extension.safeId} (perms=$safePerms, origins=$safeOrigins)")
                     return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.ALLOW)
                 }
             })
@@ -3479,8 +3489,10 @@ class BrowserViewModel : ViewModel() {
      * Listen to messaging port communication coming from inject.js MSE capture scripts
      */
     private fun setupNativeAppMessageDelegate(extension: WebExtension) {
-        // nativeApp parameter must match nativeApp ID registered in background.js chrome.runtime.sendNativeMessage
-        extension.setMessageDelegate(object : WebExtension.MessageDelegate {
+        if (extension.id.isNullOrEmpty()) return
+        try {
+            // nativeApp parameter must match nativeApp ID registered in background.js chrome.runtime.sendNativeMessage
+            extension.setMessageDelegate(object : WebExtension.MessageDelegate {
             override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
                 Log.d(TAG, "🎬 onMessage called! nativeApp = $nativeApp, messageType = ${message.javaClass.name}, message = $message")
                 try {
@@ -3601,6 +3613,9 @@ class BrowserViewModel : ViewModel() {
                 return null
             }
         }, "omniApp")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set native app message delegate for ${extension.id}", e)
+        }
     }
 
     private fun syncUniversalCopyState(shouldReload: Boolean = false) {
@@ -4969,13 +4984,14 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun toggleUserExtension(extension: WebExtension, context: Context) {
-        if (togglingUserExtensionIds.contains(extension.id)) return
-        togglingUserExtensionIds.add(extension.id)
+        val extId = extension.safeId ?: return
+        if (togglingUserExtensionIds.contains(extId)) return
+        togglingUserExtensionIds.add(extId)
         val runtime = geckoRuntime ?: run {
-            togglingUserExtensionIds.remove(extension.id)
+            togglingUserExtensionIds.remove(extId)
             return
         }
-        val currentlyEnabled = extension.metaData.enabled
+        val currentlyEnabled = extension.safeMetaData?.enabled == true
         val action = if (currentlyEnabled) {
             runtime.webExtensionController.disable(extension, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
         } else {
@@ -4983,10 +4999,10 @@ class BrowserViewModel : ViewModel() {
         }
         action.accept(
             {
-                if (extension.id == FORCE_DARK_EXTENSION_ID) {
+                if (extId == FORCE_DARK_EXTENSION_ID) {
                     saveForceDarkWebsites(context, !currentlyEnabled)
                 }
-                viewModelScope.launch {
+                viewModelScope.launch(Dispatchers.IO) {
                     try {
                         context.dataStore.edit { preferences ->
                             val currentDisabled = preferences[EXTENSION_DISABLED_IDS_KEY]
@@ -4994,16 +5010,18 @@ class BrowserViewModel : ViewModel() {
                                 ?.filter { it.isNotBlank() }
                                 ?.toMutableSet() ?: mutableSetOf()
                             if (currentlyEnabled) {
-                                currentDisabled.add(extension.id)
+                                currentDisabled.add(extId)
                             } else {
-                                currentDisabled.remove(extension.id)
+                                currentDisabled.remove(extId)
                             }
                             preferences[EXTENSION_DISABLED_IDS_KEY] = currentDisabled.joinToString(",")
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to update disabled extensions preference", e)
                     }
-                    syncUserExtensions()
+                    withContext(Dispatchers.Main) {
+                        syncUserExtensions()
+                    }
                 }
                 currentSettingsVersion++
                 val activeId = activeTabId
@@ -5014,14 +5032,14 @@ class BrowserViewModel : ViewModel() {
                     }
                 }
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    togglingUserExtensionIds.remove(extension.id)
+                    togglingUserExtensionIds.remove(extId)
                     reload()
                 }
             },
             { error ->
-                Log.e(TAG, "Failed to toggle user extension: ${extension.id}", error)
+                Log.e(TAG, "Failed to toggle user extension: $extId", error)
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    togglingUserExtensionIds.remove(extension.id)
+                    togglingUserExtensionIds.remove(extId)
                 }
             }
         )
@@ -6591,6 +6609,8 @@ class BrowserViewModel : ViewModel() {
                     false  // isTechnicalAndInteractionDataGranted
                 )
             )
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to complete extension install prompt GeckoResult", e)
         }
     }
 
@@ -6599,160 +6619,187 @@ class BrowserViewModel : ViewModel() {
         runtime.webExtensionController.list()
             .accept(
                 { list ->
-                    val coreIds = listOf(GRABBER_ID, "omni-universal-copy@omnibrowser.app", AI_BLOCKER_ID, "omni-agent@omnibrowser.app", PROXY_ROUTER_ID, FORCE_DARK_EXTENSION_ID, "omni-translate@omnibrowser.app")
+                    val coreIds = setOf(
+                        GRABBER_ID,
+                        "omni-universal-copy@omnibrowser.app",
+                        AI_BLOCKER_ID,
+                        "omni-agent@omnibrowser.app",
+                        PROXY_ROUTER_ID,
+                        FORCE_DARK_EXTENSION_ID,
+                        "omni-translate@omnibrowser.app"
+                    )
                     // Skip null-id extensions (e.g. a built-in installed before its
                     // manifest declared applications.gecko.id): they cannot be
                     // enabled/disabled and would crash the UI which keys on ext.id.
                     val filtered = list?.filter { ext ->
-                        val id = ext.id
-                        id != null && id !in coreIds
+                        val id = ext.safeId
+                        !id.isNullOrBlank() && id !in coreIds
                     } ?: emptyList()
-                    val leftoverAgent = list?.find { it.id == "omni-agent@omnibrowser.app" }
+                    val leftoverAgent = list?.find { it.safeId == "omni-agent@omnibrowser.app" }
                     if (leftoverAgent != null) {
                         Log.i(TAG, "Leftover Omni Agent extension found in profile database. Uninstalling...")
-                        runtime.webExtensionController.uninstall(leftoverAgent)
+                        try {
+                            runtime.webExtensionController.uninstall(leftoverAgent)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to uninstall leftover agent", e)
+                        }
                     }
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    viewModelScope.launch(Dispatchers.IO) {
                         val context = appContext
                         val (savedOrder, disabledIdsSet) = if (context != null) {
-                            runBlocking {
-                                try {
-                                    val prefs = context.dataStore.data.first()
-                                    val order = prefs[EXTENSION_ORDER_KEY]?.split(",") ?: emptyList()
-                                    val disabledStr = prefs[EXTENSION_DISABLED_IDS_KEY] ?: ""
-                                    val disabled = if (disabledStr.isBlank()) emptySet() else disabledStr.split(",").filter { it.isNotBlank() }.toSet()
-                                    Pair(order, disabled)
-                                } catch (e: Exception) {
-                                    Pair(emptyList<String>(), emptySet<String>())
-                                }
+                            try {
+                                val prefs = context.dataStore.data.first()
+                                val order = prefs[EXTENSION_ORDER_KEY]?.split(",") ?: emptyList()
+                                val disabledStr = prefs[EXTENSION_DISABLED_IDS_KEY] ?: ""
+                                val disabled = if (disabledStr.isBlank()) emptySet() else disabledStr.split(",").filter { it.isNotBlank() }.toSet()
+                                Pair(order, disabled)
+                            } catch (e: Exception) {
+                                Pair(emptyList<String>(), emptySet<String>())
                             }
                         } else {
                             Pair(emptyList<String>(), emptySet<String>())
                         }
 
-                        filtered.forEach { ext ->
-                            setupWebExtensionDelegates(ext)
-                            runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
-                             if (ext.id == FORCE_DARK_EXTENSION_ID) {
-                                 if (forceDarkWebsites) {
-                                     runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                                 } else {
-                                     runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                                 }
-                             } else {
-                                 if (disabledIdsSet.contains(ext.id)) {
-                                     runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                                 } else {
-                                     runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                                 }
-                             }
-                            ext.setTabDelegate(object : WebExtension.TabDelegate {
-                                override fun onNewTab(
-                                    extension: WebExtension,
-                                    createDetails: WebExtension.CreateTabDetails
-                                ): GeckoResult<GeckoSession>? {
-                                    Log.d(TAG, "WebExtension ${extension.id} requested onNewTab: ${createDetails.url}")
-                                    val url = createDetails.url ?: "about:blank"
-                                    val result = GeckoResult<GeckoSession>()
-                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                        try {
-                                            val context = appContext
-                                            if (context != null) {
-                                                createNewTab(context, url)
-                                                val createdSession = tabs.find { it.id == activeTabId }?.session ?: tabs.lastOrNull()?.session
-                                                result.complete(createdSession)
-                                            } else {
-                                                result.completeExceptionally(IllegalStateException("Context is null"))
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error in WebExtension onNewTab", e)
-                                            result.completeExceptionally(e)
+                        withContext(Dispatchers.Main) {
+                            filtered.forEach { ext ->
+                                val extId = ext.safeId ?: return@forEach
+                                try {
+                                    setupWebExtensionDelegates(ext)
+                                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    if (extId == FORCE_DARK_EXTENSION_ID) {
+                                        if (forceDarkWebsites) {
+                                            runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                        } else {
+                                            runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                        }
+                                    } else {
+                                        if (disabledIdsSet.contains(extId)) {
+                                            runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                        } else {
+                                            runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
                                         }
                                     }
-                                    return result
-                                }
-
-                                override fun onOpenOptionsPage(extension: WebExtension) {
-                                    Log.d(TAG, "WebExtension ${extension.id} requested onOpenOptionsPage")
-                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                        try {
-                                            val context = appContext
-                                            if (context != null) {
-                                                val meta = extension.metaData
-                                                val rawOptions = meta?.optionsPageUrl
-                                                val baseUrl = meta?.baseUrl ?: ""
-                                                val optionsUrl = if (!rawOptions.isNullOrBlank()) {
-                                                    if (rawOptions.startsWith("moz-extension://") || rawOptions.startsWith("http://") || rawOptions.startsWith("https://")) rawOptions
-                                                    else "${baseUrl.removeSuffix("/")}/${rawOptions.removePrefix("/")}"
-                                                } else if (baseUrl.isNotBlank()) {
-                                                    "${baseUrl.removeSuffix("/")}/options/index.html"
-                                                } else null
-                                                if (optionsUrl != null) {
-                                                    createNewTab(context, optionsUrl)
+                                    ext.setTabDelegate(object : WebExtension.TabDelegate {
+                                        override fun onNewTab(
+                                            extension: WebExtension,
+                                            createDetails: WebExtension.CreateTabDetails
+                                        ): GeckoResult<GeckoSession>? {
+                                            val currentId = extension.safeId ?: "unknown"
+                                            Log.d(TAG, "WebExtension $currentId requested onNewTab: ${createDetails.url}")
+                                            val url = createDetails.url ?: "about:blank"
+                                            val inBackground = createDetails.active == false
+                                            val result = GeckoResult<GeckoSession>()
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                try {
+                                                    val ctx = appContext
+                                                    if (ctx != null) {
+                                                        createNewTab(ctx, url, inBackground = inBackground)
+                                                        val createdSession = if (!inBackground) {
+                                                            tabs.find { it.id == activeTabId }?.session ?: tabs.lastOrNull()?.session
+                                                        } else {
+                                                            tabs.lastOrNull()?.session
+                                                        }
+                                                        result.complete(createdSession)
+                                                    } else {
+                                                        result.completeExceptionally(IllegalStateException("Context is null"))
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Log.e(TAG, "Error in WebExtension onNewTab", e)
+                                                    result.completeExceptionally(e)
                                                 }
                                             }
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "Error opening options page for ${extension.id}", e)
+                                            return result
                                         }
-                                    }
-                                }
-                            })
-                            ext.setActionDelegate(object : WebExtension.ActionDelegate {
 
-                                override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                    try {
-                                        registerExtensionAction(extension.id, session, action)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "onBrowserAction crashed for ${extension.id}", e)
-                                    }
-                                }
-                                override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
-                                    try {
-                                        registerExtensionAction(extension.id, session, action)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "onPageAction crashed for ${extension.id}", e)
-                                    }
-                                }
-                                override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
-                                    return try {
-                                        handleExtensionOpenPopup(extension, action)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "onOpenPopup crashed for ${extension.id}", e)
-                                        null
-                                    }
-                                }
-                                override fun onTogglePopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
-                                    return try {
-                                        handleExtensionOpenPopup(extension, action)
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "onTogglePopup crashed for ${extension.id}", e)
-                                        null
-                                    }
-                                }
-                            })
-                        }
-                        val sorted = filtered.sortedWith(compareBy {
-                            val idx = savedOrder.indexOf(it.id)
-                            if (idx == -1) Int.MAX_VALUE else idx
-                        })
-
-                        userExtensions.clear()
-                        userExtensions.addAll(sorted)
-
-                        // Load real icons for each extension asynchronously
-                        sorted.forEach { ext ->
-                            try {
-                                val iconImage = ext.metaData?.icon ?: return@forEach
-                                iconImage.getBitmap(128).accept(
-                                    { bitmap ->
-                                        if (bitmap != null) {
-                                            extensionIcons[ext.id] = bitmap
+                                        override fun onOpenOptionsPage(extension: WebExtension) {
+                                            val currentId = extension.safeId ?: "unknown"
+                                            Log.d(TAG, "WebExtension $currentId requested onOpenOptionsPage")
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                try {
+                                                    val ctx = appContext
+                                                    if (ctx != null) {
+                                                        val meta = extension.safeMetaData
+                                                        val rawOptions = meta?.optionsPageUrl
+                                                        val baseUrl = meta?.baseUrl ?: ""
+                                                        val optionsUrl = if (!rawOptions.isNullOrBlank()) {
+                                                            if (rawOptions.startsWith("moz-extension://") || rawOptions.startsWith("http://") || rawOptions.startsWith("https://")) rawOptions
+                                                            else "${baseUrl.removeSuffix("/")}/${rawOptions.removePrefix("/")}"
+                                                        } else if (baseUrl.isNotBlank()) {
+                                                            "${baseUrl.removeSuffix("/")}/options/index.html"
+                                                        } else null
+                                                        if (optionsUrl != null) {
+                                                            createNewTab(ctx, optionsUrl)
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Log.e(TAG, "Error opening options page for $currentId", e)
+                                                }
+                                            }
                                         }
-                                    },
-                                    { err -> Log.w(TAG, "Could not load icon for ${ext.id}: $err") }
-                                )
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Icon load failed for ${ext.id}", e)
+                                    })
+                                    ext.setActionDelegate(object : WebExtension.ActionDelegate {
+                                        override fun onBrowserAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
+                                            try {
+                                                val id = extension.safeId ?: return
+                                                registerExtensionAction(id, session, action)
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "onBrowserAction crashed for extension", e)
+                                            }
+                                        }
+                                        override fun onPageAction(extension: WebExtension, session: GeckoSession?, action: WebExtension.Action) {
+                                            try {
+                                                val id = extension.safeId ?: return
+                                                registerExtensionAction(id, session, action)
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "onPageAction crashed for extension", e)
+                                            }
+                                        }
+                                        override fun onOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
+                                            return try {
+                                                handleExtensionOpenPopup(extension, action)
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "onOpenPopup crashed for extension", e)
+                                                null
+                                            }
+                                        }
+                                        override fun onTogglePopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession>? {
+                                            return try {
+                                                handleExtensionOpenPopup(extension, action)
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "onTogglePopup crashed for extension", e)
+                                                null
+                                            }
+                                        }
+                                    })
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error setting up delegates for extension $extId", e)
+                                }
+                            }
+                            val sorted = filtered.sortedWith(compareBy {
+                                val id = it.safeId ?: ""
+                                val idx = savedOrder.indexOf(id)
+                                if (idx == -1) Int.MAX_VALUE else idx
+                            })
+
+                            userExtensions.clear()
+                            userExtensions.addAll(sorted)
+
+                            // Load real icons for each extension asynchronously
+                            sorted.forEach { ext ->
+                                val id = ext.safeId ?: return@forEach
+                                try {
+                                    val iconImage = ext.safeMetaData?.icon ?: return@forEach
+                                    iconImage.getBitmap(128).accept(
+                                        { bitmap ->
+                                            if (bitmap != null) {
+                                                extensionIcons[id] = bitmap
+                                            }
+                                        },
+                                        { err -> Log.w(TAG, "Could not load icon for $id: $err") }
+                                    )
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Icon load failed for $id", e)
+                                }
                             }
                         }
                     }
@@ -6765,10 +6812,10 @@ class BrowserViewModel : ViewModel() {
 
     fun saveExtensionOrder() {
         val context = appContext ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
+                val order = userExtensions.mapNotNull { it.safeId }
                 context.dataStore.edit { preferences ->
-                    val order = userExtensions.map { it.id }
                     preferences[EXTENSION_ORDER_KEY] = order.joinToString(",")
                 }
             } catch (e: Exception) {

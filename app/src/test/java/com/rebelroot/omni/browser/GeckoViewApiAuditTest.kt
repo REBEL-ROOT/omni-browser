@@ -61,4 +61,19 @@ class GeckoViewApiAuditTest {
         val promptDelCls = Class.forName("org.mozilla.geckoview.WebExtensionController\$PromptDelegate")
         promptDelCls.declaredMethods.forEach { println("  PromptDelegate method: $it") }
     }
+
+    @Test
+    fun testPermissionPromptResponse() {
+        val response = WebExtension.PermissionPromptResponse(true, true, false)
+        org.junit.Assert.assertEquals(true, response.isPermissionsGranted)
+        org.junit.Assert.assertEquals(true, response.isPrivateModeGranted)
+        org.junit.Assert.assertEquals(false, response.isTechnicalAndInteractionDataGranted)
+    }
+
+    @Test
+    fun testSafeExtensionAccess() {
+        val nullExt: WebExtension? = null
+        org.junit.Assert.assertNull(nullExt.safeId)
+        org.junit.Assert.assertNull(nullExt.safeMetaData)
+    }
 }

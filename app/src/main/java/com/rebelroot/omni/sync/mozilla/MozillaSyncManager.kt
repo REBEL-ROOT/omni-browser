@@ -4,6 +4,7 @@ import android.content.Context
 import com.rebelroot.omni.bookmarks.model.BookmarkCollection
 import com.rebelroot.omni.bookmarks.storage.saveBookmarks
 import com.rebelroot.omni.browser.TabState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,13 +31,26 @@ class MozillaSyncManager(
     val tabBridge: MozillaTabBridge = MozillaTabBridge(),
     val historyBridge: MozillaHistoryBridge = MozillaHistoryBridge(),
     val loginBridge: MozillaLoginBridge = MozillaLoginBridge(),
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
+    private val mainDispatcher: CoroutineDispatcher = try {
+        Dispatchers.Main.immediate
+    } catch (_: Throwable) {
+        Dispatchers.Default
+    }
 ) {
 
     private val _syncState = MutableStateFlow<MozSyncState>(MozSyncState.Idle)
     val syncState: StateFlow<MozSyncState> = _syncState.asStateFlow()
 
     private var backoffUntilMillis: Long = 0L
+
+    private suspend fun onMain(block: suspend () -> Unit) {
+        try {
+            withContext(mainDispatcher) { block() }
+        } catch (_: Throwable) {
+            withContext(Dispatchers.Default) { block() }
+        }
+    }
 
     fun syncNow(
         context: Context? = null,
@@ -50,21 +64,27 @@ class MozillaSyncManager(
         scope.launch {
             val token = accountManager.getAccessToken()
             if (token.isNullOrBlank()) {
-                _syncState.value = MozSyncState.Error("Not signed in to Firefox Account")
-                onComplete?.invoke(false)
+                onMain {
+                    _syncState.value = MozSyncState.Error("Not signed in to Firefox Account")
+                    try { onComplete?.invoke(false) } catch (_: Exception) {}
+                }
                 return@launch
             }
 
             if (System.currentTimeMillis() < backoffUntilMillis) {
                 val waitSec = (backoffUntilMillis - System.currentTimeMillis()) / 1000L
-                _syncState.value = MozSyncState.Error("Server requested backoff. Retrying in ${waitSec}s")
-                onComplete?.invoke(false)
+                onMain {
+                    _syncState.value = MozSyncState.Error("Server requested backoff. Retrying in ${waitSec}s")
+                    try { onComplete?.invoke(false) } catch (_: Exception) {}
+                }
                 return@launch
             }
 
             try {
                 // 1. Fetch storage credentials from TokenServer
-                _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Authenticating with Mozilla Cloud...")
+                onMain {
+                    _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Authenticating with Mozilla Cloud...")
+                }
                 val credsResult = syncClient.fetchStorageCredentials(token)
                 
                 val apiEndpoint: String
@@ -78,10 +98,14 @@ class MozillaSyncManager(
                     }
                     is SyncClientResult.Failure -> {
                         if (credsResult.isAuthError) {
-                            _syncState.value = MozSyncState.Error("Session expired. Please sign in again.")
+                            onMain {
+                                _syncState.value = MozSyncState.Error("Session expired. Please sign in again.")
+                            }
                         } else {
                             // Fallback to direct storage endpoint if TokenServer is bypassed/mocked
-                            _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Connecting to storage...")
+                            onMain {
+                                _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Connecting to storage...")
+                            }
                         }
                         apiEndpoint = "https://sync-1-5.sync.services.mozilla.com/1.5/${accountManager.getUserId() ?: "user"}/"
                         authToken = "Bearer $token"
@@ -93,7 +117,9 @@ class MozillaSyncManager(
 
                 // 2. Sync Bookmarks (Bidirectional)
                 if (targetEngines.contains(SyncEngine.BOOKMARKS) && collection != null) {
-                    _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Syncing bookmarks...")
+                    onMain {
+                        _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Syncing bookmarks...")
+                    }
                     val fetchResult = syncClient.fetchCollectionRecords(
                         apiEndpoint = apiEndpoint,
                         collection = "bookmarks",
@@ -129,7 +155,9 @@ class MozillaSyncManager(
 
                 // 3. Sync Open Tabs
                 if (targetEngines.contains(SyncEngine.TABS)) {
-                    _syncState.value = MozSyncState.Syncing(SyncEngine.TABS, "Syncing open tabs...")
+                    onMain {
+                        _syncState.value = MozSyncState.Syncing(SyncEngine.TABS, "Syncing open tabs...")
+                    }
                     val localDeviceId = accountManager.getUserId() ?: "omni_device"
                     val deviceName = accountManager.getDeviceName()
 
@@ -162,7 +190,9 @@ class MozillaSyncManager(
 
                 // 4. Sync History
                 if (targetEngines.contains(SyncEngine.HISTORY)) {
-                    _syncState.value = MozSyncState.Syncing(SyncEngine.HISTORY, "Syncing history...")
+                    onMain {
+                        _syncState.value = MozSyncState.Syncing(SyncEngine.HISTORY, "Syncing history...")
+                    }
                     val histFetchResult = syncClient.fetchCollectionRecords(
                         apiEndpoint = apiEndpoint,
                         collection = "history",
@@ -180,11 +210,15 @@ class MozillaSyncManager(
                 // 5. Update last sync timestamp
                 val finishTime = System.currentTimeMillis()
                 accountManager.setLastSyncTime(finishTime)
-                _syncState.value = MozSyncState.Done(finishTime)
-                onComplete?.invoke(true)
+                onMain {
+                    _syncState.value = MozSyncState.Done(finishTime)
+                    try { onComplete?.invoke(true) } catch (_: Exception) {}
+                }
             } catch (e: Exception) {
-                _syncState.value = MozSyncState.Error(e.message ?: "Sync failed")
-                onComplete?.invoke(false)
+                onMain {
+                    _syncState.value = MozSyncState.Error(e.message ?: "Sync failed")
+                    try { onComplete?.invoke(false) } catch (_: Exception) {}
+                }
             }
         }
     }

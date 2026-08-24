@@ -56,14 +56,17 @@ class FxAccountManager private constructor() {
         val encodedRedirect = URLEncoder.encode(REDIRECT_URI, StandardCharsets.UTF_8.name())
         val encodedScope = URLEncoder.encode(DEFAULT_SCOPES, StandardCharsets.UTF_8.name())
         val encodedState = URLEncoder.encode(state, StandardCharsets.UTF_8.name())
-        return "$AUTH_ENDPOINT?client_id=$CLIENT_ID&redirect_uri=$encodedRedirect&scope=$encodedScope&state=$encodedState&access_type=offline"
+        return "$AUTH_ENDPOINT?client_id=$CLIENT_ID&response_type=code&redirect_uri=$encodedRedirect&scope=$encodedScope&state=$encodedState&access_type=offline"
     }
 
     /**
      * Checks whether the given URL is the OAuth redirect callback.
      */
     fun isRedirectUrl(url: String): Boolean {
-        return url.startsWith(REDIRECT_URI) || url.startsWith(CUSTOM_SCHEME_REDIRECT)
+        return url.startsWith(REDIRECT_URI) ||
+               url.startsWith(CUSTOM_SCHEME_REDIRECT) ||
+               url.contains("/oauth/success/") ||
+               (url.contains("code=") && (url.contains("accounts.firefox.com") || url.contains("omni://") || url.contains("localhost")))
     }
 
     /**
@@ -162,10 +165,10 @@ class FxAccountManager private constructor() {
 
     companion object {
         const val CLIENT_ID = "a2270f727f45f648"
-        const val AUTH_ENDPOINT = "https://accounts.firefox.com/oauth/signin"
+        const val AUTH_ENDPOINT = "https://accounts.firefox.com/authorization"
         const val REDIRECT_URI = "https://accounts.firefox.com/oauth/success/a2270f727f45f648"
         const val CUSTOM_SCHEME_REDIRECT = "omni://fxa-auth"
-        const val DEFAULT_SCOPES = "profile sync"
+        const val DEFAULT_SCOPES = "profile sync https://identity.mozilla.com/apps/oldsync"
 
         private const val KEY_EMAIL = "fxa_email"
         private const val KEY_DISPLAY_NAME = "fxa_display_name"

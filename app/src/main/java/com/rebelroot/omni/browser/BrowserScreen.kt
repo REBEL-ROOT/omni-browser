@@ -343,7 +343,7 @@ fun BrowserScreen(
     )
 
     val hasActiveUserExtensions = remember(viewModel.userExtensions.toList()) {
-        viewModel.userExtensions.any { it.metaData.enabled }
+        viewModel.userExtensions.any { it.safeMetaData?.enabled == true }
     }
     LaunchedEffect(viewModel.currentUrl) {
         isScrollNavBarVisible = true
@@ -6433,10 +6433,12 @@ fun BrowserScreen(
             // Render top dropdown as an in-canvas overlay on web pages to keep GeckoView window focused
             if (showMenu && viewModel.addressBarPosition != "Bottom") {
                 val density = androidx.compose.ui.platform.LocalDensity.current
+                val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
                 val statusBarPx = WindowInsets.statusBars.getTop(density)
                 val statusBarDp = with(density) { statusBarPx.toDp() }
                 val topBarHeightDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else 56.dp
                 val menuTopOffset = statusBarDp + topBarHeightDp + 4.dp
+                val menuEndPadding = if (screenWidthDp < 360.dp) 4.dp else 8.dp
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -6456,7 +6458,7 @@ fun BrowserScreen(
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = menuTopOffset, end = 8.dp)
+                            .padding(top = menuTopOffset, end = menuEndPadding)
                     ) {
                         omnimenuDropdownCard(
                             expanded = showMenu,
@@ -6517,13 +6519,11 @@ fun BrowserScreen(
                     // Extensions without an id are unmanageable leftovers — hide them
                     // so the UI (which keys on ext.id) can never crash on them.
                     val userExts = remember(viewModel.userExtensions.toList()) {
-                        viewModel.userExtensions.filter { it.id != null }.toList()
+                        viewModel.userExtensions.filter { !it.safeId.isNullOrEmpty() }.toList()
                     }
                     val isDarkExt = viewModel.isDarkThemeEnabled
                     val totalInstalled = userExts.size
-                    val totalEnabled = userExts.count {
-                        try { it.metaData?.enabled == true } catch (_: Exception) { false }
-                    }
+                    val totalEnabled = userExts.count { it.safeMetaData?.enabled == true }
 
                     var selectedExtensionTab by remember { mutableStateOf("Installed") }
                     var selectedCuratedCategory by remember { mutableStateOf("All") }

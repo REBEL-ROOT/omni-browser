@@ -4,6 +4,10 @@ import com.rebelroot.omni.browser.TabState
 import org.json.JSONArray
 import org.json.JSONObject
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 data class TabInfo(
     val title: String,
     val url: String,
@@ -20,6 +24,9 @@ data class RemoteDeviceTabs(
 )
 
 class MozillaTabBridge {
+
+    private val _remoteTabsFlow = MutableStateFlow<List<RemoteDeviceTabs>>(emptyList())
+    val remoteTabsFlow: StateFlow<List<RemoteDeviceTabs>> = _remoteTabsFlow.asStateFlow()
 
     private val remoteTabsByDevice = mutableMapOf<String, RemoteDeviceTabs>()
 
@@ -129,6 +136,7 @@ class MozillaTabBridge {
      */
     fun updateRemoteDeviceTabs(remoteDevice: RemoteDeviceTabs) {
         remoteTabsByDevice[remoteDevice.deviceId] = remoteDevice
+        _remoteTabsFlow.value = remoteTabsByDevice.values.toList()
     }
 
     /**
@@ -140,5 +148,6 @@ class MozillaTabBridge {
 
     fun clearRemoteTabs() {
         remoteTabsByDevice.clear()
+        _remoteTabsFlow.value = emptyList()
     }
 }

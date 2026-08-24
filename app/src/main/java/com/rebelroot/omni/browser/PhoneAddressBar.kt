@@ -896,14 +896,26 @@ fun omnimenuDropdownCard(
     val gridCardBg = if (viewModel.isAmoledMode) Color(0xFF111114) else MaterialTheme.colorScheme.surfaceVariant
     val accentColor = MaterialTheme.colorScheme.primary
 
-    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
-    val maxHeight = (screenHeightDp - 145.dp).coerceAtLeast(250.dp)
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp.dp
+    val screenHeightDp = configuration.screenHeightDp.dp
+    val isCompact = screenWidthDp < 360.dp || screenHeightDp < 680.dp
+    val isVeryCompact = screenWidthDp < 320.dp || screenHeightDp < 560.dp
+
+    // Responsive width: dynamically scales with screen width on smaller devices
+    val menuWidth = when {
+        screenWidthDp < 320.dp -> (screenWidthDp - 16.dp).coerceAtLeast(200.dp)
+        screenWidthDp < 360.dp -> (screenWidthDp - 24.dp).coerceAtLeast(230.dp)
+        screenWidthDp < 400.dp -> (screenWidthDp * 0.74f).coerceIn(240.dp, 280.dp)
+        else -> 300.dp
+    }
+    val maxHeight = (screenHeightDp - if (isCompact) 80.dp else 130.dp).coerceAtLeast(220.dp)
 
     Surface(
         modifier = Modifier
-            .width(300.dp)
+            .width(menuWidth)
             .heightIn(max = maxHeight),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(if (isCompact) 18.dp else 24.dp),
         color = cardBg,
         shadowElevation = 14.dp,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -912,27 +924,32 @@ fun omnimenuDropdownCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = 10.dp, horizontal = 12.dp)
+                .padding(
+                    vertical = if (isCompact) 6.dp else 10.dp,
+                    horizontal = if (isCompact) 8.dp else 12.dp
+                )
         ) {
             // ── Top Circular Quick Navigation Row ──────────────────
             val canBack = activeTab?.canGoBack == true
             val canForward = activeTab?.canGoForward == true
             val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
+            val quickNavBtnSize = if (isCompact) 32.dp else 40.dp
+            val quickNavIconSize = if (isCompact) 16.dp else 20.dp
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .padding(horizontal = if (isCompact) 2.dp else 4.dp, vertical = if (isCompact) 1.dp else 2.dp)
                     .background(
                         color = if (viewModel.isAmoledMode) Color(0xFF111114) else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
                     )
                     .border(
                         width = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
                     )
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = if (isCompact) 2.dp else 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -940,33 +957,33 @@ fun omnimenuDropdownCard(
                 IconButton(
                     onClick = { onDismissRequest(); viewModel.goBack() },
                     enabled = canBack,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(quickNavBtnSize)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Back",
                         tint = if (canBack) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(quickNavIconSize)
                     )
                 }
                 // Forward
                 IconButton(
                     onClick = { onDismissRequest(); viewModel.goForward() },
                     enabled = canForward,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(quickNavBtnSize)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                         contentDescription = "Forward",
                         tint = if (canForward) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(quickNavIconSize)
                     )
                 }
                 // Save / Bookmark
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(quickNavBtnSize)
                         .clip(CircleShape)
                         .combinedClickable(
                             enabled = !isHome,
@@ -989,7 +1006,7 @@ fun omnimenuDropdownCard(
                         imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
                         contentDescription = "Bookmark",
                         tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(quickNavIconSize)
                     )
                 }
                 // Share
@@ -1009,59 +1026,60 @@ fun omnimenuDropdownCard(
                         }
                     },
                     enabled = !isHome,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(quickNavBtnSize)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.IosShare,
                         contentDescription = "Share",
                         tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(quickNavIconSize)
                     )
                 }
                 // Reload
                 IconButton(
                     onClick = { onDismissRequest(); if (!isHome) viewModel.reload() },
                     enabled = !isHome,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(quickNavBtnSize)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Refresh,
                         contentDescription = "Reload",
                         tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(quickNavIconSize)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
 
             // ── TOP NAVIGATION (GLOBAL ACTIONS) ────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_top_navigation), textColor = textSecondary)
+            MenuSectionLabel(text = stringResource(R.string.menu_section_top_navigation), textColor = textSecondary, isCompact = isCompact)
 
+            val gridSpacing = if (isCompact) 5.dp else 8.dp
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = if (isCompact) 2.dp else 4.dp),
+                verticalArrangement = Arrangement.spacedBy(gridSpacing)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(gridSpacing)
                 ) {
                     GlobalActionCard(
                         icon = Icons.Rounded.Add,
                         customIcon = {
                             Box(
                                 modifier = Modifier
-                                    .size(22.dp)
-                                    .border(1.5.dp, iconTint, RoundedCornerShape(6.dp)),
+                                    .size(if (isCompact) 18.dp else 22.dp)
+                                    .border(1.5.dp, iconTint, RoundedCornerShape(if (isCompact) 4.dp else 6.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Add,
                                     contentDescription = null,
                                     tint = iconTint,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(if (isCompact) 10.dp else 13.dp)
                                 )
                             }
                         },
@@ -1069,6 +1087,7 @@ fun omnimenuDropdownCard(
                         iconTint = iconTint,
                         cardBg = gridCardBg,
                         textColor = textPrimary,
+                        isCompact = isCompact,
                         modifier = Modifier.weight(1f),
                         onClick = { onDismissRequest(); onNewTab() }
                     )
@@ -1079,20 +1098,21 @@ fun omnimenuDropdownCard(
                                 imageVector = Icons.Rounded.VisibilityOff,
                                 contentDescription = null,
                                 tint = iconTint,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
                             )
                         },
                         label = stringResource(R.string.menu_new_incognito_tab),
                         iconTint = iconTint,
                         cardBg = gridCardBg,
                         textColor = textPrimary,
+                        isCompact = isCompact,
                         modifier = Modifier.weight(1f),
                         onClick = { onDismissRequest(); onNewIncognitoTab() }
                     )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(gridSpacing)
                 ) {
                     GlobalActionCard(
                         icon = Icons.Rounded.History,
@@ -1100,6 +1120,7 @@ fun omnimenuDropdownCard(
                         iconTint = iconTint,
                         cardBg = gridCardBg,
                         textColor = textPrimary,
+                        isCompact = isCompact,
                         modifier = Modifier.weight(1f),
                         onClick = { onDismissRequest(); onOpenHistory() }
                     )
@@ -1109,23 +1130,25 @@ fun omnimenuDropdownCard(
                         iconTint = iconTint,
                         cardBg = gridCardBg,
                         textColor = textPrimary,
+                        isCompact = isCompact,
                         modifier = Modifier.weight(1f),
                         onClick = { onDismissRequest(); onOpenDownloads() }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp))
+            Spacer(modifier = Modifier.height(if (isCompact) 3.dp else 6.dp))
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
 
             // ── PAGE & TABS ────────────────────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_page_tabs), textColor = textSecondary)
+            MenuSectionLabel(text = stringResource(R.string.menu_section_page_tabs), textColor = textSecondary, isCompact = isCompact)
 
             MinimalMenuItem(
                 text = stringResource(R.string.menu_add_tab_to_new_group),
                 icon = Icons.Rounded.GridView,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); Toast.makeText(context, context.getString(R.string.toast_group_created), Toast.LENGTH_SHORT).show() }
             )
             MinimalMenuItem(
@@ -1133,6 +1156,7 @@ fun omnimenuDropdownCard(
                 icon = Icons.Rounded.StarBorder,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onOpenBookmarks() }
             )
             MinimalMenuItem(
@@ -1140,6 +1164,7 @@ fun omnimenuDropdownCard(
                 icon = Icons.Rounded.Devices,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onOpenHistory() }
             )
             MinimalMenuItem(
@@ -1147,6 +1172,7 @@ fun omnimenuDropdownCard(
                 icon = Icons.Rounded.Extension,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onShowExtensions() }
             )
 
@@ -1156,13 +1182,14 @@ fun omnimenuDropdownCard(
                     icon = Icons.Rounded.Computer,
                     iconTint = iconTint,
                     textColor = textPrimary,
+                    isCompact = isCompact,
                     onClick = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
                     trailingContent = {
                         Switch(
                             checked = viewModel.isDesktopMode,
                             onCheckedChange = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
                             colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
-                            modifier = Modifier.scale(0.7f)
+                            modifier = Modifier.scale(if (isCompact) 0.6f else 0.7f)
                         )
                     }
                 )
@@ -1171,6 +1198,7 @@ fun omnimenuDropdownCard(
                     icon = Icons.Rounded.Search,
                     iconTint = iconTint,
                     textColor = textPrimary,
+                    isCompact = isCompact,
                     onClick = { onDismissRequest(); onFindInPage() }
                 )
                 if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
@@ -1179,6 +1207,7 @@ fun omnimenuDropdownCard(
                         icon = Icons.Rounded.AddCircle,
                         iconTint = iconTint,
                         textColor = textPrimary,
+                        isCompact = isCompact,
                         onClick = {
                             onDismissRequest()
                             val currentUrl = viewModel.currentUrl
@@ -1189,17 +1218,18 @@ fun omnimenuDropdownCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp))
+            Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
 
             // ── PRIVACY & UTILITIES ───────────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_privacy_utilities), textColor = textSecondary)
+            MenuSectionLabel(text = stringResource(R.string.menu_section_privacy_utilities), textColor = textSecondary, isCompact = isCompact)
 
             MinimalMenuItem(
                 text = stringResource(R.string.menu_password_manager),
                 icon = Icons.Rounded.Lock,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onOpenPasswordManager() }
             )
             MinimalMenuItem(
@@ -1207,20 +1237,22 @@ fun omnimenuDropdownCard(
                 icon = Icons.Rounded.DeleteOutline,
                 iconTint = Color(0xFFFF453A),
                 textColor = Color(0xFFFF453A),
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onBurnData() }
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp))
+            Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
 
             // ── SETTINGS & DISPLAY ────────────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_settings_display), textColor = textSecondary)
+            MenuSectionLabel(text = stringResource(R.string.menu_section_settings_display), textColor = textSecondary, isCompact = isCompact)
 
             MinimalMenuItem(
                 text = stringResource(R.string.menu_settings),
                 icon = Icons.Rounded.Settings,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onOpenSettings() }
             )
             MinimalMenuItem(
@@ -1228,6 +1260,7 @@ fun omnimenuDropdownCard(
                 icon = Icons.Rounded.Palette,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onShowThemeSheet() }
             )
             MinimalMenuItem(
@@ -1235,6 +1268,7 @@ fun omnimenuDropdownCard(
                 icon = Icons.Rounded.PlayCircle,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onShowPlayerSettings() }
             )
             if (isHome) {
@@ -1243,6 +1277,7 @@ fun omnimenuDropdownCard(
                     icon = if (viewModel.hideHomeBottomNav) Icons.Rounded.TvOff else Icons.Rounded.HideSource,
                     iconTint = iconTint,
                     textColor = textPrimary,
+                    isCompact = isCompact,
                     onClick = { onDismissRequest(); viewModel.saveHideHomeBottomNav(context, !viewModel.hideHomeBottomNav) }
                 )
             }
@@ -1251,6 +1286,7 @@ fun omnimenuDropdownCard(
                 icon = Icons.AutoMirrored.Rounded.HelpOutline,
                 iconTint = iconTint,
                 textColor = textPrimary,
+                isCompact = isCompact,
                 onClick = { onDismissRequest(); onShowFeedbackDialog() }
             )
 
@@ -1282,11 +1318,6 @@ fun omnimenuDropdown(
     onShowSiteInfo: () -> Unit = {},
     onFindInPage: () -> Unit = {}
 ) {
-    val isDark = viewModel.isDarkThemeEnabled
-    val cardBg = if (isDark && viewModel.isAmoledMode) Color(0xFF0C0D10) else if (isDark) Color(0xFF20222A) else Color(0xFFF6F7F9)
-    val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
-    val maxHeight = (screenHeightDp - 145.dp).coerceAtLeast(250.dp)
-
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
@@ -1327,15 +1358,16 @@ private fun GlobalActionCard(
     iconTint: Color,
     cardBg: Color,
     textColor: Color,
+    isCompact: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(if (isCompact) 12.dp else 16.dp))
             .background(cardBg)
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp),
+            .padding(vertical = if (isCompact) 8.dp else 12.dp, horizontal = if (isCompact) 4.dp else 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -1346,14 +1378,14 @@ private fun GlobalActionCard(
                 imageVector = icon,
                 contentDescription = label,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(if (isCompact) 4.dp else 8.dp))
         Text(
             text = label,
             color = textColor,
-            fontSize = 11.5.sp,
+            fontSize = if (isCompact) 10.5.sp else 11.5.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -1368,29 +1400,30 @@ private fun MinimalMenuItem(
     icon: ImageVector,
     iconTint: Color,
     textColor: Color,
+    isCompact: Boolean = false,
     onClick: () -> Unit,
     trailingContent: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 0.5.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = if (isCompact) 2.dp else 4.dp, vertical = 0.5.dp)
+            .clip(RoundedCornerShape(if (isCompact) 8.dp else 12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = if (isCompact) 8.dp else 12.dp, vertical = if (isCompact) 4.5.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 14.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = iconTint,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(if (isCompact) 17.dp else 20.dp)
         )
         Text(
             text = text,
             color = textColor,
-            fontSize = 14.sp,
+            fontSize = if (isCompact) 13.sp else 14.sp,
             fontWeight = FontWeight.Normal,
             modifier = Modifier.weight(1f)
         )
@@ -1441,14 +1474,14 @@ private fun MenuActionPill(
 }
 
 @Composable
-private fun MenuSectionLabel(text: String, textColor: Color) {
+private fun MenuSectionLabel(text: String, textColor: Color, isCompact: Boolean = false) {
     Text(
         text = text.uppercase(),
         color = textColor,
-        fontSize = 10.5.sp,
+        fontSize = if (isCompact) 9.5.sp else 10.5.sp,
         fontWeight = FontWeight.SemiBold,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+        letterSpacing = if (isCompact) 0.5.sp else 0.8.sp,
+        modifier = Modifier.padding(horizontal = if (isCompact) 8.dp else 16.dp, vertical = if (isCompact) 3.dp else 6.dp)
     )
 }
 

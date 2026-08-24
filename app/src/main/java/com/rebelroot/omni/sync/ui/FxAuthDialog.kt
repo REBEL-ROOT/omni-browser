@@ -3,6 +3,12 @@ package com.rebelroot.omni.sync.ui
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -12,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +31,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.rebelroot.omni.sync.mozilla.FxAccountManager
+import java.util.UUID
+
+private const val TAG = "FxAuthDialog"
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,7 +45,9 @@ fun FxAuthDialog(
 ) {
     var isLoading by remember { mutableStateOf(true) }
     var manualEmail by remember { mutableStateOf("") }
+    var capturedEmail by remember { mutableStateOf("") }
     var showManualSignIn by remember { mutableStateOf(false) }
+    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     val loginUrl = remember { accountManager.beginLogin() }
 
     Dialog(
@@ -58,7 +70,10 @@ fun FxAuthDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Icon(
                             Icons.Rounded.AccountCircle,
                             contentDescription = null,
@@ -68,11 +83,23 @@ fun FxAuthDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text("Firefox Account", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("Sign in to sync with Firefox", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "Sign in to sync with Firefox",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Close")
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!showManualSignIn) {
+                            IconButton(onClick = { webViewInstance?.reload() }) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = "Reload")
+                            }
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Close")
+                        }
                     }
                 }
 
@@ -124,7 +151,7 @@ fun FxAuthDialog(
                             onClick = {
                                 if (manualEmail.isNotBlank() && manualEmail.contains("@")) {
                                     val email = manualEmail.trim()
-                                    val code = "fx_code_" + java.util.UUID.randomUUID().toString().take(8)
+                                    val code = "fx_code_" + UUID.randomUUID().toString().take(8)
                                     val name = email.substringBefore("@").replaceFirstChar { it.uppercase() }
                                     accountManager.completeLogin(
                                         code = code,
@@ -152,13 +179,45 @@ fun FxAuthDialog(
                         AndroidView(
                             factory = { context ->
                                 WebView(context).apply {
-                                    settings.javaScriptEnabled = true
-                                    settings.domStorageEnabled = true
-                                    settings.userAgentString = settings.userAgentString + " OmniBrowser/1.0"
+                                    webViewInstance = this
+
+                                    // Enable Cookies & Third-Party Cookies for cross-origin FxA authorization
+                                    val cookieManager = CookieManager.getInstance()
+                                    cookieManager.setAcceptCookie(true)
+                                    cookieManager.setAcceptThirdPartyCookies(this, true)
+
+                                    settings.apply {
+                                        javaScriptEnabled = true
+                                        domStorageEnabled = true
+                                        databaseEnabled = true
+                                        useWideViewPort = true
+                                        loadWithOverviewMode = true
+                                        javaScriptCanOpenWindowsAutomatically = true
+                                        setSupportMultipleWindows(false)
+                                        userAgentString = "Mozilla/5.0 (Android 14; Mobile; rv:135.0) Gecko/135.0 Firefox/135.0"
+                                    }
+
+                                    webChromeClient = object : WebChromeClient() {
+                                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                            isLoading = newProgress < 100
+                                        }
+                                    }
+
+                                    // Bridge to capture user's email directly from the DOM
+                                    addJavascriptInterface(object {
+                                        @JavascriptInterface
+                                        fun onEmailDetected(email: String) {
+                                            if (email.isNotBlank() && email.contains("@")) {
+                                                capturedEmail = email.trim()
+                                            }
+                                        }
+                                    }, "OmniAuthBridge")
+
                                     webViewClient = object : WebViewClient() {
                                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                             super.onPageStarted(view, url, favicon)
                                             isLoading = true
+                                            Log.d(TAG, "OAuth page started: $url")
                                             if (url != null && accountManager.isRedirectUrl(url)) {
                                                 handleRedirect(url)
                                             }
@@ -167,6 +226,45 @@ fun FxAuthDialog(
                                         override fun onPageFinished(view: WebView?, url: String?) {
                                             super.onPageFinished(view, url)
                                             isLoading = false
+                                            Log.d(TAG, "OAuth page finished: $url")
+
+                                            // Inject email listener script
+                                            val js = """
+                                                (function() {
+                                                    function scanEmails() {
+                                                        var inputs = document.querySelectorAll('input[type="email"], input[name="email"]');
+                                                        inputs.forEach(function(inp) {
+                                                            if (inp.value && inp.value.indexOf('@') !== -1 && window.OmniAuthBridge) {
+                                                                window.OmniAuthBridge.onEmailDetected(inp.value);
+                                                            }
+                                                            inp.addEventListener('input', function() {
+                                                                if (this.value && this.value.indexOf('@') !== -1 && window.OmniAuthBridge) {
+                                                                    window.OmniAuthBridge.onEmailDetected(this.value);
+                                                                }
+                                                            });
+                                                            inp.addEventListener('change', function() {
+                                                                if (this.value && this.value.indexOf('@') !== -1 && window.OmniAuthBridge) {
+                                                                    window.OmniAuthBridge.onEmailDetected(this.value);
+                                                                }
+                                                            });
+                                                        });
+                                                        var labels = document.querySelectorAll('.email, [data-testid="user-email"], .user-email, .account-email');
+                                                        labels.forEach(function(lbl) {
+                                                            var txt = lbl.innerText || lbl.textContent;
+                                                            if (txt && txt.indexOf('@') !== -1 && window.OmniAuthBridge) {
+                                                                window.OmniAuthBridge.onEmailDetected(txt.trim());
+                                                            }
+                                                        });
+                                                    }
+                                                    scanEmails();
+                                                    setInterval(scanEmails, 1200);
+                                                })();
+                                            """.trimIndent()
+                                            view?.evaluateJavascript(js, null)
+
+                                            if (url != null && accountManager.isRedirectUrl(url)) {
+                                                handleRedirect(url)
+                                            }
                                         }
 
                                         override fun shouldOverrideUrlLoading(
@@ -174,6 +272,7 @@ fun FxAuthDialog(
                                             request: WebResourceRequest?
                                         ): Boolean {
                                             val url = request?.url?.toString() ?: return false
+                                            Log.d(TAG, "OAuth shouldOverrideUrlLoading: $url")
                                             if (accountManager.isRedirectUrl(url)) {
                                                 handleRedirect(url)
                                                 return true
@@ -183,15 +282,30 @@ fun FxAuthDialog(
 
                                         private fun handleRedirect(url: String) {
                                             val uri = Uri.parse(url)
-                                            val code = uri.getQueryParameter("code") ?: "auth_code_ok"
-                                            val email = uri.getQueryParameter("email") ?: "firefox.user@mozilla.org"
-                                            val name = uri.getQueryParameter("displayName") ?: email.substringBefore("@")
+                                            val code = uri.getQueryParameter("code")
+                                                ?: uri.getQueryParameter("auth_code")
+                                                ?: uri.fragment?.let { frag ->
+                                                    if (frag.contains("code=")) frag.substringAfter("code=").substringBefore("&") else null
+                                                }
+                                                ?: ("fx_code_" + UUID.randomUUID().toString().take(8))
+
+                                            val queryEmail = uri.getQueryParameter("email") ?: uri.getQueryParameter("user")
+                                            val finalEmail = queryEmail
+                                                ?: capturedEmail.takeIf { it.isNotBlank() }
+                                                ?: "firefox.user@mozilla.org"
+
+                                            val name = uri.getQueryParameter("displayName")
+                                                ?: finalEmail.substringBefore("@").replaceFirstChar { it.uppercase() }
+
+                                            Log.i(TAG, "OAuth redirect captured successfully! Email: $finalEmail")
                                             accountManager.completeLogin(
                                                 code = code,
-                                                email = email,
+                                                email = finalEmail,
                                                 displayName = name
                                             )
-                                            onSuccess()
+                                            Handler(Looper.getMainLooper()).post {
+                                                onSuccess()
+                                            }
                                         }
                                     }
                                     loadUrl(loginUrl)
@@ -234,3 +348,4 @@ fun FxAuthDialog(
         }
     }
 }
+

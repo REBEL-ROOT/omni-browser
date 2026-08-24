@@ -31,6 +31,7 @@
 
 # 1. GeckoView (Firefox engine) — KEEP ALL; heavy reflection + JNI usage
 -keep class org.mozilla.geckoview.** { *; }
+-keep interface org.mozilla.geckoview.** { *; }
 -keep class org.mozilla.gecko.** { *; }
 -keep class org.mozilla.gecko.SysInfo { *; }
 -keep class org.mozilla.gecko.mozglue.JNIObject { *; }
@@ -41,27 +42,34 @@
 -keepclassmembers class * { @org.mozilla.gecko.annotation.JNITarget *; }
 -keep class org.mozilla.geckoview.GeckoResult { *; }
 -keep class org.mozilla.geckoview.GeckoResult$* { *; }
--keep class org.mozilla.geckoview.WebExtension$MessageDelegate { *; }
--keep class org.mozilla.geckoview.WebExtension$MessageSender { *; }
--keep class org.mozilla.geckoview.WebExtension$ActionDelegate { *; }
--keep class org.mozilla.geckoview.WebExtension$PortDelegate { *; }
--keep class org.mozilla.geckoview.WebExtension$SessionController { *; }
--keep class org.mozilla.geckoview.WebExtensionController$PromptDelegate { *; }
+-keep class org.mozilla.geckoview.WebExtension { *; }
+-keep class org.mozilla.geckoview.WebExtension$* { *; }
+-keep class org.mozilla.geckoview.WebExtensionController { *; }
+-keep class org.mozilla.geckoview.WebExtensionController$* { *; }
+-keep class * implements org.mozilla.geckoview.WebExtensionController$PromptDelegate { *; }
+-keep class * implements org.mozilla.geckoview.WebExtension$TabDelegate { *; }
+-keep class * implements org.mozilla.geckoview.WebExtension$ActionDelegate { *; }
+-keep class * implements org.mozilla.geckoview.WebExtension$DownloadDelegate { *; }
+-keep class * implements org.mozilla.geckoview.WebExtension$MessageDelegate { *; }
+-keep class * implements org.mozilla.geckoview.WebExtension$BrowsingDataDelegate { *; }
+-keep class * implements org.mozilla.geckoview.WebExtension$PortDelegate { *; }
 -keep class org.mozilla.geckoview.ContentBlocking$Settings { *; }
 -keep class org.mozilla.geckoview.GeckoRuntimeSettings { *; }
 -keep class org.mozilla.geckoview.GeckoRuntimeSettings$Builder { *; }
--keep class org.mozilla.geckoview.GeckoSession$Settings { *; }
--keep class org.mozilla.geckoview.GeckoSession$ProgressDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$NavigationDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$ContentDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$PermissionDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$PromptDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$MediaDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$SelectionActionDelegate { *; }
--keep class org.mozilla.geckoview.GeckoSession$HistoryDelegate { *; }
--keep class org.mozilla.geckoview.Autocomplete$StorageDelegate { *; }
+-keep class org.mozilla.geckoview.GeckoSession { *; }
+-keep class org.mozilla.geckoview.GeckoSession$* { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$ProgressDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$NavigationDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$ContentDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$PermissionDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$PromptDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$MediaDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$SelectionActionDelegate { *; }
+-keep class * implements org.mozilla.geckoview.GeckoSession$HistoryDelegate { *; }
+-keep class * implements org.mozilla.geckoview.Autocomplete$StorageDelegate { *; }
 -keep class org.mozilla.geckoview.Autocomplete$LoginEntry { *; }
 -keep class org.mozilla.geckoview.WebExtension$PermissionPromptResponse { *; }
+-keep class com.rebelroot.omni.browser.BrowserViewModel$Pending* { *; }
 # Keep all native method bindings (JNI) — R8 strips these by default, breaking GeckoView
 -keepclasseswithmembernames class * { native <methods>; }
 # Keep any subclasses of GeckoView (e.g. anonymous classes created in Compose AndroidView)

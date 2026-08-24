@@ -68,6 +68,7 @@ fun OmniSyncShowcaseScreen(
 
     val fxaState by fxAccountManager.accountState.collectAsState()
     val mozSyncState by mozillaSyncManager.syncState.collectAsState()
+    val remoteTabs by mozillaSyncManager.tabBridge.remoteTabsFlow.collectAsState()
     val uiState by coordinator.uiState.collectAsState()
 
     var showPairDialog by remember { mutableStateOf(false) }
@@ -313,7 +314,6 @@ fun OmniSyncShowcaseScreen(
                                     Text(stringResource(R.string.sync_now), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
 
-                                val remoteTabs = mozillaSyncManager.tabBridge.getAllRemoteDeviceTabs()
                                 OutlinedButton(
                                     onClick = { showSyncedTabsSheet = true },
                                     modifier = Modifier.weight(1f),
@@ -1082,7 +1082,6 @@ fun OmniSyncShowcaseScreen(
 
     // ── REMOTE SYNCED TABS SHEET ─────────────────────────────────────────────
     if (showSyncedTabsSheet) {
-        val remoteTabs = mozillaSyncManager.tabBridge.getAllRemoteDeviceTabs()
         SyncedTabsSheet(
             devices = remoteTabs,
             onTabClick = { tab ->
