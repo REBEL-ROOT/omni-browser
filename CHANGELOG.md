@@ -2,6 +2,17 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
+## [1.2.9.4] - 2026-08-24
+
+### Added
+- **Bitwarden & Password Manager WebExtension Support**: Enabled dynamic extension permissions (`onOptionalPrompt`, `onUpdatePrompt` returning `ALLOW`) for full compatibility with Bitwarden, Proton Pass, 1Password, and KeePassXC WebExtensions.
+- **Curated Password Managers**: Added official Bitwarden, Proton Pass, and KeePassXC-Browser entries to the curated extensions repository.
+- **Omni Password Manager Master ON/OFF Toggle**: Added master switch in Password Manager screen and Privacy & Security settings with complete saving and autofill suppression when turned off.
+- **GitHub APK Update Notification**: Automated system notifications with direct "Update Now" actions when a newer release is published on GitHub.
+- **Download Notification Navigation**: Tapping in-progress download notification immediately opens Omni Browser's Downloads section; tapping completed download notification opens the file directly or navigates to Downloads.
+
+---
+
 ## [1.2.9.2] - 2026-08-18
 
 ### Added
