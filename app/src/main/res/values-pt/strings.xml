@@ -1007,7 +1007,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download...</string>
@@ -1598,7 +1598,7 @@
     <string name="onboarding_proxy_badge_recommended">Recommended</string>
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">Todos</string>
     <string name="ext_cat_privacy">Privacidade</string>
     <string name="ext_cat_utilities">Utilitários</string>
@@ -1726,4 +1726,89 @@
     <string name="extension_download_policy_never">Never allow</string>
     <string name="show_recents">Mostrar recentes</string>
     <string name="show_recents_desc">Exibir sites visitados recentemente na tela inicial</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">Sincronização em nuvem e P2P multidispositivo</string>
+    <string name="sync_fxa_title">Sincronização com Conta Firefox</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">CONECTADO</string>
+    <string name="sync_fxa_not_connected">NÃO CONECTADO</string>
+    <string name="sync_fxa_synced_recently">Sincronizado recentemente na nuvem</string>
+    <string name="sync_fxa_ready">Pronto para sincronizar com o Firefox</string>
+    <string name="sync_now">Sincronizar agora</string>
+    <string name="sync_remote_tabs">Abas remotas</string>
+    <string name="sync_sign_out">Sair</string>
+    <string name="sync_sign_in_fxa">Entrar com a Conta Firefox</string>
+    <string name="sync_fxa_desc">Entre com sua Conta Firefox para sincronizar automaticamente favoritos, abas abertas no PC/Mac, histórico e senhas pela Mozilla Cloud.</string>
+    <string name="sync_fxa_complete_toast">Sincronização com a Firefox Cloud concluída!</string>
+    <string name="sync_fxa_signed_out_toast">Desconectado da Conta Firefox</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (Offline / LAN)</string>
+    <string name="sync_mesh_subtitle">Zero Nuvem · 100% E2EE P2P (Em breve)</string>
+    <string name="sync_mesh_upcoming_badge">Recurso futuro — Fase de teste</string>
+    <string name="sync_mesh_upcoming_desc">O Omni Sync Mesh está em fase de teste. Requer a instalação da extensão Omni Sync (Testing) no navegador do computador.</string>
+    <string name="sync_mesh_desc">Sincronize favoritos, abas abertas, histórico e preferências diretamente ponto a ponto via Wi-Fi local sem servidores centrais.</string>
+    <string name="sync_pair_device">Emparelhar dispositivo</string>
+    <string name="sync_sync_p2p">Sincronizar P2P</string>
+    <string name="sync_section_inspector">Inspetor de sincronização e dados em tempo real</string>
+    <string name="sync_stat_bookmarks">Favoritos</string>
+    <string name="sync_stat_folders">Pastas</string>
+    <string name="sync_stat_peers">Dispositivos emparelhados</string>
+    <string name="sync_encryption_engine">Mecanismo de criptografia</string>
+    <string name="sync_outbox_journal">Registro de saída</string>
+    <string name="sync_pending_mutations">%1$d mutações pendentes</string>
+    <string name="sync_safe_layer_title">Camada de sincronização segura e não destrutiva</string>
+    <string name="sync_safe_layer_desc">Os dados existentes do navegador nunca são sobrescritos. O Omni Sync opera em uma camada isolada e criptografada.</string>
+    <string name="sync_section_actions">Central de importação e exportação</string>
+    <string name="sync_btn_from_pc">Do PC</string>
+    <string name="sync_btn_to_pc">Para o PC</string>
+    <string name="sync_btn_export_html">Exportar HTML</string>
+    <string name="sync_btn_import_html">Importar HTML</string>
+    <string name="sync_toast_pair_first">Emparelhe um navegador de computador primeiro.</string>
+    <string name="sync_toast_importing">"Importando dados para '💻 Desktop Bookmarks'…"</string>
+    <string name="sync_toast_exported_p2p">Favoritos e abas exportados para o computador!</string>
+    <string name="sync_toast_exported_html">Backup Netscape HTML exportado!</string>
+    <string name="sync_toast_import_select_file">Selecione o arquivo HTML para importar…</string>
+    <string name="sync_section_preferences">Preferências de sincronização</string>
+    <string name="sync_pref_bookmarks">Favoritos e pastas</string>
+    <string name="sync_pref_bookmarks_desc">Estrutura de árvore completa com ordenação fracionária</string>
+    <string name="sync_pref_tabs">Abas abertas em tempo real</string>
+    <string name="sync_pref_tabs_desc">Visualize e alterne entre abas ativas em outros dispositivos</string>
+    <string name="sync_pref_history">Histórico de navegação</string>
+    <string name="sync_pref_history_desc">Retenção opcional de 90 dias com remoção de rastreadores</string>
+    <string name="sync_pref_passwords">Senhas e credenciais</string>
+    <string name="sync_pref_passwords_desc">Cofre com conhecimento zero criptografado de ponta a ponta</string>
+    <string name="sync_pref_settings">Configurações e regras do adblock</string>
+    <string name="sync_pref_settings_desc">Filtros personalizados, tema e mecanismo de pesquisa</string>
+    <string name="sync_section_guarantees">Garantias de privacidade e criptografia</string>
+    <string name="sync_guarantee_e2ee_title">Criptografado de ponta a ponta (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">Acordo de chaves NIST P-256 ECDH com criptografia autenticada AES-256-GCM e código SAS de 6 dígitos.</string>
+    <string name="sync_guarantee_tabs_title">Abas ao vivo e envio para dispositivo</string>
+    <string name="sync_guarantee_tabs_desc">Veja abas abertas em tempo real ou envie uma aba com um toque. Sessões anônimas são excluídas.</string>
+    <string name="sync_guarantee_crdt_title">CRDT de indexação fracionária</string>
+    <string name="sync_guarantee_crdt_desc">A indexação fracionária Base-62 preserva a hierarquia de pastas e evita conflitos.</string>
+    <string name="sync_guarantee_history_title">Histórico opcional e expiração em 90 dias</string>
+    <string name="sync_guarantee_history_desc">A sincronização de histórico é opcional, remove parâmetros de rastreamento e expira em 90 dias.</string>
+    <string name="sync_guarantee_settings_title">Lista de permissões de configurações</string>
+    <string name="sync_guarantee_settings_desc">Sincroniza mecanismos de pesquisa e temas mantendo isoladas as configurações de hardware.</string>
+    <string name="sync_section_browsers">Navegadores suportados (Extensão de teste)</string>
+    <string name="sync_browsers_desc">A sincronização P2P direta requer a extensão Omni Sync (Testing) no navegador:</string>
+    <string name="sync_section_paired_devices">Dispositivos emparelhados (%1$d)</string>
+    <string name="sync_no_paired_devices">"Nenhum dispositivo emparelhado ainda. Toque em 'Emparelhar dispositivo' para gerar ou ler o QR code."</string>
+    <string name="sync_pair_dialog_title">Emparelhar dispositivo</string>
+    <string name="sync_pair_dialog_extension_req">Requer a extensão Omni Sync (Testing) instalada no navegador do computador.</string>
+    <string name="sync_scan_desktop_qr">Ler QR code do computador</string>
+    <string name="sync_share_invitation_code">Ou compartilhe este código de convite com seu PC:</string>
+    <string name="sync_copy_phone_code">Copiar código de emparelhamento</string>
+    <string name="sync_paste_extension_code">Ou cole o código de convite da extensão do PC:</string>
+    <string name="sync_paste_code_placeholder">Colar código de convite…</string>
+    <string name="sync_btn_pair">Emparelhar</string>
+    <string name="sync_toast_copied_code">Código de emparelhamento copiado para a área de transferência!</string>
+    <string name="sync_toast_pasted_code">Colado da área de transferência!</string>
+    <string name="sync_sas_title">Verificar código de segurança</string>
+    <string name="sync_sas_desc">Confirme se este código de 6 dígitos corresponde em ambos os dispositivos:</string>
+    <string name="sync_sas_confirm">Os códigos correspondem</string>
+    <string name="sync_tabs_sheet_title">Abas sincronizadas</string>
+    <string name="sync_tabs_empty_title">Nenhuma aba sincronizada disponível</string>
+    <string name="sync_tabs_empty_desc">As abas de outros dispositivos aparecerão aqui após a sincronização</string>
+    <string name="sync_connected_fxa_toast">Conectado à Conta Firefox!</string>
 </resources>

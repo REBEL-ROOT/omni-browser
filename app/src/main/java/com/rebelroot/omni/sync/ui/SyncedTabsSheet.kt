@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.rebelroot.omni.R
 import com.rebelroot.omni.sync.mozilla.RemoteDeviceTabs
 import com.rebelroot.omni.sync.mozilla.TabInfo
 
@@ -42,12 +44,12 @@ fun SyncedTabsSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Synced Tabs",
+                    text = stringResource(R.string.sync_tabs_sheet_title),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Rounded.Close, contentDescription = "Close")
+                    Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.close_text))
                 }
             }
 
@@ -69,12 +71,12 @@ fun SyncedTabsSheet(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            "No synced tabs available",
+                            stringResource(R.string.sync_tabs_empty_title),
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "Tabs from other devices will appear here after sync",
+                            stringResource(R.string.sync_tabs_empty_desc),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )

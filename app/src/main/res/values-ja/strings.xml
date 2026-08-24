@@ -1007,7 +1007,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download...</string>
@@ -1598,7 +1598,7 @@
     <string name="onboarding_proxy_badge_recommended">Recommended</string>
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">すべて</string>
     <string name="ext_cat_privacy">プライバシー</string>
     <string name="ext_cat_utilities">ユーティリティ</string>
@@ -1726,4 +1726,89 @@
     <string name="extension_download_policy_never">Never allow</string>
     <string name="show_recents">最近の履歴を表示</string>
     <string name="show_recents_desc">ホーム画面に最近アクセスしたサイトを表示</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">クラウド＆P2Pマルチデバイス同期</string>
+    <string name="sync_fxa_title">Firefoxアカウント同期</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">接続済み</string>
+    <string name="sync_fxa_not_connected">未接続</string>
+    <string name="sync_fxa_synced_recently">最近クラウド同期されました</string>
+    <string name="sync_fxa_ready">Firefoxと同期する準備ができました</string>
+    <string name="sync_now">今すぐ同期</string>
+    <string name="sync_remote_tabs">リモートタブ</string>
+    <string name="sync_sign_out">サインアウト</string>
+    <string name="sync_sign_in_fxa">Firefoxアカウントでサインイン</string>
+    <string name="sync_fxa_desc">Firefoxアカウントにサインインして、ブックマーク、PC/Macの開いているタブ、履歴、パスワードをMozilla Cloud経由で自動同期します。</string>
+    <string name="sync_fxa_complete_toast">Firefoxクラウド同期が完了しました！</string>
+    <string name="sync_fxa_signed_out_toast">Firefoxアカウントからサインアウトしました</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (オフライン / LAN)</string>
+    <string name="sync_mesh_subtitle">ゼロクラウド · 100% E2EE P2P (近日公開)</string>
+    <string name="sync_mesh_upcoming_badge">近日公開機能 — テストフェーズ</string>
+    <string name="sync_mesh_upcoming_desc">Omni Sync Meshは現在テスト段階です。テストにはデスクトップブラウザにOmni Sync Extension (Testing)をインストールする必要があります。</string>
+    <string name="sync_mesh_desc">中央サーバーを経由せず、ローカルWi-Fiでブックマーク、開いているタブ、履歴、設定をピアツーピアで直接同期します。</string>
+    <string name="sync_pair_device">デバイスをペアリング</string>
+    <string name="sync_sync_p2p">P2P同期</string>
+    <string name="sync_section_inspector">同期インスペクター＆ライブデータ</string>
+    <string name="sync_stat_bookmarks">ブックマーク</string>
+    <string name="sync_stat_folders">フォルダ</string>
+    <string name="sync_stat_peers">ペアリング済み端末</string>
+    <string name="sync_encryption_engine">暗号化エンジン</string>
+    <string name="sync_outbox_journal">送信トレイジャーナル</string>
+    <string name="sync_pending_mutations">%1$d 件の保留中の変更</string>
+    <string name="sync_safe_layer_title">安全な非破壊同期レイヤー</string>
+    <string name="sync_safe_layer_desc">既存のブラウザデータが上書きされることはありません。Omni Syncは分離された暗号化レイヤーで動作します。</string>
+    <string name="sync_section_actions">インポート＆エクスポートハブ</string>
+    <string name="sync_btn_from_pc">PCから</string>
+    <string name="sync_btn_to_pc">PCへ</string>
+    <string name="sync_btn_export_html">HTML出力</string>
+    <string name="sync_btn_import_html">HTML読込</string>
+    <string name="sync_toast_pair_first">最初にデスクトップブラウザをペアリングしてください。</string>
+    <string name="sync_toast_importing">"'💻 Desktop Bookmarks'にデータをインポート中…"</string>
+    <string name="sync_toast_exported_p2p">ブックマークとタブをデスクトップにエクスポートしました！</string>
+    <string name="sync_toast_exported_html">Netscape HTMLバックアップをエクスポートしました！</string>
+    <string name="sync_toast_import_select_file">インポートするHTMLファイルを選択…</string>
+    <string name="sync_section_preferences">同期設定</string>
+    <string name="sync_pref_bookmarks">ブックマークとフォルダ</string>
+    <string name="sync_pref_bookmarks_desc">小数インデックスによる完全なツリー構造</string>
+    <string name="sync_pref_tabs">リアルタイムの開いているタブ</string>
+    <string name="sync_pref_tabs_desc">端末間でアクティブなタブを表示・切り替え</string>
+    <string name="sync_pref_history">閲覧履歴</string>
+    <string name="sync_pref_history_desc">トラッカー削除付きの90日間オプトイン保持</string>
+    <string name="sync_pref_passwords">パスワードと認証情報</string>
+    <string name="sync_pref_passwords_desc">エンドツーエンド暗号化ゼロ知識ロッカー</string>
+    <string name="sync_pref_settings">設定と広告ブロックルール</string>
+    <string name="sync_pref_settings_desc">カスタムフィルタ、テーマ、検索エンジン</string>
+    <string name="sync_section_guarantees">プライバシー＆暗号化の保証</string>
+    <string name="sync_guarantee_e2ee_title">エンドツーエンド暗号化 (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">NIST P-256 ECDH鍵合意とAES-256-GCM暗号化、6桁のSASコード検証。</string>
+    <string name="sync_guarantee_tabs_title">ライブタブ＆端末へ送信</string>
+    <string name="sync_guarantee_tabs_desc">開いているタブをリアルタイムで確認・送信。シークレットタブは除外されます。</string>
+    <string name="sync_guarantee_crdt_title">小数インデックスCRDT</string>
+    <string name="sync_guarantee_crdt_desc">Base-62インデックスによりフォルダ階層を保持し競合を防ぎます。</string>
+    <string name="sync_guarantee_history_title">オプトイン履歴＆90日自動削除</string>
+    <string name="sync_guarantee_history_desc">履歴同期は任意で、追跡パラメータを削除し90日で自動消去されます。</string>
+    <string name="sync_guarantee_settings_title">ポータブル設定許可リスト</string>
+    <string name="sync_guarantee_settings_desc">ハードウェア固有の設定を分離したまま検索エンジンやフィルタを同期。</string>
+    <string name="sync_section_browsers">対応デスクトップブラウザ (テスト拡張機能)</string>
+    <string name="sync_browsers_desc">直接P2P同期にはブラウザにOmni Sync Extension (Testing)が必要です：</string>
+    <string name="sync_section_paired_devices">ペアリング済みデバイス (%1$d)</string>
+    <string name="sync_no_paired_devices">"ペアリングされた端末はありません。'デバイスをペアリング'をタップしてください。"</string>
+    <string name="sync_pair_dialog_title">デバイスをペアリング</string>
+    <string name="sync_pair_dialog_extension_req">デスクトップブラウザにOmni Sync Extension (Testing)が必要です。</string>
+    <string name="sync_scan_desktop_qr">デスクトップのQRコードをスキャン</string>
+    <string name="sync_share_invitation_code">またはこの招待コードをPCに共有：</string>
+    <string name="sync_copy_phone_code">ペアリングコードをコピー</string>
+    <string name="sync_paste_extension_code">または拡張機能の招待コードを貼り付け：</string>
+    <string name="sync_paste_code_placeholder">招待コードを貼り付け…</string>
+    <string name="sync_btn_pair">ペアリング</string>
+    <string name="sync_toast_copied_code">ペアリングコードをクリップボードにコピーしました！</string>
+    <string name="sync_toast_pasted_code">クリップボードから貼り付けました！</string>
+    <string name="sync_sas_title">セキュリティコードの確認</string>
+    <string name="sync_sas_desc">同期する前に、両方の端末でこの6桁のコードが一致することを確認してください：</string>
+    <string name="sync_sas_confirm">コードが一致</string>
+    <string name="sync_tabs_sheet_title">同期されたタブ</string>
+    <string name="sync_tabs_empty_title">同期されたタブはありません</string>
+    <string name="sync_tabs_empty_desc">他の端末のタブは同期後にここに表示されます</string>
+    <string name="sync_connected_fxa_toast">Firefoxアカウントに接続しました！</string>
 </resources>

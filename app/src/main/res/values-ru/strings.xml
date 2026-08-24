@@ -1007,7 +1007,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download...</string>
@@ -1598,7 +1598,7 @@
     <string name="onboarding_proxy_badge_recommended">Recommended</string>
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">Все</string>
     <string name="ext_cat_privacy">Конфиденциальность</string>
     <string name="ext_cat_utilities">Утилиты</string>
@@ -1726,4 +1726,89 @@
     <string name="extension_download_policy_never">Never allow</string>
     <string name="show_recents">Показывать недавние</string>
     <string name="show_recents_desc">Отображать недавно посещенные сайты на главном экране</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">Облачная и P2P синхронизация устройств</string>
+    <string name="sync_fxa_title">Синхронизация Firefox аккаунта</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">ПОДКЛЮЧЕНО</string>
+    <string name="sync_fxa_not_connected">НЕ ПОДКЛЮЧЕНО</string>
+    <string name="sync_fxa_synced_recently">Синхронизировано с облаком недавно</string>
+    <string name="sync_fxa_ready">Готово к синхронизации с Firefox</string>
+    <string name="sync_now">Синхронизировать</string>
+    <string name="sync_remote_tabs">Вкладки с других устройств</string>
+    <string name="sync_sign_out">Выйти</string>
+    <string name="sync_sign_in_fxa">Войти через аккаунт Firefox</string>
+    <string name="sync_fxa_desc">Войдите в аккаунт Firefox для автоматической синхронизации закладок, вкладок с ПК/Mac, истории и паролей через Mozilla Cloud.</string>
+    <string name="sync_fxa_complete_toast">Облачная синхронизация Firefox завершена!</string>
+    <string name="sync_fxa_signed_out_toast">Выход из аккаунта Firefox выполнен</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (Офлайн / LAN)</string>
+    <string name="sync_mesh_subtitle">Без облака · 100% E2EE P2P (Скоро)</string>
+    <string name="sync_mesh_upcoming_badge">Скоро — Этап тестирования</string>
+    <string name="sync_mesh_upcoming_desc">Omni Sync Mesh находится на этапе тестирования. Требуется расширение Omni Sync (Testing) в браузере на ПК.</string>
+    <string name="sync_mesh_desc">Прямая синхронизация закладок, вкладок, истории и настроек через локальный Wi-Fi без серверов.</string>
+    <string name="sync_pair_device">Связать устройство</string>
+    <string name="sync_sync_p2p">P2P Синхронизация</string>
+    <string name="sync_section_inspector">Инспектор синхронизации</string>
+    <string name="sync_stat_bookmarks">Закладки</string>
+    <string name="sync_stat_folders">Папки</string>
+    <string name="sync_stat_peers">Связанные устройства</string>
+    <string name="sync_encryption_engine">Движок шифрования</string>
+    <string name="sync_outbox_journal">Журнал исходящих</string>
+    <string name="sync_pending_mutations">%1$d ожидающих изменений</string>
+    <string name="sync_safe_layer_title">Безопасный неразрушающий слой синхронизации</string>
+    <string name="sync_safe_layer_desc">Данные браузера никогда не перезаписываются. Omni Sync работает в изолированном зашифрованном слое.</string>
+    <string name="sync_section_actions">Центр импорта и экспорта</string>
+    <string name="sync_btn_from_pc">С ПК</string>
+    <string name="sync_btn_to_pc">На ПК</string>
+    <string name="sync_btn_export_html">Экспорт HTML</string>
+    <string name="sync_btn_import_html">Импорт HTML</string>
+    <string name="sync_toast_pair_first">Сначала свяжите браузер на ПК.</string>
+    <string name="sync_toast_importing">"Импорт данных в '💻 Desktop Bookmarks'…"</string>
+    <string name="sync_toast_exported_p2p">Закладки и вкладки экспортированы на ПК!</string>
+    <string name="sync_toast_exported_html">Резервная копия Netscape HTML экспортирована!</string>
+    <string name="sync_toast_import_select_file">Выберите HTML файл для импорта…</string>
+    <string name="sync_section_preferences">Параметры синхронизации</string>
+    <string name="sync_pref_bookmarks">Закладки и папки</string>
+    <string name="sync_pref_bookmarks_desc">Полная структура с дробной индексацией</string>
+    <string name="sync_pref_tabs">Открытые вкладки в реальном времени</string>
+    <string name="sync_pref_tabs_desc">Просмотр и переключение вкладок между устройствами</string>
+    <string name="sync_pref_history">История просмотров</string>
+    <string name="sync_pref_history_desc">Хранение 90 дней с очисткой трекеров</string>
+    <string name="sync_pref_passwords">Пароли и учетные данные</string>
+    <string name="sync_pref_passwords_desc">Сквозное шифрование с нулевым разглашением</string>
+    <string name="sync_pref_settings">Настройки и правила блокировки</string>
+    <string name="sync_pref_settings_desc">Фильтры, темы и поисковая система</string>
+    <string name="sync_section_guarantees">Гарантии конфиденциальности и шифрования</string>
+    <string name="sync_guarantee_e2ee_title">Сквозное шифрование (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">Согласование ключей NIST P-256 ECDH с аутентифицированным шифрованием AES-256-GCM и 6-значным кодом SAS.</string>
+    <string name="sync_guarantee_tabs_title">Вкладки в реальном времени и отправка</string>
+    <string name="sync_guarantee_tabs_desc">Просматривайте открытые вкладки на всех устройствах. Вкладки инкогнито исключены.</string>
+    <string name="sync_guarantee_crdt_title">Дробная индексация CRDT</string>
+    <string name="sync_guarantee_crdt_desc">Индексация Base-62 сохраняет иерархию папок и предотвращает конфликты.</string>
+    <string name="sync_guarantee_history_title">Опциональная история и очистка 90 дней</string>
+    <string name="sync_guarantee_history_desc">Синхронизация истории опциональна, удаляет трекеры и истекает через 90 дней.</string>
+    <string name="sync_guarantee_settings_title">Белый список переносимых настроек</string>
+    <string name="sync_guarantee_settings_desc">Синхронизирует поисковые системы и правила, изолируя параметры оборудования.</string>
+    <string name="sync_section_browsers">Поддерживаемые браузеры на ПК (Тестовое расширение)</string>
+    <string name="sync_browsers_desc">Для прямой P2P синхронизации требуется расширение Omni Sync (Testing):</string>
+    <string name="sync_section_paired_devices">Связанные устройства (%1$d)</string>
+    <string name="sync_no_paired_devices">"Нет связанных устройств. Нажмите 'Связать устройство', чтобы отсканировать QR-код."</string>
+    <string name="sync_pair_dialog_title">Связать устройство</string>
+    <string name="sync_pair_dialog_extension_req">Требуется установленное расширение Omni Sync (Testing) в браузере на ПК.</string>
+    <string name="sync_scan_desktop_qr">Сканировать QR-код на ПК</string>
+    <string name="sync_share_invitation_code">Или отправьте этот код приглашения на ПК:</string>
+    <string name="sync_copy_phone_code">Скопировать код сопряжения</string>
+    <string name="sync_paste_extension_code">Или вставьте код из расширения на ПК:</string>
+    <string name="sync_paste_code_placeholder">Вставить код приглашения…</string>
+    <string name="sync_btn_pair">Связать</string>
+    <string name="sync_toast_copied_code">Код сопряжения скопирован в буфер обмена!</string>
+    <string name="sync_toast_pasted_code">Вставлено из буфера обмена!</string>
+    <string name="sync_sas_title">Проверка кода безопасности</string>
+    <string name="sync_sas_desc">Убедитесь, что этот 6-значный код совпадает на обоих устройствах:</string>
+    <string name="sync_sas_confirm">Коды совпадают</string>
+    <string name="sync_tabs_sheet_title">Синхронизированные вкладки</string>
+    <string name="sync_tabs_empty_title">Нет синхронизированных вкладок</string>
+    <string name="sync_tabs_empty_desc">Вкладки с других устройств появятся здесь после синхронизации</string>
+    <string name="sync_connected_fxa_toast">Подключено к аккаунту Firefox!</string>
 </resources>

@@ -1007,7 +1007,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download...</string>
@@ -1598,7 +1598,7 @@
     <string name="onboarding_proxy_badge_recommended">Recommended</string>
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">الكل</string>
     <string name="ext_cat_privacy">الخصوصية</string>
     <string name="ext_cat_utilities">أدوات</string>
@@ -1726,4 +1726,89 @@
     <string name="extension_download_policy_never">Never allow</string>
     <string name="show_recents">إظهار الأحدث</string>
     <string name="show_recents_desc">عرض المواقع التي تمت زيارتها مؤخراً على الشاشة الرئيسية</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">مزامنة سحابية ومباشرة متعددة الأجهزة</string>
+    <string name="sync_fxa_title">مزامنة حساب Firefox</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">متصل</string>
+    <string name="sync_fxa_not_connected">غير متصل</string>
+    <string name="sync_fxa_synced_recently">تمت المزامنة السحابية مؤخراً</string>
+    <string name="sync_fxa_ready">جاهز للمزامنة مع Firefox</string>
+    <string name="sync_now">مزامنة الآن</string>
+    <string name="sync_remote_tabs">علامات التبويب البعيدة</string>
+    <string name="sync_sign_out">تسجيل الخروج</string>
+    <string name="sync_sign_in_fxa">تسجيل الدخول بحساب Firefox</string>
+    <string name="sync_fxa_desc">سجّل الدخول بحساب Firefox لمزامنة الإشارات المرجعية، وعلامات التبويب المفتوحة من الحاسوب، والسجل وكلمات المرور تلقائياً عبر Mozilla Cloud.</string>
+    <string name="sync_fxa_complete_toast">اكتملت مزامنة Firefox السحابية!</string>
+    <string name="sync_fxa_signed_out_toast">تم تسجيل الخروج من حساب Firefox</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (بدون إنترنت / LAN)</string>
+    <string name="sync_mesh_subtitle">بدون سحابة · تشفير 100% E2EE (قريباً)</string>
+    <string name="sync_mesh_upcoming_badge">ميزة قادمة — مرحلة الاختبار</string>
+    <string name="sync_mesh_upcoming_desc">شبكة Omni Sync Mesh في مرحلة الاختبار. تتطلب تثبيت ملحق Omni Sync (Testing) على متصفح الحاسوب.</string>
+    <string name="sync_mesh_desc">مزامنة مباشرة للإشارات وعلامات التبويب المفتوحة والسجل والإعدادات بين الأجهزة عبر Wi-Fi المحلي بدون خوادم مركزية.</string>
+    <string name="sync_pair_device">ربط جهاز</string>
+    <string name="sync_sync_p2p">مزامنة P2P</string>
+    <string name="sync_section_inspector">فاحص المزامنة والبيانات المباشرة</string>
+    <string name="sync_stat_bookmarks">الإشارات المرجعية</string>
+    <string name="sync_stat_folders">المجلدات</string>
+    <string name="sync_stat_peers">الأجهزة المرتبطة</string>
+    <string name="sync_encryption_engine">محرك التشفير</string>
+    <string name="sync_outbox_journal">سجل الصادر</string>
+    <string name="sync_pending_mutations">%1$d تغييرات معلقة</string>
+    <string name="sync_safe_layer_title">طبقة مزامنة آمنة وغير مدمرة</string>
+    <string name="sync_safe_layer_desc">بيانات المتصفح الحالية محمية تماماً ولا يتم استبدالها أبداً. يعمل Omni Sync داخل طبقة مشفرة ومعزولة.</string>
+    <string name="sync_section_actions">مركز الاستيراد والتصدير</string>
+    <string name="sync_btn_from_pc">من الحاسوب</string>
+    <string name="sync_btn_to_pc">إلى الحاسوب</string>
+    <string name="sync_btn_export_html">تصدير HTML</string>
+    <string name="sync_btn_import_html">استيراد HTML</string>
+    <string name="sync_toast_pair_first">يرجى ربط متصفح الحاسوب أولاً.</string>
+    <string name="sync_toast_importing">"جارٍ استيراد البيانات إلى '💻 Desktop Bookmarks'…"</string>
+    <string name="sync_toast_exported_p2p">تم تصدير الإشارات وعلامات التبويب إلى الحاسوب!</string>
+    <string name="sync_toast_exported_html">تم تصدير نسخة Netscape HTML الاحتياطية!</string>
+    <string name="sync_toast_import_select_file">اختر ملف HTML للاستيراد…</string>
+    <string name="sync_section_preferences">تفضيلات المزامنة</string>
+    <string name="sync_pref_bookmarks">الإشارات المرجعية والمجلدات</string>
+    <string name="sync_pref_bookmarks_desc">هيكل شجري كامل مع ترتيب كسري</string>
+    <string name="sync_pref_tabs">علامات التبويب المفتوحة في الوقت الفعلي</string>
+    <string name="sync_pref_tabs_desc">عرض والتبديل بين علامات التبويب عبر الأجهزة</string>
+    <string name="sync_pref_history">سجل التصفح</string>
+    <string name="sync_pref_history_desc">احتفاظ اختياري لمدة 90 يوماً مع إزالة المتتبعات</string>
+    <string name="sync_pref_passwords">كلمات المرور وبيانات الاعتماد</string>
+    <string name="sync_pref_passwords_desc">خزينة معرفة صفرية مشفرة من طرف إلى طرف</string>
+    <string name="sync_pref_settings">الإعدادات وقواعد منع الإعلانات</string>
+    <string name="sync_pref_settings_desc">فلاتر مخصصة والسمة ومحرك البحث</string>
+    <string name="sync_section_guarantees">ضمانات الخصوصية والتشفير</string>
+    <string name="sync_guarantee_e2ee_title">تشفير من طرف إلى طرف (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">اتفاقية مفاتيح NIST P-256 ECDH مع تشفير AES-256-GCM ورمز SAS رقمي مكون من 6 أرقام.</string>
+    <string name="sync_guarantee_tabs_title">علامات تبويب مباشرة وإرسال إلى الجهاز</string>
+    <string name="sync_guarantee_tabs_desc">عرض علامات التبويب المفتوحة على أجهزتك في الوقت الفعلي. جلسات التصفح المتخفي مستبعدة.</string>
+    <string name="sync_guarantee_crdt_title">فهرسة كسرية CRDT</string>
+    <string name="sync_guarantee_crdt_desc">الفهرسة الكسرية Base-62 تحافظ على التسلسل الهرمي للمجلدات وتمنع التضارب.</string>
+    <string name="sync_guarantee_history_title">سجل اختياري وحذف بعد 90 يوماً</string>
+    <string name="sync_guarantee_history_desc">مزامنة السجل اختيارية، تزيل متتبعات الروابط وتنتهي بعد 90 يوماً.</string>
+    <string name="sync_guarantee_settings_title">قائمة الإعدادات المحمولة</string>
+    <string name="sync_guarantee_settings_desc">مزامنة محركات البحث وقواعد الحظر مع عزل إعدادات الأجهزة.</string>
+    <string name="sync_section_browsers">متصفحات الحاسوب المدعومة (ملحق تجريبي)</string>
+    <string name="sync_browsers_desc">تتطلب المزامنة المباشرة تثبيت ملحق Omni Sync (Testing) على المتصفح:</string>
+    <string name="sync_section_paired_devices">الأجهزة المرتبطة (%1$d)</string>
+    <string name="sync_no_paired_devices">"لا توجد أجهزة مرتبطة بعد. اضغط على 'ربط جهاز' لإنشاء أو مسح رمز QR."</string>
+    <string name="sync_pair_dialog_title">ربط جهاز</string>
+    <string name="sync_pair_dialog_extension_req">يتطلب تثبيت ملحق Omni Sync (Testing) على متصفح الحاسوب.</string>
+    <string name="sync_scan_desktop_qr">مسح رمز QR للحاسوب</string>
+    <string name="sync_share_invitation_code">أو شارك رمز الدعوة هذا مع حاسوبك:</string>
+    <string name="sync_copy_phone_code">نسخ رمز الربط</string>
+    <string name="sync_paste_extension_code">أو الصق رمز الدعوة من ملحق المتصفح:</string>
+    <string name="sync_paste_code_placeholder">الصق رمز الدعوة…</string>
+    <string name="sync_btn_pair">ربط</string>
+    <string name="sync_toast_copied_code">تم نسخ رمز الربط إلى الحافظة!</string>
+    <string name="sync_toast_pasted_code">تم اللصق من الحافظة!</string>
+    <string name="sync_sas_title">التحقق من رمز الأمان</string>
+    <string name="sync_sas_desc">تأكد من تطابق هذا الرمز المكون من 6 أرقام على كلا الجهازين:</string>
+    <string name="sync_sas_confirm">الرموز متطابقة</string>
+    <string name="sync_tabs_sheet_title">علامات التبويب المتزامنة</string>
+    <string name="sync_tabs_empty_title">لا توجد علامات تبويب متزامنة</string>
+    <string name="sync_tabs_empty_desc">ستظهر علامات التبويب من الأجهزة الأخرى هنا بعد المزامنة</string>
+    <string name="sync_connected_fxa_toast">تم الاتصال بحساب Firefox!</string>
 </resources>

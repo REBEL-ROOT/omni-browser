@@ -1009,7 +1009,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download...</string>
@@ -1599,7 +1599,7 @@
     <string name="onboarding_proxy_badge_recommended">Recommended</string>
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">सभी</string>
     <string name="ext_cat_privacy">गोपनीयता</string>
     <string name="ext_cat_utilities">उपयोगिताएं</string>
@@ -1727,4 +1727,89 @@
     <string name="extension_download_policy_never">Never allow</string>
     <string name="show_recents">हाल ही में विज़िट किए गए दिखाएं</string>
     <string name="show_recents_desc">होम स्क्रीन पर हाल ही में विज़िट की गई साइटें दिखाएं</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">क्लाउड और P2P मल्टी-डिवाइस सिंक</string>
+    <string name="sync_fxa_title">Firefox खाता सिंक</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">कनेक्टेड</string>
+    <string name="sync_fxa_not_connected">कनेक्टेड नहीं</string>
+    <string name="sync_fxa_synced_recently">हाल ही में क्लाउड सिंक किया गया</string>
+    <string name="sync_fxa_ready">Firefox के साथ सिंक करने के लिए तैयार</string>
+    <string name="sync_now">अभी सिंक करें</string>
+    <string name="sync_remote_tabs">रिमोट टैब</string>
+    <string name="sync_sign_out">साइन आउट</string>
+    <string name="sync_sign_in_fxa">Firefox खाते से साइन इन करें</string>
+    <string name="sync_fxa_desc">Mozilla Cloud के माध्यम से अपने PC/Mac से बुकमार्क, खुले टैब, ब्राउज़िंग इतिहास और पासवर्ड को स्वचालित रूप से सिंक करने के लिए अपने Firefox खाते से साइन इन करें।</string>
+    <string name="sync_fxa_complete_toast">Firefox क्लाउड सिंक पूरा हुआ!</string>
+    <string name="sync_fxa_signed_out_toast">Firefox खाते से साइन आउट किया गया</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (ऑफ़लाइन / LAN)</string>
+    <string name="sync_mesh_subtitle">शून्य-क्लाउड · 100% E2EE P2P (जल्द आ रहा है)</string>
+    <string name="sync_mesh_upcoming_badge">आगामी सुविधा — परीक्षण चरण</string>
+    <string name="sync_mesh_upcoming_desc">Omni Sync Mesh वर्तमान में परीक्षण चरण में है। इसके लिए आपके डेस्कटॉप ब्राउज़र पर Omni Sync Extension (Testing) इंस्टॉल करना आवश्यक है।</string>
+    <string name="sync_mesh_desc">केंद्रीय सर्वर के बिना स्थानीय वाई-फ़ाई पर बुकमार्क, खुले टैब, इतिहास और प्राथमिकताओं को सीधे पीयर-टू-पीयर सिंक करें।</string>
+    <string name="sync_pair_device">डिवाइस जोड़ें</string>
+    <string name="sync_sync_p2p">P2P सिंक</string>
+    <string name="sync_section_inspector">सिंक इंस्पेक्टर और लाइव डेटा</string>
+    <string name="sync_stat_bookmarks">बुकमार्क</string>
+    <string name="sync_stat_folders">फ़ोल्डर</string>
+    <string name="sync_stat_peers">जुड़े हुए डिवाइस</string>
+    <string name="sync_encryption_engine">एन्क्रिप्शन इंजन</string>
+    <string name="sync_outbox_journal">आउटबॉक्स जर्नल</string>
+    <string name="sync_pending_mutations">%1$d लंबित म्यूटेशन</string>
+    <string name="sync_safe_layer_title">सुरक्षित गैर-विनाशकारी सिंक परत</string>
+    <string name="sync_safe_layer_desc">मौजूदा ब्राउज़र डेटा कभी भी अधिलेखित नहीं होता है। Omni Sync एक अलग, एन्क्रिप्टेड परत में संचालित होता है।</string>
+    <string name="sync_section_actions">आयात और निर्यात हब</string>
+    <string name="sync_btn_from_pc">PC से</string>
+    <string name="sync_btn_to_pc">PC में</string>
+    <string name="sync_btn_export_html">HTML निर्यात</string>
+    <string name="sync_btn_import_html">HTML आयात</string>
+    <string name="sync_toast_pair_first">पहले डेस्कटॉप ब्राउज़र जोड़ें।</string>
+    <string name="sync_toast_importing">"'💻 Desktop Bookmarks' में डेटा आयात हो रहा है…"</string>
+    <string name="sync_toast_exported_p2p">बुकमार्क और टैब डेस्कटॉप पर निर्यात किए गए!</string>
+    <string name="sync_toast_exported_html">Netscape HTML बैकअप निर्यात किया गया!</string>
+    <string name="sync_toast_import_select_file">आयात करने के लिए HTML फ़ाइल चुनें…</string>
+    <string name="sync_section_preferences">सिंक प्राथमिकताएं</string>
+    <string name="sync_pref_bookmarks">बुकमार्क और फ़ोल्डर</string>
+    <string name="sync_pref_bookmarks_desc">फ्रैक्शनल ऑर्डरिंग के साथ पूर्ण ट्री संरचना</string>
+    <string name="sync_pref_tabs">रीयल-टाइम खुले टैब</string>
+    <string name="sync_pref_tabs_desc">डिवाइसों पर सक्रिय टैब देखें और बदलें</string>
+    <string name="sync_pref_history">ब्राउज़िंग इतिहास</string>
+    <string name="sync_pref_history_desc">ट्रैकर हटाने के साथ 90-दिन का वैकल्पिक इतिहास</string>
+    <string name="sync_pref_passwords">पासवर्ड और क्रेडेंशियल</string>
+    <string name="sync_pref_passwords_desc">एंड-टू-एंड एन्क्रिप्टेड ज़ीरो-नॉलेज वॉल्ट</string>
+    <string name="sync_pref_settings">सेटिंग्स और एडब्लॉक नियम</string>
+    <string name="sync_pref_settings_desc">कस्टम फ़िल्टर, थीम और खोज इंजन</string>
+    <string name="sync_section_guarantees">गोपनीयता और एन्क्रिप्शन गारंटी</string>
+    <string name="sync_guarantee_e2ee_title">एंड-टू-एंड एन्क्रिप्टेड (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">AES-256-GCM एन्क्रिप्शन और 6-अंकीय SAS कोड सत्यापन के साथ NIST P-256 ECDH कुंजी समझौता।</string>
+    <string name="sync_guarantee_tabs_title">लाइव टैब और डिवाइस पर भेजें</string>
+    <string name="sync_guarantee_tabs_desc">अपने कंप्यूटर और फोन पर रीयल-टाइम में खुले टैब देखें। गुप्त (इंकॉग्निटो) सत्र शामिल नहीं हैं।</string>
+    <string name="sync_guarantee_crdt_title">फ्रैक्शनल इंडेक्सिंग CRDT</string>
+    <string name="sync_guarantee_crdt_desc">Base-62 इंडेक्सिंग फ़ोल्डर संरचना को सुरक्षित रखती है और टकराव से बचाती है।</string>
+    <string name="sync_guarantee_history_title">वैकल्पिक इतिहास और 90-दिन ऑटो-हटाना</string>
+    <string name="sync_guarantee_history_desc">इतिहास सिंक वैकल्पिक है, ट्रैकिंग पैरामीटर हटाता है और 90 दिनों में समाप्त होता है।</string>
+    <string name="sync_guarantee_settings_title">पोर्टेबल सेटिंग्स सूची</string>
+    <string name="sync_guarantee_settings_desc">हार्डवेयर सेटिंग्स को अलग रखते हुए सर्च इंजन और एडब्लॉकर नियमों को सिंक करता है।</string>
+    <string name="sync_section_browsers">समर्थित डेस्कटॉप ब्राउज़र (परीक्षण एक्सटेंशन)</string>
+    <string name="sync_browsers_desc">प्रत्यक्ष P2P सिंक के लिए आपके ब्राउज़र पर Omni Sync Extension (Testing) आवश्यक है:</string>
+    <string name="sync_section_paired_devices">जुड़े हुए डिवाइस (%1$d)</string>
+    <string name="sync_no_paired_devices">"अभी तक कोई डिवाइस नहीं जुड़ा है। QR कोड बनाने या स्कैन करने के लिए 'डिवाइस जोड़ें' पर टैप करें।"</string>
+    <string name="sync_pair_dialog_title">डिवाइस जोड़ें</string>
+    <string name="sync_pair_dialog_extension_req">डेस्कटॉप ब्राउज़र पर Omni Sync Extension (Testing) इंस्टॉल होना आवश्यक है।</string>
+    <string name="sync_scan_desktop_qr">डेस्कटॉप QR कोड स्कैन करें</string>
+    <string name="sync_share_invitation_code">या यह इनविटेशन कोड अपने PC पर साझा करें:</string>
+    <string name="sync_copy_phone_code">फ़ोन पेयरिंग कोड कॉपी करें</string>
+    <string name="sync_paste_extension_code">या डेस्कटॉप एक्सटेंशन से इनविटेशन कोड पेस्ट करें:</string>
+    <string name="sync_paste_code_placeholder">इनविटेशन कोड पेस्ट करें…</string>
+    <string name="sync_btn_pair">जोड़ें</string>
+    <string name="sync_toast_copied_code">पेयरिंग कोड क्लिपबोर्ड पर कॉपी किया गया!</string>
+    <string name="sync_toast_pasted_code">क्लिपबोर्ड से पेस्ट किया गया!</string>
+    <string name="sync_sas_title">सुरक्षा कोड सत्यापित करें</string>
+    <string name="sync_sas_desc">सिंक करने से पहले पुष्टि करें कि यह 6-अंकीय कोड दोनों डिवाइस पर मेल खाता है:</string>
+    <string name="sync_sas_confirm">कोड मेल खाते हैं</string>
+    <string name="sync_tabs_sheet_title">सिंक किए गए टैब</string>
+    <string name="sync_tabs_empty_title">कोई सिंक किया गया टैब उपलब्ध नहीं है</string>
+    <string name="sync_tabs_empty_desc">सिंक के बाद अन्य डिवाइस के टैब यहां दिखाई देंगे</string>
+    <string name="sync_connected_fxa_toast">Firefox खाते से कनेक्ट हो गया!</string>
 </resources>

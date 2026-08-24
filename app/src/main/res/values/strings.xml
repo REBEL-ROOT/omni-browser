@@ -1095,7 +1095,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download…</string>
@@ -1271,7 +1271,7 @@
     <string name="site_settings_about_feature">About this feature</string>
     <string name="site_settings_reset_permissions">Reset Permissions</string>
 
-    <!-- Privacy & Security -->
+    <!-- Privacy &amp; Security -->
     <string name="privacy_redirect_only_desc">Only when you tap a link; automatic redirects are always blocked</string>
     <string name="privacy_https_only_title">HTTPS-Only Mode</string>
     <string name="privacy_https_only_desc">Upgrade all connection attempts to HTTPS</string>
@@ -1755,7 +1755,7 @@
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
     <string name="onboarding_proxy_footer">You can switch between modes anytime in Settings → Proxy Hub</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">All</string>
     <string name="ext_cat_privacy">Privacy</string>
     <string name="ext_cat_utilities">Utilities</string>
@@ -1795,4 +1795,89 @@
     <string name="extension_download_policy_ask">Ask every time</string>
     <string name="extension_download_policy_allow">Always allow trusted extensions</string>
     <string name="extension_download_policy_never">Never allow</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">Cloud &amp; P2P Multi-Device Sync</string>
+    <string name="sync_fxa_title">Firefox Account Sync</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">CONNECTED</string>
+    <string name="sync_fxa_not_connected">NOT CONNECTED</string>
+    <string name="sync_fxa_synced_recently">Cloud synced recently</string>
+    <string name="sync_fxa_ready">Ready to sync with Firefox</string>
+    <string name="sync_now">Sync Now</string>
+    <string name="sync_remote_tabs">Remote Tabs</string>
+    <string name="sync_sign_out">Sign Out</string>
+    <string name="sync_sign_in_fxa">Sign in with Firefox Account</string>
+    <string name="sync_fxa_desc">Sign in with your Firefox Account to automatically sync bookmarks, open tabs from your PC/Mac, browsing history, and passwords seamlessly via Mozilla Cloud.</string>
+    <string name="sync_fxa_complete_toast">Firefox Cloud Sync complete!</string>
+    <string name="sync_fxa_signed_out_toast">Signed out of Firefox Account</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (Offline / LAN)</string>
+    <string name="sync_mesh_subtitle">Zero-Cloud · 100% E2EE P2P (Upcoming)</string>
+    <string name="sync_mesh_upcoming_badge">Upcoming Feature — Testing Phase</string>
+    <string name="sync_mesh_upcoming_desc">Omni Sync Mesh is currently upcoming. Testing requires installing the Omni Sync Extension (Testing) on your desktop browser.</string>
+    <string name="sync_mesh_desc">Directly synchronize bookmarks, open tabs, history, and portable preferences peer-to-peer over Wi-Fi without central servers.</string>
+    <string name="sync_pair_device">Pair Device</string>
+    <string name="sync_sync_p2p">Sync P2P</string>
+    <string name="sync_section_inspector">Sync Inspector &amp; Live Data</string>
+    <string name="sync_stat_bookmarks">Bookmarks</string>
+    <string name="sync_stat_folders">Folders</string>
+    <string name="sync_stat_peers">Paired Peers</string>
+    <string name="sync_encryption_engine">Encryption Engine</string>
+    <string name="sync_outbox_journal">Outbox Journal</string>
+    <string name="sync_pending_mutations">%1$d pending mutations</string>
+    <string name="sync_safe_layer_title">Safe Non-Destructive Sync Layer</string>
+    <string name="sync_safe_layer_desc">Existing browser bookmarks &amp; data are never harmed or overwritten. Omni Sync operates within an isolated, encrypted sync layer.</string>
+    <string name="sync_section_actions">Import &amp; Export Hub</string>
+    <string name="sync_btn_from_pc">From PC</string>
+    <string name="sync_btn_to_pc">To PC</string>
+    <string name="sync_btn_export_html">Export HTML</string>
+    <string name="sync_btn_import_html">Import HTML</string>
+    <string name="sync_toast_pair_first">Pair a desktop browser first.</string>
+    <string name="sync_toast_importing">"Importing data into '💻 Desktop Bookmarks'…"</string>
+    <string name="sync_toast_exported_p2p">Exported bookmarks &amp; tabs to desktop!</string>
+    <string name="sync_toast_exported_html">Exported Netscape HTML backup!</string>
+    <string name="sync_toast_import_select_file">Select HTML file to import…</string>
+    <string name="sync_section_preferences">Sync Preferences</string>
+    <string name="sync_pref_bookmarks">Bookmarks &amp; Folders</string>
+    <string name="sync_pref_bookmarks_desc">Full tree structure with fractional ordering</string>
+    <string name="sync_pref_tabs">Real-Time Open Tabs</string>
+    <string name="sync_pref_tabs_desc">View &amp; switch active tabs across devices</string>
+    <string name="sync_pref_history">Browsing History</string>
+    <string name="sync_pref_history_desc">Opt-in 90-day retention with tracker stripping</string>
+    <string name="sync_pref_passwords">Passwords &amp; Credentials</string>
+    <string name="sync_pref_passwords_desc">End-to-end encrypted zero-knowledge locker</string>
+    <string name="sync_pref_settings">Settings &amp; Adblock Rules</string>
+    <string name="sync_pref_settings_desc">Custom filters, theme, and search engine</string>
+    <string name="sync_section_guarantees">Privacy &amp; Encryption Guarantees</string>
+    <string name="sync_guarantee_e2ee_title">End-to-End Encrypted (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">Audited NIST P-256 ECDH key agreement with AES-256-GCM authenticated payload encryption and out-of-band 6-digit numeric SAS code verification.</string>
+    <string name="sync_guarantee_tabs_title">Live Tabs &amp; Send-to-Device</string>
+    <string name="sync_guarantee_tabs_desc">View open tabs across all your paired computers and phones in real time, or send a tab directly with one tap. Incognito sessions are structurally excluded.</string>
+    <string name="sync_guarantee_crdt_title">Fractional Indexing CRDT</string>
+    <string name="sync_guarantee_crdt_desc">Dense Base-62 fractional indexing preserves your nested folder hierarchy and avoids bookmark collisions even under concurrent offline edits.</string>
+    <string name="sync_guarantee_history_title">Opt-In History &amp; 90-Day Purge</string>
+    <string name="sync_guarantee_history_desc">History sync is strictly opt-in, automatically strips URL tracking parameters (utm_*, fbclid), and enforces a rolling 90-day auto-expiry.</string>
+    <string name="sync_guarantee_settings_title">Portable Settings Allowlist</string>
+    <string name="sync_guarantee_settings_desc">Syncs search engines, dark theme, and ad-blocking rules while strictly keeping device-specific hardware parameters isolated.</string>
+    <string name="sync_section_browsers">Supported Desktop Browsers (Testing Extension)</string>
+    <string name="sync_browsers_desc">Direct P2P mesh sync requires installing the Omni Sync Extension (Beta / Testing) on your desktop browser:</string>
+    <string name="sync_section_paired_devices">Paired Devices (%1$d)</string>
+    <string name="sync_no_paired_devices">"No other devices paired yet. Tap 'Pair Device' to generate a QR code or scan from your desktop browser."</string>
+    <string name="sync_pair_dialog_title">Pair Device</string>
+    <string name="sync_pair_dialog_extension_req">Requires Omni Sync Extension (Testing) installed on your desktop browser.</string>
+    <string name="sync_scan_desktop_qr">Scan Desktop QR Code</string>
+    <string name="sync_share_invitation_code">Or share this phone invitation code to your PC:</string>
+    <string name="sync_copy_phone_code">Copy Phone Pairing Code</string>
+    <string name="sync_paste_extension_code">Or paste invitation code from Desktop Extension:</string>
+    <string name="sync_paste_code_placeholder">Paste invitation code…</string>
+    <string name="sync_btn_pair">Pair</string>
+    <string name="sync_toast_copied_code">Copied phone pairing code to clipboard!</string>
+    <string name="sync_toast_pasted_code">Pasted from clipboard!</string>
+    <string name="sync_sas_title">Verify Security Code</string>
+    <string name="sync_sas_desc">Confirm this 6-digit code matches on both devices before syncing:</string>
+    <string name="sync_sas_confirm">Codes Match</string>
+    <string name="sync_tabs_sheet_title">Synced Tabs</string>
+    <string name="sync_tabs_empty_title">No synced tabs available</string>
+    <string name="sync_tabs_empty_desc">Tabs from other devices will appear here after sync</string>
+    <string name="sync_connected_fxa_toast">Connected to Firefox Account!</string>
 </resources>

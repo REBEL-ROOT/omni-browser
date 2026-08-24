@@ -1007,7 +1007,7 @@
     <string name="download_share_file_via">Share file via</string>
     <string name="download_share_failed">Failed to share file</string>
 
-    <!-- Download Notifications & Progress -->
+    <!-- Download Notifications &amp; Progress -->
     <string name="download_notification_complete">Download complete</string>
     <string name="download_notification_failed">Download failed</string>
     <string name="download_progress_starting">Starting download...</string>
@@ -1598,7 +1598,7 @@
     <string name="onboarding_proxy_badge_recommended">Recommended</string>
     <string name="onboarding_proxy_badge_private">Private</string>
     <string name="onboarding_proxy_badge_advanced">Advanced</string>
-    <!-- Category & Autofill string resources -->
+    <!-- Category &amp; Autofill string resources -->
     <string name="ext_cat_all">全部</string>
     <string name="ext_cat_privacy">隐私</string>
     <string name="ext_cat_utilities">工具</string>
@@ -1726,4 +1726,89 @@
     <string name="extension_download_policy_never">Never allow</string>
     <string name="show_recents">显示最近访问</string>
     <string name="show_recents_desc">在主屏幕上显示最近访问的网站</string>
+
+    <string name="sync_title">Omni Sync</string>
+    <string name="sync_subtitle">云端与P2P多设备同步</string>
+    <string name="sync_fxa_title">Firefox 账号同步</string>
+    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_connected">已连接</string>
+    <string name="sync_fxa_not_connected">未连接</string>
+    <string name="sync_fxa_synced_recently">最近已同步至云端</string>
+    <string name="sync_fxa_ready">准备好与 Firefox 同步</string>
+    <string name="sync_now">立即同步</string>
+    <string name="sync_remote_tabs">远程标签页</string>
+    <string name="sync_sign_out">退出登录</string>
+    <string name="sync_sign_in_fxa">登录 Firefox 账号</string>
+    <string name="sync_fxa_desc">登录您的 Firefox 账号，通过 Mozilla Cloud 自动同步书签、电脑端打开的标签页、历史记录和密码。</string>
+    <string name="sync_fxa_complete_toast">Firefox 云端同步已完成！</string>
+    <string name="sync_fxa_signed_out_toast">已退出 Firefox 账号</string>
+    <string name="sync_mesh_title">Omni Sync Mesh (离线 / 局域网)</string>
+    <string name="sync_mesh_subtitle">零云端 · 100% 端到端加密P2P (即将推出)</string>
+    <string name="sync_mesh_upcoming_badge">即将推出的功能 — 测试阶段</string>
+    <string name="sync_mesh_upcoming_desc">Omni Sync Mesh 目前处于测试阶段。测试需要在桌面浏览器上安装 Omni Sync Extension (Testing)。</string>
+    <string name="sync_mesh_desc">通过本地 Wi-Fi 在设备间直接对等同步书签、标签页、历史记录和偏好设置，无需中央服务器。</string>
+    <string name="sync_pair_device">配对设备</string>
+    <string name="sync_sync_p2p">P2P 同步</string>
+    <string name="sync_section_inspector">同步检查器与实时数据</string>
+    <string name="sync_stat_bookmarks">书签</string>
+    <string name="sync_stat_folders">文件夹</string>
+    <string name="sync_stat_peers">已配对设备</string>
+    <string name="sync_encryption_engine">加密引擎</string>
+    <string name="sync_outbox_journal">发件箱日志</string>
+    <string name="sync_pending_mutations">%1$d 个待处理变更</string>
+    <string name="sync_safe_layer_title">安全非破坏性同步层</string>
+    <string name="sync_safe_layer_desc">现有浏览器书签和数据绝不会被覆盖。Omni Sync 在独立的加密同步层中运行。</string>
+    <string name="sync_section_actions">导入与导出中心</string>
+    <string name="sync_btn_from_pc">从电脑</string>
+    <string name="sync_btn_to_pc">至电脑</string>
+    <string name="sync_btn_export_html">导出 HTML</string>
+    <string name="sync_btn_import_html">导入 HTML</string>
+    <string name="sync_toast_pair_first">请先配对桌面浏览器。</string>
+    <string name="sync_toast_importing">"正在导入数据至 '💻 Desktop Bookmarks'…"</string>
+    <string name="sync_toast_exported_p2p">书签与标签页已导出至桌面！</string>
+    <string name="sync_toast_exported_html">Netscape HTML 备份已导出！</string>
+    <string name="sync_toast_import_select_file">选择要导入的 HTML 文件…</string>
+    <string name="sync_section_preferences">同步偏好设置</string>
+    <string name="sync_pref_bookmarks">书签与文件夹</string>
+    <string name="sync_pref_bookmarks_desc">包含小数排序的完整树状结构</string>
+    <string name="sync_pref_tabs">实时打开的标签页</string>
+    <string name="sync_pref_tabs_desc">跨设备查看并切换活动标签页</string>
+    <string name="sync_pref_history">浏览历史记录</string>
+    <string name="sync_pref_history_desc">自选 90 天保留期并自动剥离跟踪参数</string>
+    <string name="sync_pref_passwords">密码与凭据</string>
+    <string name="sync_pref_passwords_desc">端到端加密零知识密码库</string>
+    <string name="sync_pref_settings">设置与广告拦截规则</string>
+    <string name="sync_pref_settings_desc">自定义过滤规则、主题及搜索引擎</string>
+    <string name="sync_section_guarantees">隐私与加密保障</string>
+    <string name="sync_guarantee_e2ee_title">端到端加密 (E2EE)</string>
+    <string name="sync_guarantee_e2ee_desc">经过审计的 NIST P-256 ECDH 密钥协商与 AES-256-GCM 认证加密及 6 位数字 SAS 码验证。</string>
+    <string name="sync_guarantee_tabs_title">实时标签页与发送到设备</string>
+    <string name="sync_guarantee_tabs_desc">实时查看所有已配对设备上的标签页。无痕会话严格隔离不参与同步。</string>
+    <string name="sync_guarantee_crdt_title">小数索引 CRDT</string>
+    <string name="sync_guarantee_crdt_desc">Base-62 小数索引保持文件夹层级完整性并避免离线冲突。</string>
+    <string name="sync_guarantee_history_title">自选历史记录与 90 天清除</string>
+    <string name="sync_guarantee_history_desc">历史记录同步为自选项，自动清除跟踪参数且 90 天滚动过期。</string>
+    <string name="sync_guarantee_settings_title">便携式设置白名单</string>
+    <string name="sync_guarantee_settings_desc">同步搜索引擎和广告拦截规则，同时隔离特定硬件设置。</string>
+    <string name="sync_section_browsers">支持的桌面浏览器 (测试扩展)</string>
+    <string name="sync_browsers_desc">直接 P2P 同步需要在桌面浏览器上安装 Omni Sync Extension (Testing)：</string>
+    <string name="sync_section_paired_devices">已配对设备 (%1$d)</string>
+    <string name="sync_no_paired_devices">尚未配对其他设备。点击“配对设备”以生成或扫描二维码。</string>
+    <string name="sync_pair_dialog_title">配对设备</string>
+    <string name="sync_pair_dialog_extension_req">需要在桌面浏览器上安装 Omni Sync Extension (Testing)。</string>
+    <string name="sync_scan_desktop_qr">扫描桌面二维码</string>
+    <string name="sync_share_invitation_code">或将此手机邀请码分享至电脑：</string>
+    <string name="sync_copy_phone_code">复制手机配对码</string>
+    <string name="sync_paste_extension_code">或粘贴来自桌面扩展的邀请码：</string>
+    <string name="sync_paste_code_placeholder">粘贴邀请码…</string>
+    <string name="sync_btn_pair">配对</string>
+    <string name="sync_toast_copied_code">配对码已复制到剪贴板！</string>
+    <string name="sync_toast_pasted_code">已从剪贴板粘贴！</string>
+    <string name="sync_sas_title">验证安全码</string>
+    <string name="sync_sas_desc">同步前请确认两台设备上的 6 位数字代码一致：</string>
+    <string name="sync_sas_confirm">代码一致</string>
+    <string name="sync_tabs_sheet_title">已同步的标签页</string>
+    <string name="sync_tabs_empty_title">暂无已同步的标签页</string>
+    <string name="sync_tabs_empty_desc">同步完成后，其他设备的标签页将显示在此处</string>
+    <string name="sync_connected_fxa_toast">已连接到 Firefox 账号！</string>
 </resources>

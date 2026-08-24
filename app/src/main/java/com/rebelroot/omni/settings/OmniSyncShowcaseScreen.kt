@@ -26,12 +26,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.rebelroot.omni.R
 import com.rebelroot.omni.bookmarks.storage.loadBookmarks
 import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.sync.coordinator.SyncCoordinator
@@ -59,55 +61,91 @@ fun OmniSyncShowcaseScreen(
             collection = loadBookmarks(context)
         )
     }
-
-    val fxAccountManager = remember { FxAccountManager.getInstance().apply { initialize(context) } }
+    val fxAccountManager = remember {
+        FxAccountManager.getInstance().apply { initialize(context) }
+    }
     val mozillaSyncManager = remember { MozillaSyncManager.getInstance() }
+
     val fxaState by fxAccountManager.accountState.collectAsState()
     val mozSyncState by mozillaSyncManager.syncState.collectAsState()
-
     val uiState by coordinator.uiState.collectAsState()
+
     var showPairDialog by remember { mutableStateOf(false) }
     var showCameraScanner by remember { mutableStateOf(false) }
+    var showSasDialog by remember { mutableStateOf<String?>(null) }
     var showFxAuthDialog by remember { mutableStateOf(false) }
     var showSyncedTabsSheet by remember { mutableStateOf(false) }
 
-    // Granular sync data preferences
+    var myInvitationJson by remember { mutableStateOf("") }
+    var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var pairingCodeInput by remember { mutableStateOf("") }
+
     var syncBookmarks by remember { mutableStateOf(true) }
     var syncTabs by remember { mutableStateOf(true) }
     var syncHistory by remember { mutableStateOf(false) }
     var syncPasswords by remember { mutableStateOf(true) }
     var syncSettings by remember { mutableStateOf(true) }
-    var showSasDialog by remember { mutableStateOf<String?>(null) }
-    var pairingCodeInput by remember { mutableStateOf("") }
-    var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var myInvitationJson by remember { mutableStateOf("") }
+
     val clipboardManager = LocalClipboardManager.current
+
+    // String resources for toasts
+    val toastPairFirst = stringResource(R.string.sync_toast_pair_first)
+    val toastImporting = stringResource(R.string.sync_toast_importing)
+    val toastExportedP2P = stringResource(R.string.sync_toast_exported_p2p)
+    val toastExportedHtml = stringResource(R.string.sync_toast_exported_html)
+    val toastImportSelectFile = stringResource(R.string.sync_toast_import_select_file)
+    val toastFxaComplete = stringResource(R.string.sync_fxa_complete_toast)
+    val toastFxaSignedOut = stringResource(R.string.sync_fxa_signed_out_toast)
+    val toastCopiedCode = stringResource(R.string.sync_toast_copied_code)
+    val toastPastedCode = stringResource(R.string.sync_toast_pasted_code)
+    val toastConnectedFxa = stringResource(R.string.sync_connected_fxa_toast)
 
     BackHandler { onNavigateBack() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Omni Sync", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+                title = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.sync_title),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 19.sp
+                        )
+                        Text(
+                            text = stringResource(R.string.sync_subtitle),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.back_desc)
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = {
-                        coordinator.syncNow()
                         if (fxaState is FxaState.SignedIn) {
                             mozillaSyncManager.syncNow(
                                 context = context,
                                 collection = coordinator.collection,
                                 tabs = viewModel.tabs.toList()
-                            )
+                            ) { success ->
+                                if (success) {
+                                    Toast.makeText(context, toastFxaComplete, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } else {
+                            coordinator.syncNow()
                         }
                     }) {
                         Icon(
                             Icons.Rounded.Sync,
-                            contentDescription = "Sync Now",
+                            contentDescription = stringResource(R.string.sync_now),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -176,13 +214,13 @@ fun OmniSyncShowcaseScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        "Firefox Account Sync",
+                                        stringResource(R.string.sync_fxa_title),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 17.sp,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        "Mozilla Cloud Sync",
+                                        stringResource(R.string.sync_fxa_subtitle),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.primary
@@ -197,7 +235,7 @@ fun OmniSyncShowcaseScreen(
                                 color = if (fxaState is FxaState.SignedIn) Color(0xFF2E7D32) else MaterialTheme.colorScheme.surfaceVariant
                             ) {
                                 Text(
-                                    text = if (fxaState is FxaState.SignedIn) "CONNECTED" else "NOT CONNECTED",
+                                    text = if (fxaState is FxaState.SignedIn) stringResource(R.string.sync_fxa_connected) else stringResource(R.string.sync_fxa_not_connected),
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -239,9 +277,9 @@ fun OmniSyncShowcaseScreen(
                                             Text(
                                                 when (mozSyncState) {
                                                     is MozSyncState.Syncing -> (mozSyncState as MozSyncState.Syncing).message
-                                                    is MozSyncState.Done -> "Cloud synced recently"
+                                                    is MozSyncState.Done -> stringResource(R.string.sync_fxa_synced_recently)
                                                     is MozSyncState.Error -> (mozSyncState as MozSyncState.Error).message
-                                                    else -> "Ready to sync with Firefox"
+                                                    else -> stringResource(R.string.sync_fxa_ready)
                                                 },
                                                 fontSize = 11.sp,
                                                 color = if (mozSyncState is MozSyncState.Error) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
@@ -263,7 +301,7 @@ fun OmniSyncShowcaseScreen(
                                             tabs = viewModel.tabs.toList()
                                         ) { success ->
                                             if (success) {
-                                                Toast.makeText(context, "Firefox Cloud Sync complete!", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, toastFxaComplete, Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     },
@@ -272,7 +310,7 @@ fun OmniSyncShowcaseScreen(
                                 ) {
                                     Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Sync Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.sync_now), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 val remoteTabs = mozillaSyncManager.tabBridge.getAllRemoteDeviceTabs()
@@ -284,7 +322,7 @@ fun OmniSyncShowcaseScreen(
                                     Icon(Icons.Rounded.Devices, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        if (remoteTabs.isNotEmpty()) "Tabs (${remoteTabs.sumOf { it.tabs.size }})" else "Remote Tabs",
+                                        if (remoteTabs.isNotEmpty()) "${stringResource(R.string.sync_remote_tabs)} (${remoteTabs.sumOf { it.tabs.size }})" else stringResource(R.string.sync_remote_tabs),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -293,16 +331,16 @@ fun OmniSyncShowcaseScreen(
                                 OutlinedButton(
                                     onClick = {
                                         fxAccountManager.logout()
-                                        Toast.makeText(context, "Signed out of Firefox Account", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, toastFxaSignedOut, Toast.LENGTH_SHORT).show()
                                     },
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Sign Out", fontSize = 12.sp)
+                                    Text(stringResource(R.string.sync_sign_out), fontSize = 12.sp)
                                 }
                             }
                         } else {
                             Text(
-                                "Sign in with your Firefox Account to automatically sync bookmarks, open tabs from your PC/Mac, browsing history, and passwords seamlessly via Mozilla Cloud.",
+                                stringResource(R.string.sync_fxa_desc),
                                 fontSize = 13.sp,
                                 lineHeight = 18.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -316,7 +354,7 @@ fun OmniSyncShowcaseScreen(
                             ) {
                                 Icon(Icons.Rounded.AccountCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Sign in with Firefox Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(stringResource(R.string.sync_sign_in_fxa), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
                     }
@@ -372,13 +410,13 @@ fun OmniSyncShowcaseScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        "Omni Sync Mesh (Offline / LAN)",
+                                        stringResource(R.string.sync_mesh_title),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 17.sp,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        "Zero-Cloud · 100% E2EE P2P (Upcoming)",
+                                        stringResource(R.string.sync_mesh_subtitle),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.primary
@@ -429,13 +467,13 @@ fun OmniSyncShowcaseScreen(
                                 )
                                 Column {
                                     Text(
-                                        "Upcoming Feature — Testing Phase",
+                                        stringResource(R.string.sync_mesh_upcoming_badge),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.tertiary
                                     )
                                     Text(
-                                        "Omni Sync Mesh is currently upcoming. Testing requires installing the Omni Sync Extension (Testing) on your desktop browser.",
+                                        stringResource(R.string.sync_mesh_upcoming_desc),
                                         fontSize = 11.sp,
                                         lineHeight = 15.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -445,7 +483,7 @@ fun OmniSyncShowcaseScreen(
                         }
 
                         Text(
-                            "Directly synchronize bookmarks, open tabs, history, and portable preferences peer-to-peer over Wi-Fi without central servers.",
+                            stringResource(R.string.sync_mesh_desc),
                             fontSize = 13.sp,
                             lineHeight = 18.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -467,7 +505,7 @@ fun OmniSyncShowcaseScreen(
                             ) {
                                 Icon(Icons.Rounded.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Pair Device", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(stringResource(R.string.sync_pair_device), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
 
                             OutlinedButton(
@@ -477,7 +515,7 @@ fun OmniSyncShowcaseScreen(
                             ) {
                                 Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Sync P2P", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(stringResource(R.string.sync_sync_p2p), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -485,7 +523,7 @@ fun OmniSyncShowcaseScreen(
             }
 
             // ── 3. LIVE SYNC INSPECTOR ─────────────────────────────────────────
-            SectionHeader(title = "Sync Inspector & Live Data", icon = Icons.Rounded.Assessment)
+            SectionHeader(title = stringResource(R.string.sync_section_inspector), icon = Icons.Rounded.Assessment)
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -504,7 +542,7 @@ fun OmniSyncShowcaseScreen(
                                 fontSize = 22.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("Bookmarks", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.sync_stat_bookmarks), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -514,7 +552,7 @@ fun OmniSyncShowcaseScreen(
                                 fontSize = 22.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("Folders", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.sync_stat_folders), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -524,7 +562,7 @@ fun OmniSyncShowcaseScreen(
                                 fontSize = 22.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("Paired Peers", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.sync_stat_peers), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -535,7 +573,7 @@ fun OmniSyncShowcaseScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Encryption Engine", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.sync_encryption_engine), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFF2E7D32).copy(alpha = 0.15f)
@@ -555,9 +593,9 @@ fun OmniSyncShowcaseScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Outbox Journal", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.sync_outbox_journal), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
-                            "${uiState.pendingOutboxCount} pending mutations",
+                            stringResource(R.string.sync_pending_mutations, uiState.pendingOutboxCount),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -585,13 +623,13 @@ fun OmniSyncShowcaseScreen(
                     )
                     Column {
                         Text(
-                            "Safe Non-Destructive Sync Layer",
+                            stringResource(R.string.sync_safe_layer_title),
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            "Existing browser bookmarks & data are never harmed or overwritten. Omni Sync operates within an isolated, encrypted sync layer.",
+                            stringResource(R.string.sync_safe_layer_desc),
                             fontSize = 12.sp,
                             lineHeight = 16.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -601,7 +639,7 @@ fun OmniSyncShowcaseScreen(
             }
 
             // ── 4. IMPORT & EXPORT ACTIONS HUB ─────────────────────────────────
-            SectionHeader(title = "Import & Export Hub", icon = Icons.Rounded.SwapVert)
+            SectionHeader(title = stringResource(R.string.sync_section_actions), icon = Icons.Rounded.SwapVert)
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -616,9 +654,9 @@ fun OmniSyncShowcaseScreen(
                         Button(
                             onClick = {
                                 if (uiState.trustedDevices.isEmpty()) {
-                                    Toast.makeText(context, "Pair a desktop browser first.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, toastPairFirst, Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "Importing data into '💻 Desktop Bookmarks'...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, toastImporting, Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -626,16 +664,16 @@ fun OmniSyncShowcaseScreen(
                         ) {
                             Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("From PC", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.sync_btn_from_pc), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
                         Button(
                             onClick = {
                                 if (uiState.trustedDevices.isEmpty()) {
-                                    Toast.makeText(context, "Pair a desktop browser first.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, toastPairFirst, Toast.LENGTH_SHORT).show()
                                 } else {
                                     coordinator.syncNow()
-                                    Toast.makeText(context, "Exported bookmarks & tabs to desktop!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, toastExportedP2P, Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -643,7 +681,7 @@ fun OmniSyncShowcaseScreen(
                         ) {
                             Icon(Icons.Rounded.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("To PC", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.sync_btn_to_pc), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -655,33 +693,33 @@ fun OmniSyncShowcaseScreen(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                Toast.makeText(context, "Exported Netscape HTML backup!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, toastExportedHtml, Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Rounded.SaveAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Export HTML", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.sync_btn_export_html), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
 
                         OutlinedButton(
                             onClick = {
-                                Toast.makeText(context, "Select HTML file to import...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, toastImportSelectFile, Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import HTML", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.sync_btn_import_html), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
 
             // ── 5. GRANULAR DATA PREFERENCES TOGGLES ───────────────────────────
-            SectionHeader(title = "Sync Preferences", icon = Icons.Rounded.Tune)
+            SectionHeader(title = stringResource(R.string.sync_section_preferences), icon = Icons.Rounded.Tune)
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -692,8 +730,8 @@ fun OmniSyncShowcaseScreen(
                     // Bookmarks
                     PreferenceToggleRow(
                         icon = Icons.Rounded.Bookmark,
-                        title = "Bookmarks & Folders",
-                        desc = "Full tree structure with fractional ordering",
+                        title = stringResource(R.string.sync_pref_bookmarks),
+                        desc = stringResource(R.string.sync_pref_bookmarks_desc),
                         checked = syncBookmarks,
                         onCheckedChange = { syncBookmarks = it }
                     )
@@ -703,8 +741,8 @@ fun OmniSyncShowcaseScreen(
                     // Open Tabs
                     PreferenceToggleRow(
                         icon = Icons.Rounded.Tab,
-                        title = "Real-Time Open Tabs",
-                        desc = "View & switch active tabs across devices",
+                        title = stringResource(R.string.sync_pref_tabs),
+                        desc = stringResource(R.string.sync_pref_tabs_desc),
                         checked = syncTabs,
                         onCheckedChange = { syncTabs = it }
                     )
@@ -714,8 +752,8 @@ fun OmniSyncShowcaseScreen(
                     // Browsing History
                     PreferenceToggleRow(
                         icon = Icons.Rounded.History,
-                        title = "Browsing History",
-                        desc = "Opt-in 90-day retention with tracker stripping",
+                        title = stringResource(R.string.sync_pref_history),
+                        desc = stringResource(R.string.sync_pref_history_desc),
                         checked = syncHistory,
                         onCheckedChange = { syncHistory = it }
                     )
@@ -725,8 +763,8 @@ fun OmniSyncShowcaseScreen(
                     // Passwords
                     PreferenceToggleRow(
                         icon = Icons.Rounded.Lock,
-                        title = "Passwords & Credentials",
-                        desc = "End-to-end encrypted zero-knowledge locker",
+                        title = stringResource(R.string.sync_pref_passwords),
+                        desc = stringResource(R.string.sync_pref_passwords_desc),
                         checked = syncPasswords,
                         onCheckedChange = { syncPasswords = it }
                     )
@@ -736,8 +774,8 @@ fun OmniSyncShowcaseScreen(
                     // Settings & Rules
                     PreferenceToggleRow(
                         icon = Icons.Rounded.Settings,
-                        title = "Settings & Adblock Rules",
-                        desc = "Custom filters, theme, and search engine",
+                        title = stringResource(R.string.sync_pref_settings),
+                        desc = stringResource(R.string.sync_pref_settings_desc),
                         checked = syncSettings,
                         onCheckedChange = { syncSettings = it }
                     )
@@ -745,40 +783,40 @@ fun OmniSyncShowcaseScreen(
             }
 
             // ── 6. FEATURE HIGHLIGHTS GRID ──────────────────────────────────────
-            SectionHeader(title = "Privacy & Encryption Guarantees", icon = Icons.Rounded.VerifiedUser)
+            SectionHeader(title = stringResource(R.string.sync_section_guarantees), icon = Icons.Rounded.VerifiedUser)
 
             FeatureCard(
                 icon = Icons.Rounded.Security,
-                title = "End-to-End Encrypted (E2EE)",
-                description = "Audited NIST P-256 ECDH key agreement with AES-256-GCM authenticated payload encryption and out-of-band 6-digit numeric SAS code verification."
+                title = stringResource(R.string.sync_guarantee_e2ee_title),
+                description = stringResource(R.string.sync_guarantee_e2ee_desc)
             )
 
             FeatureCard(
                 icon = Icons.Rounded.Tab,
-                title = "Live Tabs & Send-to-Device",
-                description = "View open tabs across all your paired computers and phones in real time, or send a tab directly with one tap. Incognito sessions are structurally excluded."
+                title = stringResource(R.string.sync_guarantee_tabs_title),
+                description = stringResource(R.string.sync_guarantee_tabs_desc)
             )
 
             FeatureCard(
                 icon = Icons.Rounded.Bookmarks,
-                title = "Fractional Indexing CRDT",
-                description = "Dense Base-62 fractional indexing preserves your nested folder hierarchy and avoids bookmark collisions even under concurrent offline edits."
+                title = stringResource(R.string.sync_guarantee_crdt_title),
+                description = stringResource(R.string.sync_guarantee_crdt_desc)
             )
 
             FeatureCard(
                 icon = Icons.Rounded.History,
-                title = "Opt-In History & 90-Day Purge",
-                description = "History sync is strictly opt-in, automatically strips URL tracking parameters (utm_*, fbclid), and enforces a rolling 90-day auto-expiry."
+                title = stringResource(R.string.sync_guarantee_history_title),
+                description = stringResource(R.string.sync_guarantee_history_desc)
             )
 
             FeatureCard(
                 icon = Icons.Rounded.Tune,
-                title = "Portable Settings Allowlist",
-                description = "Syncs search engines, dark theme, and ad-blocking rules while strictly keeping device-specific hardware parameters isolated."
+                title = stringResource(R.string.sync_guarantee_settings_title),
+                description = stringResource(R.string.sync_guarantee_settings_desc)
             )
 
             // ── 7. CROSS-PLATFORM ECOSYSTEM ─────────────────────────────────────
-            SectionHeader(title = "Supported Desktop Browsers (Testing Extension)", icon = Icons.Rounded.Language)
+            SectionHeader(title = stringResource(R.string.sync_section_browsers), icon = Icons.Rounded.Language)
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -787,7 +825,7 @@ fun OmniSyncShowcaseScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Direct P2P mesh sync requires installing the Omni Sync Extension (Beta / Testing) on your desktop browser:",
+                        stringResource(R.string.sync_browsers_desc),
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -804,7 +842,7 @@ fun OmniSyncShowcaseScreen(
             }
 
             // ── 8. PAIRED DEVICES SECTION ───────────────────────────────────────
-            SectionHeader(title = "Paired Devices (${uiState.trustedDevices.size})", icon = Icons.Rounded.Devices)
+            SectionHeader(title = stringResource(R.string.sync_section_paired_devices, uiState.trustedDevices.size), icon = Icons.Rounded.Devices)
 
             if (uiState.trustedDevices.isEmpty()) {
                 Card(
@@ -813,7 +851,7 @@ fun OmniSyncShowcaseScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        "No other devices paired yet. Tap 'Pair Device' to generate a QR code or scan from your desktop browser.",
+                        stringResource(R.string.sync_no_paired_devices),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp)
@@ -885,9 +923,9 @@ fun OmniSyncShowcaseScreen(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Pair Device", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(stringResource(R.string.sync_pair_dialog_title), fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Text(
-                        "Requires Omni Sync Extension (Testing) installed on your desktop browser.",
+                        stringResource(R.string.sync_pair_dialog_extension_req),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -904,13 +942,13 @@ fun OmniSyncShowcaseScreen(
                     ) {
                         Icon(Icons.Rounded.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Scan Desktop QR Code", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(stringResource(R.string.sync_scan_desktop_qr), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(14.dp))
-                    Text("Or share this phone invitation code to your PC:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.sync_share_invitation_code), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     qrBitmap?.let { bmp ->
@@ -929,7 +967,7 @@ fun OmniSyncShowcaseScreen(
                         onClick = {
                             if (myInvitationJson.isNotBlank()) {
                                 clipboardManager.setText(AnnotatedString(myInvitationJson))
-                                Toast.makeText(context, "Copied phone pairing code to clipboard!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, toastCopiedCode, Toast.LENGTH_SHORT).show()
                             }
                         },
                         shape = RoundedCornerShape(10.dp),
@@ -938,14 +976,14 @@ fun OmniSyncShowcaseScreen(
                     ) {
                         Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Copy Phone Pairing Code", fontSize = 13.sp)
+                        Text(stringResource(R.string.sync_copy_phone_code), fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Text("Or paste invitation code from Desktop Extension:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(stringResource(R.string.sync_paste_extension_code), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
@@ -956,7 +994,7 @@ fun OmniSyncShowcaseScreen(
                         OutlinedTextField(
                             value = pairingCodeInput,
                             onValueChange = { pairingCodeInput = it },
-                            placeholder = { Text("Paste invitation code...", fontSize = 12.sp) },
+                            placeholder = { Text(stringResource(R.string.sync_paste_code_placeholder), fontSize = 12.sp) },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true
@@ -966,7 +1004,7 @@ fun OmniSyncShowcaseScreen(
                                 val clip = clipboardManager.getText()?.text
                                 if (!clip.isNullOrBlank()) {
                                     pairingCodeInput = clip
-                                    Toast.makeText(context, "Pasted from clipboard!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, toastPastedCode, Toast.LENGTH_SHORT).show()
                                 }
                             }
                         ) {
@@ -979,7 +1017,7 @@ fun OmniSyncShowcaseScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        TextButton(onClick = { showPairDialog = false }) { Text("Cancel") }
+                        TextButton(onClick = { showPairDialog = false }) { Text(stringResource(R.string.cancel_text)) }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
@@ -993,7 +1031,7 @@ fun OmniSyncShowcaseScreen(
                             },
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("Pair")
+                            Text(stringResource(R.string.sync_btn_pair))
                         }
                     }
                 }
@@ -1005,10 +1043,10 @@ fun OmniSyncShowcaseScreen(
     showSasDialog?.let { sas ->
         AlertDialog(
             onDismissRequest = { showSasDialog = null },
-            title = { Text("Verify Security Code", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.sync_sas_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text("Confirm this 6-digit code matches on both devices before syncing:")
+                    Text(stringResource(R.string.sync_sas_desc))
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         "${sas.take(3)} ${sas.takeLast(3)}",
@@ -1020,7 +1058,7 @@ fun OmniSyncShowcaseScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = { showSasDialog = null }) { Text("Codes Match") }
+                Button(onClick = { showSasDialog = null }) { Text(stringResource(R.string.sync_sas_confirm)) }
             }
         )
     }
@@ -1032,7 +1070,7 @@ fun OmniSyncShowcaseScreen(
             onDismiss = { showFxAuthDialog = false },
             onSuccess = {
                 showFxAuthDialog = false
-                Toast.makeText(context, "Connected to Firefox Account!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, toastConnectedFxa, Toast.LENGTH_SHORT).show()
                 mozillaSyncManager.syncNow(
                     context = context,
                     collection = coordinator.collection,
