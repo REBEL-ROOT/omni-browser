@@ -972,10 +972,10 @@ fun SiteStyleCustomizerSheetContent(
 
     val presets = listOf(
         Triple("DEFAULT", R.string.site_style_preset_original, Color.Gray),
-        Triple("DARK", R.string.site_style_preset_dark, Color(0xFF0B131E)),
+        Triple("DARK", R.string.site_style_preset_dark, Color(0xFF18181B)),
         Triple("SEPIA", R.string.site_style_preset_sepia, Color(0xFFF4ECD8)),
         Triple("OLED", R.string.site_style_preset_oled, Color(0xFF000000)),
-        Triple("FOREST", R.string.site_style_preset_forest, Color(0xFFE6F0E6))
+        Triple("FOREST", R.string.site_style_preset_forest, Color(0xFF0F1C15))
     )
 
     val isDark = viewModel.isDarkThemeEnabled
@@ -1104,7 +1104,7 @@ fun SiteStyleCustomizerSheetContent(
                                         text = context.getString(labelRes),
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (code == "SEPIA" || code == "FOREST" || (code == "DEFAULT" && !isDark)) Color.Black else Color.White
+                                        color = if (code == "SEPIA" || (code == "DEFAULT" && !isDark)) Color(0xFF5F4B32) else Color.White
                                     )
                                 }
                             }

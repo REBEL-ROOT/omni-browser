@@ -1,0 +1,30 @@
+{
+  "description": "Deleting a bookmark creates a tombstone; older edits received later are ignored.",
+  "operations": [
+    {
+      "opId": "op_del_gitlab",
+      "opType": "DELETE",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_gitlab_02",
+      "hlc": "1724330440000:0000:dev_android_01",
+      "payload": {
+        "isDeleted": true
+      }
+    },
+    {
+      "opId": "op_stale_edit",
+      "opType": "UPDATE_CONTENT",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_gitlab_02",
+      "hlc": "1724330435000:0000:dev_chrome_01",
+      "payload": {
+        "title": "Old GitLab Edit"
+      }
+    }
+  ],
+  "expectedState": {
+    "entityId": "bmk_gitlab_02",
+    "isDeleted": true,
+    "resurrectionPrevented": true
+  }
+}

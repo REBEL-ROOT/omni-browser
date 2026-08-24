@@ -1,0 +1,35 @@
+{
+  "description": "Attempting to move parent folder into its child must be rejected; child created in deleted parent must fallback to root.",
+  "operations": [
+    {
+      "opId": "op_subfolder",
+      "opType": "CREATE",
+      "entityType": "FOLDER",
+      "entityId": "fld_tools_02",
+      "hlc": "1724330425000:0000:dev_android_01",
+      "payload": {
+        "parentId": "fld_dev_01",
+        "position": "a0",
+        "title": "Tools",
+        "createdAt": 1724330425000,
+        "modifiedAt": 1724330425000
+      }
+    },
+    {
+      "opId": "op_cycle_move",
+      "opType": "MOVE_REORDER",
+      "entityType": "FOLDER",
+      "entityId": "fld_dev_01",
+      "hlc": "1724330430000:0000:dev_chrome_01",
+      "payload": {
+        "parentId": "fld_tools_02",
+        "position": "a0"
+      }
+    }
+  ],
+  "expectedStatus": {
+    "op_cycle_move": "REJECTED_CYCLE_DETECTED",
+    "fld_dev_01_parentId": "root",
+    "fld_tools_02_parentId": "fld_dev_01"
+  }
+}

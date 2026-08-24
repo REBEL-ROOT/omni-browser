@@ -1,0 +1,34 @@
+{
+  "description": "Inserting an item between two existing items without reindexing siblings",
+  "operations": [
+    {
+      "opId": "op_insert_middle",
+      "opType": "CREATE",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_bitbucket_03",
+      "hlc": "1724330420000:0000:dev_android_01",
+      "payload": {
+        "parentId": "fld_dev_01",
+        "position": "a0V",
+        "title": "Bitbucket",
+        "url": "https://bitbucket.org",
+        "createdAt": 1724330420000,
+        "modifiedAt": 1724330420000
+      }
+    }
+  ],
+  "expectedOrdering": [
+    {
+      "id": "bmk_github_01",
+      "position": "a0"
+    },
+    {
+      "id": "bmk_bitbucket_03",
+      "position": "a0V"
+    },
+    {
+      "id": "bmk_gitlab_02",
+      "position": "a1"
+    }
+  ]
+}

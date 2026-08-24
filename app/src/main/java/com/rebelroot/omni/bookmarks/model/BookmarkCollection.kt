@@ -111,6 +111,59 @@ class BookmarkCollection(
     }
 
     /**
+     * Adds a leaf bookmark with an explicit stable [id] (used during sync replication).
+     */
+    fun addBookmarkWithId(
+        id: String,
+        title: String,
+        url: String,
+        parentId: String = ROOT_FOLDER_ID,
+        position: Long? = null,
+        createdAt: Long? = null,
+        modifiedAt: Long? = null
+    ): OmniBookmark {
+        requireParentExists(parentId)
+        val now = clock()
+        val entry = OmniBookmark(
+            id = id,
+            parentId = parentId,
+            position = position ?: nextPosition(parentId),
+            title = title,
+            url = url,
+            createdAt = createdAt ?: now,
+            modifiedAt = modifiedAt ?: now
+        )
+        bookmarks[entry.id] = entry
+        return entry
+    }
+
+    /**
+     * Adds a folder with an explicit stable [id] (used during sync replication).
+     */
+    fun addFolderWithId(
+        id: String,
+        title: String,
+        parentId: String = ROOT_FOLDER_ID,
+        position: Long? = null,
+        createdAt: Long? = null,
+        modifiedAt: Long? = null
+    ): OmniBookmarkFolder {
+        requireParentExists(parentId)
+        val now = clock()
+        val entry = OmniBookmarkFolder(
+            id = id,
+            parentId = parentId,
+            position = position ?: nextPosition(parentId),
+            title = title,
+            createdAt = createdAt ?: now,
+            modifiedAt = modifiedAt ?: now
+        )
+        folders[entry.id] = entry
+        return entry
+    }
+
+
+    /**
      * Moves any item (bookmark or folder) to [newParentId] at [newIndex]
      * (0-based; clamped to the valid range). Positions stay dense after the
      * move. Moving a folder into itself or its own descendant throws

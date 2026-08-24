@@ -151,6 +151,7 @@
 
     <application
         android:name=".OmniApplication"
+        android:extractNativeLibs="false"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

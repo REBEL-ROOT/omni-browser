@@ -87,6 +87,7 @@ fun SettingsScreen(
     onOpenPasswordManager: () -> Unit = {},
     onOpenDownloadSettings: () -> Unit = {},
     onOpenOfflineAi: () -> Unit = {},
+    onOpenSync: () -> Unit = {},
     onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
@@ -830,6 +831,19 @@ fun SettingsScreen(
                     SwitchRow(Icons.Rounded.Verified, stringResource(id = R.string.media_validate_title), stringResource(id = R.string.media_validate_desc), viewModel.isMediaValidateEnabled) { viewModel.toggleMediaValidate(context) }
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     SwitchRow(Icons.Rounded.Block, stringResource(id = R.string.ai_blocker_title), stringResource(id = R.string.ai_blocker_desc), viewModel.isAiBlockerEnabled) { viewModel.toggleAiBlocker(context) }
+                }
+            }
+
+            // ── SYNC & ECOSYSTEM ──────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionHeader("SYNC & ECOSYSTEM")
+                SettingsCard {
+                    NavRow(
+                        Icons.Rounded.Bolt,
+                        "Omni Sync (Experimental)",
+                        "Experimental zero-cloud, E2EE sync for bookmarks, tabs & settings with Chrome, Firefox, Edge & Safari.",
+                        onClick = onOpenSync
+                    )
                 }
             }
 

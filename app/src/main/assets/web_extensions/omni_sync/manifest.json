@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Omni Sync",
+  "version": "1.0.0",
+  "description": "End-to-end encrypted, zero-cloud LAN bookmark & tab synchronization with Omni Browser.",
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "alarms",
+    "sidePanel"
+  ],
+  "background": {
+    "scripts": ["dist/background.js"],
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Omni Sync"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "description": "Initial creation of a folder and two child bookmarks with fractional indexing",
+  "operations": [
+    {
+      "opId": "op_01",
+      "opType": "CREATE",
+      "entityType": "FOLDER",
+      "entityId": "fld_dev_01",
+      "hlc": "1724330400000:0000:dev_android_01",
+      "payload": {
+        "parentId": "root",
+        "position": "a0",
+        "title": "Development",
+        "createdAt": 1724330400000,
+        "modifiedAt": 1724330400000
+      }
+    },
+    {
+      "opId": "op_02",
+      "opType": "CREATE",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_github_01",
+      "hlc": "1724330400000:0001:dev_android_01",
+      "payload": {
+        "parentId": "fld_dev_01",
+        "position": "a0",
+        "title": "GitHub",
+        "url": "https://github.com",
+        "faviconUrl": "https://github.com/favicon.ico",
+        "createdAt": 1724330400000,
+        "modifiedAt": 1724330400000
+      }
+    },
+    {
+      "opId": "op_03",
+      "opType": "CREATE",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_gitlab_02",
+      "hlc": "1724330400000:0002:dev_android_01",
+      "payload": {
+        "parentId": "fld_dev_01",
+        "position": "a1",
+        "title": "GitLab",
+        "url": "https://gitlab.com",
+        "faviconUrl": "https://gitlab.com/favicon.ico",
+        "createdAt": 1724330400000,
+        "modifiedAt": 1724330400000
+      }
+    }
+  ],
+  "expectedTree": {
+    "root": {
+      "folders": [
+        {
+          "id": "fld_dev_01",
+          "title": "Development",
+          "position": "a0",
+          "children": [
+            {
+              "id": "bmk_github_01",
+              "title": "GitHub",
+              "position": "a0"
+            },
+            {
+              "id": "bmk_gitlab_02",
+              "title": "GitLab",
+              "position": "a1"
+            }
+          ]
+        }
+      ],
+      "bookmarks": []
+    }
+  }
+}

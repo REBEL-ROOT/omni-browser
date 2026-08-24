@@ -1,0 +1,60 @@
+{
+  "description": "Full bootstrap snapshot sent during initial pairing of a new device",
+  "snapshot": {
+    "protocolVersion": 1,
+    "snapshotId": "snp_01HZX87K9Q3E4R7P8A2B5C6D7E",
+    "sourceDeviceId": "dev_android_01",
+    "snapshotHlc": "1724330450000:0000:dev_android_01",
+    "folders": [
+      {
+        "id": "fld_dev_01",
+        "parentId": "root",
+        "position": "a0",
+        "title": "Development",
+        "createdAt": 1724330400000,
+        "modifiedAt": 1724330425000,
+        "hlc": "1724330425000:0000:dev_android_01"
+      },
+      {
+        "id": "fld_tools_02",
+        "parentId": "fld_dev_01",
+        "position": "a0",
+        "title": "Tools",
+        "createdAt": 1724330425000,
+        "modifiedAt": 1724330425000,
+        "hlc": "1724330425000:0000:dev_android_01"
+      }
+    ],
+    "bookmarks": [
+      {
+        "id": "bmk_github_01",
+        "parentId": "fld_dev_01",
+        "position": "a0",
+        "title": "GitHub Homepage",
+        "url": "https://github.com/home",
+        "faviconUrl": "https://github.com/favicon.ico",
+        "createdAt": 1724330400000,
+        "modifiedAt": 1724330415000,
+        "hlc": "1724330415000:0000:dev_android_01"
+      },
+      {
+        "id": "bmk_bitbucket_03",
+        "parentId": "fld_dev_01",
+        "position": "a0V",
+        "title": "Bitbucket",
+        "url": "https://bitbucket.org",
+        "faviconUrl": "",
+        "createdAt": 1724330420000,
+        "modifiedAt": 1724330420000,
+        "hlc": "1724330420000:0000:dev_android_01"
+      }
+    ],
+    "tombstones": [
+      {
+        "entityId": "bmk_gitlab_02",
+        "entityType": "BOOKMARK",
+        "deletedAtHlc": "1724330440000:0000:dev_android_01"
+      }
+    ]
+  }
+}

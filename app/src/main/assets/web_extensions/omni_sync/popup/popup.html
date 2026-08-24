@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Omni Sync</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo-box">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-title">Omni Sync <span class="exp-tag">Experimental</span></h1>
+        <span class="brand-sub">Private Mesh</span>
+      </div>
+    </div>
+    <div id="sync-status" class="status-pill status-unpaired">
+      <span class="status-dot"></span>
+      <span class="status-text">Unpaired</span>
+    </div>
+  </header>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- DEVICE PROFILE CARD -->
+  <section class="device-card">
+    <div class="device-meta">
+      <span class="device-name" id="device-name">Chrome Desktop</span>
+      <div class="device-id-badge">
+        <span class="id-prefix">ID</span>
+        <span class="id-val" id="device-fingerprint">dev_chrome_...</span>
+      </div>
+    </div>
+    <div class="device-avatar">
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+        <line x1="8" y1="21" x2="16" y2="21"></line>
+        <line x1="12" y1="17" x2="12" y2="21"></line>
+      </svg>
+    </div>
+  </section>
+
+  <!-- PRIMARY ACTIONS -->
+  <section class="action-grid">
+    <button id="btn-sync-now" class="btn btn-filled">
+      <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+      </svg>
+      <span>Sync Now</span>
+    </button>
+    <button id="btn-pair-device" class="btn btn-tonal">
+      <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7"></rect>
+        <rect x="14" y="3" width="7" height="7"></rect>
+        <rect x="14" y="14" width="7" height="7"></rect>
+        <rect x="3" y="14" width="7" height="7"></rect>
+      </svg>
+      <span>Pair Device</span>
+    </button>
+  </section>
+
+  <!-- NON-DESTRUCTIVE SAFE OVERLAY BANNER -->
+  <section class="security-banner">
+    <div class="security-icon">
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        <path d="M9 12l2 2 4-4"></path>
+      </svg>
+    </div>
+    <div class="security-copy">
+      <strong>Non-Destructive Sync Layer</strong>
+      <p>Native browser data is preserved. Synced data is isolated in dedicated sync folders.</p>
+    </div>
+  </section>
+
+  <!-- IMPORT & EXPORT HUB -->
+  <div class="section-header">
+    <span class="section-label">Data Portability</span>
+  </div>
+  <section class="hub-container">
+    <div class="hub-tile-grid">
+      <button id="btn-import-phone" class="hub-tile">
+        <div class="tile-icon-box">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8 17 12 21 16 17"></polyline>
+            <line x1="12" y1="12" x2="12" y2="21"></line>
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+          </svg>
+        </div>
+        <span class="tile-label">Import from Phone</span>
+      </button>
+
+      <button id="btn-export-phone" class="hub-tile">
+        <div class="tile-icon-box">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 7 12 3 8 7"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+          </svg>
+        </div>
+        <span class="tile-label">Export to Phone</span>
+      </button>
+
+      <button id="btn-export-html" class="hub-tile hub-tile-secondary">
+        <div class="tile-icon-box">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+        <span class="tile-label">Export HTML</span>
+      </button>
+
+      <button id="btn-import-html" class="hub-tile hub-tile-secondary">
+        <div class="tile-icon-box">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
+        <span class="tile-label">Import HTML</span>
+      </button>
+    </div>
+    <input type="file" id="file-html-input" accept=".html,.htm" style="display: none;">
+  </section>
+
+  <!-- METRICS & LIVE DATA -->
+  <div class="section-header">
+    <span class="section-label">Sync Telemetry</span>
+  </div>
+  <section class="metrics-card">
+    <div class="metrics-grid">
+      <div class="metric-item">
+        <span class="metric-val" id="stat-bookmarks">0</span>
+        <span class="metric-tag">Bookmarks</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <span class="metric-val" id="stat-tabs">0</span>
+        <span class="metric-tag">Open Tabs</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item">
+        <span class="metric-val" id="stat-devices">0</span>
+        <span class="metric-tag">Mesh Peers</span>
+      </div>
+    </div>
+    <div class="metrics-footer">
+      <svg class="icon-svg inline-time-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+      <span id="stat-last-sync">Last Synced: Never</span>
+    </div>
+  </section>
+
+  <!-- DATA TYPES TOGGLE LIST -->
+  <div class="section-header">
+    <span class="section-label">Active Datasets</span>
+  </div>
+  <section class="settings-list">
+    <div class="setting-item">
+      <div class="setting-leading">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </div>
+      <div class="setting-body">
+        <span class="setting-title">Bookmarks & Folders</span>
+        <span class="setting-sub">Fractional index CRDT tree</span>
+      </div>
+      <label class="m3-switch">
+        <input type="checkbox" id="toggle-bookmarks" checked>
+        <span class="m3-track"><span class="m3-thumb"></span></span>
+      </label>
+    </div>
+
+    <div class="setting-item">
+      <div class="setting-leading">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="3" y1="9" x2="21" y2="9"></line>
+        </svg>
+      </div>
+      <div class="setting-body">
+        <span class="setting-title">Active Open Tabs</span>
+        <span class="setting-sub">Cross-device tab sync snapshot</span>
+      </div>
+      <label class="m3-switch">
+        <input type="checkbox" id="toggle-tabs" checked>
+        <span class="m3-track"><span class="m3-thumb"></span></span>
+      </label>
+    </div>
+
+    <div class="setting-item">
+      <div class="setting-leading">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 14 14"></polyline>
+        </svg>
+      </div>
+      <div class="setting-body">
+        <span class="setting-title">Browsing History</span>
+        <span class="setting-sub">Opt-in 90-day retention</span>
+      </div>
+      <label class="m3-switch">
+        <input type="checkbox" id="toggle-history">
+        <span class="m3-track"><span class="m3-thumb"></span></span>
+      </label>
+    </div>
+
+    <div class="setting-item">
+      <div class="setting-leading">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <div class="setting-body">
+        <span class="setting-title">Password Safe Locker</span>
+        <span class="setting-sub">Zero-knowledge AES-256 vault</span>
+      </div>
+      <label class="m3-switch">
+        <input type="checkbox" id="toggle-passwords" checked>
+        <span class="m3-track"><span class="m3-thumb"></span></span>
+      </label>
+    </div>
+
+    <div class="setting-item">
+      <div class="setting-leading">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </div>
+      <div class="setting-body">
+        <span class="setting-title">Settings & Rules</span>
+        <span class="setting-sub">Search engines & adblock filters</span>
+      </div>
+      <label class="m3-switch">
+        <input type="checkbox" id="toggle-settings" checked>
+        <span class="m3-track"><span class="m3-thumb"></span></span>
+      </label>
+    </div>
+  </section>
+
+  <!-- RECENT EVENT JOURNAL -->
+  <div class="section-header">
+    <span class="section-label">Audit Log</span>
+  </div>
+  <section class="journal-card" id="activity-log">
+    <div class="journal-entry">
+      <span class="journal-time">Now</span>
+      <span class="journal-msg">Mesh coordinator initialized</span>
+    </div>
+  </section>
+
+  <!-- TRUSTED DEVICES -->
+  <div class="section-header">
+    <span class="section-label">Connected Mesh Peers</span>
+  </div>
+  <section id="device-list" class="mesh-list">
+    <div class="empty-mesh" id="empty-state">
+      <svg class="icon-svg empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+        <line x1="12" y1="18" x2="12.01" y2="18"></line>
+      </svg>
+      <span>No trusted peers linked. Click "Pair Device" to establish connection.</span>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="app-footer">
+    <span>E2EE P-256 ECDH</span>
+    <span class="dot-separator">&bull;</span>
+    <span>v1.2.9</span>
+  </footer>
+
+  <!-- PAIRING MODAL -->
+  <div id="pair-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-top">
+        <div class="modal-heading">
+          <span class="modal-title" id="modal-title">Pair Device</span>
+          <span class="modal-sub">Secure Short-Auth-String Link</span>
+        </div>
+        <button id="btn-close-modal" class="btn-icon-dismiss">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="segmented-control">
+        <button id="tab-qr" class="seg-btn active">
+          <svg class="icon-svg seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Show QR</span>
+        </button>
+        <button id="tab-enter" class="seg-btn">
+          <svg class="icon-svg seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+            <line x1="6" y1="8" x2="6.01" y2="8"></line>
+            <line x1="10" y1="8" x2="10.01" y2="8"></line>
+            <line x1="14" y1="8" x2="14.01" y2="8"></line>
+            <line x1="18" y1="8" x2="18.01" y2="8"></line>
+          </svg>
+          <span>Enter Code</span>
+        </button>
+      </div>
+
+      <!-- VIEW: QR CODE -->
+      <div id="view-qr" class="tab-pane">
+        <div class="qr-viewport">
+          <canvas id="qr-canvas"></canvas>
+        </div>
+        <p class="guide-text">Scan with Omni Browser on Android, or copy the cryptographic string below:</p>
+        <textarea id="output-qr-code" rows="2" readonly placeholder="Generating keypair..."></textarea>
+        <div class="modal-cta-row" style="margin-top: 8px;">
+          <button id="btn-copy-qr-text" class="btn btn-tonal" style="flex: 1;">
+            <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Copy Key</span>
+          </button>
+          <button id="btn-qr-next-sas" class="btn btn-filled" style="flex: 1.5;">
+            <span>Next: Confirm Code</span>
+            <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW: ENTER CODE -->
+      <div id="view-enter" class="tab-pane hidden">
+        <p class="guide-text">Paste the invitation JSON token from Omni Browser mobile:</p>
+        <textarea id="input-invitation" rows="4" placeholder='{"version":1,"deviceId":"...","publicKey":"..."}'></textarea>
+        <div class="modal-cta-row">
+          <button id="btn-paste-clip" class="btn btn-tonal">
+            <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+            <span>Paste</span>
+          </button>
+          <button id="btn-submit-pair" class="btn btn-filled flex-grow">Verify & Link</button>
+        </div>
+      </div>
+
+      <!-- VIEW: SAS CONFIRMATION -->
+      <div id="view-sas" class="tab-pane hidden">
+        <div class="sas-card">
+          <span class="sas-label">Security Verification Code</span>
+          <div class="sas-digits" id="sas-code">--- ---</div>
+          <span class="sas-sub">Confirm digits match with peer screen</span>
+        </div>
+        <button id="btn-confirm-sas" class="btn btn-filled full-width">
+          <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Codes Match &mdash; Establish Mesh</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="../../dist/popup.js"></script>
+</body>
+</html>

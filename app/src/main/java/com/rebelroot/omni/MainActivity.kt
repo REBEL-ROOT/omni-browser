@@ -544,6 +544,9 @@ class MainActivity : FragmentActivity() {
                                 onOpenOfflineAi = {
                                     navController.navigate("offline_ai")
                                 },
+                                onOpenSync = {
+                                    navController.navigate("omni_sync_showcase")
+                                },
                                 onSettingsImported = {
                                     this@MainActivity.recreate()
                                 }
@@ -567,6 +570,14 @@ class MainActivity : FragmentActivity() {
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
                                 onOpenDownloads = { navController.navigate("downloads") }
+                            )
+                        }
+
+                        // Omni Sync Showcase & Feature Screen
+                        composable("omni_sync_showcase") {
+                            com.rebelroot.omni.settings.OmniSyncShowcaseScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

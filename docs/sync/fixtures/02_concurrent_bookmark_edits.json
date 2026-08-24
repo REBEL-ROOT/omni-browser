@@ -1,0 +1,35 @@
+{
+  "description": "Two peers concurrently edit title vs URL of the same bookmark. Highest HLC wins for conflict.",
+  "operations": [
+    {
+      "opId": "op_edit_peer1",
+      "opType": "UPDATE_CONTENT",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_github_01",
+      "hlc": "1724330410000:0000:dev_chrome_01",
+      "payload": {
+        "title": "GitHub - Build software better",
+        "url": "https://github.com",
+        "modifiedAt": 1724330410000
+      }
+    },
+    {
+      "opId": "op_edit_peer2",
+      "opType": "UPDATE_CONTENT",
+      "entityType": "BOOKMARK",
+      "entityId": "bmk_github_01",
+      "hlc": "1724330415000:0000:dev_android_01",
+      "payload": {
+        "title": "GitHub Homepage",
+        "url": "https://github.com/home",
+        "modifiedAt": 1724330415000
+      }
+    }
+  ],
+  "expectedEntity": {
+    "id": "bmk_github_01",
+    "title": "GitHub Homepage",
+    "url": "https://github.com/home",
+    "hlc": "1724330415000:0000:dev_android_01"
+  }
+}

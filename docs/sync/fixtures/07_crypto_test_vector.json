@@ -1,0 +1,8 @@
+{
+  "description": "Cross-platform ECDH / AES-256-GCM / SAS test vector for Kotlin and TypeScript",
+  "curve": "secp256r1",
+  "cipher": "AES-256-GCM",
+  "hkdf": "HmacSHA256",
+  "sasLength": 6,
+  "pairingTtlMs": 300000
+}
