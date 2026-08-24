@@ -9,8 +9,8 @@ plugins {
 // DO NOT remove the ABI offsets in the onVariants block!
 // baseVersionCode = 2027 on its own wouldn't clear the old 1002004 bug. 
 // It only works because of the per-ABI +1M/2M/3M offsets.
-val baseVersionCode = 2045
-val baseVersionName = "1.2.9.5"
+val baseVersionCode = 2046
+val baseVersionName = "1.3.0.1"
 
 android {
     namespace = "com.rebelroot.omni"
