@@ -81,8 +81,8 @@ jobs:
 
       - name: Rename APKs
         run: |
-          VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ]; then VERSION="v1.2.6.3"; fi
+          export VERSION="${{ github.ref_name }}"
+          if [ -z "$VERSION" ]; then export VERSION="v1.2.6.3"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -117,12 +117,49 @@ jobs:
           body: |
             ## Omni Browser ${{ github.ref_name }}
 
-            This release is built and signed from the GitHub Actions workflow using the signing secrets stored in the selected GitHub Environment.
+            ⚡ **Optimized R8 Minification Version with Highly Compressed Libraries**
+            This build is optimized utilizing aggressive R8 compiler shrinking, optimization, and resource minification alongside highly compressed runtime libraries, delivering maximum performance, enhanced security, and the smallest possible installation footprint.
 
-            The changelog has the full feature and fix list for this tag.
+            ---
 
-            To install, download the APK asset that matches your device architecture. If you are not sure which one to use, grab the universal APK.
+            ## 🚀 What's New in ${{ github.ref_name }}
 
-            Android 8.0+ (API 26) is required.
+            ### 🛠️ Critical Bug Fixes
+            - **OAuth Popup & New Window Navigation**: Fixed a bug where sites like Deezer trying to open third-party logins (Facebook, Google, Spotify, etc.) were blocked. Expanded the authentication host bypass to handle all major OAuth, SSO, and OIDC endpoints.
+            - **Keyboard Layout & Resize Stability**: Added `adjustResize` support and fixed dynamic bar-hiding to prevent soft keyboard interactions from breaking fixed/sticky web page elements, overlapping layouts, or forms.
+            - **Google Sign-In Black Screen Fix**: Resolved an issue where closing a Google OAuth popup tab left the parent browser session in a blank/black screen state by implementing a secure GeckoView session-rebind counter.
+            - **Firefox Account OAuth Flow**: Fully repaired the Firefox Sync OAuth login loop ("Something went wrong. Please close this tab and try again") by enabling third-party cookies, correcting authorization scopes, and bypassing bot protection using a dedicated Firefox Mobile User-Agent.
+            - **WebExtension Click Crash**: Fixed a native browser crash/restart that triggered when clicking on certain extension actions.
+            - **Responsive 3-Dot Menu**: Improved UI responsiveness by dynamically adapting the three-dot dropdown width on smaller screen form factors.
+
+            ---
+
+            ## 🔑 Password Managers & WebExtensions (v1.2.9.4)
+            - **Bitwarden & Password Manager WebExtension Support**: Updated GeckoView prompt delegates (`onOptionalPrompt` and `onUpdatePrompt`) to allow dynamic host and clipboard permissions (`browser.permissions.request()`). Bitwarden, Proton Pass, 1Password, and KeePassXC can now dynamically inspect web forms, search vaults, and autofill credentials across all websites.
+            - **Curated Extensions Store Expansion**: Added official entries for Bitwarden, Proton Pass, and KeePassXC-Browser to the built-in curated extension repository for 1-tap installation. Enhanced options page navigation with private browsing support.
+            - **Omni Password Manager Master Toggle**: Added a master toggle switch in the Password Manager vault screen and Settings. When turned OFF, it completely silences login save prompts and autocomplete sheets.
+
+            ## 📥 Download Notifications & Deep-Link Navigation (v1.2.9.4)
+            - **In-Progress Download Tap**: Tapping the system notification of an ongoing download brings Omni Browser to the foreground and opens the Downloads section directly.
+            - **Completed Download Tap & Direct File Opening**: Tapping a completed download notification opens the file directly with the default viewer via FileProvider. Added dual action buttons on the notification: "Open" and "Downloads".
+            - **Deep Link Handlers**: Integrated robust event handlers in MainActivity to handle both cold starts and background resumes.
+
+            ## 🔔 In-App OTA Update Notification System (v1.2.9.4)
+            - **Automated GitHub Update Notifications**: Added a background check on app startup (throttled to at most once per 12 hours) to check the GitHub Releases API. Issues a high-priority system status bar notification when a new version is available.
+
+            ## 🔄 Omni Sync & Firefox Account Cloud Integration (v1.2.9.4)
+            - **Firefox Account Cloud Sync**: End-to-end encrypted cloud sync for bookmarks, history, tabs, and settings via Firefox Account infrastructure.
+            - **P2P / Local Mesh Device Pairing**: Secure QR-code pairing and LAN transport sync across devices without third-party servers.
+            - **Localization**: Translated and synchronized all sync UI strings across 11 supported languages (English, Hindi, Spanish, French, German, Portuguese, Polish, Russian, Japanese, Chinese, Arabic).
+
+            ## 🎨 UI, Engine & Performance Stability (v1.2.9.4)
+            - **Blank Screen on Startup Resolved**: Fixed proxy initialization, removed premature JavaScript injections, and resolved EGL crash flags on incompatible GPUs.
+            - **OLED Dark Mode Improvements**: Eliminated mutation observer infinite feedback loops with 200ms debouncing, and scoped force-dark CSS variables to eliminate white text on light pages.
+
+            ---
+
+            ### Installation Requirements
+            - Android 8.0+ (API 26) is required.
+            - If you are not sure which build to choose, download the **universal** APK.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
