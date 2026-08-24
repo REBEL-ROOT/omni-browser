@@ -565,7 +565,7 @@ fun PhoneAddressBar(
 
 
 
-        AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
+        AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Split" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             IconButton(
                 onClick = onShowExtensionsSheet,
                 modifier = Modifier.size(config.barIconSize)

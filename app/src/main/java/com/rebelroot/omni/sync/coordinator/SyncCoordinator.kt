@@ -23,6 +23,12 @@ enum class SyncStatus {
     ERROR
 }
 
+enum class SyncBackend {
+    OMNI_LAN,
+    FIREFOX,
+    BOTH
+}
+
 data class SyncUiState(
     val deviceId: String = "",
     val deviceName: String = "",
@@ -32,7 +38,10 @@ data class SyncUiState(
     val autoSyncEnabled: Boolean = true,
     val lastSyncTimestamp: Long = 0L,
     val pendingOutboxCount: Int = 0,
-    val statusMessage: String = "Ready"
+    val statusMessage: String = "Ready",
+    val syncBackend: SyncBackend = SyncBackend.OMNI_LAN,
+    val fxSyncEnabled: Boolean = false,
+    val fxAccountEmail: String? = null
 )
 
 class SyncCoordinator(

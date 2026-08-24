@@ -17,12 +17,8 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
     val tab = targetTab ?: activeTab ?: return
     val session = tab.session ?: return
 
-    // Determine active theme preset
-    val effectiveTheme = when {
-        siteStyleTheme != "DEFAULT" -> siteStyleTheme
-        isAmoledMode -> "OLED"
-        else -> "DEFAULT"
-    }
+    // Determine active theme preset strictly from user's explicit selection
+    val effectiveTheme = siteStyleTheme
 
     val hasCustomStyles = effectiveTheme != "DEFAULT" || siteStyleFontSize != 100 || 
             siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || 
@@ -30,6 +26,7 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
             siteStyleGrayscale || siteStyleWarmFilter
 
     if (!hasCustomStyles) {
+        clearSiteStyleFromTab(tab)
         return
     }
 
@@ -419,14 +416,24 @@ fun BrowserViewModel.clearSiteStyleFromTab(targetTab: TabState? = null) {
     val session = tab.session ?: return
     val clearJs = """
         javascript:(function() {
-            const s = document.getElementById('omni-custom-site-style');
-            if (s) s.remove();
-            const m = document.getElementById('omni-custom-site-style-meta');
-            if (m) m.remove();
-            if (window.__omniAmoledObserver) {
-                window.__omniAmoledObserver.disconnect();
-                window.__omniAmoledObserver = null;
-            }
+            try {
+                const s = document.getElementById('omni-custom-site-style');
+                if (s) s.remove();
+                const m = document.getElementById('omni-custom-site-style-meta');
+                if (m) m.remove();
+                if (window.__omniAmoledObserver) {
+                    window.__omniAmoledObserver.disconnect();
+                    window.__omniAmoledObserver = null;
+                }
+                var oledEls = document.querySelectorAll('[__omniOled]');
+                for (var i = 0; i < oledEls.length; i++) {
+                    var el = oledEls[i];
+                    el.removeAttribute('__omniOled');
+                    el.style.backgroundColor = '';
+                    el.style.background = '';
+                    el.style.color = '';
+                }
+            } catch(e) {}
         })();
     """.trimIndent()
     try { session.loadUri(clearJs) } catch (_: Exception) {}
@@ -468,12 +475,7 @@ fun BrowserViewModel.updateSiteStyle(
     }.apply()
 
     updateGeckoColorScheme()
-    val effectiveTheme = when {
-        siteStyleTheme != "DEFAULT" -> siteStyleTheme
-        isAmoledMode -> "OLED"
-        else -> "DEFAULT"
-    }
-    val hasCustomStyles = effectiveTheme != "DEFAULT" || siteStyleFontSize != 100 || 
+    val hasCustomStyles = siteStyleTheme != "DEFAULT" || siteStyleFontSize != 100 || 
             siteStyleLineSpacing != 1.4f || siteStyleLetterSpacing != 0f || 
             siteStyleFontFamily != "inherit" || siteStyleHideImages || 
             siteStyleGrayscale || siteStyleWarmFilter

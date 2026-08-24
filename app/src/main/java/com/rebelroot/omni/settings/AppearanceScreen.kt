@@ -488,6 +488,20 @@ fun AppearanceScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Text(stringResource(id = R.string.show_recents), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = viewModel.showHomeRecents,
+                            onCheckedChange = { viewModel.saveShowHomeRecents(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(stringResource(id = R.string.discover_feed_title), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
                         Switch(
                             checked = viewModel.showDiscoverFeed,

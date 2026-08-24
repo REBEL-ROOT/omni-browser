@@ -810,6 +810,7 @@ fun BrowserScreen(
         session.scrollDelegate = object : org.mozilla.geckoview.GeckoSession.ScrollDelegate {
             override fun onScrollChanged(sess: org.mozilla.geckoview.GeckoSession, scrollX: Int, scrollY: Int) {
                 scrollChannel.trySend(scrollY)  // non-blocking; drops stale values automatically
+                viewModel.triggerScrollPillVisibility()
                 // Force-refresh scroll metrics via the GeckoView subclass lambda
                 viewModel.refreshScrollMetrics?.invoke()
             }
@@ -2048,7 +2049,7 @@ fun BrowserScreen(
                                 
                                 val geckoTopPad = 0.dp
                                 
-                                Box(
+                                BoxWithConstraints(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .then(
@@ -2098,112 +2099,147 @@ fun BrowserScreen(
                                             }
                                             val thresholdPx = with(density) { 80.dp.toPx() }
                                             object : GeckoView(activityCtx) {
-                                                private var startY = 0f
-                                                private var isPulling = false
-                                                private var isFastScrolling = false
-                                                private val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+                                                 private var startX = 0f
+                                                 private var startY = 0f
+                                                 private var isPulling = false
+                                                 private var isFastScrolling = false
+                                                 private var isPotentialFastScroll = false
+                                                 private val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
 
-                                                override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-                                                     val scrollY = currentScrollPos
-                                                     val isPillEnabled = viewModel.showScrollButtons && !showHomeScreen && !viewModel.isFullscreen
-                                                     val density = ctx.resources.displayMetrics.density
-                                                     val stripPx = 48f * density
-                                                     val minThumbPx = 36f * density
-                                                     val maxThumbPx = 90f * density
-                                                     val hitboxTolPx = 20f * density
-                                                     val minHitboxHPx = 64f * density
+                                                 override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+                                                      val scrollY = currentScrollPos
+                                                      val isPillEnabled = !showHomeScreen && !viewModel.isFullscreen
+                                                      val density = ctx.resources.displayMetrics.density
+                                                      val stripPx = 48f * density
+                                                      val minThumbPx = 36f * density
+                                                      val maxThumbPx = 90f * density
+                                                      val hitboxTolPx = 24f * density
+                                                      val minHitboxHPx = 64f * density
 
-                                                     val geometry = FastScrollMath.computeGeometry(
-                                                         viewportWidth = width.toFloat(),
-                                                         viewportHeight = height.toFloat(),
-                                                         topTrackOffset = viewModel.fastScrollPillTrackTop,
-                                                         bottomTrackOffset = viewModel.fastScrollPillTrackBottom,
-                                                         pageScrollHeight = viewModel.pageScrollHeight,
-                                                         pageViewportHeight = viewModel.pageViewportHeight,
-                                                         scrollRange = viewModel.currentScrollRange,
-                                                         scrollExtent = viewModel.currentScrollExtent,
-                                                         currentScrollOffset = maxOf(scrollY, viewModel.currentScrollOffset).toFloat(),
-                                                         isDragging = isFastScrolling,
-                                                         dragFraction = viewModel.fastScrollPillFraction,
-                                                         minThumbPx = minThumbPx,
-                                                         maxThumbPx = maxThumbPx,
-                                                         hitboxWidthPx = stripPx,
-                                                         hitboxTolerancePx = hitboxTolPx,
-                                                         minHitboxHeightPx = minHitboxHPx
-                                                     )
+                                                      val localTopTrackPx = 6f * density
+                                                      val localBottomTrackPx = 6f * density
+                                                      val geometry = FastScrollMath.computeGeometry(
+                                                          viewportWidth = width.toFloat(),
+                                                          viewportHeight = height.toFloat(),
+                                                          topTrackOffset = localTopTrackPx,
+                                                          bottomTrackOffset = localBottomTrackPx,
+                                                          pageScrollHeight = viewModel.pageScrollHeight,
+                                                          pageViewportHeight = viewModel.pageViewportHeight,
+                                                          scrollRange = viewModel.currentScrollRange,
+                                                          scrollExtent = viewModel.currentScrollExtent,
+                                                          currentScrollOffset = maxOf(scrollY, viewModel.currentScrollOffset).toFloat(),
+                                                          isDragging = isFastScrolling,
+                                                          dragFraction = viewModel.fastScrollPillFraction,
+                                                          minThumbPx = minThumbPx,
+                                                          maxThumbPx = maxThumbPx,
+                                                          hitboxWidthPx = stripPx,
+                                                          hitboxTolerancePx = hitboxTolPx,
+                                                          minHitboxHeightPx = minHitboxHPx
+                                                      )
 
-                                                     when (ev.actionMasked) {
-                                                         android.view.MotionEvent.ACTION_DOWN -> {
-                                                             if (viewModel.isFullscreen) {
-                                                                 showFullscreenDownloadBtn = true
-                                                                 fullscreenControlsLastActivityMs = System.currentTimeMillis()
-                                                             }
-                                                             startY = ev.y
-                                                             isPulling = false
-                                                             if (isPillEnabled && geometry.isScrollable && FastScrollMath.isTouchInsideHitbox(ev.x, ev.y, geometry)) {
-                                                                 isFastScrolling = true
-                                                                 viewModel.isFastScrollingPill = true
-                                                                 viewModel.scrollPillState = ScrollPillState.DRAGGING
-                                                                 viewModel.fastScrollController.attachSession(activeTab.session)
-                                                                 try {
-                                                                     performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                                                 } catch (_: Exception) {}
+                                                      when (ev.actionMasked) {
+                                                          android.view.MotionEvent.ACTION_DOWN -> {
+                                                              if (viewModel.isFullscreen) {
+                                                                  showFullscreenDownloadBtn = true
+                                                                  fullscreenControlsLastActivityMs = System.currentTimeMillis()
+                                                              }
+                                                              startX = ev.x
+                                                              startY = ev.y
+                                                              isPulling = false
+                                                              isFastScrolling = false
+                                                              viewModel.triggerScrollPillVisibility()
 
-                                                                 val frac = FastScrollMath.computeDragFraction(
-                                                                     fingerY = ev.y,
-                                                                     topTrackOffset = viewModel.fastScrollPillTrackTop,
-                                                                     thumbHeight = geometry.thumbHeight,
-                                                                     maxThumbTravel = geometry.maxThumbTravel
-                                                                 )
-                                                                 viewModel.fastScrollPillFraction = frac
-                                                                 viewModel.fastScrollController.dispatchDragFraction(frac, geometry.maxDocumentScroll)
-                                                                 return true
-                                                             }
-                                                         }
-                                                         android.view.MotionEvent.ACTION_MOVE -> {
-                                                             if (isFastScrolling) {
-                                                                 val frac = FastScrollMath.computeDragFraction(
-                                                                     fingerY = ev.y,
-                                                                     topTrackOffset = viewModel.fastScrollPillTrackTop,
-                                                                     thumbHeight = geometry.thumbHeight,
-                                                                     maxThumbTravel = geometry.maxThumbTravel
-                                                                 )
-                                                                 viewModel.fastScrollPillFraction = frac
-                                                                 viewModel.fastScrollController.dispatchDragFraction(frac, geometry.maxDocumentScroll)
-                                                                 return true
-                                                             }
-                                                             val deltaY = ev.y - startY
-                                                             if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading && !viewModel.isFullscreen) {
-                                                                 // Only allow pull-to-refresh if the swipe started near the top edge
-                                                                 // of the screen. This prevents accidental refreshes when scrolling up
-                                                                 // inside internal scrollable elements on websites like MangaPlus.
-                                                                 val edgeThreshold = 120f * density
-                                                                 if (startY < edgeThreshold) {
-                                                                     isPulling = true
-                                                                 }
-                                                             }
-                                                             if (isPulling) {
-                                                                 val pullDistance = (deltaY - touchSlop).coerceAtLeast(0f)
-                                                                 viewModel.pullToRefreshOffset = pullDistance
-                                                                 return true
-                                                             }
-                                                         }
-                                                         android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
-                                                             if (isFastScrolling) {
-                                                                 isFastScrolling = false
-                                                                 viewModel.isFastScrollingPill = false
-                                                                 viewModel.scrollPillState = ScrollPillState.VISIBLE_IDLE
-                                                                 return true
-                                                             }
-                                                             if (isPulling) {
-                                                                 isPulling = false
-                                                                 viewModel.onPullRelease(thresholdPx)
-                                                                 return true
-                                                             }
-                                                         }
-                                                     }
-                                                     return super.dispatchTouchEvent(ev)
-                                                }
+                                                              val isInsideThumb = isPillEnabled && FastScrollMath.isTouchInsideHitbox(ev.x, ev.y, geometry)
+                                                              val isNearRightEdge = isPillEnabled && FastScrollMath.isTouchNearRightEdge(ev.x, width.toFloat(), stripPx)
+
+                                                              if (isInsideThumb || isNearRightEdge) {
+                                                                  isPotentialFastScroll = true
+                                                                  viewModel.scrollPillState = ScrollPillState.VISIBLE_IDLE
+                                                              } else {
+                                                                  isPotentialFastScroll = false
+                                                              }
+                                                              // Do NOT swallow down event so that web elements (buttons, links) at the right edge receive clicks
+                                                              return super.dispatchTouchEvent(ev)
+                                                          }
+                                                          android.view.MotionEvent.ACTION_MOVE -> {
+                                                              if (isFastScrolling) {
+                                                                  val frac = FastScrollMath.computeDragFraction(
+                                                                      fingerY = ev.y,
+                                                                      topTrackOffset = localTopTrackPx,
+                                                                      thumbHeight = geometry.thumbHeight,
+                                                                      maxThumbTravel = geometry.maxThumbTravel
+                                                                  )
+                                                                  viewModel.fastScrollPillFraction = frac
+                                                                  viewModel.fastScrollController.dispatchDragFraction(frac, geometry.maxDocumentScroll)
+                                                                  return true
+                                                              }
+
+                                                              if (isPotentialFastScroll && isPillEnabled) {
+                                                                  val dx = kotlin.math.abs(ev.x - startX)
+                                                                  val dy = kotlin.math.abs(ev.y - startY)
+
+                                                                  // If user moves vertically past touch slop, engage fast scrolling
+                                                                  if (dy > touchSlop && dy > dx) {
+                                                                      isFastScrolling = true
+                                                                      viewModel.isFastScrollingPill = true
+                                                                      viewModel.scrollPillState = ScrollPillState.DRAGGING
+                                                                      viewModel.fastScrollController.attachSession(activeTab.session)
+                                                                      try {
+                                                                          performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                                                      } catch (_: Exception) {}
+
+                                                                      // Cancel the web click event in GeckoView so the button under finger doesn't fire
+                                                                      val cancelEvent = android.view.MotionEvent.obtain(ev).apply {
+                                                                          action = android.view.MotionEvent.ACTION_CANCEL
+                                                                      }
+                                                                      super.dispatchTouchEvent(cancelEvent)
+                                                                      cancelEvent.recycle()
+
+                                                                      val frac = FastScrollMath.computeDragFraction(
+                                                                          fingerY = ev.y,
+                                                                          topTrackOffset = localTopTrackPx,
+                                                                          thumbHeight = geometry.thumbHeight,
+                                                                          maxThumbTravel = geometry.maxThumbTravel
+                                                                      )
+                                                                      viewModel.fastScrollPillFraction = frac
+                                                                      viewModel.fastScrollController.dispatchDragFraction(frac, geometry.maxDocumentScroll)
+                                                                      return true
+                                                                  } else if (dx > touchSlop && dx > dy) {
+                                                                      // User swiped horizontally, cancel fast scroll detection
+                                                                      isPotentialFastScroll = false
+                                                                  }
+                                                              }
+
+                                                              val deltaY = ev.y - startY
+                                                              if (scrollY <= 0 && deltaY > touchSlop && !isPulling && !viewModel.isLoading && !viewModel.isFullscreen) {
+                                                                  val edgeThreshold = 120f * density
+                                                                  if (startY < edgeThreshold) {
+                                                                      isPulling = true
+                                                                  }
+                                                              }
+                                                              if (isPulling) {
+                                                                  val pullDistance = (deltaY - touchSlop).coerceAtLeast(0f)
+                                                                  viewModel.pullToRefreshOffset = pullDistance
+                                                                  return true
+                                                              }
+                                                          }
+                                                          android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                                                              isPotentialFastScroll = false
+                                                              if (isFastScrolling) {
+                                                                  isFastScrolling = false
+                                                                  viewModel.isFastScrollingPill = false
+                                                                  viewModel.scrollPillState = ScrollPillState.VISIBLE_IDLE
+                                                                  return true
+                                                              }
+                                                              if (isPulling) {
+                                                                  isPulling = false
+                                                                  viewModel.onPullRelease(thresholdPx)
+                                                                  return true
+                                                              }
+                                                          }
+                                                      }
+                                                      return super.dispatchTouchEvent(ev)
+                                                 }
 
                                                 override fun computeVerticalScrollRange(): Int {
                                                     val r = super.computeVerticalScrollRange()
@@ -2574,6 +2610,116 @@ fun BrowserScreen(
                                                 }
                                             }
                                         }
+                                    }
+
+                                    // iOS-style Capsule Scrollbar Overlay (rendered directly inside GeckoView container for 1:1 coordinate parity)
+                                    val localTopTrackOffset = 6.dp
+                                    val localBottomTrackOffset = 6.dp
+                                    val localTopTrackPx = with(density) { localTopTrackOffset.toPx() }
+                                    val localBottomTrackPx = with(density) { localBottomTrackOffset.toPx() }
+
+                                    val geckoWidthPx = with(density) { maxWidth.toPx() }
+                                    val geckoHeightPx = with(density) { maxHeight.toPx() }
+
+                                    val currentOffset = maxOf(currentScrollPos, viewModel.currentScrollOffset).toFloat()
+                                    val geometry = remember(
+                                        geckoWidthPx, geckoHeightPx, localTopTrackPx, localBottomTrackPx,
+                                        viewModel.pageScrollHeight, viewModel.pageViewportHeight,
+                                        viewModel.currentScrollRange, viewModel.currentScrollExtent,
+                                        currentOffset, viewModel.isFastScrollingPill, viewModel.fastScrollPillFraction
+                                    ) {
+                                        FastScrollMath.computeGeometry(
+                                            viewportWidth = geckoWidthPx,
+                                            viewportHeight = geckoHeightPx,
+                                            topTrackOffset = localTopTrackPx,
+                                            bottomTrackOffset = localBottomTrackPx,
+                                            pageScrollHeight = viewModel.pageScrollHeight,
+                                            pageViewportHeight = viewModel.pageViewportHeight,
+                                            scrollRange = viewModel.currentScrollRange,
+                                            scrollExtent = viewModel.currentScrollExtent,
+                                            currentScrollOffset = currentOffset,
+                                            isDragging = viewModel.isFastScrollingPill,
+                                            dragFraction = viewModel.fastScrollPillFraction,
+                                            minThumbPx = with(density) { 36.dp.toPx() },
+                                            maxThumbPx = with(density) { 90.dp.toPx() },
+                                            hitboxWidthPx = with(density) { 48.dp.toPx() },
+                                            hitboxTolerancePx = with(density) { 20.dp.toPx() },
+                                            minHitboxHeightPx = with(density) { 64.dp.toPx() }
+                                        )
+                                    }
+
+                                    LaunchedEffect(geometry) {
+                                        viewModel.fastScrollGeometry = geometry
+                                    }
+
+                                    val scrollTimestamp = viewModel.scrollPillVisibleTimestamp
+                                    LaunchedEffect(scrollTimestamp, currentScrollPos, viewModel.currentScrollOffset, viewModel.isFastScrollingPill) {
+                                        if (viewModel.isFastScrollingPill) {
+                                            viewModel.scrollPillState = ScrollPillState.DRAGGING
+                                        } else if (geometry.isScrollable) {
+                                            viewModel.scrollPillState = ScrollPillState.VISIBLE_IDLE
+                                            kotlinx.coroutines.delay(1800)
+                                            if (!viewModel.isFastScrollingPill) {
+                                                viewModel.scrollPillState = ScrollPillState.FADED
+                                            }
+                                        } else {
+                                            viewModel.scrollPillState = ScrollPillState.NON_SCROLLABLE
+                                        }
+                                    }
+
+                                    val isPillVisible = !viewModel.isFullscreen &&
+                                        (viewModel.scrollPillState == ScrollPillState.VISIBLE_IDLE || viewModel.scrollPillState == ScrollPillState.DRAGGING || viewModel.isFastScrollingPill)
+
+                                    val alphaAnim by animateFloatAsState(
+                                        targetValue = if (isPillVisible) 1f else 0f,
+                                        animationSpec = tween(durationMillis = if (viewModel.scrollPillState == ScrollPillState.DRAGGING || viewModel.isFastScrollingPill) 80 else 300),
+                                        label = "scrollAlpha"
+                                    )
+
+                                    val effectiveAlpha = if (viewModel.isFastScrollingPill || viewModel.scrollPillState == ScrollPillState.DRAGGING) 1f else alphaAnim
+
+                                    val capsuleWidth by animateDpAsState(
+                                        targetValue = if (viewModel.isFastScrollingPill) 12.dp else 5.5.dp,
+                                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
+                                        label = "capsuleWidth"
+                                    )
+
+                                    if (effectiveAlpha > 0.005f) {
+                                        val thumbYDp = with(density) { geometry.thumbY.toDp() }
+                                        val thumbHDp = with(density) { geometry.thumbHeight.coerceIn(48.dp.toPx(), 120.dp.toPx()).toDp() }
+                                        val isDark = viewModel.isDarkThemeEnabled || viewModel.isAmoledMode
+
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = (-3.5).dp, y = thumbYDp)
+                                                .size(width = capsuleWidth, height = thumbHDp)
+                                                .zIndex(1000f)
+                                                .graphicsLayer { alpha = effectiveAlpha }
+                                                .shadow(
+                                                    elevation = if (viewModel.isFastScrollingPill) 6.dp else 2.dp,
+                                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                                    ambientColor = androidx.compose.ui.graphics.Color.Black,
+                                                    spotColor = androidx.compose.ui.graphics.Color.Black
+                                                )
+                                                .background(
+                                                    color = if (isDark) {
+                                                        androidx.compose.ui.graphics.Color(0xFFE5E5EA).copy(alpha = if (viewModel.isFastScrollingPill) 0.95f else 0.85f)
+                                                    } else {
+                                                        androidx.compose.ui.graphics.Color(0xFF3A3A3C).copy(alpha = if (viewModel.isFastScrollingPill) 0.90f else 0.80f)
+                                                    },
+                                                    shape = androidx.compose.foundation.shape.CircleShape
+                                                )
+                                                .border(
+                                                    width = 0.75.dp,
+                                                    color = if (isDark) {
+                                                        androidx.compose.ui.graphics.Color(0x60000000)
+                                                    } else {
+                                                        androidx.compose.ui.graphics.Color(0x99FFFFFF)
+                                                    },
+                                                    shape = androidx.compose.foundation.shape.CircleShape
+                                                )
+                                        )
                                     }
                                 }
                                 RainbowScanBorder(isScanning = viewModel.isQrScanning)
@@ -7872,184 +8018,6 @@ fun BrowserScreen(
                                 }
                             }
                         }
-                    }
-                }
-            }
-
-            // iOS-style Capsule Scrollbar Overlay
-            if (viewModel.showScrollButtons && !showHomeScreen && activeTab != null) {
-                // Fetch page dimensions when tab changes
-                LaunchedEffect(activeTab.id) {
-                    viewModel.scrollPillState = ScrollPillState.VISIBLE_IDLE
-                    activeTab.session.loadUri(
-                        "javascript:(function(){try{var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}}catch(e){}})();"
-                    )
-                    kotlinx.coroutines.delay(1500)
-                    if (!viewModel.isFastScrollingPill) {
-                        viewModel.scrollPillState = ScrollPillState.FADED
-                    }
-                }
-
-                val density = androidx.compose.ui.platform.LocalDensity.current
-                val pillBottomNavHeight = if (viewModel.addressBarPosition == "Bottom" && !isTablet && !viewModel.isFullscreen && !isLandscape) {
-                    val searchH = config.searchBoxHeight + (config.paddingVertical * 2)
-                    if (viewModel.chromeNavBarEnabled) searchH else searchH + config.bottomNavBarHeight
-                } else 0.dp
-                val topTrackOffset = 6.dp
-                val bottomTrackOffset = (pillBottomNavHeight * (1f - bottomBarFraction)) + 6.dp
-
-                val topTrackPx = with(density) { topTrackOffset.toPx() }
-                val bottomTrackPx = with(density) { bottomTrackOffset.toPx() }
-                LaunchedEffect(topTrackPx, bottomTrackPx) {
-                    viewModel.fastScrollPillTrackTop = topTrackPx
-                    viewModel.fastScrollPillTrackBottom = bottomTrackPx
-                }
-
-                val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-                val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
-
-                val currentOffset = maxOf(currentScrollPos, viewModel.currentScrollOffset).toFloat()
-                val geometry = remember(
-                    screenWidthPx, screenHeightPx, topTrackPx, bottomTrackPx,
-                    viewModel.pageScrollHeight, viewModel.pageViewportHeight,
-                    viewModel.currentScrollRange, viewModel.currentScrollExtent,
-                    currentOffset, viewModel.isFastScrollingPill, viewModel.fastScrollPillFraction
-                ) {
-                    FastScrollMath.computeGeometry(
-                        viewportWidth = screenWidthPx,
-                        viewportHeight = screenHeightPx,
-                        topTrackOffset = topTrackPx,
-                        bottomTrackOffset = bottomTrackPx,
-                        pageScrollHeight = viewModel.pageScrollHeight,
-                        pageViewportHeight = viewModel.pageViewportHeight,
-                        scrollRange = viewModel.currentScrollRange,
-                        scrollExtent = viewModel.currentScrollExtent,
-                        currentScrollOffset = currentOffset,
-                        isDragging = viewModel.isFastScrollingPill,
-                        dragFraction = viewModel.fastScrollPillFraction,
-                        minThumbPx = with(density) { 36.dp.toPx() },
-                        maxThumbPx = with(density) { 90.dp.toPx() },
-                        hitboxWidthPx = with(density) { 48.dp.toPx() },
-                        hitboxTolerancePx = with(density) { 20.dp.toPx() },
-                        minHitboxHeightPx = with(density) { 64.dp.toPx() }
-                    )
-                }
-
-                LaunchedEffect(geometry) {
-                    viewModel.fastScrollGeometry = geometry
-                }
-
-                LaunchedEffect(activeTab.session) {
-                    viewModel.fastScrollController.attachSession(activeTab.session)
-                }
-
-                // Auto show/hide on normal scrolling: wake up pill for 1500ms then smoothly fade out
-                LaunchedEffect(currentScrollPos, viewModel.currentScrollOffset, viewModel.isFastScrollingPill) {
-                    if (viewModel.isFastScrollingPill) {
-                        viewModel.scrollPillState = ScrollPillState.DRAGGING
-                    } else if (geometry.isScrollable) {
-                        viewModel.scrollPillState = ScrollPillState.VISIBLE_IDLE
-                        kotlinx.coroutines.delay(1500)
-                        if (!viewModel.isFastScrollingPill) {
-                            viewModel.scrollPillState = ScrollPillState.FADED
-                        }
-                    } else {
-                        viewModel.scrollPillState = ScrollPillState.NON_SCROLLABLE
-                    }
-                }
-
-                val isPillVisible = !viewModel.isFullscreen && geometry.isScrollable &&
-                    (viewModel.scrollPillState == ScrollPillState.VISIBLE_IDLE || viewModel.scrollPillState == ScrollPillState.DRAGGING)
-
-                val alphaAnim by animateFloatAsState(
-                    targetValue = if (isPillVisible) 1f else 0f,
-                    animationSpec = tween(durationMillis = if (viewModel.scrollPillState == ScrollPillState.DRAGGING) 100 else 350),
-                    label = "scrollAlpha"
-                )
-
-                // iOS capsule width animation: thin when idle, thick when grabbed
-                val capsuleWidth by animateDpAsState(
-                    targetValue = if (viewModel.isFastScrollingPill) 12.dp else 5.dp,
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-                    label = "capsuleWidth"
-                )
-
-                val pillLocalView = LocalView.current
-
-                DisposableEffect(isPillVisible, geometry.hitboxTop, geometry.hitboxBottom) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        try {
-                            if (isPillVisible && geometry.isScrollable) {
-                                pillLocalView.systemGestureExclusionRects = listOf(
-                                    android.graphics.Rect(
-                                        geometry.hitboxLeft.toInt(),
-                                        geometry.hitboxTop.toInt(),
-                                        geometry.hitboxRight.toInt(),
-                                        geometry.hitboxBottom.toInt()
-                                    )
-                                )
-                            } else {
-                                pillLocalView.systemGestureExclusionRects = emptyList()
-                            }
-                        } catch (_: Exception) {}
-                    }
-                    onDispose {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                            try {
-                                pillLocalView.systemGestureExclusionRects = emptyList()
-                            } catch (_: Exception) {}
-                        }
-                    }
-                }
-
-                // Render purely visual high-contrast Apple capsule scrollbar (no full-height touch interceptor Box)
-                if (alphaAnim > 0.005f && geometry.isScrollable) {
-                    androidx.compose.foundation.Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zIndex(100f)
-                            .graphicsLayer { alpha = alphaAnim }
-                    ) {
-                        val w = capsuleWidth.toPx()
-                        val x = size.width - w - 3.dp.toPx()
-                        val thumbY = geometry.thumbY
-                        val thumbH = geometry.thumbHeight
-
-                        val isDark = viewModel.isDarkThemeEnabled || viewModel.isAmoledMode
-                        val thumbColor = if (isDark) {
-                            androidx.compose.ui.graphics.Color(0xFFE5E5EA).copy(
-                                alpha = if (viewModel.isFastScrollingPill) 0.95f else 0.75f
-                            )
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFF2C2C2E).copy(
-                                alpha = if (viewModel.isFastScrollingPill) 0.90f else 0.70f
-                            )
-                        }
-                        val borderColor = if (isDark) {
-                            androidx.compose.ui.graphics.Color(0xFF000000).copy(
-                                alpha = if (viewModel.isFastScrollingPill) 0.50f else 0.30f
-                            )
-                        } else {
-                            androidx.compose.ui.graphics.Color(0xFFFFFFFF).copy(
-                                alpha = if (viewModel.isFastScrollingPill) 0.60f else 0.40f
-                            )
-                        }
-
-                        // Outer outline for maximum contrast against any website background
-                        drawRoundRect(
-                            color = borderColor,
-                            topLeft = androidx.compose.ui.geometry.Offset(x - 0.5f, thumbY - 0.5f),
-                            size = androidx.compose.ui.geometry.Size(w + 1f, thumbH + 1f),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius((w + 1f) / 2f, (w + 1f) / 2f)
-                        )
-
-                        // Capsule body
-                        drawRoundRect(
-                            color = thumbColor,
-                            topLeft = androidx.compose.ui.geometry.Offset(x, thumbY),
-                            size = androidx.compose.ui.geometry.Size(w, thumbH),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2f, w / 2f)
-                        )
                     }
                 }
             }

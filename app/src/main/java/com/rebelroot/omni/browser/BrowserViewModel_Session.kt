@@ -1231,7 +1231,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     }
                     if (showScrollButtons) {
                         tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
-                        tab.session.loadUri("javascript:(function(){var sh=document.documentElement.scrollHeight||document.body.scrollHeight;var vh=window.innerHeight;if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}})();")
+                        tab.session.loadUri("javascript:(function(){try{var se=document.scrollingElement||document.documentElement||document.body;var sh=Math.max(document.documentElement?document.documentElement.scrollHeight:0,document.body?document.body.scrollHeight:0,se?se.scrollHeight:0);var vh=window.innerHeight||(document.documentElement?document.documentElement.clientHeight:0);if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}}catch(e){}})();")
                     }
                     applyVisualBlockRulesToTab(tab)
                 }

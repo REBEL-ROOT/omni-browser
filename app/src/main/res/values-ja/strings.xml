@@ -1705,16 +1705,6 @@
     <string name="menu_section_page_tabs">Page &amp; Tabs</string>
     <string name="menu_section_privacy_utilities">Privacy &amp; Utilities</string>
     <string name="menu_section_settings_display">Settings &amp; Display</string>
-    <string name="lottie_loading">Loading…</string>
-    <string name="lottie_empty_title">Nothing here yet</string>
-    <string name="lottie_empty_subtitle">This space is waiting for your content</string>
-    <string name="lottie_error_title">Something went wrong</string>
-    <string name="lottie_error_retry">Retry</string>
-    <string name="lottie_success_saved">Saved successfully</string>
-    <string name="lottie_success_downloaded">Downloaded</string>
-    <string name="lottie_searching">Searching…</string>
-    <string name="lottie_privacy_secure">Secure connection</string>
-    <string name="lottie_privacy_insecure">Connection not secure</string>
     <string name="download_confirmation_title">Download file?</string>
     <string name="download_confirmation_desc">The extension \"%1$s\" wants to download a file to your device.</string>
     <string name="download_file_label">File</string>
@@ -1734,4 +1724,6 @@
     <string name="extension_download_policy_ask">Ask every time</string>
     <string name="extension_download_policy_allow">Always allow trusted extensions</string>
     <string name="extension_download_policy_never">Never allow</string>
+    <string name="show_recents">最近の履歴を表示</string>
+    <string name="show_recents_desc">ホーム画面に最近アクセスしたサイトを表示</string>
 </resources>

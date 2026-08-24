@@ -507,6 +507,7 @@
     <string name="new_tab_page">New Tab Page</string>
     <string name="show_logo">Show Logo</string>
     <string name="show_shortcuts">Show Shortcuts</string>
+    <string name="show_recents">Show Recents</string>
     <string name="wallpaper_custom_url_title">Custom Video or GIF URL</string>
     <string name="wallpaper_custom_url_desc">Enter a direct HTTP/HTTPS URL for any online GIF or MP4/WebM video:</string>
     <string name="wallpaper_custom_url_placeholder">https://example.com/wallpaper.mp4</string>
@@ -805,6 +806,7 @@
     <string name="shortcut_shape_helper">Choose the shape of your shortcut icons</string>
     <string name="show_logo_desc">Display Omni brand logo at the top</string>
     <string name="show_shortcuts_desc">Quick access site links and built-in shortcuts</string>
+    <string name="show_recents_desc">Display recently visited sites on home screen</string>
     <string name="privacy_stats_widget">Privacy Stats Widget</string>
     <string name="privacy_stats_widget_desc">Show trackers blocked &amp; data saved card</string>
     <string name="minimalist_focus_mode">Minimalist Focus Mode</string>
@@ -1773,16 +1775,6 @@
     <string name="menu_section_page_tabs">Page &amp; Tabs</string>
     <string name="menu_section_privacy_utilities">Privacy &amp; Utilities</string>
     <string name="menu_section_settings_display">Settings &amp; Display</string>
-    <string name="lottie_loading">Loading…</string>
-    <string name="lottie_empty_title">Nothing here yet</string>
-    <string name="lottie_empty_subtitle">This space is waiting for your content</string>
-    <string name="lottie_error_title">Something went wrong</string>
-    <string name="lottie_error_retry">Retry</string>
-    <string name="lottie_success_saved">Saved successfully</string>
-    <string name="lottie_success_downloaded">Downloaded</string>
-    <string name="lottie_searching">Searching…</string>
-    <string name="lottie_privacy_secure">Secure connection</string>
-    <string name="lottie_privacy_insecure">Connection not secure</string>
     <!-- Download confirmation and management strings -->
     <string name="download_confirmation_title">Download file?</string>
     <string name="download_confirmation_desc">The extension \"%1$s\" wants to download a file to your device.</string>

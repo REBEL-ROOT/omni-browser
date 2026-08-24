@@ -900,7 +900,7 @@ fun HomeScreenContent(
 
         // Recently Visited Section matching screenshot
         val historyList = viewModel.historyList
-        if (historyList.isNotEmpty() && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
+        if (viewModel.showHomeRecents && historyList.isNotEmpty() && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2209,6 +2209,36 @@ fun HomeScreenContent(
                         Switch(
                             checked = viewModel.showHomeShortcuts,
                             onCheckedChange = { viewModel.saveShowHomeShortcuts(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // Toggle: Show Recents
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.show_recents),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = stringResource(R.string.show_recents_desc),
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.showHomeRecents,
+                            onCheckedChange = { viewModel.saveShowHomeRecents(context, it) },
                             colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }

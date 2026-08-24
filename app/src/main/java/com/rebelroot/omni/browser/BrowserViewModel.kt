@@ -210,6 +210,7 @@ class BrowserViewModel : ViewModel() {
         val CHROME_NAV_BAR_KEY = booleanPreferencesKey("chrome_nav_bar_enabled")
         val SHOW_HOME_LOGO_KEY = booleanPreferencesKey("show_home_logo")
         val SHOW_HOME_SHORTCUTS_KEY = booleanPreferencesKey("show_home_shortcuts")
+        val SHOW_HOME_RECENTS_KEY = booleanPreferencesKey("show_home_recents")
         val WALLPAPER_DIM_KEY = floatPreferencesKey("wallpaper_dim")
         val WALLPAPER_BLUR_KEY = floatPreferencesKey("wallpaper_blur")
         val WALLPAPER_SCALE_KEY = floatPreferencesKey("wallpaper_scale")
@@ -630,6 +631,18 @@ class BrowserViewModel : ViewModel() {
     var showBackgroundTabNotification by mutableStateOf(false)
     private var backgroundTabDismissJob: kotlinx.coroutines.Job? = null
 
+    // === Firefox Sync State ===
+    var firefoxSyncEnabled by mutableStateOf(false)
+    var fxAccountEmail by mutableStateOf<String?>(null)
+    var fxAccountDisplayName by mutableStateOf<String?>(null)
+    var fxAccountAvatarUrl by mutableStateOf<String?>(null)
+    var fxSyncBookmarks by mutableStateOf(true)
+    var fxSyncHistory by mutableStateOf(true)
+    var fxSyncTabs by mutableStateOf(true)
+    var fxSyncLogins by mutableStateOf(true)
+    var fxLastSyncTime by mutableStateOf(0L)
+    var fxSyncStatus by mutableStateOf("Idle")
+
     fun triggerBackgroundTabNotification(tab: TabState) {
         lastBackgroundTabOpenedTitle = tab.title?.takeIf { it.isNotBlank() && it != "New Tab" && it != "about:blank" }
             ?: try {
@@ -680,6 +693,10 @@ class BrowserViewModel : ViewModel() {
     var fastScrollPillTrackTop by mutableStateOf(0f)
     var fastScrollPillTrackBottom by mutableStateOf(0f)
     var scrollPillState by mutableStateOf(ScrollPillState.FADED)
+    var scrollPillVisibleTimestamp by mutableStateOf(0L)
+    fun triggerScrollPillVisibility() {
+        scrollPillVisibleTimestamp = System.currentTimeMillis()
+    }
     var fastScrollGeometry by mutableStateOf<ScrollGeometry?>(null)
     val fastScrollController = FastScrollController(viewModelScope)
     var navBarHideTop by mutableStateOf(true)
@@ -696,6 +713,7 @@ class BrowserViewModel : ViewModel() {
     var showDiscoverFeed by mutableStateOf(false)
     var showHomeLogo by mutableStateOf(true)
     var showHomeShortcuts by mutableStateOf(true)
+    var showHomeRecents by mutableStateOf(true)
     var showBottomNavBar by mutableStateOf(true)
     var hideHomeBottomNav by mutableStateOf(false)
     var chromeNavBarEnabled by mutableStateOf(false)
@@ -3261,6 +3279,7 @@ class BrowserViewModel : ViewModel() {
                     chromeNavBarEnabled = prefs[CHROME_NAV_BAR_KEY] ?: false
                     showHomeLogo = prefs[SHOW_HOME_LOGO_KEY] ?: true
                     showHomeShortcuts = prefs[SHOW_HOME_SHORTCUTS_KEY] ?: true
+                    showHomeRecents = prefs[SHOW_HOME_RECENTS_KEY] ?: true
                     wallpaperDim = prefs[WALLPAPER_DIM_KEY] ?: -1f
                     wallpaperBlur = prefs[WALLPAPER_BLUR_KEY] ?: 0f
                     wallpaperScale = prefs[WALLPAPER_SCALE_KEY] ?: 1.0f
@@ -3989,8 +4008,6 @@ class BrowserViewModel : ViewModel() {
             context.dataStore.edit { it[AMOLED_MODE_KEY] = enabled }
             isAmoledMode = enabled
             ThemeStateHolder.amoledMode = enabled
-            updateGeckoColorScheme()
-            applySiteStyleToActiveTab()
         }
     }
 
@@ -4057,7 +4074,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun updateGeckoColorScheme() {
-        val isDark = isDarkThemeEnabled || forceDarkWebsites || isAmoledMode || siteStyleTheme == "DARK" || siteStyleTheme == "OLED"
+        val isDark = isDarkThemeEnabled || forceDarkWebsites || siteStyleTheme == "DARK" || siteStyleTheme == "OLED"
         geckoRuntime?.settings?.preferredColorScheme = if (isDark) {
             GeckoRuntimeSettings.COLOR_SCHEME_DARK
         } else {
@@ -4451,6 +4468,13 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[SHOW_HOME_SHORTCUTS_KEY] = show }
             showHomeShortcuts = show
+        }
+    }
+
+    fun saveShowHomeRecents(context: Context, show: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[SHOW_HOME_RECENTS_KEY] = show }
+            showHomeRecents = show
         }
     }
 
@@ -5830,6 +5854,21 @@ class BrowserViewModel : ViewModel() {
                 sb.append("  canvas.captureStream.enabled: false\n")
                 sb.append("  dom.webaudio.enabled: false\n")
             }
+            // === Telemetry Kill — 0% data collection ===
+            sb.append("  datareporting.policy.dataSubmissionEnabled: false\n")
+            sb.append("  toolkit.telemetry.enabled: false\n")
+            sb.append("  toolkit.telemetry.unified: false\n")
+            sb.append("  datareporting.healthreport.uploadEnabled: false\n")
+            sb.append("  toolkit.telemetry.archive.enabled: false\n")
+            sb.append("  toolkit.telemetry.bhrPing.enabled: false\n")
+            sb.append("  toolkit.telemetry.firstShutdownPing.enabled: false\n")
+            sb.append("  toolkit.telemetry.newProfilePing.enabled: false\n")
+            sb.append("  toolkit.telemetry.shutdownPingSender.enabled: false\n")
+            sb.append("  toolkit.telemetry.updatePing.enabled: false\n")
+            sb.append("  app.normandy.enabled: false\n")
+            sb.append("  app.shield.optoutstudies.enabled: false\n")
+            // === Firefox Accounts — enable FxA identity services for sync ===
+            sb.append("  identity.fxaccounts.enabled: true\n")
             val tmpFile = File(ctx.filesDir, "geckoview-config.tmp")
             tmpFile.writeText(sb.toString())
             if (tmpFile.exists() && tmpFile.length() > 0) {

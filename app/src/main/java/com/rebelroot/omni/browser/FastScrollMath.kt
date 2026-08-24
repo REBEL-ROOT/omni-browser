@@ -95,8 +95,12 @@ object FastScrollMath {
         if (maxThumbTravel <= 0f) return 0f
 
         val targetThumbY = fingerY - topTrackOffset - (thumbHeight / 2f)
-        val clampedThumbY = targetThumbY.coerceIn(0f, maxThumbTravel)
-        return (clampedThumbY / maxThumbTravel).coerceIn(0f, 1f)
+        val rawFrac = targetThumbY / maxThumbTravel
+        return when {
+            rawFrac <= 0.015f -> 0f
+            rawFrac >= 0.985f -> 1f
+            else -> rawFrac.coerceIn(0f, 1f)
+        }
     }
 
     /**
@@ -104,8 +108,11 @@ object FastScrollMath {
      */
     fun computeDocumentScrollTarget(fraction: Float, maxDocumentScroll: Float): Float {
         if (fraction.isNaN() || maxDocumentScroll.isNaN() || maxDocumentScroll <= 0f) return 0f
-        val clampedFrac = fraction.coerceIn(0f, 1f)
-        return (clampedFrac * maxDocumentScroll).coerceIn(0f, maxDocumentScroll)
+        return when {
+            fraction <= 0.015f -> 0f
+            fraction >= 0.985f -> maxDocumentScroll
+            else -> (fraction * maxDocumentScroll).coerceIn(0f, maxDocumentScroll)
+        }
     }
 
     /**
@@ -186,8 +193,12 @@ object FastScrollMath {
         hitboxTolerancePx: Float = 20f,
         minHitboxHeightPx: Float = 64f
     ): ScrollGeometry {
-        val maxScroll = computeMaxDocumentScroll(pageScrollHeight, pageViewportHeight, scrollRange, scrollExtent)
-        val isScrollable = maxScroll > 0f
+        val calculatedMaxScroll = computeMaxDocumentScroll(pageScrollHeight, pageViewportHeight, scrollRange, scrollExtent)
+        val isExplicitlyShort = (!pageScrollHeight.isNaN() && !pageViewportHeight.isNaN() && pageScrollHeight > 0f && pageViewportHeight > 0f && pageScrollHeight <= pageViewportHeight) ||
+                (scrollRange > 0 && scrollExtent > 0 && scrollRange <= scrollExtent)
+
+        val isScrollable = if (isExplicitlyShort) false else (calculatedMaxScroll > 0f || isDragging || currentScrollOffset > 0f || (viewportHeight > 0f && pageScrollHeight == 0f && scrollRange == 0))
+        val maxScroll = if (calculatedMaxScroll > 0f) calculatedMaxScroll else maxOf(currentScrollOffset * 1.5f, viewportHeight * 2f).coerceAtLeast(1000f)
 
         val safeTop = if (topTrackOffset.isNaN()) 0f else topTrackOffset.coerceAtLeast(0f)
         val safeBot = if (bottomTrackOffset.isNaN()) 0f else bottomTrackOffset.coerceAtLeast(0f)
@@ -245,5 +256,18 @@ object FastScrollMath {
         val isInsideX = touchX >= geometry.hitboxLeft && touchX <= (geometry.hitboxRight + 12f)
         val isInsideY = touchY >= geometry.hitboxTop && touchY <= geometry.hitboxBottom
         return isInsideX && isInsideY
+    }
+
+    /**
+     * Checks if a touch coordinate is within the right edge swipe strip.
+     */
+    fun isTouchNearRightEdge(
+        touchX: Float,
+        viewportWidth: Float,
+        edgeStripWidthPx: Float = 48f
+    ): Boolean {
+        if (viewportWidth <= 0f) return false
+        val leftBound = (viewportWidth - edgeStripWidthPx).coerceAtLeast(0f)
+        return touchX >= leftBound && touchX <= (viewportWidth + 24f)
     }
 }

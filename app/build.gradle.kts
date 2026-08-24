@@ -186,6 +186,9 @@ configurations.all {
     exclude(group = "io.opencensus", module = "opencensus-api")
     exclude(group = "io.opencensus", module = "opencensus-proto")
     exclude(group = "io.opencensus", module = "opencensus-contrib-grpc-metrics")
+    exclude(group = "org.mozilla.telemetry", module = "glean")
+    exclude(group = "org.mozilla.telemetry", module = "glean-native")
+    exclude(group = "org.mozilla.components", module = "service-glean")
 }
 
 dependencies {
@@ -213,6 +216,17 @@ dependencies {
     // Architecture-specific flavors
     "armImplementation"("org.mozilla.geckoview:geckoview-armeabi-v7a:$geckoviewVersion")
     "aarch64Implementation"("org.mozilla.geckoview:geckoview-arm64-v8a:$geckoviewVersion")
+
+    // === Mozilla Firefox Sync (Application Services) ===
+    val mozillaComponentsVersion = "152.0.5"
+    implementation("org.mozilla.components:service-firefox-accounts:$mozillaComponentsVersion")
+    implementation("org.mozilla.components:browser-storage-sync:$mozillaComponentsVersion")
+    implementation("org.mozilla.components:concept-storage:$mozillaComponentsVersion")
+    implementation("org.mozilla.components:concept-sync:$mozillaComponentsVersion")
+    implementation("org.mozilla.components:lib-dataprotect:$mozillaComponentsVersion")
+    implementation("org.mozilla.components:service-sync-logins:$mozillaComponentsVersion")
+    // implementation("org.mozilla.components:support-rusthttp:$mozillaComponentsVersion")
+    // implementation("org.mozilla.components:support-rustlog:$mozillaComponentsVersion")
 
     // === In-app BitTorrent engine (jlibtorrent) for magnet/torrent downloading ===
     implementation("com.frostwire:jlibtorrent:1.2.0.18")
