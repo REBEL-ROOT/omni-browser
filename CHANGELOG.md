@@ -2,7 +2,10 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
-## [1.2.9.4] - 2026-08-24
+## [1.2.9.5] - 2026-08-24
+
+### Optimized
+- **54% APK Size Reduction (~130 MB saved)**: Enabled native library compression (`useLegacyPackaging = true`) and stripped non-essential crash diagnostic binaries (`libminidump_analyzer.so`, `libcrashhelper.so`), cutting the `aarch64` release APK from 241 MB down to ~111 MB.
 
 ### Added
 - **Bitwarden & Password Manager WebExtension Support**: Enabled dynamic extension permissions (`onOptionalPrompt`, `onUpdatePrompt` returning `ALLOW`) for full compatibility with Bitwarden, Proton Pass, 1Password, and KeePassXC WebExtensions.
