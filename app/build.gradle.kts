@@ -130,10 +130,12 @@ android {
 
     packaging {
         jniLibs {
-            // Using `resource-noexec-tor` (JNI shared library) ensures full 16 KB page
-            // alignment compatibility on Android 15+ (API 35+) and avoids native load crashes.
-            useLegacyPackaging = false
+            useLegacyPackaging = true
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
+            excludes.addAll(listOf(
+                "**/libminidump_analyzer.so",
+                "**/libcrashhelper.so"
+            ))
         }
         resources {
             excludes += listOf(
