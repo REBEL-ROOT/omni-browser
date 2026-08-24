@@ -15,6 +15,77 @@ import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSession
 
+/**
+ * Detects whether a URL is related to authentication, OAuth, SSO, or login flows.
+ * Used to bypass ad-blocking for legitimate auth popups (Google, Facebook, Deezer, etc.).
+ */
+private fun isAuthRelatedUrl(uri: String): Boolean {
+    if (uri.isBlank()) return true // GeckoView may provide empty URI initially in onNewSession
+    val lower = uri.lowercase()
+
+    // ── Known auth hosts ────────────────────────────────────────────────
+    val knownAuthHosts = listOf(
+        "accounts.google.com",
+        "accounts.youtube.com",
+        "appleid.apple.com",
+        "login.microsoftonline.com",
+        "github.com/login",
+        "github.com/sessions",
+        "connect.deezer.com",
+        "www.facebook.com/v",          // Facebook OAuth dialog: /v<N>/dialog/oauth
+        "www.facebook.com/dialog",
+        "m.facebook.com/v",
+        "m.facebook.com/dialog",
+        "accounts.spotify.com",
+        "discord.com/oauth",
+        "discord.com/api/oauth",
+        "id.twitch.tv",
+        "api.twitter.com/oauth",
+        "twitter.com/i/oauth",
+        "x.com/i/oauth",
+        "login.yahoo.com",
+        "login.live.com",
+        "auth0.com",
+        "auth.atlassian.com",
+        "signin.aws.amazon.com",
+        "login.salesforce.com",
+        "sso.godaddy.com",
+        "id.heroku.com",
+        "gitlab.com/oauth",
+        "bitbucket.org/site/oauth",
+        "stackexchange.com/oauth",
+        "stackoverflow.com/oauth",
+        "open.spotify.com/authorize",
+    )
+    if (knownAuthHosts.any { lower.contains(it) }) return true
+
+    // ── Auth path patterns (covers OAuth, OIDC, SAML, SSO) ──────────────
+    val authPathPatterns = listOf(
+        "/oauth",
+        "/auth/",
+        "/authorize",
+        "/login",
+        "/signin",
+        "/sign-in",
+        "/sign_in",
+        "/sso",
+        "/saml",
+        "/openid",
+        "/connect/authorize",
+        "/dialog/oauth",
+        "response_type=code",
+        "response_type=token",
+        "redirect_uri=",
+        "client_id=",
+    )
+    if (authPathPatterns.any { lower.contains(it) }) return true
+
+    // ── Generic keyword patterns ────────────────────────────────────────
+    if (lower.contains("oauth") || lower.contains("gsi")) return true
+
+    return false
+}
+
 internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: Context) {
     applyUserAgentForTab(tab)
     tab.session.contentBlockingDelegate = object : org.mozilla.geckoview.ContentBlocking.Delegate {
@@ -790,7 +861,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                              OriginVerifier.isExactOriginMatch(uri, "accounts.youtube.com") ||
                              OriginVerifier.isExactOriginMatch(uri, "appleid.apple.com") ||
                              OriginVerifier.isExactOriginMatch(uri, "login.microsoftonline.com") ||
-                             OriginVerifier.isExactOriginMatch(uri, "github.com")
+                             OriginVerifier.isExactOriginMatch(uri, "github.com") ||
+                             isAuthRelatedUrl(uri)
 
             if (isAuthHost) {
                 val effectiveHost = SecurityPolicy.extractEffectiveHost(uri)
@@ -1126,12 +1198,13 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
                 // Block ad/tracker popup popups before creating sessions
                 val host = SecurityPolicy.extractEffectiveHost(uri)
-                val isAuthUri = OriginVerifier.isExactOriginMatch(uri, "accounts.google.com") ||
+                val isAuthUri = isAuthRelatedUrl(uri) ||
+                                isAuthRelatedUrl(tab.url) || // parent tab is on an auth page
+                                OriginVerifier.isExactOriginMatch(uri, "accounts.google.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "accounts.youtube.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "appleid.apple.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "login.microsoftonline.com") ||
-                                OriginVerifier.isExactOriginMatch(uri, "github.com") ||
-                                lowerUri.contains("oauth") || lowerUri.contains("gsi")
+                                OriginVerifier.isExactOriginMatch(uri, "github.com")
 
                 if (host.isNotEmpty() && !isAuthUri && adBlockManager.isHostBlocked(host)) {
                     Log.w(TAG, "🚫 onNewSession: Blocked ad/tracker popup to $uri")

@@ -332,12 +332,15 @@ fun BrowserScreen(
     val navHideTopActive = isNavHideEnabled && viewModel.navBarHideTop
     val navHideBottomActive = isNavHideEnabled && viewModel.navBarHideBottom
     val topBarFraction by animateFloatAsState(
-        targetValue = if (isKeyboardVisible && !isInputFocused && !isEditMode) 1f else if (!viewModel.isFullscreen && !showHomeScreen && navHideTopActive && !isScrollNavBarVisible) 1f else 0f,
+        // Only hide the top bar on scroll-away or fullscreen. Do NOT hide when
+        // the keyboard is visible for web content — doing so causes GeckoView to
+        // receive a resize spike that breaks page layout (fixed/sticky elements, forms).
+        targetValue = if (!viewModel.isFullscreen && !showHomeScreen && navHideTopActive && !isScrollNavBarVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
         label = "topBarHide"
     )
     val bottomBarFraction by animateFloatAsState(
-        targetValue = if (isKeyboardVisible && !isInputFocused && !isEditMode) 1f else if (!viewModel.isFullscreen && !showHomeScreen && navHideBottomActive && !isScrollNavBarVisible) 1f else 0f,
+        targetValue = if (!viewModel.isFullscreen && !showHomeScreen && navHideBottomActive && !isScrollNavBarVisible) 1f else 0f,
         animationSpec = tween(durationMillis = 220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
         label = "bottomBarHide"
     )
@@ -2301,6 +2304,11 @@ fun BrowserScreen(
                                             }
                                         },
                                         update = { geckoView ->
+                                            // Read sessionRebindCounter to trigger this update
+                                            // block when a popup tab closes and returns to parent.
+                                            @Suppress("UNUSED_VARIABLE")
+                                            val rebindGen = viewModel.sessionRebindCounter
+
                                             geckoView.setAutofillEnabled(true)
                                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                                                 geckoView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_YES

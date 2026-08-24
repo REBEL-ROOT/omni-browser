@@ -396,6 +396,11 @@ class BrowserViewModel : ViewModel() {
      *  sees a blank white screen during recovery. */
     var isRecoveringActiveTab by mutableStateOf(false)
 
+    /** Incremented when a popup/child tab closes and we return to a parent tab.
+     *  Used as a key in BrowserScreen to force GeckoView recomposition so the
+     *  parent session is re-bound to the view (prevents black screen). */
+    var sessionRebindCounter by androidx.compose.runtime.mutableIntStateOf(0)
+
     /** True if the last recovery attempt failed and the safe recovery UI should be shown. */
     var lastRecoveryFailed by mutableStateOf(false)
 
@@ -2457,6 +2462,10 @@ class BrowserViewModel : ViewModel() {
                     ?: remainingModeTabs.find { it.id == (if (tabToClose.isIncognito) activeIncognitoTabId else activeNormalTabId) } 
                     ?: remainingModeTabs.first()
                 selectTab(nextSelect.id)
+                // Force GeckoView to rebind the session after a popup close.
+                // Without this, the GeckoView may show a black screen because
+                // releaseSession() was called but the AndroidView key didn't change.
+                sessionRebindCounter++
             }
         }
         saveTabs()

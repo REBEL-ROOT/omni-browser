@@ -173,6 +173,7 @@
             android:resizeableActivity="true"
             android:theme="@style/Theme.OmniBrowser"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout">
             
             <!-- Standard intent filters to handle web pages and HTTP/HTTPS links -->
