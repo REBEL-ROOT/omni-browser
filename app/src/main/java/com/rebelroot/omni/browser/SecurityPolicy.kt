@@ -361,7 +361,12 @@ object SecurityPolicy {
     fun isGenericDownloadUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val lower = url.lowercase(Locale.ROOT).trim()
-        if (lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("about:")) return false
+        if (lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("about:") || lower.startsWith("blob:")) return false
+
+        // Check if URL is an interactive landing page on known file hosting platforms
+        if (isFileHostLandingPage(lower)) {
+            return false
+        }
 
         // Drop fragment (#...) and query (?...)
         val noFrag = lower.substringBeforeLast("#")
@@ -400,9 +405,10 @@ object SecurityPolicy {
             return true
         }
 
+        // Extensionless URLs should be loaded normally so the server can provide
+        // proper Content-Disposition and Content-Type headers rather than guessing.
         if (ext.isEmpty()) {
-            val downloadWords = setOf("download", "file", "get", "serve", "attachment", "export", "report")
-            return lastSegment.substringBefore('/').lowercase(Locale.ROOT) in downloadWords
+            return false
         }
         if (ext.length > 10) return false
 
@@ -429,6 +435,186 @@ object SecurityPolicy {
         if (ext in commonTlds) return false
 
         return true
+    }
+
+    /**
+     * Identifies known web landing pages on file sharing hosts that should be rendered
+     * as HTML rather than intercepted as direct downloads.
+     */
+    private fun isFileHostLandingPage(lowerUrl: String): Boolean {
+        // MediaFire file preview/download landing pages:
+        // https://www.mediafire.com/file/... or /view/... or /download/...
+        if (lowerUrl.contains("mediafire.com/file/") ||
+            lowerUrl.contains("mediafire.com/view/") ||
+            lowerUrl.contains("mediafire.com/download/") ||
+            lowerUrl.contains("mediafire.com/file_premium/")
+        ) {
+            return true
+        }
+
+        // Google Drive file viewer landing pages
+        if (lowerUrl.contains("drive.google.com/file/") ||
+            lowerUrl.contains("drive.google.com/open")
+        ) {
+            return true
+        }
+
+        // Mega landing pages
+        if (lowerUrl.contains("mega.nz/file/") ||
+            lowerUrl.contains("mega.nz/folder/") ||
+            lowerUrl.contains("mega.io/file/")
+        ) {
+            return true
+        }
+
+        // Dropbox preview landing pages (unless direct download dl=1)
+        if ((lowerUrl.contains("dropbox.com/s/") || lowerUrl.contains("dropbox.com/scl/")) &&
+            !lowerUrl.contains("dl=1")
+        ) {
+            return true
+        }
+
+        // Box preview landing pages
+        if (lowerUrl.contains("box.com/s/") || lowerUrl.contains("box.com/file/")) {
+            return true
+        }
+
+        // Pixeldrain / Gofile / Rapidgator landing pages
+        if (lowerUrl.contains("pixeldrain.com/u/") ||
+            lowerUrl.contains("gofile.io/d/") ||
+            lowerUrl.contains("rapidgator.net/file/")
+        ) {
+            return true
+        }
+
+        return false
+    }
+
+    /**
+     * Extracts and sanitizes the filename from Content-Disposition header.
+     * Prioritizes RFC 5987 / RFC 6266 extended parameter (filename*=...) over standard filename= parameter.
+     */
+    fun parseFilenameFromContentDisposition(disposition: String?): String? {
+        if (disposition.isNullOrBlank()) return null
+
+        // 1. Prioritize RFC 5987 / RFC 6266 parameter: filename*=charset'lang'encoded-value
+        val extRegex = Regex("""filename\*\s*=\s*(?:['"]?)(?:[A-Za-z0-9_-]+)'[^']*'([^'";\r\n]+)(?:['"]?)""", RegexOption.IGNORE_CASE)
+        extRegex.find(disposition)?.groupValues?.get(1)?.trim()?.let { encodedName ->
+            try {
+                val decoded = java.net.URLDecoder.decode(encodedName, "UTF-8").trim()
+                if (decoded.isNotBlank()) {
+                    return sanitizeFilename(decoded)
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 2. Fallback to standard parameter: filename="name" or filename=name
+        val stdRegex = Regex("""filename\s*=\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^;\s\r\n]+))""", RegexOption.IGNORE_CASE)
+        stdRegex.find(disposition)?.let { match ->
+            val name = (match.groupValues[1].ifBlank { null }
+                ?: match.groupValues[2].ifBlank { null }
+                ?: match.groupValues[3].ifBlank { null })?.trim()
+            if (!name.isNullOrBlank()) {
+                return sanitizeFilename(name)
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Guesses a safe filename from a URL and optional Content-Type MIME string.
+     * Properly handles multi-segment paths (e.g. MediaFire URLs .../file/id/app.apk/file).
+     */
+    fun guessDownloadFilename(url: String, contentType: String? = null): String {
+        val cleanUrl = url.trim()
+        val pathSegments = try {
+            val path = if (cleanUrl.contains("://")) {
+                cleanUrl.substringAfter("://").substringAfter("/", "").substringBefore("?").substringBefore("#")
+            } else {
+                cleanUrl.substringBefore("?").substringBefore("#")
+            }
+            path.split('/').filter { it.isNotBlank() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        val htmlExtensions = setOf("html", "htm", "php", "asp", "aspx", "jsp", "xhtml")
+        val ignoredTailWords = setOf("file", "view", "download", "get", "preview")
+
+        var candidateFilename: String? = null
+        for (segment in pathSegments.reversed()) {
+            val trimmed = segment.trim()
+            if (trimmed.isBlank()) continue
+
+            // If segment has an extension, check if it's a valid downloadable file name
+            if (trimmed.contains('.')) {
+                val ext = trimmed.substringAfterLast('.', "").lowercase(Locale.ROOT)
+                if (ext.isNotBlank() && ext.length <= 10 && ext !in htmlExtensions) {
+                    candidateFilename = trimmed
+                    break
+                }
+            } else if (candidateFilename == null && trimmed.lowercase(Locale.ROOT) !in ignoredTailWords) {
+                // Potential base name without extension
+                candidateFilename = trimmed
+            }
+        }
+
+        if (candidateFilename == null && pathSegments.isNotEmpty()) {
+            candidateFilename = pathSegments.last()
+        }
+
+        // If candidate filename already has a valid file extension, return sanitized
+        if (!candidateFilename.isNullOrBlank() && candidateFilename.contains('.')) {
+            val ext = candidateFilename.substringAfterLast('.', "").lowercase(Locale.ROOT)
+            if (ext.isNotBlank() && ext.length <= 10 && ext !in htmlExtensions) {
+                return sanitizeFilename(candidateFilename)
+            }
+        }
+
+        // Resolve extension from contentType / MIME
+        val cleanContentType = contentType?.trim()?.lowercase(Locale.ROOT)?.substringBefore(';')?.trim()
+        val mimeExt = when {
+            cleanContentType.isNullOrBlank() -> null
+            cleanContentType == "application/vnd.android.package-archive" || cleanContentType == "application/x-authorware-bin" -> "apk"
+            cleanContentType == "application/zip" || cleanContentType == "application/x-zip-compressed" -> "zip"
+            cleanContentType == "application/x-7z-compressed" -> "7z"
+            cleanContentType == "application/x-rar-compressed" || cleanContentType == "application/vnd.rar" -> "rar"
+            cleanContentType == "application/x-tar" -> "tar"
+            cleanContentType == "application/gzip" || cleanContentType == "application/x-gzip" -> "gz"
+            cleanContentType == "application/x-bittorrent" -> "torrent"
+            cleanContentType == "application/pdf" -> "pdf"
+            cleanContentType == "application/msword" -> "doc"
+            cleanContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+            cleanContentType == "application/vnd.ms-excel" -> "xls"
+            cleanContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
+            cleanContentType == "application/vnd.ms-powerpoint" -> "ppt"
+            cleanContentType == "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "pptx"
+            cleanContentType == "application/epub+zip" -> "epub"
+            cleanContentType == "text/plain" -> "txt"
+            cleanContentType == "text/csv" -> "csv"
+            cleanContentType == "application/json" -> "json"
+            cleanContentType == "application/xml" || cleanContentType == "text/xml" -> "xml"
+            cleanContentType == "application/vnd.debian.binary-package" -> "deb"
+            cleanContentType == "application/x-redhat-package-manager" -> "rpm"
+            cleanContentType == "application/java-archive" -> "jar"
+            cleanContentType.startsWith("image/") -> cleanContentType.substringAfter("image/").takeIf { it.isNotBlank() }
+            cleanContentType.startsWith("audio/") -> cleanContentType.substringAfter("audio/").takeIf { it.isNotBlank() }
+            cleanContentType.startsWith("video/") -> cleanContentType.substringAfter("video/").takeIf { it.isNotBlank() }
+            else -> null
+        }
+
+        val baseName = candidateFilename?.substringBeforeLast('.')?.takeIf {
+            it.isNotBlank() && it.lowercase(Locale.ROOT) !in ignoredTailWords
+        } ?: "download"
+
+        return if (!mimeExt.isNullOrBlank() && mimeExt != "bin") {
+            sanitizeFilename("$baseName.$mimeExt")
+        } else if (candidateFilename != null && candidateFilename.isNotBlank() && candidateFilename.lowercase(Locale.ROOT) !in ignoredTailWords) {
+            sanitizeFilename("$candidateFilename.bin")
+        } else {
+            "download.bin"
+        }
     }
 }
 

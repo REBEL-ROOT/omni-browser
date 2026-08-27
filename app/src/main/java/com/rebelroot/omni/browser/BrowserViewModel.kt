@@ -861,44 +861,11 @@ class BrowserViewModel : ViewModel() {
                 clean.contains(".ts?")
     }
 
-    private fun parseFilenameFromContentDisposition(disposition: String?): String? {
-        if (disposition.isNullOrBlank()) return null
-        val regex = Regex("""filename\*?=(?:UTF-8''?)?\"?([^\";]+)\"?""", RegexOption.IGNORE_CASE)
-        val match = regex.find(disposition)
-        return match?.groupValues?.get(1)?.trim()?.trim('"')
-    }
+    internal fun parseFilenameFromContentDisposition(disposition: String?): String? =
+        SecurityPolicy.parseFilenameFromContentDisposition(disposition)
 
-    internal fun guessDownloadFilename(url: String, contentType: String?): String {
-        val parsed = try {
-            Uri.parse(url).lastPathSegment
-        } catch (e: Exception) {
-            null
-        }
-        if (!parsed.isNullOrBlank() && parsed.contains('.')) {
-            return SecurityPolicy.sanitizeFilename(parsed)
-        }
-        if (!parsed.isNullOrBlank() && parsed.isNotBlank()) {
-            return SecurityPolicy.sanitizeFilename("$parsed.bin")
-        }
-        val cleanContentType = contentType?.trim()?.lowercase()
-        return SecurityPolicy.sanitizeFilename(when {
-            cleanContentType == null -> "download.bin"
-            cleanContentType.contains("pdf") -> "download.pdf"
-            cleanContentType.contains("zip") -> "download.zip"
-            cleanContentType.contains("msword") || cleanContentType.contains("wordprocessingml.document") -> "download.docx"
-            cleanContentType.contains("excel") || cleanContentType.contains("spreadsheetml.sheet") -> "download.xlsx"
-            cleanContentType.contains("presentation") || cleanContentType.contains("presentationml.presentation") -> "download.pptx"
-            cleanContentType.contains("text/plain") -> "download.txt"
-            cleanContentType.contains("text/html") -> "download.html"
-            cleanContentType.contains("json") -> "download.json"
-            cleanContentType.contains("xml") -> "download.xml"
-            cleanContentType.startsWith("image/") -> "download${cleanContentType.substringAfter("/")}"
-            cleanContentType.startsWith("audio/") -> "download.audio"
-            cleanContentType.startsWith("video/") -> "download.video"
-            cleanContentType.contains("octet-stream") -> "download.bin"
-            else -> "download.bin"
-        })
-    }
+    internal fun guessDownloadFilename(url: String, contentType: String?): String =
+        SecurityPolicy.guessDownloadFilename(url, contentType)
 
     internal fun isGenericDownloadUrl(url: String): Boolean = SecurityPolicy.isGenericDownloadUrl(url)
 

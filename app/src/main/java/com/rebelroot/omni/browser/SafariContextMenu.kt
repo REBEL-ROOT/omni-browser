@@ -62,8 +62,27 @@ private fun cleanUrl(raw: String): String {
 
 private fun guessFilename(url: String): String {
     return try {
-        val path = android.net.Uri.parse(url).lastPathSegment ?: "file"
-        if (path.contains('.')) path else "$path.bin"
+        val parsedUri = android.net.Uri.parse(url)
+        val segments = parsedUri.pathSegments ?: emptyList()
+        val htmlExtensions = setOf("html", "htm", "php", "asp", "aspx", "jsp", "xhtml")
+        val ignoredTailWords = setOf("file", "view", "download", "get", "preview")
+
+        var candidate: String? = null
+        for (segment in segments.reversed()) {
+            val trimmed = segment.trim()
+            if (trimmed.isBlank()) continue
+            if (trimmed.contains('.')) {
+                val ext = trimmed.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT)
+                if (ext.isNotBlank() && ext.length <= 10 && ext !in htmlExtensions) {
+                    candidate = trimmed
+                    break
+                }
+            } else if (candidate == null && trimmed.lowercase(java.util.Locale.ROOT) !in ignoredTailWords) {
+                candidate = trimmed
+            }
+        }
+        val safe = SecurityPolicy.sanitizeFilename(candidate ?: parsedUri.lastPathSegment ?: "download")
+        if (safe.contains('.')) safe else "$safe.bin"
     } catch (_: Exception) {
         "download"
     }

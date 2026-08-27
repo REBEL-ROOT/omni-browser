@@ -83,4 +83,72 @@ class GenericWebsiteDownloadTest {
         assertEquals("file.zip", download.filename)
         assertEquals("application/zip", download.contentType)
     }
+
+    @Test
+    fun testMediaFireAndFileHostLandingPagesNotClassifiedAsDownloads() {
+        // MediaFire landing pages should NOT be intercepted as raw downloads
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://www.mediafire.com/file/5abc123xyz/MyCoolApp.apk/file"))
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://www.mediafire.com/file/5abc123xyz/MyCoolApp.apk"))
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://www.mediafire.com/view/5abc123xyz/MyCoolApp.apk"))
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://www.mediafire.com/download/5abc123xyz/MyCoolApp.apk"))
+
+        // Google Drive, Mega, Dropbox landing pages
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://drive.google.com/file/d/123456789/view"))
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://mega.nz/file/12345#abcdef"))
+        assertFalse(SecurityPolicy.isGenericDownloadUrl("https://www.dropbox.com/s/12345/app.apk?dl=0"))
+
+        // Direct CDN file downloads from MediaFire subdomains SHOULD be recognized
+        assertTrue(SecurityPolicy.isGenericDownloadUrl("https://download1592.mediafire.com/token123/5abc/MyCoolApp.apk"))
+    }
+
+    @Test
+    fun testGuessDownloadFilenameFromMediaFireUrl() {
+        // MediaFire URL with /file at the end should extract the actual APK name
+        val filename1 = SecurityPolicy.guessDownloadFilename("https://www.mediafire.com/file/5abc123xyz/MyCoolApp.apk/file", null)
+        assertEquals("MyCoolApp.apk", filename1)
+
+        val filename2 = SecurityPolicy.guessDownloadFilename("https://www.mediafire.com/view/5abc123xyz/MyApp-v2.0.apk", null)
+        assertEquals("MyApp-v2.0.apk", filename2)
+
+        val filename3 = SecurityPolicy.guessDownloadFilename("https://download1592.mediafire.com/token123/5abc/MyCoolApp.apk", null)
+        assertEquals("MyCoolApp.apk", filename3)
+    }
+
+    @Test
+    fun testGuessDownloadFilenameWithMimeType() {
+        // APK MIME type mapping
+        val apkFilename = SecurityPolicy.guessDownloadFilename("https://example.com/download/12345", "application/vnd.android.package-archive")
+        assertEquals("12345.apk", apkFilename)
+
+        // Fallback without filename segment but with APK MIME type
+        val genericApkFilename = SecurityPolicy.guessDownloadFilename("https://example.com/download/", "application/vnd.android.package-archive")
+        assertEquals("download.apk", genericApkFilename)
+
+        // ZIP MIME type
+        val zipFilename = SecurityPolicy.guessDownloadFilename("https://example.com/api/get-archive", "application/zip")
+        assertEquals("get-archive.zip", zipFilename)
+    }
+
+    @Test
+    fun testParseFilenameFromContentDisposition() {
+        // Standard filename
+        val name1 = SecurityPolicy.parseFilenameFromContentDisposition("""attachment; filename="MyCoolApp.apk"""")
+        assertEquals("MyCoolApp.apk", name1)
+
+        // Unquoted filename
+        val name2 = SecurityPolicy.parseFilenameFromContentDisposition("attachment; filename=MyCoolApp.apk")
+        assertEquals("MyCoolApp.apk", name2)
+
+        // RFC 5987 / RFC 6266 filename* prioritizing over fallback filename
+        val name3 = SecurityPolicy.parseFilenameFromContentDisposition(
+            """attachment; filename="fallback.bin"; filename*=UTF-8''RealApp.apk"""
+        )
+        assertEquals("RealApp.apk", name3)
+
+        // RFC 5987 with URL percent encoding and language tag
+        val name4 = SecurityPolicy.parseFilenameFromContentDisposition(
+            "attachment; filename*=UTF-8'en'My%20Cool%20App%20v1.0.apk"
+        )
+        assertEquals("My Cool App v1.0.apk", name4)
+    }
 }

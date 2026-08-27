@@ -1632,6 +1632,17 @@ class StreamDownloadEngine(
     private fun getMimeTypeForFile(filename: String): String {
         val ext = filename.substringAfterLast('.', "").lowercase()
         return when (ext) {
+            "apk", "apks", "xapk" -> "application/vnd.android.package-archive"
+            "torrent" -> "application/x-bittorrent"
+            "pdf" -> "application/pdf"
+            "zip" -> "application/zip"
+            "7z" -> "application/x-7z-compressed"
+            "rar" -> "application/x-rar-compressed"
+            "tar" -> "application/x-tar"
+            "gz" -> "application/gzip"
+            "deb" -> "application/vnd.debian.binary-package"
+            "rpm" -> "application/x-redhat-package-manager"
+            "jar" -> "application/java-archive"
             "mp3" -> "audio/mpeg"
             "m4a" -> "audio/mp4"
             "wav" -> "audio/wav"
@@ -1650,7 +1661,19 @@ class StreamDownloadEngine(
             "3gp" -> "video/3gpp"
             "wmv" -> "video/x-ms-wmv"
             "m4v" -> "video/mp4"
-            else -> "application/octet-stream"
+            "png" -> "image/png"
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            "svg" -> "image/svg+xml"
+            "txt" -> "text/plain"
+            "json" -> "application/json"
+            "xml" -> "application/xml"
+            else -> try {
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+            } catch (_: Exception) {
+                "application/octet-stream"
+            }
         }
     }
 
