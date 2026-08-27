@@ -1367,8 +1367,11 @@ internal fun BrowserViewModel.injectStealthDefuserScriptlet(tab: TabState) {
 
         val defuserJs = adBlockManager.getStealthDefuserJs()
         if (defuserJs.isNotBlank()) {
-            val cleanJs = defuserJs.replace("\n", " ")
-            tab.session.loadUri("javascript:(function(){$cleanJs})();")
+            val cleanJs = defuserJs.lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("//") }
+                .joinToString(" ")
+            tab.session.loadUri("javascript:$cleanJs")
         }
     } catch (e: Exception) {
         Log.e(TAG, "Error injecting stealth defuser scriptlet", e)

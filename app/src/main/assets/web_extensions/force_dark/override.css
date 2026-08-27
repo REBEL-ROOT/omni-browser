@@ -31,7 +31,12 @@ html.omni-force-dark-active #root,
 html.omni-force-dark-active #app,
 html.omni-force-dark-active main,
 html.omni-force-dark-active [role="main"],
-html.omni-force-dark-active [role="article"],
+html.omni-force-dark-active [role="article"] {
+    background-color: #121214 !important;
+    background: #121214 !important;
+    color: #f1f5f9 !important;
+}
+
 html.omni-force-dark-active section,
 html.omni-force-dark-active article,
 html.omni-force-dark-active header,
@@ -47,9 +52,11 @@ html.omni-force-dark-active [class*="wrapper" i],
 html.omni-force-dark-active [class*="content" i],
 html.omni-force-dark-active [class*="layout" i],
 html.omni-force-dark-active [class*="page" i] {
-    background-color: #121214 !important;
-    background: #121214 !important;
-    color: #f1f5f9 !important;
+    &:not(.omni-video-player-active):not(.omni-video-player-active *):not([class*="player" i]):not([class*="player" i] *):not([class*="video" i]):not([class*="video" i] *) {
+        background-color: #121214 !important;
+        background: #121214 !important;
+        color: #f1f5f9 !important;
+    }
 }
 
 html.omni-force-dark-active .card,
@@ -76,10 +83,12 @@ html.omni-force-dark-active li,
 html.omni-force-dark-active dl,
 html.omni-force-dark-active dt,
 html.omni-force-dark-active dd {
-    background-color: #18191c !important;
-    background: #18191c !important;
-    border-color: #2e3035 !important;
-    color: #f1f5f9 !important;
+    &:not(.omni-video-player-active):not(.omni-video-player-active *):not([class*="player" i]):not([class*="player" i] *):not([class*="video" i]):not([class*="video" i] *) {
+        background-color: #18191c !important;
+        background: #18191c !important;
+        border-color: #2e3035 !important;
+        color: #f1f5f9 !important;
+    }
 }
 
 /* Crisp readable text across all elements — zero grey wash */

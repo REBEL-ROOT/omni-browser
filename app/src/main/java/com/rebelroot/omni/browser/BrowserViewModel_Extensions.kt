@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
@@ -98,18 +99,21 @@ fun BrowserViewModel.getActionForExtension(extensionId: String): WebExtension.Ac
 }
 
 fun BrowserViewModel.openUserExtension(extension: WebExtension, context: Context) {
-    val activeAction = extension.id?.let { getActionForExtension(it) }
+    val extId = extension.safeId ?: return
+    val currentExtension = userExtensions.find { it.safeId == extId } ?: extension
+
+    val activeAction = currentExtension.safeId?.let { getActionForExtension(it) }
     if (activeAction != null) {
         try {
             activeAction.click()
             return
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to click extension action for ${extension.id}", e)
+            Log.e(TAG, "Failed to click extension action for $extId", e)
         }
     }
 
-    // Fallback: If no action registered yet or click failed, open options or popup page in browser
-    val meta = extension.metaData
+    // Fallback: If no action popup registered yet or click didn't trigger a popup, open options page in a new tab if available
+    val meta = currentExtension.safeMetaData
     val rawOptions = meta?.optionsPageUrl
     val baseUrl = meta?.baseUrl ?: ""
     val targetUrl = when {
@@ -117,159 +121,130 @@ fun BrowserViewModel.openUserExtension(extension: WebExtension, context: Context
             if (rawOptions.startsWith("moz-extension://") || rawOptions.startsWith("http://") || rawOptions.startsWith("https://")) rawOptions
             else "${baseUrl.removeSuffix("/")}/${rawOptions.removePrefix("/")}"
         }
-        baseUrl.isNotBlank() -> {
-            "${baseUrl.removeSuffix("/")}/popup/index.html"
-        }
         else -> null
     }
 
     if (targetUrl != null) {
-        loadUrl(targetUrl)
+        createNewTab(context, targetUrl)
     } else {
-        Toast.makeText(context, "Extension active", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "${meta?.name ?: extId} is active", Toast.LENGTH_SHORT).show()
     }
 }
 
 fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: WebExtension.Action): GeckoResult<GeckoSession> {
-    val result = GeckoResult<GeckoSession>()
     if (isNativeSheetOpen) {
+        val result = GeckoResult<GeckoSession>()
         result.completeExceptionally(IllegalStateException("Blocked: Native toolbox/notes sheet is active."))
         return result
     }
-    var completed = false
-    android.os.Handler(android.os.Looper.getMainLooper()).post {
-        try {
-            val run = runtime
-            if (run == null) {
-                completed = true
-                result.completeExceptionally(IllegalStateException("GeckoRuntime not ready"))
-                return@post
-            }
-            activeExtensionPopupSession?.close() // close previous popup session to avoid leaks
 
-            // Use mobile viewport — desktop mode renders at ~1280px causing tiny popups on phones
-            val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
-                .usePrivateMode(isIncognitoMode)
-                .allowJavascript(true)
-                .userAgentMode(org.mozilla.geckoview.GeckoSessionSettings.USER_AGENT_MODE_MOBILE)
-                .viewportMode(org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
-                .build()
+    val oldSession = activeExtensionPopupSession
+    if (oldSession != null) {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                oldSession.close()
+            } catch (_: Exception) {}
+        }, 400)
+    }
 
-            val session = GeckoSession(settings)
+    val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
+        .usePrivateMode(false)
+        .allowJavascript(true)
+        .viewportMode(org.mozilla.geckoview.GeckoSessionSettings.VIEWPORT_MODE_MOBILE)
+        .build()
 
-            // Show spinner while the popup page loads
-            activeExtensionPopupLoading = true
+    val session = GeckoSession(settings)
 
-            // Content delegate — dismiss popup if the extension page closes itself
-            session.contentDelegate = object : GeckoSession.ContentDelegate {
-                override fun onCloseRequest(session: GeckoSession) {
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        dismissExtensionPopup()
-                    }
-                }
-            }
+    // Show spinner while the popup page loads
+    activeExtensionPopupLoading = true
 
-            // Prompt delegate — handle alerts/confirms in extension popups gracefully
-            session.promptDelegate = object : GeckoSession.PromptDelegate {
-                override fun onAlertPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.AlertPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
-                    return GeckoResult.fromValue(prompt.dismiss())
-                }
-                override fun onButtonPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.ButtonPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
-                    return GeckoResult.fromValue(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
-                }
-            }
-
-            // Progress delegate — inject auto-fit CSS once page finishes loading
-            session.progressDelegate = object : GeckoSession.ProgressDelegate {
-                override fun onPageStop(session: GeckoSession, success: Boolean) {
-                    // Inject CSS + viewport meta so the extension popup fills the phone screen.
-                    val js = """
-                        (function(){
-                            try {
-                                // Set/update viewport meta for device-width scaling
-                                var vp = document.querySelector('meta[name="viewport"]');
-                                if (!vp) {
-                                    vp = document.createElement('meta');
-                                    vp.name = 'viewport';
-                                    document.head.appendChild(vp);
-                                }
-                                vp.content = 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes';
-
-                                // Strip desktop min-width constraints so the popup fills available width
-                                var style = document.createElement('style');
-                                style.id = '_omni_ext_fit';
-                                style.textContent = [
-                                    'html { min-width: unset !important; width: 100% !important; box-sizing: border-box !important; }',
-                                    'body { min-width: unset !important; width: 100% !important; max-width: 100vw !important; box-sizing: border-box !important; overflow-x: hidden !important; }',
-                                    '* { max-width: 100% !important; }'
-                                ].join('\n');
-                                var old = document.getElementById('_omni_ext_fit');
-                                if (old) old.remove();
-                                document.head.appendChild(style);
-                            } catch(e) {}
-                        })();
-                    """.trimIndent()
-                    try { session.loadUri("javascript:$js") } catch (_: Exception) {}
-
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        activeExtensionPopupLoading = false
-                    }
-                }
-                override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {}
-            }
-
-            // Navigation delegate — allow extension-internal navigation (moz-extension:// links)
-            session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-                override fun onLocationChange(
-                    session: GeckoSession,
-                    url: String?,
-                    perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
-                    hasUserGesture: Boolean
-                ) {}
-                override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {}
-                override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {}
-                override fun onLoadRequest(
-                    session: GeckoSession,
-                    request: GeckoSession.NavigationDelegate.LoadRequest
-                ): GeckoResult<AllowOrDeny>? {
-                    val url = request.uri ?: return null
-                    return when {
-                        // Allow all moz-extension://, about:, blob:, and data: pages
-                        url.startsWith("moz-extension://") || url.startsWith("about:") || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("javascript:") -> null
-                        // Intercept external http(s) links — open in main browser
-                        url.startsWith("http://") || url.startsWith("https://") -> {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                dismissExtensionPopup()
-                                loadUrl(url)
-                            }
-                            GeckoResult.fromValue(AllowOrDeny.DENY)
-                        }
-                        else -> null
-                    }
-                }
-            }
-
-            session.open(run)
-            activeExtensionPopupSession = session
-            activeExtensionPopupName = try { extension.metaData?.name ?: extension.id } catch (_: Exception) { extension.id }
-            completed = true
-            result.complete(session)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to open popup for ${extension.id}", e)
-            if (!completed) {
-                completed = true
-                result.completeExceptionally(e)
+    // Content delegate — dismiss popup if the extension page closes itself
+    session.contentDelegate = object : GeckoSession.ContentDelegate {
+        override fun onCloseRequest(session: GeckoSession) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                dismissExtensionPopup()
             }
         }
     }
-    return result
+
+    // Prompt delegate — handle alerts/confirms in extension popups gracefully
+    session.promptDelegate = object : GeckoSession.PromptDelegate {
+        override fun onAlertPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.AlertPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            return GeckoResult.fromValue(prompt.dismiss())
+        }
+        override fun onButtonPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.ButtonPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            return GeckoResult.fromValue(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
+        }
+    }
+
+    // Progress delegate — track loading state
+    session.progressDelegate = object : GeckoSession.ProgressDelegate {
+        override fun onPageStop(session: GeckoSession, success: Boolean) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                activeExtensionPopupLoading = false
+            }
+        }
+        override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {}
+    }
+
+    // Navigation delegate — allow extension-internal navigation (moz-extension:// links)
+    session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+        override fun onLocationChange(
+            session: GeckoSession,
+            url: String?,
+            perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
+            hasUserGesture: Boolean
+        ) {}
+        override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {}
+        override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {}
+        override fun onLoadRequest(
+            session: GeckoSession,
+            request: GeckoSession.NavigationDelegate.LoadRequest
+        ): GeckoResult<AllowOrDeny>? {
+            val url = request.uri ?: return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+            return when {
+                // Explicitly allow all moz-extension://, about:, blob:, and data: pages
+                url.startsWith("moz-extension://") || url.startsWith("about:") || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("javascript:") -> {
+                    GeckoResult.fromValue(AllowOrDeny.ALLOW)
+                }
+                // Intercept external http(s) links — open in main browser
+                url.startsWith("http://") || url.startsWith("https://") -> {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        dismissExtensionPopup()
+                        loadUrl(url)
+                    }
+                    GeckoResult.fromValue(AllowOrDeny.DENY)
+                }
+                else -> GeckoResult.fromValue(AllowOrDeny.ALLOW)
+            }
+        }
+    }
+
+    val run = runtime
+    if (run != null && !session.isOpen) {
+        session.open(run)
+    }
+
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
+        activeExtensionPopupSession = session
+        activeExtensionPopupName = extension.safeMetaData?.name ?: extension.safeId ?: "Extension"
+    }
+
+    return GeckoResult.fromValue(session)
 }
 
 fun BrowserViewModel.dismissExtensionPopup() {
-    activeExtensionPopupSession?.close()
+    val sessionToClose = activeExtensionPopupSession
     activeExtensionPopupSession = null
     activeExtensionPopupName = ""
     activeExtensionPopupLoading = true
+    if (sessionToClose != null) {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                sessionToClose.close()
+            } catch (_: Exception) {}
+        }, 400)
+    }
 }
 
 internal fun BrowserViewModel.refreshAndLoadBuiltInExtensions(context: Context) {
@@ -1111,15 +1086,16 @@ internal fun BrowserViewModel.handleWebExtensionDownload(
     val result = GeckoResult<WebExtension.DownloadInitData>()
 
     // 1. Permission check
-    val meta = ext.metaData
+    val meta = ext.safeMetaData
+    val extId = ext.safeId ?: "unknown"
     val hasDownloadPerm = ext.isBuiltIn ||
             meta?.requiredPermissions?.contains("downloads") == true ||
             meta?.optionalPermissions?.contains("downloads") == true ||
             meta?.grantedOptionalPermissions?.contains("downloads") == true ||
-            ext.id == BrowserViewModel.GRABBER_ID
+            extId == BrowserViewModel.GRABBER_ID
 
     if (!hasDownloadPerm) {
-        Log.w(TAG, "🔒 [WebExtensionDownload] Extension [${ext.id}] attempted download without 'downloads' permission")
+        Log.w(TAG, "🔒 [WebExtensionDownload] Extension [$extId] attempted download without 'downloads' permission")
         result.completeExceptionally(SecurityException("Extension lacks 'downloads' permission in manifest"))
         return result
     }
@@ -1153,7 +1129,7 @@ internal fun BrowserViewModel.handleWebExtensionDownload(
         return result
     }
 
-    val extDisplayName = meta?.name ?: ext.id
+    val extDisplayName = meta?.name ?: ext.safeId ?: "Extension"
 
     val initialInfo = object : WebExtension.Download.Info {
         override fun filename() = safeFilename

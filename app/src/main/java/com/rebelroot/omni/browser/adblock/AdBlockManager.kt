@@ -389,7 +389,7 @@ class AdBlockManager(private val context: Context) {
                 if (window.__omniStealthDefuserActive) return;
                 window.__omniStealthDefuserActive = true;
 
-                // 1. Stub common ad network globals expected by site scripts
+                /* 1. Stub common ad network globals expected by site scripts */
                 window.google_ad_client = true;
                 window.google_ad_status = 1;
                 window.canRunAds = true;
@@ -428,7 +428,7 @@ class AdBlockManager(private val context: Context) {
                 if (!window.ga) window.ga = function() {};
                 if (!window._gaq) window._gaq = [];
 
-                // 2. Define traps for window properties probed by FuckAdBlock / BlockAdBlock / Admiral / CMPs
+                /* 2. Define traps for window properties probed by FuckAdBlock / BlockAdBlock / Admiral / CMPs */
                 try {
                     var trueProps = ['canRunAds', 'google_ad_client', 'google_ad_status', 'pubads'];
                     var falseProps = ['isAdBlockActive', 'fuckAdBlock', 'BlockAdBlock', 'SniffAdBlock', 'adBlockDetected'];
@@ -456,7 +456,7 @@ class AdBlockManager(private val context: Context) {
                     });
                 } catch(e) {}
 
-                // 3. OffsetHeight & ClientHeight Proxy Spoofing for Bait Elements
+                /* 3. OffsetHeight & ClientHeight Proxy Spoofing for Bait Elements */
                 try {
                     var origOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
                     if (origOffsetHeight && origOffsetHeight.get) {
@@ -479,7 +479,7 @@ class AdBlockManager(private val context: Context) {
                     }
                 } catch(e) {}
 
-                // 4. MutationObserver Anti-Adblock Overlay Defuser
+                /* 4. MutationObserver Anti-Adblock Overlay Defuser */
                 try {
                     var removeAntiAdblockOverlays = function() {
                         var selectors = [

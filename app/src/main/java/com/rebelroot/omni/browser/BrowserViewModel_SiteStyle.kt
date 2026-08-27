@@ -92,7 +92,11 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                     --border: #26272b !important;
                     color-scheme: dark !important;
                 }
-                html, body, #__next, #root, #app, main, [role="main"], [role="article"],
+                html, body, #__next, #root, #app, main, [role="main"], [role="article"] {
+                    background-color: #000000 !important;
+                    background: #000000 !important;
+                    color: #f1f5f9 !important;
+                }
                 section, article, header, nav, footer, aside, dialog,
                 .container, .wrapper, .content, .main-content, .layout, .page,
                 [class*="container" i], [class*="wrapper" i], [class*="layout" i], [class*="content" i], [class*="page" i],
@@ -102,9 +106,11 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                 g-card, g-inner-card, g-header, g-flat-button, g-expandable-card, c-wiz,
                 .g, .kp-blk, .xpd, .cUnBl, .MjjYud, .vdLWh, .wDYH0e, .K5qjJc, .g-blk, .sfbg, .e222eb, .minidiv, .appbar, #aria-main, #cnt, #rcnt, [data-async-context],
                 .A8SBwf, #searchform, .tsf, .mJ2Mod, .PZPZlf, .QCzoEc, .Lj9dx, .ULSxyf {
-                    background-color: #000000 !important;
-                    background: #000000 !important;
-                    color: #f1f5f9 !important;
+                    &:not(.omni-video-player-active):not(.omni-video-player-active *):not([class*="player" i]):not([class*="player" i] *):not([class*="video" i]):not([class*="video" i] *) {
+                        background-color: #000000 !important;
+                        background: #000000 !important;
+                        color: #f1f5f9 !important;
+                    }
                 }
 
                 .card, .panel, table, tr, td, th, hr, .divider, [class*="divider" i], [class*="separator" i] {
@@ -180,21 +186,29 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                     --border: #2e3035 !important;
                     color-scheme: dark !important;
                 }
-                html, body, #__next, #root, #app, main, [role="main"], [role="article"],
-                section, article, header, nav, footer, aside, dialog,
-                .container, .wrapper, .content, .main-content, .layout, .page,
-                [class*="container" i], [class*="wrapper" i], [class*="layout" i], [class*="content" i], [class*="page" i] {
+                html, body, #__next, #root, #app, main, [role="main"], [role="article"] {
                     background-color: #121214 !important;
                     background: #121214 !important;
                     color: #f1f5f9 !important;
                 }
+                section, article, header, nav, footer, aside, dialog,
+                .container, .wrapper, .content, .main-content, .layout, .page,
+                [class*="container" i], [class*="wrapper" i], [class*="layout" i], [class*="content" i], [class*="page" i] {
+                    &:not(.omni-video-player-active):not(.omni-video-player-active *):not([class*="player" i]):not([class*="player" i] *):not([class*="video" i]):not([class*="video" i] *) {
+                        background-color: #121214 !important;
+                        background: #121214 !important;
+                        color: #f1f5f9 !important;
+                    }
+                }
                 .card, .panel, .box, .sidebar, .modal, .dropdown, .menu,
                 [class*="card" i], [class*="panel" i], [class*="box" i], [class*="sidebar" i], [class*="modal" i], [class*="menu" i], [class*="list" i],
                 table, tr, td, th, ul, ol, li, dl, dt, dd {
-                    background-color: #18191c !important;
-                    background: #18191c !important;
-                    border-color: #2e3035 !important;
-                    color: #f1f5f9 !important;
+                    &:not(.omni-video-player-active):not(.omni-video-player-active *):not([class*="player" i]):not([class*="player" i] *):not([class*="video" i]):not([class*="video" i] *) {
+                        background-color: #18191c !important;
+                        background: #18191c !important;
+                        border-color: #2e3035 !important;
+                        color: #f1f5f9 !important;
+                    }
                 }
                 p, h1, h2, h3, h4, h5, h6, label, strong, b, em, i, span, dt, dd, summary,
                 small, blockquote, q, cite, code, pre, figcaption {
@@ -354,13 +368,44 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                 style.textContent = '$fullCss';
             }
 
-            if ('$effectiveTheme' === 'OLED') {
+            if ('$effectiveTheme' === 'OLED' || '$effectiveTheme' === 'DARK') {
+                const markVideoPlayers = function() {
+                    try {
+                        const videos = document.querySelectorAll('video');
+                        for (let i = 0; i < videos.length; i++) {
+                            let parent = videos[i].parentElement;
+                            let depth = 0;
+                            while (parent && depth < 5) {
+                                if (parent.tagName === 'BODY' || parent.tagName === 'HTML') break;
+                                if (!parent.classList.contains('omni-video-player-active')) {
+                                    parent.classList.add('omni-video-player-active');
+                                }
+                                parent = parent.parentElement;
+                                depth++;
+                            }
+                        }
+                    } catch(e) {}
+                };
+
                 const fixOledSurfaces = function() {
                     try {
+                        markVideoPlayers();
                         const nonMediaEls = document.querySelectorAll('div, section, article, nav, header, footer, main, form, table, g-card, c-wiz');
                         for (let i = 0; i < nonMediaEls.length; i++) {
                             const el = nonMediaEls[i];
                             if (el.__omniOled) continue;
+                            
+                            let isVideoPlayer = false;
+                            let temp = el;
+                            while (temp) {
+                                if (temp.classList && temp.classList.contains('omni-video-player-active')) {
+                                    isVideoPlayer = true;
+                                    break;
+                                }
+                                temp = temp.parentElement;
+                            }
+                            if (isVideoPlayer) continue;
+
                             const bg = window.getComputedStyle(el).backgroundColor;
                             if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'rgb(0, 0, 0)') {
                                 el.style.setProperty('background-color', '#000000', 'important');
@@ -370,9 +415,17 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                         }
                     } catch(e) {}
                 };
-                fixOledSurfaces();
-                setTimeout(fixOledSurfaces, 250);
-                setTimeout(fixOledSurfaces, 800);
+
+                const runObserverLogic = function() {
+                    markVideoPlayers();
+                    if ('$effectiveTheme' === 'OLED') {
+                        fixOledSurfaces();
+                    }
+                };
+
+                runObserverLogic();
+                setTimeout(runObserverLogic, 250);
+                setTimeout(runObserverLogic, 800);
 
                 if (window.__omniAmoledObserver) {
                     window.__omniAmoledObserver.disconnect();
@@ -392,7 +445,7 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                                 document.head.appendChild(ns);
                             } catch(e) {}
                         }
-                        fixOledSurfaces();
+                        runObserverLogic();
                     }, 200);
                 });
                 try {

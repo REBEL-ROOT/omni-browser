@@ -2762,10 +2762,14 @@ class BrowserViewModel : ViewModel() {
                 // Mobile GeckoView multi-process configuration:
                 // Fission (out-of-process iframes) is kept false on Android to prevent process
                 // explosion and LMK kills when loading sites with multiple cross-origin iframes.
-                // Content process count is capped at 2 (standard for mobile GeckoView).
+                // Content process count scales with device RAM (Chrome/Firefox Mobile parity).
+                val processCount = computeProcessCount()
+                val webIsolatedCount = (processCount / 2).coerceAtLeast(1)
                 sb.append("  fission.autostart: false\n")
-                sb.append("  dom.ipc.processCount: 2\n")
-                sb.append("  dom.ipc.processCount.webIsolated: 1\n")
+                sb.append("  dom.ipc.processCount: $processCount\n")
+                sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
+                // Also initialize maxLiveTabs based on device RAM
+                maxLiveTabs = computeDefaultMaxLiveTabs()
                 sb.append("  privacy.donottrackheader.enabled: ${dnt}\n")
                 sb.append("  dom.security.https_only_mode: ${hom || sbLevel == 2}\n")
                 sb.append("  dom.security.https_first: true\n")
@@ -5803,8 +5807,10 @@ class BrowserViewModel : ViewModel() {
             val sb = StringBuilder()
             sb.append("prefs:\n")
             sb.append("  fission.autostart: false\n")
-            sb.append("  dom.ipc.processCount: 2\n")
-            sb.append("  dom.ipc.processCount.webIsolated: 1\n")
+            val processCount = computeProcessCount()
+            val webIsolatedCount = (processCount / 2).coerceAtLeast(1)
+            sb.append("  dom.ipc.processCount: $processCount\n")
+            sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
             if (isForceHighRefreshRate) {
                 sb.append("  layout.frame_rate: 120\n")
             }
@@ -6675,17 +6681,23 @@ class BrowserViewModel : ViewModel() {
                                 try {
                                     setupWebExtensionDelegates(ext)
                                     runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    val isCurrentlyEnabled = ext.safeMetaData?.enabled == true
                                     if (extId == FORCE_DARK_EXTENSION_ID) {
-                                        if (forceDarkWebsites) {
-                                            runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                                        } else {
-                                            runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                        if (isCurrentlyEnabled != forceDarkWebsites) {
+                                            if (forceDarkWebsites) {
+                                                runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                            } else {
+                                                runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                            }
                                         }
                                     } else {
-                                        if (disabledIdsSet.contains(extId)) {
-                                            runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
-                                        } else {
-                                            runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                        val shouldBeEnabled = !disabledIdsSet.contains(extId)
+                                        if (isCurrentlyEnabled != shouldBeEnabled) {
+                                            if (shouldBeEnabled) {
+                                                runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                            } else {
+                                                runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                            }
                                         }
                                     }
                                     ext.setTabDelegate(object : WebExtension.TabDelegate {
@@ -6790,24 +6802,28 @@ class BrowserViewModel : ViewModel() {
                                 if (idx == -1) Int.MAX_VALUE else idx
                             })
 
-                            userExtensions.clear()
-                            userExtensions.addAll(sorted)
+                            if (userExtensions != sorted) {
+                                userExtensions.clear()
+                                userExtensions.addAll(sorted)
+                            }
 
-                            // Load real icons for each extension asynchronously
+                            // Load real icons for each extension asynchronously if not cached
                             sorted.forEach { ext ->
                                 val id = ext.safeId ?: return@forEach
-                                try {
-                                    val iconImage = ext.safeMetaData?.icon ?: return@forEach
-                                    iconImage.getBitmap(128).accept(
-                                        { bitmap ->
-                                            if (bitmap != null) {
-                                                extensionIcons[id] = bitmap
-                                            }
-                                        },
-                                        { err -> Log.w(TAG, "Could not load icon for $id: $err") }
-                                    )
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Icon load failed for $id", e)
+                                if (!extensionIcons.containsKey(id)) {
+                                    try {
+                                        val iconImage = ext.safeMetaData?.icon ?: return@forEach
+                                        iconImage.getBitmap(128).accept(
+                                            { bitmap ->
+                                                if (bitmap != null) {
+                                                    extensionIcons[id] = bitmap
+                                                }
+                                            },
+                                            { err -> Log.w(TAG, "Could not load icon for $id: $err") }
+                                        )
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Icon load failed for $id", e)
+                                    }
                                 }
                             }
                         }
@@ -9232,9 +9248,60 @@ class BrowserViewModel : ViewModel() {
     /** Maximum number of tabs that keep a live GeckoSession at any time.
      *  The active tab is always live; the (maxLiveTabs - 1) most-recently-used
      *  background tabs stay live; all others are soft-suspended.
-     *  Exposed as a var so MainActivity.onTrimMemory can temporarily tighten
-     *  the cap under low-memory pressure, then restore the default. */
+     *  Initialized dynamically based on device RAM (Chrome-style adaptive scaling).
+     *  Exposed as a var so MainActivity.onTrimMemory can tighten the cap under
+     *  low-memory pressure. */
     var maxLiveTabs: Int = DEFAULT_MAX_LIVE_TABS
+
+    /**
+     * Computes a sensible default for [maxLiveTabs] based on device total RAM.
+     * Chrome uses up to 8 renderer processes on high-RAM devices and scales down
+     * on low-RAM ones. We mirror that strategy for live tab session count.
+     *
+     * | Device RAM | maxLiveTabs |
+     * |------------|-------------|
+     * | ≤ 2 GB     | 6           |
+     * | 3–4 GB     | 12          |
+     * | ≥ 6 GB     | 24          |
+     */
+    fun computeDefaultMaxLiveTabs(): Int {
+        val ctx = appContext ?: return DEFAULT_MAX_LIVE_TABS
+        val am = ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            ?: return DEFAULT_MAX_LIVE_TABS
+        val mi = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(mi)
+        val totalGb = mi.totalMem / (1024L * 1024L * 1024L)
+        return when {
+            totalGb <= 2 -> 6
+            totalGb <= 4 -> 12
+            else -> DEFAULT_MAX_LIVE_TABS  // 24
+        }
+    }
+
+    /**
+     * Computes the Gecko content process count based on device RAM.
+     * Chrome on Android uses up to 8 renderer processes; Firefox Mobile defaults
+     * to 8 (`dom.ipc.processCount`). We scale proportionally:
+     *
+     * | Device RAM | processCount |
+     * |------------|--------------|
+     * | ≤ 2 GB     | 4            |
+     * | 3–4 GB     | 6            |
+     * | ≥ 6 GB     | 8            |
+     */
+    fun computeProcessCount(): Int {
+        val ctx = appContext ?: return 4
+        val am = ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            ?: return 4
+        val mi = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(mi)
+        val totalGb = mi.totalMem / (1024L * 1024L * 1024L)
+        return when {
+            totalGb <= 2 -> 4
+            totalGb <= 4 -> 6
+            else -> 8
+        }
+    }
 
     /**
      * Enforces the live-tab cap using soft suspension first.
@@ -9276,6 +9343,12 @@ class BrowserViewModel : ViewModel() {
             val tab = tabs[idx]
             if (tab.isSuspended) return
             if (tab.id == activeTabId) return
+            // Actually pause the Gecko renderer so this session releases its
+            // compositor resources and content process slot. Without this call
+            // the tab was flagged suspended but the renderer stayed fully active,
+            // consuming a content process slot and causing black pages when the
+            // process count limit was reached (especially on API 28 / low-RAM).
+            runCatching { tab.session.setActive(false) }
             tabs[idx] = tab.copy(isSuspended = true)
             Log.d(TAG, "Soft-suspended tab ${tab.id} (${tab.url})")
         } catch (e: Exception) {

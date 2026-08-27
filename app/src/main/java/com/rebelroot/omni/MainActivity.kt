@@ -160,7 +160,8 @@ class MainActivity : FragmentActivity() {
 
         // --- Global Robust Uncaught Exception Handler (with crash-loop protection) ---
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            android.util.Log.e("OMNI_CRASH", "Uncaught Exception caught!", throwable)
+            android.util.Log.e("OMNI_CRASH", "🚨 Uncaught Exception in thread ${thread.name}!", throwable)
+            android.util.Log.e("GeckoConsole", "🚨 OMNI_CRASH in thread ${thread.name}: ${throwable.stackTraceToString()}")
             val crashPrefs = getSharedPreferences("omni_crash_prefs", android.content.Context.MODE_PRIVATE)
             val crashMsg = throwable.localizedMessage ?: throwable.toString()
             crashPrefs.edit().putString("last_crash_msg", crashMsg).apply()
@@ -845,11 +846,13 @@ class MainActivity : FragmentActivity() {
                     android.util.Log.d("MainActivity", "🧹 onTrimMemory MODERATE (60): icon + image caches cleared")
                 }
 
-                // BACKGROUND (40) / UI_HIDDEN (20): just clear Coil memory cache.
+                // BACKGROUND (40) / UI_HIDDEN (20): pressure has eased — restore live tab
+                // cap to device-appropriate default and clear Coil memory cache.
                 android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
                 android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
+                    browserViewModel.maxLiveTabs = browserViewModel.computeDefaultMaxLiveTabs()
                     coil.Coil.imageLoader(this).memoryCache?.clear()
-                    android.util.Log.d("MainActivity", "🧹 onTrimMemory BACKGROUND/UI_HIDDEN ($level): image cache cleared")
+                    android.util.Log.d("MainActivity", "🧹 onTrimMemory BACKGROUND/UI_HIDDEN ($level): image cache cleared, cap restored to ${browserViewModel.maxLiveTabs}")
                 }
 
                 // RUNNING_CRITICAL (15): process is still foreground but OS is desperate.
@@ -859,13 +862,13 @@ class MainActivity : FragmentActivity() {
                     android.util.Log.i("MainActivity", "🧹 onTrimMemory RUNNING_CRITICAL (15): all background tabs suspended, caches cleared")
                 }
 
-                // RUNNING_LOW (10): pressure building — tighten cap to 3 live tabs.
+                // RUNNING_LOW (10): pressure building — halve live tab cap and keep it
+                // reduced until memory pressure eases (restored on BACKGROUND/UI_HIDDEN).
                 android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
-                    browserViewModel.maxLiveTabs = 3
+                    browserViewModel.maxLiveTabs = (browserViewModel.maxLiveTabs / 2).coerceAtLeast(2)
                     browserViewModel.enforceSuspendLimit()
-                    browserViewModel.maxLiveTabs = BrowserViewModel.DEFAULT_MAX_LIVE_TABS
                     coil.Coil.imageLoader(this).memoryCache?.clear()
-                    android.util.Log.i("MainActivity", "🧹 onTrimMemory RUNNING_LOW (10): excess background tabs suspended")
+                    android.util.Log.i("MainActivity", "🧹 onTrimMemory RUNNING_LOW (10): cap tightened to ${browserViewModel.maxLiveTabs} live tabs")
                 }
             }
             // NOTE: System.gc() intentionally removed — it causes a stop-the-world pause

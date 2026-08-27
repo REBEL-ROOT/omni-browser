@@ -1628,13 +1628,7 @@ fun BrowserScreen(
                             .run {
                                 if (isBottomNavBarVisible) this else navigationBarsPadding()
                             }
-                            // When the URL field is focused, the soft keyboard opens.
-                            // The window automatically resizes to accommodate the IME,
-                            // which already lifts the Scaffold's bottom bar.
-                            // Applying Modifier.imePadding() here would add the IME
-                            // inset twice, pushing the edit bar to the top of the screen.
-                            // Thus, we apply no additional IME padding.
-                            ,
+                            .then(if (isInputFocused) Modifier.imePadding() else Modifier),
                         color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
                         shadowElevation = 12.dp,
                         tonalElevation = 2.dp
@@ -1932,7 +1926,15 @@ fun BrowserScreen(
         }
     }
     ) { paddingValues ->
-
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val statusBarHeightDp = remember(density) {
+            val resourceId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+            if (resourceId > 0) {
+                with(density) { context.resources.getDimension(resourceId).toDp() }
+            } else {
+                24.dp
+            }
+        }
 
         // ── Content area: mirrors Omni Browser 2.0 layout exactly ──────────────────
         // Outer Box uses system inset padding directly (not Scaffold paddingValues) so
@@ -1957,8 +1959,8 @@ fun BrowserScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(statusBarHeightDp)
                             .background(statusBarBg)
-                            .statusBarsPadding()
                     )
                     HorizontalDivider(
                         color = dividerColor,
@@ -2032,10 +2034,6 @@ fun BrowserScreen(
                                     }
                                 }
 
-                                val density = androidx.compose.ui.platform.LocalDensity.current
-                                val statusBarHeightPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(density)
-                                val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
-                                
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                                 val topBarMeasuredDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
                                 val topBarTotalHeight = topBarMeasuredDp + statusBarHeightDp
@@ -6779,15 +6777,17 @@ fun BrowserScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             row.forEach { ext ->
-                                                val isEnabled = ext.metaData.enabled
-                                                val optionsUrl = try { ext.metaData?.optionsPageUrl } catch (_: Exception) { null }
-                                                val iconBitmap = viewModel.extensionIcons[ext.id]
+                                                val extId = ext.safeId ?: "unknown"
+                                                val meta = ext.safeMetaData
+                                                val isEnabled = meta?.enabled == true
+                                                val optionsUrl = meta?.optionsPageUrl
+                                                val iconBitmap = viewModel.extensionIcons[extId]
 
                                                 Box(modifier = Modifier.weight(1f)) {
                                                     UserExtensionGridCard(
                                                         extension = ext,
                                                         checked = isEnabled,
-                                                        enabled = !viewModel.togglingUserExtensionIds.contains(ext.id),
+                                                        enabled = !viewModel.togglingUserExtensionIds.contains(extId),
                                                         onCheckedChange = { viewModel.toggleUserExtension(ext, context) },
                                                         onUninstall = { extensionToDelete = ext },
                                                         onOptionsClick = {
@@ -6821,9 +6821,11 @@ fun BrowserScreen(
                                 ) {
                                     userExts.forEachIndexed { idx, ext ->
                                         val isDragged = draggedIndex == idx
-                                        val isEnabled = ext.metaData.enabled
-                                        val optionsUrl = try { ext.metaData?.optionsPageUrl } catch (_: Exception) { null }
-                                        val iconBitmap = viewModel.extensionIcons[ext.id]
+                                        val extId = ext.safeId ?: "unknown"
+                                        val meta = ext.safeMetaData
+                                        val isEnabled = meta?.enabled == true
+                                        val optionsUrl = meta?.optionsPageUrl
+                                        val iconBitmap = viewModel.extensionIcons[extId]
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -6864,7 +6866,7 @@ fun BrowserScreen(
                                             UserExtensionItemCard(
                                                 extension = ext,
                                                 checked = isEnabled,
-                                                enabled = !viewModel.togglingUserExtensionIds.contains(ext.id),
+                                                enabled = !viewModel.togglingUserExtensionIds.contains(extId),
                                                 onCheckedChange = { viewModel.toggleUserExtension(ext, context) },
                                                 onUninstall = { extensionToDelete = ext },
                                                 onOptionsClick = {
@@ -7091,7 +7093,7 @@ fun BrowserScreen(
             if (viewModel.activeExtensionPopupSession != null) {
 
                 // Zoom & pan state — reset each time a new extension popup is opened
-                key(viewModel.activeExtensionPopupName) {
+                key(viewModel.activeExtensionPopupSession) {
                     var popupScale by remember { mutableStateOf(1f) }
                     var popupOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -7239,8 +7241,20 @@ fun BrowserScreen(
                             ) {
                                 AndroidView(
                                     factory = { ctx ->
-                                        org.mozilla.geckoview.GeckoView(ctx).apply {
-                                            setSession(viewModel.activeExtensionPopupSession!!)
+                                        val activityCtx = if (context is android.app.Activity) context else {
+                                            var cur: android.content.Context? = context
+                                            var act: android.app.Activity? = null
+                                            while (cur is android.content.ContextWrapper) {
+                                                if (cur is android.app.Activity) {
+                                                    act = cur
+                                                    break
+                                                }
+                                                cur = cur.baseContext
+                                            }
+                                            act ?: context
+                                        }
+                                        org.mozilla.geckoview.GeckoView(activityCtx).apply {
+                                            viewModel.activeExtensionPopupSession?.let { setSession(it) }
                                             isClickable = true
                                             isFocusable = true
                                             isFocusableInTouchMode = true
@@ -7248,44 +7262,35 @@ fun BrowserScreen(
                                     },
                                     update = { geckoView ->
                                         val session = viewModel.activeExtensionPopupSession
-                                        if (session != null) geckoView.setSession(session)
+                                        if (session != null && geckoView.session != session) {
+                                            geckoView.setSession(session)
+                                        }
+                                        try {
+                                            session?.setActive(true)
+                                        } catch (_: Exception) {}
                                         geckoView.scaleX = popupScale
                                         geckoView.scaleY = popupScale
                                         geckoView.translationX = popupOffset.x
                                         geckoView.translationY = popupOffset.y
                                     },
+                                    onRelease = { geckoView ->
+                                        try {
+                                            geckoView.releaseSession()
+                                        } catch (_: Exception) {}
+                                    },
                                     modifier = Modifier.fillMaxSize()
                                 )
 
-                                // Loading overlay
+                                // Top loading progress bar
                                 if (viewModel.activeExtensionPopupLoading) {
-                                    Box(
+                                    LinearProgressIndicator(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                if (viewModel.isDarkThemeEnabled)
-                                                    Color(0xFF0D1620).copy(alpha = 0.9f)
-                                                else
-                                                    Color.White.copy(alpha = 0.9f)
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            CircularProgressIndicator(
-                                                color = MaterialTheme.colorScheme.primary,
-                                                strokeWidth = 2.5.dp,
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.ext_loading_extension),
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                            )
-                                        }
-                                    }
+                                            .fillMaxWidth()
+                                            .height(2.dp)
+                                            .align(Alignment.TopCenter),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = Color.Transparent
+                                    )
                                 }
                             }
                         }
@@ -7871,7 +7876,7 @@ fun BrowserScreen(
                         enter = slideInVertically { it } + fadeIn(),
                         exit = slideOutVertically { it } + fadeOut(),
                         modifier = Modifier.padding(
-                            bottom = if (viewModel.addressBarPosition == "bottom" && !showHomeScreen) 84.dp else 24.dp,
+                            bottom = if (viewModel.addressBarPosition == "Bottom" && !showHomeScreen) 84.dp else 24.dp,
                             start = 16.dp,
                             end = 16.dp
                         )

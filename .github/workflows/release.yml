@@ -124,37 +124,30 @@ jobs:
 
             ## 🚀 What's New in ${{ github.ref_name }}
 
-            ### 🛠️ Critical Bug Fixes
-            - **OAuth Popup & New Window Navigation**: Fixed a bug where sites like Deezer trying to open third-party logins (Facebook, Google, Spotify, etc.) were blocked. Expanded the authentication host bypass to handle all major OAuth, SSO, and OIDC endpoints.
-            - **Keyboard Layout & Resize Stability**: Added `adjustResize` support and fixed dynamic bar-hiding to prevent soft keyboard interactions from breaking fixed/sticky web page elements, overlapping layouts, or forms.
-            - **Google Sign-In Black Screen Fix**: Resolved an issue where closing a Google OAuth popup tab left the parent browser session in a blank/black screen state by implementing a secure GeckoView session-rebind counter.
-            - **Firefox Account OAuth Flow**: Fully repaired the Firefox Sync OAuth login loop ("Something went wrong. Please close this tab and try again") by enabling third-party cookies, correcting authorization scopes, and bypassing bot protection using a dedicated Firefox Mobile User-Agent.
-            - **WebExtension Click Crash**: Fixed a native browser crash/restart that triggered when clicking on certain extension actions.
-            - **Responsive 3-Dot Menu**: Improved UI responsiveness by dynamically adapting the three-dot dropdown width on smaller screen form factors.
+            ### ⚡ Performance, RAM Scaling & Black Screen Fixes
+            - **Adaptive Multi-Process & Tab Scaler**: Scaled Gecko content processes (`dom.ipc.processCount`) and live tab caps dynamically based on physical device RAM (up to 8 processes and 24 live tabs on 6GB+ RAM devices, optimized for lower-RAM devices).
+            - **Compositor Resource Release on Tab Suspension**: Fixed black screens caused by reaching content process limits by actively deactivating Gecko renderers (`session.setActive(false)`) when background tabs are soft-suspended.
+            - **Smart Memory Pressure Handling**: Refined `onTrimMemory` lifecycle hooks to halve live tab caps under memory pressure and restore full capacity once pressure eases.
 
-            ---
+            ### 🧭 Bottom Address Bar & Keyboard UX
+            - **Upward Suggestions & Actions Layout**: When the address bar is configured at the bottom, history suggestions and quick action bars now expand upwards naturally above the keyboard.
+            - **IME Keyboard Padding Fix**: Refined keyboard focus insets to eliminate jumping or double-padding when typing into the bottom address bar.
+            - **Theme-Adaptive Search Bar**: Enhanced contrast and styling for search bar backgrounds across Light, Dark, and AMOLED modes.
 
-            ## 🔑 Password Managers & WebExtensions (v1.2.9.4)
-            - **Bitwarden & Password Manager WebExtension Support**: Updated GeckoView prompt delegates (`onOptionalPrompt` and `onUpdatePrompt`) to allow dynamic host and clipboard permissions (`browser.permissions.request()`). Bitwarden, Proton Pass, 1Password, and KeePassXC can now dynamically inspect web forms, search vaults, and autofill credentials across all websites.
-            - **Curated Extensions Store Expansion**: Added official entries for Bitwarden, Proton Pass, and KeePassXC-Browser to the built-in curated extension repository for 1-tap installation. Enhanced options page navigation with private browsing support.
-            - **Omni Password Manager Master Toggle**: Added a master toggle switch in the Password Manager vault screen and Settings. When turned OFF, it completely silences login save prompts and autocomplete sheets.
+            ### 🧩 WebExtensions Engine & Popup Enhancements
+            - **Crash & NPE Prevention**: Added null-safe metadata and extension ID fallbacks (`safeId` / `safeMetaData`) across all extension cards and delegates.
+            - **Overhauled Popup Lifecycle**: Configured full prompt, progress, and navigation delegates for extension popups, ensuring seamless handling of alerts, button prompts, and `moz-extension://` navigation.
+            - **Smooth Progress Bar**: Replaced heavy blocking spinner overlays with a sleek, non-intrusive top linear progress bar.
+            - **Options Page Fallback**: Clicking extensions without active popups now seamlessly opens their options page in a new tab.
+            - **Startup & Icon Cache Optimization**: Avoids redundant IPC enable/disable calls and caches extension icons to boost startup performance.
 
-            ## 📥 Download Notifications & Deep-Link Navigation (v1.2.9.4)
-            - **In-Progress Download Tap**: Tapping the system notification of an ongoing download brings Omni Browser to the foreground and opens the Downloads section directly.
-            - **Completed Download Tap & Direct File Opening**: Tapping a completed download notification opens the file directly with the default viewer via FileProvider. Added dual action buttons on the notification: "Open" and "Downloads".
-            - **Deep Link Handlers**: Integrated robust event handlers in MainActivity to handle both cold starts and background resumes.
+            ### 🎬 Dark Mode & OLED Media Player Protection
+            - **Video Player Protection**: Added dynamic video player detection and MutationObservers (`markVideoPlayers`) to prevent force-dark / AMOLED CSS from inverting video controls and overlays.
+            - **Refined Contrast**: Grouped core page containers and applied scoped styling to eliminate background washouts.
 
-            ## 🔔 In-App OTA Update Notification System (v1.2.9.4)
-            - **Automated GitHub Update Notifications**: Added a background check on app startup (throttled to at most once per 12 hours) to check the GitHub Releases API. Issues a high-priority system status bar notification when a new version is available.
-
-            ## 🔄 Omni Sync & Firefox Account Cloud Integration (v1.2.9.4)
-            - **Firefox Account Cloud Sync**: End-to-end encrypted cloud sync for bookmarks, history, tabs, and settings via Firefox Account infrastructure.
-            - **P2P / Local Mesh Device Pairing**: Secure QR-code pairing and LAN transport sync across devices without third-party servers.
-            - **Localization**: Translated and synchronized all sync UI strings across 11 supported languages (English, Hindi, Spanish, French, German, Portuguese, Polish, Russian, Japanese, Chinese, Arabic).
-
-            ## 🎨 UI, Engine & Performance Stability (v1.2.9.4)
-            - **Blank Screen on Startup Resolved**: Fixed proxy initialization, removed premature JavaScript injections, and resolved EGL crash flags on incompatible GPUs.
-            - **OLED Dark Mode Improvements**: Eliminated mutation observer infinite feedback loops with 200ms debouncing, and scoped force-dark CSS variables to eliminate white text on light pages.
+            ### 🛡️ AdBlock & Scriptlet Fixes
+            - **Stealth Defuser JS Injection Fix**: Resolved single-line comment stripping during scriptlet injection, ensuring anti-adblock defuser traps execute cleanly.
+            - **Enhanced Crash Logging**: Added thread names and stack traces with visual markers in logcat for faster diagnostic triage.
 
             ---
 

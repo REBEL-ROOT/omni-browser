@@ -169,8 +169,11 @@ fun PhoneAddressBar(
     var showAddressBarContextMenu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     var dragAmountAccumulated by remember { mutableFloatStateOf(0f) }
+    val isBottom = viewModel.addressBarPosition == "Bottom"
 
-    Row(
+    @Composable
+    fun MainAddressBar() {
+        Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(
@@ -247,13 +250,21 @@ fun PhoneAddressBar(
                 .height(config.searchBoxHeight)
                 .padding(horizontal = 4.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    color = if (viewModel.isDarkThemeEnabled) {
+                        if (viewModel.isAmoledMode) Color(0xFF202124) else Color(0xFF2C2E35)
+                    } else {
+                        Color(0xFFF1F3F4)
+                    },
                     shape = RoundedCornerShape(config.searchBoxHeight / 2)
                 )
-                .border(
-                    width = 1.dp,
-                    color = if (isInputFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(config.searchBoxHeight / 2)
+                .then(
+                    if (isInputFocused) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(config.searchBoxHeight / 2)
+                        )
+                    } else Modifier
                 )
                 .pointerInput(isInputFocused, viewModel.addressBarPosition) {
                     if (isInputFocused) return@pointerInput
@@ -645,24 +656,27 @@ fun PhoneAddressBar(
             }
         }
     }
+    }
 
-    // ── Address Bar Editing Quick Action Bar (Issue #88) ───────────────────────
-    if (isInputFocused) {
-        val clipboard = remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager }
-        val clipboardText = remember(isInputFocused) {
-            try {
-                clipboard?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
-            } catch (_: Exception) {
-                null
+    @Composable
+    fun QuickActionBar() {
+        // ── Address Bar Editing Quick Action Bar (Issue #88) ───────────────────────
+        if (isInputFocused) {
+            val clipboard = remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager }
+            val clipboardText = remember(isInputFocused) {
+                try {
+                    clipboard?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+                } catch (_: Exception) {
+                    null
+                }
             }
-        }
-        val currentText = inputUrl.text.ifEmpty { viewModel.currentUrl }.takeIf { it.isNotEmpty() && it != "about:blank" }
+            val currentText = inputUrl.text.ifEmpty { viewModel.currentUrl }.takeIf { it.isNotEmpty() && it != "about:blank" }
 
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = config.paddingHorizontal)
-                .offset(y = 4.dp),
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = config.paddingHorizontal)
+                    .offset(y = if (isBottom) (-4).dp else 4.dp),
             shape = RoundedCornerShape(12.dp),
             color = if (viewModel.isAmoledMode) Color(0xFF0C0D10) else if (viewModel.isDarkThemeEnabled) Color(0xFF20222A) else Color(0xFFF2F4F7),
             tonalElevation = 2.dp,
@@ -800,15 +814,18 @@ fun PhoneAddressBar(
             }
         }
     }
+    }
 
-    // ── History Suggestions Dropdown ─────────────────────────────────────────
-    if (isInputFocused && viewModel.historySuggestions.isNotEmpty()) {
-        val shape = RoundedCornerShape(16.dp)
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = config.paddingHorizontal)
-                .offset(y = 4.dp),
+    @Composable
+    fun HistorySuggestions() {
+        // ── History Suggestions Dropdown ─────────────────────────────────────────
+        if (isInputFocused && viewModel.historySuggestions.isNotEmpty()) {
+            val shape = RoundedCornerShape(16.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = config.paddingHorizontal)
+                    .offset(y = if (isBottom) (-4).dp else 4.dp),
             shape = shape,
             color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
             tonalElevation = 4.dp,
@@ -858,6 +875,17 @@ fun PhoneAddressBar(
                 }
             }
         }
+    }
+    }
+
+    if (isBottom) {
+        HistorySuggestions()
+        QuickActionBar()
+        MainAddressBar()
+    } else {
+        MainAddressBar()
+        QuickActionBar()
+        HistorySuggestions()
     }
 }
 
