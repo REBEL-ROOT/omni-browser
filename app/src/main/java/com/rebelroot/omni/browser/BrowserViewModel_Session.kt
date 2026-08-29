@@ -1438,89 +1438,170 @@ internal fun getNativeAppHandlers(context: Context, uri: String): List<android.c
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Universal Extension Mobile Compatibility Engine
+//
+// Handles ALL web extensions (Bitwarden, uBlock, LastPass, Privacy Badger,
+// Dark Reader, etc.) that inject iframes, notification bars, or overlay panels
+// into pages. On small phone screens these elements overflow because they were
+// designed for desktop-width viewports (min-width: 400-600px, fixed positioning).
+//
+// Strategy:
+//   1. CSS patch  — static rules to constrain any moz-extension:// iframe that
+//                   is already in the DOM when the page loads.
+//   2. DOM scan   — immediately fix any iframes already present in the page.
+//   3. Overflow   — clamp any fixed-position element that is wider than the
+//                   viewport (catches notification banners from any extension).
+//   4. Observer   — MutationObserver watches for dynamically injected elements
+//                   and applies the same fixes as they arrive.
+//   5. Popup fix  — For moz-extension:// popup pages opened in the bottom sheet,
+//                   inject a responsive viewport meta tag and box-model CSS so
+//                   the popup's own content fits within a mobile screen.
+// ──────────────────────────────────────────────────────────────────────────────
+
 fun BrowserViewModel.injectExtensionOverlayMobileFix(tab: TabState) {
     val js = """
         (function() {
             try {
-                if (window.__omni_ext_overlay_fix_installed) return;
-                window.__omni_ext_overlay_fix_installed = true;
+                if (window.__omni_ext_compat_installed) return;
+                window.__omni_ext_compat_installed = true;
 
+                // ── 1. Static CSS: constrain ALL extension iframes universally ──
                 var style = document.createElement('style');
-                style.id = 'omni-ext-overlay-style';
-                style.innerHTML = `
-                    iframe[src*="moz-extension://"],
-                    iframe[src*="chrome-extension://"],
-                    iframe[id*="bitwarden"],
-                    iframe[class*="bitwarden"],
-                    #bitwarden-notification-bar,
-                    div[id*="bitwarden-overlay"],
-                    .bitwarden-overlay,
-                    [class*="bitwarden-notification"] {
-                        max-width: 100vw !important;
-                        width: 100% !important;
-                        left: 0px !important;
-                        right: 0px !important;
-                        margin: 0 auto !important;
-                        background: transparent !important;
-                        background-color: transparent !important;
-                        border: none !important;
-                        box-sizing: border-box !important;
-                        color-scheme: light dark !important;
-                    }
-                `;
+                style.id = 'omni-ext-compat-css';
+                style.innerHTML = [
+                    /* Any iframe served from a browser extension URL */
+                    'iframe[src*="moz-extension://"],',
+                    'iframe[src*="chrome-extension://"] {',
+                    '  max-width: 100vw !important;',
+                    '  width: 100% !important;',
+                    '  left: 0 !important;',
+                    '  right: 0 !important;',
+                    '  margin: 0 auto !important;',
+                    '  background: transparent !important;',
+                    '  background-color: transparent !important;',
+                    '  border: none !important;',
+                    '  box-sizing: border-box !important;',
+                    '  color-scheme: light dark !important;',
+                    '}',
+
+                    /* Generic fixed/absolute banners injected by any extension */
+                    /* (catches LastPass, 1Password, Dashlane, uBlock popups, etc.) */
+                    '[data-lastpass-root],',
+                    '[data-onepassword-notification],',
+                    '[id^="dashlane-"],',
+                    '[class^="dashlane-"],',
+                    '[id*="extension-notification"],',
+                    '[id*="ext-notification"],',
+                    '[class*="extension-notification"],',
+                    '[class*="ext-bar"],',
+                    '[class*="ext-popup"],',
+                    '[class*="extension-bar"],',
+                    '[class*="extension-popup"],',
+                    '[id*="bitwarden"],',
+                    '[class*="bitwarden"],',
+                    '[id*="keeper-"],',
+                    '[id*="nordpass"],',
+                    '[class*="nordpass"],',
+                    '[id*="roboform"],',
+                    '[class*="roboform"],',
+                    '[id*="keypass"],',
+                    '[class*="keypass"],',
+                    '#password-notification-bar,',
+                    '#credential-notification-bar {',
+                    '  max-width: 100vw !important;',
+                    '  width: 100% !important;',
+                    '  left: 0 !important;',
+                    '  right: 0 !important;',
+                    '  margin: 0 auto !important;',
+                    '  box-sizing: border-box !important;',
+                    '}'
+                ].join(' ');
                 (document.head || document.documentElement).appendChild(style);
 
+                var vw = window.innerWidth || document.documentElement.clientWidth || 360;
+
+                // ── 2 & 3. Fix one element: extension iframes + overflow clamping ──
                 function fixElement(el) {
-                    if (!el || !el.tagName) return;
-                    var isExt = false;
-                    var src = (el.getAttribute && el.getAttribute('src')) || '';
-                    var id = el.id || '';
-                    var cls = (el.className && typeof el.className === 'string') ? el.className : '';
-                    if (src.indexOf('moz-extension://') !== -1 || src.indexOf('chrome-extension://') !== -1 ||
-                        id.indexOf('bitwarden') !== -1 || cls.indexOf('bitwarden') !== -1 ||
-                        id === 'bitwarden-notification-bar') {
-                        isExt = true;
-                    }
-                    if (isExt && el.tagName.toLowerCase() === 'iframe') {
+                    if (!el || el.nodeType !== 1) return;
+                    var tag = el.tagName.toLowerCase();
+                    var src  = el.getAttribute ? (el.getAttribute('src') || '') : '';
+                    var isExtIframe = tag === 'iframe' &&
+                                      (src.indexOf('moz-extension://') !== -1 ||
+                                       src.indexOf('chrome-extension://') !== -1);
+
+                    if (isExtIframe) {
                         el.setAttribute('allowtransparency', 'true');
-                        el.style.setProperty('max-width', '100vw', 'important');
-                        el.style.setProperty('width', '100%', 'important');
-                        el.style.setProperty('left', '0px', 'important');
-                        el.style.setProperty('right', '0px', 'important');
-                        el.style.setProperty('background', 'transparent', 'important');
-                        el.style.setProperty('background-color', 'transparent', 'important');
-                        el.style.setProperty('box-sizing', 'border-box', 'important');
-                        el.style.setProperty('border', 'none', 'important');
+                        el.style.setProperty('max-width',        '100vw',        'important');
+                        el.style.setProperty('width',            '100%',         'important');
+                        el.style.setProperty('left',             '0',            'important');
+                        el.style.setProperty('right',            '0',            'important');
+                        el.style.setProperty('background',       'transparent',  'important');
+                        el.style.setProperty('background-color', 'transparent',  'important');
+                        el.style.setProperty('box-sizing',       'border-box',   'important');
+                        el.style.setProperty('border',           'none',         'important');
+                        return;
                     }
+
+                    // ── 3. Overflow clamp: catch fixed/absolute banners wider than viewport ──
+                    // Only clamp elements that are clearly "chrome injected at top of page":
+                    // position fixed or absolute, near the top (top < 120px), and wider than vw.
+                    try {
+                        var cs = window.getComputedStyle(el);
+                        var pos = cs.position;
+                        if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') {
+                            var rect = el.getBoundingClientRect();
+                            if (rect.top < 120 && rect.width > vw + 4) {
+                                el.style.setProperty('max-width',    '100vw',      'important');
+                                el.style.setProperty('width',        '100vw',      'important');
+                                el.style.setProperty('left',         '0',          'important');
+                                el.style.setProperty('right',        '0',          'important');
+                                el.style.setProperty('box-sizing',   'border-box', 'important');
+                                el.style.setProperty('overflow-x',  'hidden',     'important');
+                            }
+                        }
+                    } catch (styleErr) {}
                 }
 
-                var existing = document.querySelectorAll('iframe[src*="moz-extension://"], iframe[id*="bitwarden"], #bitwarden-notification-bar, div[id*="bitwarden-overlay"], .bitwarden-overlay');
-                for (var i = 0; i < existing.length; i++) {
-                    fixElement(existing[i]);
+                // ── 2. Scan DOM immediately ──
+                var allEls = document.querySelectorAll(
+                    'iframe[src*="moz-extension://"],' +
+                    'iframe[src*="chrome-extension://"]'
+                );
+                for (var i = 0; i < allEls.length; i++) { fixElement(allEls[i]); }
+
+                // Also scan fixed/absolute elements already in page at load time
+                var fixedEls = document.querySelectorAll('*');
+                for (var j = 0; j < Math.min(fixedEls.length, 500); j++) {
+                    fixElement(fixedEls[j]);
                 }
 
+                // ── 4. MutationObserver: catch dynamically injected elements ──
                 var observer = new MutationObserver(function(mutations) {
                     for (var m = 0; m < mutations.length; m++) {
-                        var added = mutations[m].addedNodes;
-                        for (var n = 0; n < added.length; n++) {
-                            var node = added[n];
-                            if (node && node.nodeType === 1) {
-                                fixElement(node);
-                                if (node.querySelectorAll) {
-                                    var nested = node.querySelectorAll('iframe[src*="moz-extension://"], iframe[id*="bitwarden"], #bitwarden-notification-bar');
-                                    for (var k = 0; k < nested.length; k++) {
-                                        fixElement(nested[k]);
-                                    }
+                        var nodes = mutations[m].addedNodes;
+                        for (var n = 0; n < nodes.length; n++) {
+                            var node = nodes[n];
+                            if (!node || node.nodeType !== 1) continue;
+                            fixElement(node);
+                            if (node.querySelectorAll) {
+                                var children = node.querySelectorAll(
+                                    'iframe[src*="moz-extension://"],' +
+                                    'iframe[src*="chrome-extension://"]'
+                                );
+                                for (var k = 0; k < children.length; k++) {
+                                    fixElement(children[k]);
                                 }
                             }
                         }
                     }
                 });
 
-                observer.observe(document.documentElement || document.body, {
-                    childList: true,
-                    subtree: true
-                });
+                var root = document.documentElement || document.body;
+                if (root) {
+                    observer.observe(root, { childList: true, subtree: true });
+                }
+
             } catch (e) {}
         })();
     """.trimIndent().replace("\n", " ")
@@ -1528,39 +1609,78 @@ fun BrowserViewModel.injectExtensionOverlayMobileFix(tab: TabState) {
     tab.session.loadUri("javascript:$js")
 }
 
+// ── 5. Extension Popup Responsive Fix ────────────────────────────────────────
+// Applied to moz-extension:// pages opened inside the bottom-sheet popup viewer.
+// Adds a mobile viewport meta tag (if missing) and overrides desktop-only
+// box-model CSS so the popup's own content (buttons, cards, forms) fits a phone.
 fun BrowserViewModel.injectExtensionPopupResponsiveFix(tab: TabState) {
     val js = """
         (function() {
             try {
-                if (!document.querySelector('meta[name="viewport"]')) {
+                // Inject or update the viewport meta tag
+                var existing = document.querySelector('meta[name="viewport"]');
+                if (!existing) {
                     var meta = document.createElement('meta');
-                    meta.name = 'viewport';
+                    meta.name    = 'viewport';
                     meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
                     (document.head || document.documentElement).appendChild(meta);
+                } else if (!existing.content || existing.content.indexOf('width=device-width') === -1) {
+                    existing.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
                 }
+
+                if (document.getElementById('omni-ext-popup-responsive')) return;
+
                 var style = document.createElement('style');
                 style.id = 'omni-ext-popup-responsive';
-                style.innerHTML = `
-                    html, body {
-                        max-width: 100vw !important;
-                        width: 100% !important;
-                        min-width: unset !important;
-                        overflow-x: hidden !important;
-                        box-sizing: border-box !important;
-                        background-color: transparent !important;
-                    }
-                    * {
-                        box-sizing: border-box !important;
-                    }
-                    .notification, .card, #notification, [class*="notification"], [class*="card"], [class*="popup"], .container, main {
-                        max-width: calc(100vw - 16px) !important;
-                        width: auto !important;
-                        min-width: unset !important;
-                        margin-left: auto !important;
-                        margin-right: auto !important;
-                    }
-                `;
+                style.innerHTML = [
+                    /* Root layout — prevent horizontal overflow */
+                    'html, body {',
+                    '  max-width: 100vw !important;',
+                    '  width: 100% !important;',
+                    '  min-width: unset !important;',
+                    '  overflow-x: hidden !important;',
+                    '  box-sizing: border-box !important;',
+                    '}',
+
+                    /* Universal box-model fix */
+                    '*, *::before, *::after {',
+                    '  box-sizing: border-box !important;',
+                    '}',
+
+                    /* Common container patterns used by extension popups */
+                    /* Bitwarden, LastPass, 1Password, Dashlane, uBlock, etc. */
+                    '.container, .wrapper, .content, .inner, .card, .panel,',
+                    '.notification, .notification-bar, .notification-card,',
+                    '.popup, .popup-container, .popup-inner,',
+                    '.app, .app-container, .main, main, [role="main"],',
+                    '[class*="container"], [class*="wrapper"], [class*="card"],',
+                    '[class*="notification"], [class*="popup"], [class*="panel"],',
+                    '[class*="dialog"], [class*="modal"], [id*="container"],',
+                    '[id*="wrapper"], [id*="notification"], [id*="popup"] {',
+                    '  max-width: calc(100vw - 8px) !important;',
+                    '  width: auto !important;',
+                    '  min-width: unset !important;',
+                    '  margin-left: auto !important;',
+                    '  margin-right: auto !important;',
+                    '  overflow-x: hidden !important;',
+                    '}',
+
+                    /* Ensure buttons and inputs never overflow */
+                    'button, input, select, textarea, a {',
+                    '  max-width: 100% !important;',
+                    '  word-break: break-word !important;',
+                    '}',
+
+                    /* Fixed position elements inside the popup page */
+                    '[style*="position: fixed"], [style*="position:fixed"] {',
+                    '  max-width: 100vw !important;',
+                    '  width: 100% !important;',
+                    '  left: 0 !important;',
+                    '  right: 0 !important;',
+                    '}'
+                ].join(' ');
                 (document.head || document.documentElement).appendChild(style);
+
             } catch (e) {}
         })();
     """.trimIndent().replace("\n", " ")

@@ -177,44 +177,48 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
         }
     }
 
-    // Progress delegate — track loading state and apply responsive scaling to extension popup
+    // Progress delegate — track loading state and apply universal responsive scaling
     session.progressDelegate = object : GeckoSession.ProgressDelegate {
         override fun onPageStop(session: GeckoSession, success: Boolean) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 activeExtensionPopupLoading = false
             }
             if (success) {
+                // Inject universal mobile responsive fix into every extension popup page.
+                // Ensures viewport meta is set, box-model is correct, and containers are
+                // clamped to the device width — covers Bitwarden, LastPass, uBlock, etc.
                 val fixJs = """
                     (function() {
                         try {
-                            if (!document.querySelector('meta[name="viewport"]')) {
+                            var existing = document.querySelector('meta[name="viewport"]');
+                            if (!existing) {
                                 var meta = document.createElement('meta');
-                                meta.name = 'viewport';
+                                meta.name    = 'viewport';
                                 meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
                                 (document.head || document.documentElement).appendChild(meta);
+                            } else if (!existing.content || existing.content.indexOf('width=device-width') === -1) {
+                                existing.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
                             }
+                            if (document.getElementById('omni-ext-popup-responsive')) return;
                             var style = document.createElement('style');
                             style.id = 'omni-ext-popup-responsive';
-                            style.innerHTML = `
-                                html, body {
-                                    max-width: 100vw !important;
-                                    width: 100% !important;
-                                    min-width: unset !important;
-                                    overflow-x: hidden !important;
-                                    box-sizing: border-box !important;
-                                    background-color: transparent !important;
-                                }
-                                * {
-                                    box-sizing: border-box !important;
-                                }
-                                .notification, .card, #notification, [class*="notification"], [class*="card"], [class*="popup"], .container, main {
-                                    max-width: calc(100vw - 16px) !important;
-                                    width: auto !important;
-                                    min-width: unset !important;
-                                    margin-left: auto !important;
-                                    margin-right: auto !important;
-                                }
-                            `;
+                            style.innerHTML = [
+                                'html, body { max-width: 100vw !important; width: 100% !important; min-width: unset !important; overflow-x: hidden !important; box-sizing: border-box !important; }',
+                                '*, *::before, *::after { box-sizing: border-box !important; }',
+                                '.container, .wrapper, .content, .inner, .card, .panel,',
+                                '.notification, .notification-bar, .notification-card,',
+                                '.popup, .popup-container, .popup-inner,',
+                                '.app, .app-container, .main, main, [role="main"],',
+                                '[class*="container"], [class*="wrapper"], [class*="card"],',
+                                '[class*="notification"], [class*="popup"], [class*="panel"],',
+                                '[class*="dialog"], [class*="modal"], [id*="container"],',
+                                '[id*="wrapper"], [id*="notification"], [id*="popup"] {',
+                                '  max-width: calc(100vw - 8px) !important; width: auto !important;',
+                                '  min-width: unset !important; margin-left: auto !important; margin-right: auto !important;',
+                                '  overflow-x: hidden !important; }',
+                                'button, input, select, textarea, a { max-width: 100% !important; word-break: break-word !important; }',
+                                '[style*="position: fixed"], [style*="position:fixed"] { max-width: 100vw !important; width: 100% !important; left: 0 !important; right: 0 !important; }'
+                            ].join(' ');
                             (document.head || document.documentElement).appendChild(style);
                         } catch (e) {}
                     })();
