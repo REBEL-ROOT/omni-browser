@@ -2015,19 +2015,32 @@ fun BrowserScreen(
                             if (activeTab != null && !isHome) {
                                 val bottomNavBarHeight = remember(viewModel.addressBarPosition, viewModel.chromeNavBarEnabled, viewModel.showBottomNavBar, viewModel.bottomNavScale, viewModel.uiScale) {
                                     if (!isTablet && !isHome && !viewModel.isFullscreen && !isLandscape) {
-                                        if (viewModel.addressBarPosition == "Bottom") {
-                                            val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
-                                            if (viewModel.chromeNavBarEnabled) {
-                                                searchHeight
-                                            } else if (viewModel.showBottomNavBar) {
-                                                searchHeight + (52 * viewModel.bottomNavScale).dp
-                                            } else {
-                                                searchHeight
+                                        when (viewModel.addressBarPosition) {
+                                            "Bottom" -> {
+                                                val searchHeight = config.searchBoxHeight + (config.paddingVertical * 2)
+                                                if (viewModel.chromeNavBarEnabled) {
+                                                    searchHeight
+                                                } else if (viewModel.showBottomNavBar) {
+                                                    searchHeight + (52 * viewModel.bottomNavScale).dp
+                                                } else {
+                                                    searchHeight
+                                                }
                                             }
-                                        } else if (viewModel.showBottomNavBar) {
-                                            (52 * viewModel.bottomNavScale).dp
-                                        } else {
-                                            0.dp
+                                            "Top" -> {
+                                                if (!viewModel.chromeNavBarEnabled && viewModel.showBottomNavBar) {
+                                                    (52 * viewModel.bottomNavScale).dp
+                                                } else {
+                                                    0.dp
+                                                }
+                                            }
+                                            "Split" -> {
+                                                if (viewModel.showBottomNavBar) {
+                                                    (52 * viewModel.bottomNavScale).dp
+                                                } else {
+                                                    0.dp
+                                                }
+                                            }
+                                            else -> 0.dp
                                         }
                                     } else {
                                         0.dp
@@ -2036,42 +2049,19 @@ fun BrowserScreen(
 
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                                 val topBarMeasuredDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
-                                val topBarTotalHeight = topBarMeasuredDp + statusBarHeightDp
 
                                 // Banner is inside Scaffold's topBar but measured separately; add its height
-                                // so GeckoView offset is correct when the banner is visible.
+                                // so GeckoView padding is correct when the banner is visible.
                                 val bannerHeight = if (showAlohaBanner && viewModel.addressBarPosition != "Bottom") 48.dp else 0.dp
 
-                                val totalTopPad = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) topBarTotalHeight + bannerHeight else 0.dp
-                                val geckoTopOffset = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) {
-                                    (statusBarHeightDp + bannerHeight) + (topBarMeasuredDp * (1f - topBarFraction))
+                                val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen && !isLandscape && !(isKeyboardVisible && !isInputFocused && !isEditMode)) {
+                                    (topBarMeasuredDp * (1f - topBarFraction)) + bannerHeight
                                 } else 0.dp
                                 val geckoBottomPad = if (!viewModel.isFullscreen && !isLandscape) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
-                                
-                                val geckoTopPad = 0.dp
                                 
                                 BoxWithConstraints(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .then(
-                                            object : androidx.compose.ui.layout.LayoutModifier {
-                                                override fun androidx.compose.ui.layout.MeasureScope.measure(
-                                                    measurable: androidx.compose.ui.layout.Measurable,
-                                                    constraints: androidx.compose.ui.unit.Constraints
-                                                ): androidx.compose.ui.layout.MeasureResult {
-                                                    val extraHeight = totalTopPad.roundToPx()
-                                                    val newConstraints = constraints.copy(
-                                                        minHeight = constraints.minHeight + extraHeight,
-                                                        maxHeight = if (constraints.hasBoundedHeight) constraints.maxHeight + extraHeight else constraints.maxHeight
-                                                    )
-                                                    val placeable = measurable.measure(newConstraints)
-                                                    return layout(placeable.width, placeable.height) {
-                                                        placeable.placeRelative(0, 0)
-                                                    }
-                                                }
-                                            }
-                                        )
-                                        .offset(y = geckoTopOffset)
                                         .padding(top = geckoTopPad, bottom = geckoBottomPad)
                                 ) {
                                     DisposableEffect(Unit) {
@@ -2276,6 +2266,14 @@ fun BrowserScreen(
                                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                                     ViewGroup.LayoutParams.MATCH_PARENT
                                                 )
+                                                setOnApplyWindowInsetsListener { _, insets ->
+                                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                                        android.view.WindowInsets.CONSUMED
+                                                    } else {
+                                                        @Suppress("DEPRECATION")
+                                                        insets.consumeSystemWindowInsets()
+                                                    }
+                                                }
                                                 
                                                 setAutofillEnabled(true)
                                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

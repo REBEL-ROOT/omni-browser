@@ -913,6 +913,8 @@ fun VideoPlayerScreen(
                         // all touch handling is done by the Compose overlay layer.
                         isClickable = false
                         isFocusable = false
+                        // Transparent shutter background prevents black screen masking before/during video frame rendering
+                        setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                         resizeMode = aspectMode.toResizeMode()
                         // Capture the view reference so the player-init effect above can
                         // bind the player deterministically (prevents black screen).

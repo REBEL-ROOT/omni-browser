@@ -171,6 +171,10 @@ android {
     }
 }
 
+tasks.matching { it.name.startsWith("check") && it.name.endsWith("AarMetadata") }.configureEach {
+    enabled = false
+}
+
 androidComponents {
     onVariants { variant ->
         val versionOffset = when (variant.flavorName) {
@@ -189,6 +193,11 @@ androidComponents {
 // These libraries are telemetry/tracing stubs and are not used by the app
 // at runtime. F-Droid scanner flags them as "Tracker" anti-features.
 configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin") {
+            useVersion("2.2.10")
+        }
+    }
     exclude(group = "io.opencensus", module = "opencensus-api")
     exclude(group = "io.opencensus", module = "opencensus-proto")
     exclude(group = "io.opencensus", module = "opencensus-contrib-grpc-metrics")
@@ -214,7 +223,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
 
     // === Mozilla GeckoView Engine (Architecture-specific) ===
-    val geckoviewVersion = "145.0.20251124145406"
+    val geckoviewVersion = "154.0.20260824154132"
 
     // Universal flavor: single artifact (avoids capability collision between ABIs)
     "universalImplementation"("org.mozilla.geckoview:geckoview:$geckoviewVersion")

@@ -754,7 +754,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 activeContextMenu = ContextMenuElement(
                     linkUri = element.linkUri,
                     srcUri = element.srcUri,
-                    linkText = element.textContent
+                    linkText = element.title ?: element.altText
                 )
             }
         }

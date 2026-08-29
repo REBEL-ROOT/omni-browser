@@ -1,0 +1,6 @@
+• Upgraded Gecko Engine to v154 for faster page loads & smoother scrolling
+• Firefox Sync: End-to-end sync for bookmarks, tabs, logins & history
+• Top Address Bar: Fixed bottom viewport spacing & perfected touch tap accuracy
+• Enhanced Media Sniffer & integrated BitTorrent engine
+• Offline AI summarizer & smarter ad blocker
+• 16 KB page-size alignment for Android 15+ performance & stability
