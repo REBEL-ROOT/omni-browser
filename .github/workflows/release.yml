@@ -124,30 +124,21 @@ jobs:
 
             ## 🚀 What's New in ${{ github.ref_name }}
 
-            ### ⚡ Performance, RAM Scaling & Black Screen Fixes
-            - **Adaptive Multi-Process & Tab Scaler**: Scaled Gecko content processes (`dom.ipc.processCount`) and live tab caps dynamically based on physical device RAM (up to 8 processes and 24 live tabs on 6GB+ RAM devices, optimized for lower-RAM devices).
-            - **Compositor Resource Release on Tab Suspension**: Fixed black screens caused by reaching content process limits by actively deactivating Gecko renderers (`session.setActive(false)`) when background tabs are soft-suspended.
-            - **Smart Memory Pressure Handling**: Refined `onTrimMemory` lifecycle hooks to halve live tab caps under memory pressure and restore full capacity once pressure eases.
+            ### 🌐 Gecko Engine v154 & Core Enhancements
+            - **Upgraded Gecko Engine to v154**: Faster page loads, smoother scrolling, and modern web standards.
+            - **Firefox Sync**: End-to-end sync for bookmarks, logins, open tabs, and browsing history.
+            - **Top Address Bar**: Fixed bottom viewport spacing, overflow clipping, and perfected touch tap precision.
+            - **Privacy & AI**: Smart ad blocker with offline on-device webpage summarizer.
+            - **Performance**: Full 16 KB page-size alignment for optimal Android 15+ stability.
 
-            ### 🧭 Bottom Address Bar & Keyboard UX
-            - **Upward Suggestions & Actions Layout**: When the address bar is configured at the bottom, history suggestions and quick action bars now expand upwards naturally above the keyboard.
-            - **IME Keyboard Padding Fix**: Refined keyboard focus insets to eliminate jumping or double-padding when typing into the bottom address bar.
-            - **Theme-Adaptive Search Bar**: Enhanced contrast and styling for search bar backgrounds across Light, Dark, and AMOLED modes.
+            ### 🧩 Universal Mobile Extension Compatibility Engine
+            - **Universal In-Page Overlay Clamping**: Automatic detection and styling engine for extensions (Bitwarden, LastPass, 1Password, Dashlane, Keeper, NordPass, RoboForm, KeePass, and generic extension popups/bars) to prevent mobile screen clipping and white rectangle overlay artifacts.
+            - **Dynamic MutationObserver**: Watches for dynamically injected extension prompts, auto-constraining them to 100vw with transparency guards and duplicate-injection prevention.
+            - **Responsive Popup Viewports**: Automatically injects mobile-friendly viewport meta tags and universal box-model CSS into `moz-extension://` popups so dialogs, buttons, and inputs render seamlessly on mobile displays.
 
-            ### 🧩 WebExtensions Engine & Popup Enhancements
-            - **Crash & NPE Prevention**: Added null-safe metadata and extension ID fallbacks (`safeId` / `safeMetaData`) across all extension cards and delegates.
-            - **Overhauled Popup Lifecycle**: Configured full prompt, progress, and navigation delegates for extension popups, ensuring seamless handling of alerts, button prompts, and `moz-extension://` navigation.
-            - **Smooth Progress Bar**: Replaced heavy blocking spinner overlays with a sleek, non-intrusive top linear progress bar.
-            - **Options Page Fallback**: Clicking extensions without active popups now seamlessly opens their options page in a new tab.
-            - **Startup & Icon Cache Optimization**: Avoids redundant IPC enable/disable calls and caches extension icons to boost startup performance.
-
-            ### 🎬 Dark Mode & OLED Media Player Protection
-            - **Video Player Protection**: Added dynamic video player detection and MutationObservers (`markVideoPlayers`) to prevent force-dark / AMOLED CSS from inverting video controls and overlays.
-            - **Refined Contrast**: Grouped core page containers and applied scoped styling to eliminate background washouts.
-
-            ### 🛡️ AdBlock & Scriptlet Fixes
-            - **Stealth Defuser JS Injection Fix**: Resolved single-line comment stripping during scriptlet injection, ensuring anti-adblock defuser traps execute cleanly.
-            - **Enhanced Crash Logging**: Added thread names and stack traces with visual markers in logcat for faster diagnostic triage.
+            ### 📥 Downloads & Update Resilience
+            - **MediaFire & File MIME Download Fix**: Fixed an issue where APK and binary file downloads from MediaFire / direct file hosts could be saved with `.bin` extensions.
+            - **In-App APK Installation Crash Fix**: Added `FLAG_ACTIVITY_NEW_TASK` and `FLAG_ACTIVITY_CLEAR_TOP` to the APK installer intent to eliminate crashes when triggering updates from ViewModel contexts.
 
             ---
 

@@ -7,7 +7,7 @@
 
   <a href="https://kotlinlang.org/"><img src="https://img.shields.io/badge/Kotlin-1.9-blueviolet?style=for-the-badge&logo=kotlin&logoColor=white" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4CAF50?style=for-the-badge&logo=android&logoColor=white" /></a>
-  <a href="https://mozilla.github.io/geckoview/"><img src="https://img.shields.io/badge/Engine-GeckoView%20v145-FF7139?style=for-the-badge&logo=firefox&logoColor=white" /></a>
+  <a href="https://mozilla.github.io/geckoview/"><img src="https://img.shields.io/badge/Engine-GeckoView%20v154-FF7139?style=for-the-badge&logo=firefox&logoColor=white" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue?style=for-the-badge" /></a>
   <a href="https://github.com/REBEL-ROOT/omni-browser/releases"><img src="https://img.shields.io/github/v/release/REBEL-ROOT/omni-browser?style=for-the-badge&color=success" /></a>
   <a href="https://github.com/REBEL-ROOT/omni-browser/issues"><img src="https://img.shields.io/github/issues/REBEL-ROOT/omni-browser?style=for-the-badge" /></a>
