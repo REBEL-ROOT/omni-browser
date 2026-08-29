@@ -1285,6 +1285,10 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 if (forceDarkWebsites || isDarkThemeEnabled) {
                     injectForceDarkCssIfNeeded(tab)
                 }
+                injectExtensionOverlayMobileFix(tab)
+                if (tab.url.startsWith("moz-extension://")) {
+                    injectExtensionPopupResponsiveFix(tab)
+                }
                 if (tab.id == activeTabId) {
                     injectStealthDefuserScriptlet(tab)
                     if (accessibilityForceZoom) {
@@ -1432,4 +1436,134 @@ internal fun getNativeAppHandlers(context: Context, uri: String): List<android.c
     } catch (e: Exception) {
         emptyList()
     }
+}
+
+fun BrowserViewModel.injectExtensionOverlayMobileFix(tab: TabState) {
+    val js = """
+        (function() {
+            try {
+                if (window.__omni_ext_overlay_fix_installed) return;
+                window.__omni_ext_overlay_fix_installed = true;
+
+                var style = document.createElement('style');
+                style.id = 'omni-ext-overlay-style';
+                style.innerHTML = `
+                    iframe[src*="moz-extension://"],
+                    iframe[src*="chrome-extension://"],
+                    iframe[id*="bitwarden"],
+                    iframe[class*="bitwarden"],
+                    #bitwarden-notification-bar,
+                    div[id*="bitwarden-overlay"],
+                    .bitwarden-overlay,
+                    [class*="bitwarden-notification"] {
+                        max-width: 100vw !important;
+                        width: 100% !important;
+                        left: 0px !important;
+                        right: 0px !important;
+                        margin: 0 auto !important;
+                        background: transparent !important;
+                        background-color: transparent !important;
+                        border: none !important;
+                        box-sizing: border-box !important;
+                        color-scheme: light dark !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+
+                function fixElement(el) {
+                    if (!el || !el.tagName) return;
+                    var isExt = false;
+                    var src = (el.getAttribute && el.getAttribute('src')) || '';
+                    var id = el.id || '';
+                    var cls = (el.className && typeof el.className === 'string') ? el.className : '';
+                    if (src.indexOf('moz-extension://') !== -1 || src.indexOf('chrome-extension://') !== -1 ||
+                        id.indexOf('bitwarden') !== -1 || cls.indexOf('bitwarden') !== -1 ||
+                        id === 'bitwarden-notification-bar') {
+                        isExt = true;
+                    }
+                    if (isExt && el.tagName.toLowerCase() === 'iframe') {
+                        el.setAttribute('allowtransparency', 'true');
+                        el.style.setProperty('max-width', '100vw', 'important');
+                        el.style.setProperty('width', '100%', 'important');
+                        el.style.setProperty('left', '0px', 'important');
+                        el.style.setProperty('right', '0px', 'important');
+                        el.style.setProperty('background', 'transparent', 'important');
+                        el.style.setProperty('background-color', 'transparent', 'important');
+                        el.style.setProperty('box-sizing', 'border-box', 'important');
+                        el.style.setProperty('border', 'none', 'important');
+                    }
+                }
+
+                var existing = document.querySelectorAll('iframe[src*="moz-extension://"], iframe[id*="bitwarden"], #bitwarden-notification-bar, div[id*="bitwarden-overlay"], .bitwarden-overlay');
+                for (var i = 0; i < existing.length; i++) {
+                    fixElement(existing[i]);
+                }
+
+                var observer = new MutationObserver(function(mutations) {
+                    for (var m = 0; m < mutations.length; m++) {
+                        var added = mutations[m].addedNodes;
+                        for (var n = 0; n < added.length; n++) {
+                            var node = added[n];
+                            if (node && node.nodeType === 1) {
+                                fixElement(node);
+                                if (node.querySelectorAll) {
+                                    var nested = node.querySelectorAll('iframe[src*="moz-extension://"], iframe[id*="bitwarden"], #bitwarden-notification-bar');
+                                    for (var k = 0; k < nested.length; k++) {
+                                        fixElement(nested[k]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                observer.observe(document.documentElement || document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            } catch (e) {}
+        })();
+    """.trimIndent().replace("\n", " ")
+
+    tab.session.loadUri("javascript:$js")
+}
+
+fun BrowserViewModel.injectExtensionPopupResponsiveFix(tab: TabState) {
+    val js = """
+        (function() {
+            try {
+                if (!document.querySelector('meta[name="viewport"]')) {
+                    var meta = document.createElement('meta');
+                    meta.name = 'viewport';
+                    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
+                    (document.head || document.documentElement).appendChild(meta);
+                }
+                var style = document.createElement('style');
+                style.id = 'omni-ext-popup-responsive';
+                style.innerHTML = `
+                    html, body {
+                        max-width: 100vw !important;
+                        width: 100% !important;
+                        min-width: unset !important;
+                        overflow-x: hidden !important;
+                        box-sizing: border-box !important;
+                        background-color: transparent !important;
+                    }
+                    * {
+                        box-sizing: border-box !important;
+                    }
+                    .notification, .card, #notification, [class*="notification"], [class*="card"], [class*="popup"], .container, main {
+                        max-width: calc(100vw - 16px) !important;
+                        width: auto !important;
+                        min-width: unset !important;
+                        margin-left: auto !important;
+                        margin-right: auto !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            } catch (e) {}
+        })();
+    """.trimIndent().replace("\n", " ")
+
+    tab.session.loadUri("javascript:$js")
 }

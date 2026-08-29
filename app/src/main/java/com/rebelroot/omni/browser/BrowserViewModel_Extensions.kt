@@ -177,11 +177,49 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
         }
     }
 
-    // Progress delegate — track loading state
+    // Progress delegate — track loading state and apply responsive scaling to extension popup
     session.progressDelegate = object : GeckoSession.ProgressDelegate {
         override fun onPageStop(session: GeckoSession, success: Boolean) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 activeExtensionPopupLoading = false
+            }
+            if (success) {
+                val fixJs = """
+                    (function() {
+                        try {
+                            if (!document.querySelector('meta[name="viewport"]')) {
+                                var meta = document.createElement('meta');
+                                meta.name = 'viewport';
+                                meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
+                                (document.head || document.documentElement).appendChild(meta);
+                            }
+                            var style = document.createElement('style');
+                            style.id = 'omni-ext-popup-responsive';
+                            style.innerHTML = `
+                                html, body {
+                                    max-width: 100vw !important;
+                                    width: 100% !important;
+                                    min-width: unset !important;
+                                    overflow-x: hidden !important;
+                                    box-sizing: border-box !important;
+                                    background-color: transparent !important;
+                                }
+                                * {
+                                    box-sizing: border-box !important;
+                                }
+                                .notification, .card, #notification, [class*="notification"], [class*="card"], [class*="popup"], .container, main {
+                                    max-width: calc(100vw - 16px) !important;
+                                    width: auto !important;
+                                    min-width: unset !important;
+                                    margin-left: auto !important;
+                                    margin-right: auto !important;
+                                }
+                            `;
+                            (document.head || document.documentElement).appendChild(style);
+                        } catch (e) {}
+                    })();
+                """.trimIndent().replace("\n", " ")
+                session.loadUri("javascript:$fixJs")
             }
         }
         override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {}

@@ -20,6 +20,7 @@ package com.rebelroot.omni.browser
 
 import com.rebelroot.omni.R
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -27,6 +28,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.compose.runtime.mutableStateListOf
@@ -931,7 +933,12 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    fun startGenericDownload(download: PendingGenericDownload, saveToLocker: Boolean, context: Context) {
+    fun startGenericDownload(
+        download: PendingGenericDownload,
+        saveToLocker: Boolean,
+        context: Context,
+        forceInternal: Boolean = false
+    ) {
         pendingGenericDownload = null
         val safeFilename = SecurityPolicy.sanitizeFilename(download.filename).ifBlank { "download.bin" }
         if (saveToLocker) {
@@ -944,6 +951,19 @@ class BrowserViewModel : ViewModel() {
                 referrerUrl = currentUrl
             )
             Toast.makeText(context, context.getString(R.string.download_toast_locker), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (forceInternal) {
+            streamDownloadEngine.startGenericFileDownload(
+                url = download.url,
+                filename = safeFilename,
+                contentType = download.contentType,
+                saveToLocker = false,
+                cookies = activeVideoCookies,
+                referrerUrl = currentUrl
+            )
+            Toast.makeText(context, context.getString(R.string.download_toast_started), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -1046,7 +1066,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     /**
-     * Hands a download URL to an external download manager (ADM, 1DM, …) via the system
+     * Hands a download URL to an external download manager (ADM, 1DM, IDM, FDM, …) via the system
      * chooser or directly to a target package.
      */
     fun handOffToExternalDownloadManager(
@@ -1062,40 +1082,105 @@ class BrowserViewModel : ViewModel() {
         val scheme = parsed.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") return false
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(parsed, contentType?.takeIf { it.isNotBlank() } ?: "*/*")
-            addCategory(Intent.CATEGORY_BROWSABLE)
-            val headers = Bundle().apply {
-                referrerUrl?.takeIf { it.isNotBlank() }?.let { putString("Referer", it) }
-                cookies?.takeIf { it.isNotBlank() }?.let { putString("Cookie", it) }
-                putString("User-Agent", CHROME_UA)
+        val safeFilename = filename?.takeIf { it.isNotBlank() }
+            ?: guessDownloadFilename(url, contentType)
+
+        val resolvedPackage = targetPackage?.takeIf { it.isNotBlank() }
+            ?: if (defaultDownloader.startsWith("package:")) {
+                defaultDownloader.substringAfter("package:").takeIf { it.isNotBlank() }
+            } else null
+
+        // Resolve MIME type using provided contentType or file extension
+        val resolvedMime = contentType?.takeIf { it.isNotBlank() && it != "*/*" }
+            ?: safeFilename.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.let { ext ->
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.lowercase())
+            } ?: "application/octet-stream"
+
+        val headers = Bundle().apply {
+            referrerUrl?.takeIf { it.isNotBlank() }?.let {
+                putString("Referer", it)
+                putString("Referrer", it)
             }
-            putExtra(android.provider.Browser.EXTRA_HEADERS, headers)
-            filename?.takeIf { it.isNotBlank() }?.let { putExtra("title", it) }
-            if (!targetPackage.isNullOrEmpty()) {
-                setPackage(targetPackage)
+            cookies?.takeIf { it.isNotBlank() }?.let {
+                putString("Cookie", it)
+                putString("cookie", it)
+            }
+            putString("User-Agent", CHROME_UA)
+            putString("user-agent", CHROME_UA)
+        }
+
+        fun buildIntent(pkg: String?, withType: Boolean): Intent {
+            return Intent(Intent.ACTION_VIEW).apply {
+                if (withType) {
+                    setDataAndType(parsed, resolvedMime)
+                } else {
+                    setData(parsed)
+                }
+                addCategory(Intent.CATEGORY_DEFAULT)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+                // Headers bundle recognized by ADM, 1DM, and Android Browser
+                putExtra(android.provider.Browser.EXTRA_HEADERS, headers)
+                putExtra("com.android.browser.headers", headers)
+
+                // Standard and third-party download manager extras (ADM, 1DM, FDM, NDM, etc.)
+                putExtra(Intent.EXTRA_TEXT, url)
+                putExtra("download_url", url)
+                putExtra("android.intent.extra.TEXT", url)
+                putExtra("title", safeFilename)
+                putExtra("filename", safeFilename)
+                putExtra(Intent.EXTRA_TITLE, safeFilename)
+                putExtra("secure_uri", true)
+
+                if (!pkg.isNullOrEmpty()) {
+                    setPackage(pkg)
+                }
             }
         }
 
         return try {
-            if (!targetPackage.isNullOrEmpty()) {
-                context.startActivity(intent)
-            } else {
-                val chooser = Intent.createChooser(intent, "Download with…")
-                context.startActivity(chooser)
-            }
-            true
-        } catch (e: Exception) {
-            if (!targetPackage.isNullOrEmpty()) {
-                runCatching {
-                    intent.setPackage(null)
-                    val chooser = Intent.createChooser(intent, "Download with…")
-                    context.startActivity(chooser)
+            if (!resolvedPackage.isNullOrEmpty()) {
+                // Try targeted package with MIME type first, fallback to data-only URI
+                val intentWithType = buildIntent(resolvedPackage, withType = true)
+                val canHandleWithType = try {
+                    context.packageManager.queryIntentActivities(intentWithType, 0).isNotEmpty()
+                } catch (_: Exception) { false }
+
+                if (canHandleWithType) {
+                    context.startActivity(intentWithType)
                     true
-                }.getOrDefault(false)
+                } else {
+                    val intentWithoutType = buildIntent(resolvedPackage, withType = false)
+                    context.startActivity(intentWithoutType)
+                    true
+                }
             } else {
-                false
+                // System Chooser mode ("Always Ask" / "External Downloader" option clicked)
+                val primaryIntent = buildIntent(null, withType = true)
+                val chooser = Intent.createChooser(primaryIntent, "Download with…").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                        val excludeList = arrayOf(
+                            ComponentName(context.packageName, "com.rebelroot.omni.MainActivity"),
+                            ComponentName(context.packageName, context.javaClass.name)
+                        )
+                        putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, excludeList)
+                    }
+                }
+                context.startActivity(chooser)
+                true
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to hand off download to external manager", e)
+            runCatching {
+                val fallbackIntent = buildIntent(null, withType = false)
+                val chooser = Intent.createChooser(fallbackIntent, "Download with…").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(chooser)
+                true
+            }.getOrDefault(false)
         }
     }
 
@@ -1174,16 +1259,32 @@ class BrowserViewModel : ViewModel() {
         val result = mutableMapOf<String, ExternalDownloaderApp>()
 
         val knownPackages = listOf(
-            "com.dv.adm" to "ADM (Advanced Download Manager)",
-            "com.dv.adm.pay" to "ADM Pro",
+            "com.dv.get" to "ADM (Advanced Download Manager)",
+            "com.dv.get.pro" to "ADM Pro",
+            "com.dv.adm" to "ADM (Legacy)",
+            "com.dv.adm.pay" to "ADM Pro (Legacy)",
             "idm.internet.download.manager" to "1DM",
+            "idm.internet.download.manager.plus" to "1DM+",
             "idm.internet.download.manager.lite" to "1DM Lite",
-            "idm.internet.download.manager.adm" to "1DM+",
+            "idm.internet.download.manager.adm" to "1DM+ (Alt)",
+            "idm.internet.download.manager.adm.thirdparty" to "1DM Third-Party",
+            "com.idm.internet.download.manager" to "1DM (Alt)",
+            "org.freedownloadmanager.fdm" to "Free Download Manager",
             "com.al.ndm" to "NDM (Download Manager)",
             "com.delphicoder.flud" to "Flud Torrent",
             "com.delphicoder.flud.paid" to "Flud Torrent Pro",
             "com.tt.android.dm" to "Download Navigator",
-            "org.mrb.downloadmanager" to "Download Manager"
+            "com.pavelrekun.yak2" to "Download Navi",
+            "org.mrb.downloadmanager" to "Download Manager",
+            "com.gianlu.aria2android" to "Aria2Android",
+            "com.gigatools.downloader" to "Nova Download Manager",
+            "com.ponydroid.ponydroid" to "Ponydroid",
+            "com.mixplorer" to "MiXplorer",
+            "com.mixplorer.silver" to "MiXplorer Silver",
+            "com.bittorrent.client" to "BitTorrent",
+            "com.utorrent.client" to "µTorrent",
+            "org.proninyaroslav.libretorrent" to "LibreTorrent",
+            "com.torrent.torrdroid" to "TorrDroid"
         )
 
         for ((pkg, label) in knownPackages) {
@@ -1198,8 +1299,8 @@ class BrowserViewModel : ViewModel() {
         runCatching {
             val testUri = Uri.parse("https://example.com/file.bin")
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(testUri, "*/*")
-                addCategory(Intent.CATEGORY_BROWSABLE)
+                setDataAndType(testUri, "application/octet-stream")
+                addCategory(Intent.CATEGORY_DEFAULT)
             }
             val resolveInfos = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                 pm.queryIntentActivities(intent, android.content.pm.PackageManager.ResolveInfoFlags.of(0))
@@ -1209,7 +1310,13 @@ class BrowserViewModel : ViewModel() {
             }
             for (info in resolveInfos) {
                 val pkg = info.activityInfo.packageName
-                if (pkg != context.packageName && !pkg.contains("browser") && !pkg.contains("chrome") && !pkg.contains("firefox")) {
+                if (pkg != context.packageName && 
+                    !pkg.contains("browser") && 
+                    !pkg.contains("chrome") && 
+                    !pkg.contains("firefox") &&
+                    !pkg.contains("opera") &&
+                    !pkg.contains("edge")
+                ) {
                     if (!result.containsKey(pkg)) {
                         val appName = info.loadLabel(pm).toString()
                         val icon = info.loadIcon(pm)
@@ -8190,6 +8297,8 @@ class BrowserViewModel : ViewModel() {
                                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                                     setDataAndType(apkUri, "application/vnd.android.package-archive")
                                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                 }
                                 context.startActivity(intent)
                             } else {

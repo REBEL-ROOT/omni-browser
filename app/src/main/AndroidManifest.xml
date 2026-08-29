@@ -59,13 +59,27 @@
         <package android:name="in.amazon.mShop.android.shopping" />      <!-- Amazon Pay -->
         <package android:name="com.whatsapp" />                          <!-- WhatsApp -->
 
-        <!-- External download managers (ADM / 1DM) — for chooser visibility on Android 11+ -->
+        <!-- External download managers (ADM / 1DM / FDM / NDM / Navi / Flud / Aria2, etc.) — for chooser visibility on Android 11+ -->
         <package android:name="com.dv.adm" />                              <!-- ADM (legacy) -->
+        <package android:name="com.dv.adm.pay" />                          <!-- ADM Pro (legacy) -->
         <package android:name="com.dv.get" />                              <!-- ADM (current) -->
+        <package android:name="com.dv.get.pro" />                          <!-- ADM Pro (current) -->
         <package android:name="idm.internet.download.manager" />           <!-- 1DM -->
         <package android:name="idm.internet.download.manager.plus" />      <!-- 1DM+ -->
+        <package android:name="idm.internet.download.manager.lite" />      <!-- 1DM Lite -->
+        <package android:name="idm.internet.download.manager.adm" />       <!-- 1DM+ (alt) -->
         <package android:name="idm.internet.download.manager.adm.thirdparty" /> <!-- 1DM third-party -->
         <package android:name="com.idm.internet.download.manager" />       <!-- 1DM (alt) -->
+        <package android:name="org.freedownloadmanager.fdm" />              <!-- Free Download Manager -->
+        <package android:name="com.al.ndm" />                              <!-- NDM -->
+        <package android:name="com.tt.android.dm" />                       <!-- Download Navigator -->
+        <package android:name="com.pavelrekun.yak2" />                     <!-- Download Navi -->
+        <package android:name="org.mrb.downloadmanager" />                 <!-- Download Manager -->
+        <package android:name="com.gianlu.aria2android" />                 <!-- Aria2Android -->
+        <package android:name="com.gigatools.downloader" />                <!-- Nova Download Manager -->
+        <package android:name="com.ponydroid.ponydroid" />                 <!-- Ponydroid -->
+        <package android:name="com.mixplorer" />                           <!-- MiXplorer -->
+        <package android:name="com.mixplorer.silver" />                    <!-- MiXplorer Silver -->
 
         <!-- For querying torrent and magnet links (Flud, BitTorrent, uTorrent, LibreTorrent, etc.) -->
         <intent>

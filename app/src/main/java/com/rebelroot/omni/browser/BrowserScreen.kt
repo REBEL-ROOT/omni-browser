@@ -3772,7 +3772,11 @@ fun BrowserScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                         Button(
-                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = false, context) },
+                            onClick = {
+                                val current = pending
+                                viewModel.pendingGenericDownload = null
+                                viewModel.startGenericDownload(current, saveToLocker = false, context = context, forceInternal = true)
+                            },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(32.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -3783,7 +3787,11 @@ fun BrowserScreen(
                         }
 
                         OutlinedButton(
-                            onClick = { viewModel.startGenericDownload(pending, saveToLocker = true, context) },
+                            onClick = {
+                                val current = pending
+                                viewModel.pendingGenericDownload = null
+                                viewModel.startGenericDownload(current, saveToLocker = true, context = context)
+                            },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(32.dp),
                             border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
@@ -3793,26 +3801,29 @@ fun BrowserScreen(
                             Text(stringResource(R.string.download_destination_vault), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
                         }
 
-                        if (viewModel.isExternalDownloadManagerEnabled) {
-                            OutlinedButton(
-                                onClick = {
-                                    val current = pending
-                                    viewModel.pendingGenericDownload = null
-                                    viewModel.handOffToExternalDownloadManager(
-                                        context = context,
-                                        url = current.url,
-                                        filename = current.filename,
-                                        contentType = current.contentType
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                                shape = RoundedCornerShape(32.dp),
-                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
-                            ) {
-                                Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.external_download_manager_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
-                            }
+                        OutlinedButton(
+                            onClick = {
+                                val current = pending
+                                viewModel.pendingGenericDownload = null
+                                val handedOff = viewModel.handOffToExternalDownloadManager(
+                                    context = context,
+                                    url = current.url,
+                                    filename = current.filename,
+                                    contentType = current.contentType
+                                )
+                                if (handedOff) {
+                                    Toast.makeText(context, context.getString(R.string.download_toast_external), Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Could not open external downloader", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(32.dp),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.external_download_manager_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
                         }
 
                         TextButton(
