@@ -9,8 +9,8 @@ plugins {
 // DO NOT remove the ABI offsets in the onVariants block!
 // baseVersionCode = 2027 on its own wouldn't clear the old 1002004 bug. 
 // It only works because of the per-ABI +1M/2M/3M offsets.
-val baseVersionCode = 2049
-val baseVersionName = "1.3.1.1"
+val baseVersionCode = 2050
+val baseVersionName = "1.3.1.2"
 
 android {
     namespace = "com.rebelroot.omni"
@@ -295,6 +295,7 @@ dependencies {
     // === Image Loading ===
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-gif:2.7.0")
+    implementation("io.coil-kt:coil-svg:2.7.0")
 
     // === AndroidX Media3 / ExoPlayer ===
     val media3Version = "1.3.1"
@@ -312,6 +313,12 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
+
+    // === ML Kit On-Device Text Recognition V2 (Manga & Image OCR) ===
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }
 
 tasks.register("checkStringParity") {

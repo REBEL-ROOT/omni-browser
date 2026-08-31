@@ -82,7 +82,7 @@ jobs:
       - name: Rename APKs
         run: |
           export VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ]; then export VERSION="v1.2.6.3"; fi
+          if [ -z "$VERSION" ]; then export VERSION="v1.3.1.2"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -124,21 +124,19 @@ jobs:
 
             ## 🚀 What's New in ${{ github.ref_name }}
 
+            ### 🎨 AI Manga & Comic Translation Engine
+            - **On-Device Manga & Comic OCR/Translation**: Integrated smart AI detection, text replacement overlays, and multi-language support for manga and comic reading.
+            - **Webpage Translation Bridge**: Enhanced DOM text translation and dynamic content handling.
+
+            ### 📷 QR Code & Media Tools
+            - **Advanced QR Code Scanner & Generator**: Support for camera scanning, gallery image decoding, multi-format QR/barcode decoding, and direct action triggers.
+            - **High-Res Media Grabber**: Upgraded asset extraction, media grabber resolution enhancements, and batch downloads.
+
             ### 🌐 Gecko Engine v154 & Core Enhancements
-            - **Upgraded Gecko Engine to v154**: Faster page loads, smoother scrolling, and modern web standards.
+            - **Gecko Engine v154**: Faster page loads, smoother scrolling, and modern web standards.
             - **Firefox Sync**: End-to-end sync for bookmarks, logins, open tabs, and browsing history.
-            - **Top Address Bar**: Fixed bottom viewport spacing, overflow clipping, and perfected touch tap precision.
-            - **Privacy & AI**: Smart ad blocker with offline on-device webpage summarizer.
-            - **Performance**: Full 16 KB page-size alignment for optimal Android 15+ stability.
-
-            ### 🧩 Universal Mobile Extension Compatibility Engine
-            - **Universal In-Page Overlay Clamping**: Automatic detection and styling engine for extensions (Bitwarden, LastPass, 1Password, Dashlane, Keeper, NordPass, RoboForm, KeePass, and generic extension popups/bars) to prevent mobile screen clipping and white rectangle overlay artifacts.
-            - **Dynamic MutationObserver**: Watches for dynamically injected extension prompts, auto-constraining them to 100vw with transparency guards and duplicate-injection prevention.
-            - **Responsive Popup Viewports**: Automatically injects mobile-friendly viewport meta tags and universal box-model CSS into `moz-extension://` popups so dialogs, buttons, and inputs render seamlessly on mobile displays.
-
-            ### 📥 Downloads & Update Resilience
-            - **MediaFire & File MIME Download Fix**: Fixed an issue where APK and binary file downloads from MediaFire / direct file hosts could be saved with `.bin` extensions.
-            - **In-App APK Installation Crash Fix**: Added `FLAG_ACTIVITY_NEW_TASK` and `FLAG_ACTIVITY_CLEAR_TOP` to the APK installer intent to eliminate crashes when triggering updates from ViewModel contexts.
+            - **Tab & Navigation Settings**: Granular control over tab layouts, close confirmations, and UI customization.
+            - **Universal Mobile Extension Compatibility**: Mobile-friendly overlay clamping and viewport responsiveness.
 
             ---
 
