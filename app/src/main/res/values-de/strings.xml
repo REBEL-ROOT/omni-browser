@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">Beenden &amp; Alles vernichten</string>
     <string name="exit_quit_burn_all_desc">Schließen und alle Tabs, Verlauf &amp; Cache löschen</string>
     <string name="exit_cancel">Abbrechen</string>
+    <string name="exit_dont_ask_again">Nicht mehr fragen</string>
+    <string name="default_exit_action_title">Standard-Beendigungsaktion</string>
+    <string name="default_exit_action_desc">Aktion beim Beenden vom Startbildschirm</string>
+    <string name="exit_action_always_ask">Immer nachfragen</string>
     <string name="video_player_aspect_fit">Seitenverhältnis: An Bildschirm anpassen</string>
     <string name="video_player_aspect_fill">Seitenverhältnis: Bildschirm ausfüllen</string>
     <string name="video_player_aspect_stretch">Seitenverhältnis: Strecken</string>

@@ -93,6 +93,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.ui.theme.getUiSizeConfig
@@ -127,6 +128,7 @@ import kotlin.math.abs
  import androidx.compose.foundation.gestures.rememberTransformableState
  import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.boundsInRoot
@@ -306,11 +308,14 @@ fun BrowserScreen(
     var showSiteInfoSheet by remember { mutableStateOf(false) }
     var showPrivacyReportSheet by remember { mutableStateOf(false) }
     var inputUrl by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)) }
-    LaunchedEffect(inputUrl.text) {
-        viewModel.fetchSearchSuggestions(inputUrl.text)
-        viewModel.fetchHistorySuggestions(inputUrl.text)
-    }
     var isInputFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(inputUrl.text, isInputFocused) {
+        if (isInputFocused && inputUrl.text.isNotBlank() && inputUrl.text != "about:blank") {
+            viewModel.fetchHistorySuggestions(inputUrl.text)
+        } else {
+            viewModel.historySuggestions.clear()
+        }
+    }
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     
@@ -894,16 +899,20 @@ fun BrowserScreen(
             if (viewModel.isExternalIntentLaunch && activity != null) {
                 if (activity.isTaskRoot) activity.finishAndRemoveTask() else activity.finish()
             } else {
-                if (viewModel.confirmExit) {
+                if (viewModel.confirmExit || viewModel.defaultExitAction == "ASK") {
                     showExitSheet = true
                 } else {
-                    if (activity?.isTaskRoot == true) activity.finishAndRemoveTask() else activity?.finish()
+                    viewModel.performExitAction(context, viewModel.defaultExitAction) {
+                        onExitBrowser()
+                    }
                 }
             }
         }
     }
 
     if (showExitSheet) {
+        var dontAskAgain by remember { mutableStateOf(false) }
+
         androidx.compose.material3.ModalBottomSheet(
             onDismissRequest = { showExitSheet = false },
             containerColor = if (viewModel.isAmoledMode) Color(0xFF0D0D0D) else MaterialTheme.colorScheme.surface,
@@ -921,8 +930,9 @@ fun BrowserScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 28.dp),
+                    .padding(bottom = 24.dp),
                 horizontalAlignment = Alignment.Start
             ) {
                 // Header
@@ -951,6 +961,9 @@ fun BrowserScreen(
                     isDark = viewModel.isDarkThemeEnabled,
                     onClick = {
                         showExitSheet = false
+                        if (dontAskAgain) {
+                            viewModel.saveDefaultExitAction(context, "QUIT")
+                        }
                         onExitBrowser()
                     }
                 )
@@ -968,6 +981,9 @@ fun BrowserScreen(
                     isDark = viewModel.isDarkThemeEnabled,
                     onClick = {
                         showExitSheet = false
+                        if (dontAskAgain) {
+                            viewModel.saveDefaultExitAction(context, "CLEAR_HISTORY")
+                        }
                         coroutineScope.launch {
                             viewModel.clearAllHistory()
                             onExitBrowser()
@@ -988,6 +1004,9 @@ fun BrowserScreen(
                     isDark = viewModel.isDarkThemeEnabled,
                     onClick = {
                         showExitSheet = false
+                        if (dontAskAgain) {
+                            viewModel.saveDefaultExitAction(context, "BURN_ALL")
+                        }
                         coroutineScope.launch {
                             val runtime = viewModel.getGeckoRuntime(context)
                             FireButton(runtime, context).burn()
@@ -997,7 +1016,35 @@ fun BrowserScreen(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // --- Don't ask again checkbox row ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { dontAskAgain = !dontAskAgain }
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = dontAskAgain,
+                        onCheckedChange = { dontAskAgain = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.exit_dont_ask_again),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // --- Cancel ---
                 OutlinedButton(
@@ -1082,6 +1129,8 @@ fun BrowserScreen(
             showDownloadSheet || showVideoOverviewDialog || (viewModel.pendingGenericDownload != null) || (viewModel.pendingTorrentUrl != null)
         if (_observeDialogTriggers) { /* observation only */ }
 
+        var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+
         Scaffold(
         topBar = {
         if (!viewModel.isFullscreen && !showHomeScreen &&
@@ -1102,7 +1151,9 @@ fun BrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = statusBarHeightDp)
-                            .graphicsLayer { translationY = -topBarTotalHeight.toPx() * topBarFraction },
+                            .offset {
+                                IntOffset(0, (-topBarTotalHeight.toPx() * topBarFraction).toInt())
+                            },
                         shape = androidx.compose.ui.graphics.RectangleShape,
                         color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                         shadowElevation = 8.dp,
@@ -1211,13 +1262,13 @@ fun BrowserScreen(
                                 ) {
                                     IconButton(
                                         onClick = { viewModel.goBack() },
-                                        enabled = viewModel.canGoBack,
+                                        enabled = viewModel.canGoBack && !showHomeScreen,
                                         modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                             contentDescription = "Back",
-                                            tint = if (viewModel.canGoBack) (if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)) else (if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.2f) else Color(0x1F000000)),
+                                            tint = if (viewModel.canGoBack && !showHomeScreen) (if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)) else (if (viewModel.isDarkThemeEnabled) Color.White.copy(alpha = 0.2f) else Color(0x1F000000)),
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -1527,7 +1578,9 @@ fun BrowserScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .graphicsLayer { translationY = -topBarMeasuredDp.toPx() * topBarFraction },
+                                .offset {
+                                    IntOffset(0, (-topBarMeasuredDp.toPx() * topBarFraction).toInt())
+                                },
                             color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                             shadowElevation = 4.dp
                         ) {
@@ -1557,7 +1610,14 @@ fun BrowserScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer { translationY = size.height * bottomBarFraction }
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0 && bottomBarHeightPx != coords.size.height) {
+                            bottomBarHeightPx = coords.size.height
+                        }
+                    }
+                    .offset {
+                        IntOffset(0, (bottomBarHeightPx * bottomBarFraction).toInt())
+                    }
             ) {
                 // --- Bottom Group Strip ---
                 if (!showHomeScreen && activeTab != null) {
@@ -1845,13 +1905,13 @@ fun BrowserScreen(
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                 IconButton(
                                     onClick = { viewModel.goBack() },
-                                    enabled = viewModel.canGoBack,
+                                    enabled = viewModel.canGoBack && !showHomeScreen,
                                     modifier = Modifier.size(config.barIconSize + 4.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                         contentDescription = "Back",
-                                        tint = if (viewModel.canGoBack) navContent else navContentMuted,
+                                        tint = if (viewModel.canGoBack && !showHomeScreen) navContent else navContentMuted,
                                         modifier = Modifier.size(config.innerIconSize)
                                     )
                                 }
@@ -1941,7 +2001,6 @@ fun BrowserScreen(
         // the content area is never tied to Scaffold's measurement. GeckoView padding
         // snaps binary on isScrollNavBarVisible, so no reflow happens during the
         // graphicsLayer slide animation.
-        val needsStatusBarPadding = viewModel.addressBarPosition != "Bottom" || isTablet || showHomeScreen
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1950,24 +2009,10 @@ fun BrowserScreen(
                 .background(if (viewModel.isFullscreen || isLandscape) Color.Black else MaterialTheme.colorScheme.background)
         ) {
             Column(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (!viewModel.isFullscreen && !isLandscape) Modifier.statusBarsPadding() else Modifier)
             ) {
-                if (!needsStatusBarPadding && !viewModel.isFullscreen) {
-                    val isDark = viewModel.isDarkThemeEnabled
-                    val statusBarBg = if (viewModel.isAmoledMode) Color(0xFF000000) else if (isDark) Color(0xFF1C1C1E) else Color.White
-                    val dividerColor = if (viewModel.isAmoledMode) Color(0xFF161618) else if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(statusBarHeightDp)
-                            .background(statusBarBg)
-                    )
-                    HorizontalDivider(
-                        color = dividerColor,
-                        thickness = 0.5.dp
-                    )
-                }
-
                 AnimatedVisibility(
                     visible = showAlohaBanner && viewModel.addressBarPosition == "Bottom",
                     enter = expandVertically() + fadeIn(),
@@ -1984,9 +2029,7 @@ fun BrowserScreen(
                 }
 
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (needsStatusBarPadding && !viewModel.isFullscreen && !isLandscape) Modifier.statusBarsPadding() else Modifier)
+                    modifier = Modifier.weight(1f)
                 ) {
                     AnimatedContent(
                         targetState = Pair(viewModel.activeTabId, showHomeScreen),
@@ -2748,14 +2791,7 @@ fun BrowserScreen(
                                     onOpenHistory = onOpenHistory,
                                     onOpenBookmarks = onOpenBookmarks,
                                     onOpenLocker = onOpenLocker,
-                                    onOpenQrTools = {
-                                        if (!viewModel.hasSeenQrOverview) {
-                                            pendingQrAction = onOpenQrTools
-                                            showQrOverviewDialog = true
-                                        } else {
-                                            onOpenQrTools()
-                                        }
-                                    },
+                                    onOpenQrTools = onOpenQrTools,
                                     onOpenExtensions = {
                                         viewModel.saveExtensionsOverviewSeen(context, true)
                                         showExtensionsSheet = true
@@ -2766,12 +2802,7 @@ fun BrowserScreen(
                                         showTranslationDialog = true
                                     },
                                     onOpenConsole = {
-                                        if (!viewModel.hasSeenConsoleOverview) {
-                                            pendingConsoleAction = { showConsoleSheet = true }
-                                            showConsoleOverviewDialog = true
-                                        } else {
-                                            showConsoleSheet = true
-                                        }
+                                        showConsoleSheet = true
                                     },
                                     onNavigateTo = { query ->
                                         viewModel.loadUrl(query)
@@ -7466,7 +7497,7 @@ fun BrowserScreen(
                                     "torrent_downloader", "omni_config",
                                     "qr_scanner", "safe_locker", "translator", "edit_page",
                                     "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
-                                    "qr_generator", "dev_notes", "site_style"
+                                    "qr_generator", "console_log", "dev_notes", "site_style"
                                 )
                                 list.addAll(vmOrder.filter { it in allTools } + allTools.filter { it !in vmOrder })
                             }
@@ -7621,17 +7652,17 @@ fun BrowserScreen(
                             })
                             "qr_scanner" -> ({
                                 showQuickToolsSheet = false
-                                if (!viewModel.hasSeenQrOverview) { pendingQrAction = onOpenQrTools; showQrOverviewDialog = true } else onOpenQrTools()
+                                onOpenQrTools()
                             })
                             "safe_locker"  -> ({ showQuickToolsSheet = false; onOpenLocker() })
                             "translator"   -> ({ showQuickToolsSheet = false; translationSourceText = ""; translationResultText = ""; showTranslationDialog = true })
                             "edit_page" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
-                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenEditPageOverview) { pendingEditPageAction = { viewModel.toggleEditMode() }; showEditPageOverviewDialog = true } else viewModel.toggleEditMode() }
+                                else { showQuickToolsSheet = false; viewModel.toggleEditMode() }
                             })
                             "save_pdf" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
-                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenPdfOverview) { pendingPdfAction = { viewModel.printCurrentPage(context) }; showPdfOverviewDialog = true } else viewModel.printCurrentPage(context) }
+                                else { showQuickToolsSheet = false; viewModel.printCurrentPage(context) }
                             })
                             "pin_web_app" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
@@ -7643,19 +7674,25 @@ fun BrowserScreen(
                             })
                             "qr_scan_page" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
-                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { viewModel.scanPageForQrCodes() }; showQrOverviewDialog = true } else viewModel.scanPageForQrCodes() }
+                                else { showQuickToolsSheet = false; viewModel.scanPageForQrCodes() }
                             })
                             "qr_generator" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
-                                else { showQuickToolsSheet = false; if (!viewModel.hasSeenQrOverview) { pendingQrAction = { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true }; showQrOverviewDialog = true } else { qrGeneratorUrl = activeTab.url; showQrGeneratorDialog = true } }
+                                showQuickToolsSheet = false
+                                val targetUrl = if (!showHomeScreen && activeTab != null && activeTab.url != "about:blank" && !activeTab.url.startsWith("file:///android_asset/home")) {
+                                    activeTab.url
+                                } else {
+                                    ""
+                                }
+                                qrGeneratorUrl = targetUrl
+                                showQrGeneratorDialog = true
                             })
                             "console_log" -> ({
                                 showQuickToolsSheet = false
-                                if (!viewModel.hasSeenConsoleOverview) { pendingConsoleAction = { showConsoleSheet = true }; showConsoleOverviewDialog = true } else showConsoleSheet = true
+                                showConsoleSheet = true
                             })
                             "dev_notes" -> ({
                                 showQuickToolsSheet = false
-                                if (!viewModel.hasSeenDevNotesOverview) { pendingDevNotesAction = { showDevNotesSheet = true }; showDevNotesOverviewDialog = true } else showDevNotesSheet = true
+                                showDevNotesSheet = true
                             })
                             "site_style" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
@@ -8632,7 +8669,8 @@ private fun MediaSnifferBanner(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp),
-        color = Color(0xFF1B2234)
+        color = Color(0xFF1B2234),
+        shadowElevation = 4.dp
     ) {
         Row(
             modifier = Modifier

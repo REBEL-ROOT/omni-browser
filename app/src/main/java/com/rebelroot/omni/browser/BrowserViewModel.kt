@@ -19,6 +19,7 @@
 package com.rebelroot.omni.browser
 
 import com.rebelroot.omni.R
+import com.rebelroot.omni.MainActivity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -58,6 +59,7 @@ import com.rebelroot.omni.privacy.VpnManager
 import com.rebelroot.omni.privacy.TorManager
 import com.rebelroot.omni.privacy.EmbeddedTorManager
 import com.rebelroot.omni.privacy.TorState
+import com.rebelroot.omni.privacy.FireButton
 import com.rebelroot.omni.tools.locker.PrivateLockerManager
 import com.rebelroot.omni.tools.passwords.PasswordEntry
 import com.rebelroot.omni.tools.passwords.PasswordVaultManager
@@ -185,6 +187,7 @@ class BrowserViewModel : ViewModel() {
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
         val FOLLOW_SYSTEM_THEME_KEY = booleanPreferencesKey("follow_system_theme")
         val CONFIRM_EXIT_KEY = booleanPreferencesKey("confirm_exit_enabled")
+        val DEFAULT_EXIT_ACTION_KEY = stringPreferencesKey("default_exit_action")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color_enabled")
         val ACCENT_THEME_KEY = stringPreferencesKey("accent_theme")
@@ -621,6 +624,7 @@ class BrowserViewModel : ViewModel() {
     var isDarkThemeEnabled by mutableStateOf(true)
     var followSystemTheme by mutableStateOf(false)
     var confirmExit by mutableStateOf(true)
+    var defaultExitAction by mutableStateOf("ASK")
     var isAmoledMode by mutableStateOf(false)
     var isCreamyMode by mutableStateOf(false)
     var isDynamicColorEnabled by mutableStateOf(false)
@@ -2095,7 +2099,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun saveDevNotes() {
-        val context = appContext ?: return
+        val context = appContext ?: MainActivity.getActiveActivity()?.applicationContext ?: return
         val listSnapshot = devNotes.toList()
         viewModelScope.launch(Dispatchers.IO) {
             val file = File(context.filesDir, "dev_notes.json")
@@ -2952,8 +2956,8 @@ class BrowserViewModel : ViewModel() {
 
             val builder = GeckoRuntimeSettings.Builder()
                 .aboutConfigEnabled(isDebug)
-                .consoleOutput(isDebug)
-                .debugLogging(isDebug)
+                .consoleOutput(false)
+                .debugLogging(false)
                 .remoteDebuggingEnabled(isDebug)
                 .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
                 .locales(targetLocales) // Configures Accept-Language headers with English fallback
@@ -2975,8 +2979,8 @@ class BrowserViewModel : ViewModel() {
                     
                     val fallbackSettings = GeckoRuntimeSettings.Builder()
                         .aboutConfigEnabled(isDebug)
-                        .consoleOutput(isDebug)
-                        .debugLogging(isDebug)
+                        .consoleOutput(false)
+                        .debugLogging(false)
                         .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
                         .locales(targetLocales)
                         .contentBlocking(cbSettings)
@@ -3302,6 +3306,7 @@ class BrowserViewModel : ViewModel() {
                 autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
                 openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
                 confirmExit = prefs[CONFIRM_EXIT_KEY] ?: true
+                defaultExitAction = prefs[DEFAULT_EXIT_ACTION_KEY] ?: if (confirmExit) "ASK" else "QUIT"
                 accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
                 accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
                 accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
@@ -3561,7 +3566,6 @@ class BrowserViewModel : ViewModel() {
                                 put("host", org.json.JSONObject.NULL)
                             }
                         }
-                        Log.i(TAG, "ProxyRouter GET_PROXY_ENDPOINT -> ${if (ep != null) "${ep.first}:${ep.second}" else "DIRECT"} (provider=$proxyProvider)")
                         return GeckoResult.fromValue(response.toString())
                     }
                 } catch (e: Exception) {
@@ -3581,7 +3585,6 @@ class BrowserViewModel : ViewModel() {
             // nativeApp parameter must match nativeApp ID registered in background.js chrome.runtime.sendNativeMessage
             extension.setMessageDelegate(object : WebExtension.MessageDelegate {
             override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
-                Log.d(TAG, "🎬 onMessage called! nativeApp = $nativeApp, messageType = ${message.javaClass.name}, message = $message")
                 try {
                     val type = if (message is org.json.JSONObject) {
                         if (message.has("type")) message.getString("type") else null
@@ -4096,8 +4099,53 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
                 preferences[CONFIRM_EXIT_KEY] = enabled
+                if (enabled) {
+                    preferences[DEFAULT_EXIT_ACTION_KEY] = "ASK"
+                } else if (preferences[DEFAULT_EXIT_ACTION_KEY] == "ASK" || preferences[DEFAULT_EXIT_ACTION_KEY] == null) {
+                    preferences[DEFAULT_EXIT_ACTION_KEY] = "QUIT"
+                }
             }
             confirmExit = enabled
+            if (enabled) {
+                defaultExitAction = "ASK"
+            } else if (defaultExitAction == "ASK") {
+                defaultExitAction = "QUIT"
+            }
+        }
+    }
+
+    fun saveDefaultExitAction(context: Context, action: String) {
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[DEFAULT_EXIT_ACTION_KEY] = action
+                preferences[CONFIRM_EXIT_KEY] = (action == "ASK")
+            }
+            defaultExitAction = action
+            confirmExit = (action == "ASK")
+        }
+    }
+
+    fun performExitAction(
+        context: Context,
+        action: String = defaultExitAction,
+        onExitBrowser: () -> Unit
+    ) {
+        viewModelScope.launch {
+            when (action) {
+                "CLEAR_HISTORY" -> {
+                    clearAllHistory()
+                    onExitBrowser()
+                }
+                "BURN_ALL" -> {
+                    val runtime = getGeckoRuntime(context)
+                    FireButton(runtime, context).burn()
+                    burnAllData(context)
+                    onExitBrowser()
+                }
+                else -> {
+                    onExitBrowser()
+                }
+            }
         }
     }
 
@@ -4240,9 +4288,13 @@ class BrowserViewModel : ViewModel() {
 
     fun saveAddressBarPosition(context: Context, position: String) {
         viewModelScope.launch {
-            context.dataStore.edit { it[ADDRESS_BAR_POSITION_KEY] = position }
+            val chromeEnabled = position != "Split"
+            context.dataStore.edit { 
+                it[ADDRESS_BAR_POSITION_KEY] = position 
+                it[CHROME_NAV_BAR_KEY] = chromeEnabled
+            }
             addressBarPosition = position
-            saveChromeNavBarEnabled(context, position != "Split")
+            chromeNavBarEnabled = chromeEnabled
         }
     }
 
@@ -6012,18 +6064,18 @@ class BrowserViewModel : ViewModel() {
 
     fun fetchSearchSuggestions(query: String) {
         searchSuggestJob?.cancel()
-        if (query.trim().isBlank()) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank() || trimmed == "about:blank" || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
             searchSuggestions.clear()
-            historySuggestions.clear()
             return
         }
         searchSuggestJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 kotlinx.coroutines.delay(200)
                 val encodedQuery = try {
-                    java.net.URLEncoder.encode(query, "UTF-8")
+                    java.net.URLEncoder.encode(trimmed, "UTF-8")
                 } catch (_: Exception) {
-                    query.replace(" ", "+")
+                    trimmed.replace(" ", "+")
                 }
                 
                 val urlString = when (selectedSearchEngine) {
@@ -6118,11 +6170,12 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun fetchHistorySuggestions(query: String) {
-        if (query.trim().isBlank()) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank() || trimmed == "about:blank") {
             historySuggestions.clear()
             return
         }
-        val lower = query.lowercase()
+        val lower = trimmed.lowercase()
         val matches = historyList
             .asReversed()
             .filter {
@@ -6186,6 +6239,8 @@ class BrowserViewModel : ViewModel() {
 
     // --- Browser Navigation ---
     fun loadUrl(url: String) {
+        searchSuggestions.clear()
+        historySuggestions.clear()
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
 
@@ -6305,6 +6360,8 @@ class BrowserViewModel : ViewModel() {
             currentUrl = "about:blank"
             canGoBack = false
         }
+        searchSuggestions.clear()
+        historySuggestions.clear()
         // Then actually load it in the session so back history is cleared
         viewModelScope.launch(Dispatchers.Main) {
             try { geckoSession.loadUri("about:blank") } catch (e: Exception) {
@@ -7825,14 +7882,39 @@ class BrowserViewModel : ViewModel() {
         val newEditMode = !activeTab.isEditModeEnabled
         tabs[idx] = activeTab.copy(isEditModeEnabled = newEditMode)
         
+        // Use the active tab's session — only fall back to the top-level geckoSession
+        // if there's no per-tab session (matches the pattern in injectZoomEnabler).
+        val targetSession = activeTab.session ?: geckoSession
+        val ctx = appContext ?: MainActivity.getActiveActivity()?.applicationContext
         if (newEditMode) {
-            // Turn on designMode and focus the body so the cursor appears immediately
-            geckoSession.loadUri(
-                "javascript:(function(){" +
-                "  document.designMode = 'on';" +
-                "  document.body && document.body.focus();" +
-                "})();"
-            )
+            val onJs = "javascript:(function(){" +
+                    "  try {" +
+                    "    document.designMode = 'on';" +
+                    "    if (document.body) {" +
+                    "      document.body.contentEditable = 'true';" +
+                    "      document.body.focus();" +
+                    "    }" +
+                    "    if (document.documentElement) {" +
+                    "      document.documentElement.contentEditable = 'true';" +
+                    "    }" +
+                    "    var banner = document.getElementById('omni-edit-indicator');" +
+                    "    if (!banner) {" +
+                    "      banner = document.createElement('div');" +
+                    "      banner.id = 'omni-edit-indicator';" +
+                    "      banner.textContent = '✏️ Edit Mode Active — Tap text to edit';" +
+                    "      banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(139,92,246,0.95);color:#ffffff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,0.35);z-index:2147483647;pointer-events:none;font-family:sans-serif;letter-spacing:0.2px;';" +
+                    "      (document.body || document.documentElement).appendChild(banner);" +
+                    "    }" +
+                    "  } catch(e) {}" +
+                    "})();"
+            try {
+                targetSession.loadUri(onJs)
+            } catch (e: Exception) {
+                Log.e(TAG, "toggleEditMode: loadUri failed", e)
+            }
+            ctx?.let { c ->
+                android.widget.Toast.makeText(c, "✏️ " + c.getString(R.string.tool_edit_page), android.widget.Toast.LENGTH_SHORT).show()
+            }
             // Delay to let the bottom sheet dismiss animation finish, then request
             // focus on the GeckoView and show the soft keyboard.
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -7846,8 +7928,23 @@ class BrowserViewModel : ViewModel() {
                 }
             }, 300)
         } else {
-            // Turn off designMode and hide the keyboard
-            geckoSession.loadUri("javascript:(function(){ document.designMode = 'off'; })();")
+            val offJs = "javascript:(function(){" +
+                    "  try {" +
+                    "    document.designMode = 'off';" +
+                    "    if (document.body) { document.body.contentEditable = 'false'; }" +
+                    "    if (document.documentElement) { document.documentElement.contentEditable = 'false'; }" +
+                    "    var banner = document.getElementById('omni-edit-indicator');" +
+                    "    if (banner) { banner.remove(); }" +
+                    "  } catch(e) {}" +
+                    "})();"
+            try {
+                targetSession.loadUri(offJs)
+            } catch (e: Exception) {
+                Log.e(TAG, "toggleEditMode: loadUri failed", e)
+            }
+            ctx?.let { c ->
+                android.widget.Toast.makeText(c, c.getString(R.string.tool_stop_edit), android.widget.Toast.LENGTH_SHORT).show()
+            }
             val geckoView = activeGeckoViewRef?.get()
             if (geckoView != null) {
                 val imm = geckoView.context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
@@ -8778,9 +8875,9 @@ class BrowserViewModel : ViewModel() {
             return
         }
 
-        // Automatic fallback: hide spinner after 8 seconds if script hasn't signaled DONE
+        // Automatic fallback: hide spinner after 30 seconds if script hasn't signaled DONE
         viewModelScope.launch(Dispatchers.Main) {
-            kotlinx.coroutines.delay(8000)
+            kotlinx.coroutines.delay(30000)
             if (isExtractingImages) {
                 isExtractingImages = false
             }
@@ -8791,6 +8888,67 @@ class BrowserViewModel : ViewModel() {
                 try {
                     var urls = [];
                     var seen = {};
+
+                    function upgradeHighResUrl(u) {
+                        if (!u || typeof u !== 'string') return u;
+                        try {
+                            if (u.indexOf('nhentai.net') !== -1) {
+                                u = u.replace(/^(https?:\/\/)t(\d*)\.nhentai\.net\/galleries\/(\d+)\/(\d+)t\.([a-zA-Z0-9]+)/i, '${'$'}1i${'$'}2.nhentai.net/galleries/${'$'}3/${'$'}4.${'$'}5');
+                                u = u.replace(/^(https?:\/\/)t(\d*)\.nhentai\.net\/galleries\/(\d+)\/(?:thumb|cover)\.([a-zA-Z0-9]+)/i, '${'$'}1i${'$'}2.nhentai.net/galleries/${'$'}3/cover.${'$'}4');
+                                return u;
+                            }
+                            if (u.indexOf('donmai.us') !== -1) {
+                                u = u.replace(/\/(?:180x180|360x360|720x720|sample|preview)\//i, '/original/');
+                                u = u.replace(/\/sample-([a-f0-9]+)\./i, '/${'$'}1.');
+                                return u;
+                            }
+                            if (u.indexOf('gelbooru.com') !== -1 || u.indexOf('rule34.xxx') !== -1 || u.indexOf('safebooru.org') !== -1 || u.indexOf('realbooru.com') !== -1) {
+                                u = u.replace(/\/thumbnails\/(.+)\/thumbnail_([^.]+)\./i, '/images/${'$'}1/${'$'}2.');
+                                u = u.replace(/\/samples\/(.+)\/sample_([^.]+)\./i, '/images/${'$'}1/${'$'}2.');
+                                u = u.replace(/\/preview\/(.+)\/([^.]+)\./i, '/images/${'$'}1/${'$'}2.');
+                                return u;
+                            }
+                            if (u.indexOf('zerochan.net') !== -1) {
+                                u = u.replace(/s[12]\.zerochan\.net/i, 'static.zerochan.net');
+                                u = u.replace(/\.(?:preview|1024|240|600|720)\.([a-zA-Z0-9]+)${'$'}/i, '.full.${'$'}1');
+                                return u;
+                            }
+                            if (u.indexOf('pximg.net') !== -1) {
+                                u = u.replace(/\/c\/\d+x\d+_\d+\/img-master\//i, '/img-original/');
+                                u = u.replace(/_master1200\./i, '.');
+                                return u;
+                            }
+                            if (u.indexOf('mangadex.org') !== -1) {
+                                u = u.replace(/\/data-saver\//i, '/data/');
+                                return u;
+                            }
+                            if (u.indexOf('i.imgur.com') !== -1) {
+                                u = u.replace(/i\.imgur\.com\/([a-zA-Z0-9]{5,8})[stmlh]\.(jpg|jpeg|png|webp|gif)/i, 'i.imgur.com/${'$'}1.${'$'}2');
+                                return u;
+                            }
+                            if (u.indexOf('preview.redd.it') !== -1) {
+                                u = u.replace(/^https?:\/\/preview\.redd\.it\/([^?]+).*/i, 'https://i.redd.it/${'$'}1');
+                                return u;
+                            }
+                            if (u.indexOf('pbs.twimg.com') !== -1) {
+                                u = u.replace(/name=\w+/i, 'name=orig');
+                                return u;
+                            }
+                            if (/-\d{2,4}x\d{2,4}\.(jpg|jpeg|png|webp|avif)${'$'}/i.test(u)) {
+                                u = u.replace(/-\d{2,4}x\d{2,4}\.(jpg|jpeg|png|webp|avif)${'$'}/i, '.${'$'}1');
+                            }
+                            if (/\.(?:jpg|jpeg|png|webp|avif)\?(?:.*(?:resize|fit|width|w|h|quality|q)=.*)${'$'}/i.test(u)) {
+                                u = u.replace(/\?(?:.*(?:resize|fit|width|w|h|quality|q)=.*)${'$'}/i, '');
+                            }
+                            if (/_([0-9]+x[0-9]*|small|medium|large|grande|compact)\.(jpg|jpeg|png|webp)/i.test(u)) {
+                                u = u.replace(/_([0-9]+x[0-9]*|small|medium|large|grande|compact)\.(jpg|jpeg|png|webp)/i, '.${'$'}2');
+                            }
+                            if (/[._-](?:thumb|preview|thumbnail|small|mini)\.(jpg|jpeg|png|webp|avif)${'$'}/i.test(u)) {
+                                u = u.replace(/[._-](?:thumb|preview|thumbnail|small|mini)\.(jpg|jpeg|png|webp|avif)${'$'}/i, '.${'$'}1');
+                            }
+                        } catch(_e) {}
+                        return u;
+                    }
 
                     function addUrl(src) {
                         if (!src || typeof src !== 'string') return;
@@ -8808,13 +8966,13 @@ class BrowserViewModel : ViewModel() {
                             return;
                         }
 
-                        if (!seen[src]) {
-                            seen[src] = true;
-                            urls.push(src);
+                        var upgraded = upgradeHighResUrl(src);
+                        if (!seen[upgraded]) {
+                            seen[upgraded] = true;
+                            urls.push(upgraded);
                         }
                     }
 
-                    /* Parse srcset and return ONLY the highest-resolution URL */
                     function bestFromSrcset(srcset) {
                         if (!srcset) return null;
                         var parts = srcset.split(',');
@@ -8840,47 +8998,275 @@ class BrowserViewModel : ViewModel() {
                         return best;
                     }
 
-                    /* 1. Extract from DOM Elements (force eager loading across un-scrolled elements) */
+                    function extractNhentaiGallery() {
+                        try {
+                            var g = null;
+                            if (window._gallery && window._gallery.media_id) {
+                                g = window._gallery;
+                            } else if (window.__INITIAL_STATE__ && window.__INITIAL_STATE__.gallery) {
+                                g = window.__INITIAL_STATE__.gallery;
+                            } else {
+                                var scripts = document.getElementsByTagName('script');
+                                for (var s = 0; s < scripts.length; s++) {
+                                    var txt = scripts[s].textContent || scripts[s].innerText || '';
+                                    if (txt.indexOf('media_id') === -1 && txt.indexOf('_gallery') === -1) continue;
+
+                                    var parseIdx = txt.indexOf('JSON.parse(');
+                                    if (parseIdx !== -1) {
+                                        for (var i = txt.length - 1; i >= parseIdx; i--) {
+                                            if (txt[i] === ')') {
+                                                try {
+                                                    var candidate = txt.substring(parseIdx, i + 1);
+                                                    var res = eval(candidate);
+                                                    if (res && res.media_id) {
+                                                        g = res;
+                                                        break;
+                                                    }
+                                                } catch(_e) {}
+                                            }
+                                        }
+                                    }
+
+                                    if (g && g.media_id) break;
+
+                                    var bStart = txt.indexOf('{');
+                                    if (bStart !== -1) {
+                                        var bEnd = txt.lastIndexOf('}');
+                                        if (bEnd > bStart) {
+                                            try {
+                                                var direct = eval('(' + txt.substring(bStart, bEnd + 1) + ')');
+                                                if (direct && direct.media_id) {
+                                                    g = direct;
+                                                    break;
+                                                }
+                                            } catch(_err) {}
+                                        }
+                                    }
+                                }
+                            }
+
+                            function mapNhentaiExt(t) {
+                                if (!t) return 'webp';
+                                var lower = String(t).toLowerCase().trim();
+                                if (lower === 'w' || lower === 'webp') return 'webp';
+                                if (lower === 'j' || lower === 'jpg' || lower === 'jpeg') return 'jpg';
+                                if (lower === 'p' || lower === 'png') return 'png';
+                                if (lower === 'a' || lower === 'avif') return 'avif';
+                                if (lower === 'g' || lower === 'gif') return 'gif';
+                                return lower;
+                            }
+
+                            if (g && g.media_id && g.images && Array.isArray(g.images.pages)) {
+                                var mid = g.media_id;
+                                var hostSub = '';
+                                var sampleThumb = document.querySelector('img[src*="/galleries/"], img[data-src*="/galleries/"], #cover img, .gallerythumb img');
+                                if (sampleThumb) {
+                                    var sSrc = sampleThumb.getAttribute('data-src') || sampleThumb.getAttribute('data-lazy-src') || sampleThumb.src || '';
+                                    var subMatch = sSrc.match(/https?:\/\/(?:t|i)(\d*)\.nhentai\.net/i);
+                                    if (subMatch && subMatch[1] !== undefined) {
+                                        hostSub = subMatch[1];
+                                    }
+                                }
+                                var host = hostSub ? ('i' + hostSub + '.nhentai.net') : 'i.nhentai.net';
+                                var cnt = 0;
+                                g.images.pages.forEach(function(pg, idx) {
+                                    var tVal = (pg && typeof pg === 'object') ? (pg.t || pg.type || pg.format || pg.ext || '') : pg;
+                                    var ext = mapNhentaiExt(tVal);
+                                    addUrl('https://' + host + '/galleries/' + mid + '/' + (idx + 1) + '.' + ext);
+                                    cnt++;
+                                });
+                                if (cnt > 0) return true;
+                            }
+
+                            /* Fallback to DOM Thumbnails + Noscripts */
+                            var thumbList = [];
+                            var thumbSeen = {};
+
+                            function inspectThumbSrc(src) {
+                                if (!src || typeof src !== 'string' || src.indexOf('/galleries/') === -1 || thumbSeen[src]) return;
+                                thumbSeen[src] = true;
+                                var pMatch = src.match(/\/galleries\/(\d+)\/(\d+)t?\.(jpg|jpeg|png|webp|avif)/i);
+                                if (pMatch) {
+                                    var mId = pMatch[1];
+                                    var pNum = parseInt(pMatch[2]);
+                                    var pExt = pMatch[3].toLowerCase();
+                                    var hostMatch = src.match(/https?:\/\/(?:t|i)(\d*)\.nhentai\.net/i);
+                                    var hSub = (hostMatch && hostMatch[1] !== undefined) ? hostMatch[1] : '';
+                                    var mHost = hSub ? ('i' + hSub + '.nhentai.net') : 'i.nhentai.net';
+                                    thumbList.push({
+                                        num: pNum,
+                                        url: 'https://' + mHost + '/galleries/' + mId + '/' + pNum + '.' + pExt
+                                    });
+                                } else {
+                                    thumbList.push({ num: 999999, url: src });
+                                }
+                            }
+
+                            var thumbs = document.querySelectorAll('.gallerythumb img, #thumbnail-container img, .thumbs img, .thumb-container img, #cover img');
+                            thumbs.forEach(function(el) {
+                                var s = el.getAttribute('data-src') || el.getAttribute('data-lazy-src') || el.src || '';
+                                inspectThumbSrc(s);
+                            });
+
+                            var noscripts = document.querySelectorAll('.gallerythumb noscript, .thumb-container noscript, #thumbnail-container noscript');
+                            noscripts.forEach(function(ns) {
+                                var txt = ns.textContent || ns.innerHTML || '';
+                                var m = txt.match(/src=["']([^"']+)["']/i) || txt.match(/data-src=["']([^"']+)["']/i);
+                                if (m && m[1]) inspectThumbSrc(m[1]);
+                            });
+
+                            if (thumbList.length > 0) {
+                                thumbList.sort(function(a, b) { return a.num - b.num; });
+                                thumbList.forEach(function(item) { addUrl(item.url); });
+                                return true;
+                            }
+                        } catch(_e) {}
+                        return false;
+                    }
+
+                    function extractHitomiGallery() {
+                        try {
+                            var g = window.galleryinfo;
+                            if (!g && window.images) g = { files: window.images };
+                            if (g && Array.isArray(g.files) && g.files.length > 0) {
+                                g.files.forEach(function(f) {
+                                    if (typeof f === 'string') addUrl(f);
+                                    else if (f && f.name) {
+                                        var hash = f.hash || '';
+                                        var hasWebp = f.haswebp === 1 || f.haswebp === true;
+                                        var ext = hasWebp ? 'webp' : (f.name.split('.').pop() || 'jpg');
+                                        if (hash) addUrl('https://la.hitomi.la/images/' + hash + '.' + ext);
+                                    }
+                                });
+                                return true;
+                            }
+                        } catch(_e) {}
+                        return false;
+                    }
+
+                    function extractEhentaiGallery() {
+                        try {
+                            var readerLinks = document.querySelectorAll('.gdtm a, .gdtl a, #gdt a');
+                            if (!readerLinks || readerLinks.length === 0) return false;
+
+                            var linkUrls = [];
+                            var linkSeen = {};
+                            readerLinks.forEach(function(a) {
+                                var href = a.href;
+                                if (href && !linkSeen[href] && (href.indexOf('/s/') !== -1 || href.indexOf('/g/') === -1)) {
+                                    linkSeen[href] = true;
+                                    linkUrls.push(href);
+                                }
+                            });
+
+                            if (linkUrls.length === 0) return false;
+
+                            var collected = [];
+                            var batchSize = 4;
+                            var index = 0;
+
+                            function extractImg(html) {
+                                if (!html) return null;
+                                var tagMatch = html.match(/<img[^>]+id=["']img["'][^>]*>/i);
+                                if (tagMatch) {
+                                    var srcMatch = tagMatch[0].match(/src=["']([^"']+)["']/i);
+                                    if (srcMatch) return srcMatch[1];
+                                }
+                                var hMatch = html.match(/https?:\/\/[^"'\s<>]+\/h\/[^"'\s<>]+/i);
+                                if (hMatch) return hMatch[0];
+                                var nlMatch = html.match(/<img[^>]+src=["'](https?:\/\/[^"'\s<>]+\.(?:jpg|jpeg|png|webp|avif|gif))["']/i);
+                                if (nlMatch) return nlMatch[1];
+                                return null;
+                            }
+
+                            function step() {
+                                if (index >= linkUrls.length) {
+                                    if (collected.length > 0) {
+                                        alert('OMNI_IMAGES:' + JSON.stringify(collected));
+                                    } else {
+                                        collectDomImages();
+                                        alert('OMNI_IMAGES:' + JSON.stringify(urls));
+                                    }
+                                    return;
+                                }
+
+                                var batch = linkUrls.slice(index, index + batchSize);
+                                index += batchSize;
+
+                                var promises = batch.map(function(u) {
+                                    return fetch(u, { credentials: 'include' })
+                                        .then(function(r) { return r.ok ? r.text() : ''; })
+                                        .then(function(html) { return extractImg(html); })
+                                        .catch(function() { return null; });
+                                });
+
+                                Promise.all(promises).then(function(res) {
+                                    res.forEach(function(imgSrc) {
+                                        if (imgSrc) collected.push(imgSrc);
+                                    });
+                                    setTimeout(step, 100);
+                                });
+                            }
+
+                            step();
+                            return true;
+                        } catch(_e) {
+                            return false;
+                        }
+                    }
+
                     function collectDomImages() {
-                        var selector = 'img, picture source, [data-src], [data-original], [data-lazy-src], [data-url], [data-echo], [data-cdn], [data-actual-src], [data-cfsrc], [data-manga-src], [data-page-src], [data-full-src], [data-hi-res-src], [data-master], [data-img], [data-origin], [data-link], [data-lazy], [data-srcset], [srcset]';
+                        var selector = 'img, picture source, [data-src], [data-original], [data-lazy-src], [data-url], [data-echo], [data-cdn], [data-actual-src], [data-cfsrc], [data-manga-src], [data-page-src], [data-full-src], [data-hi-res-src], [data-high-res-src], [data-master], [data-img], [data-origin], [data-link], [data-lazy], [data-srcset], [srcset], a.gallerythumb, a.directlink, a.thumb, [data-file-url], [data-large-file-url]';
                         var els = document.querySelectorAll(selector);
                         els.forEach(function(el) {
-                            /* Force eager loading attribute */
                             if (el.tagName === 'IMG') {
                                 el.loading = 'eager';
                                 el.removeAttribute('loading');
                             }
 
-                            /* 1. Best from srcset (highest resolution) */
-                            var srcset = el.getAttribute('data-srcset') || el.getAttribute('srcset');
-                            var bestSrcset = bestFromSrcset(srcset);
+                            var booruSrc = el.getAttribute('data-file-url') || el.getAttribute('data-large-file-url') || el.getAttribute('data-sample-url');
+                            if (booruSrc) { addUrl(booruSrc); return; }
 
-                            /* 2. Lazy-load / full-res data attributes */
-                            var dataSrc = el.getAttribute('data-original') || 
-                                          el.getAttribute('data-src') || 
-                                          el.getAttribute('data-lazy-src') || 
-                                          el.getAttribute('data-url') || 
-                                          el.getAttribute('data-cdn') ||
-                                          el.getAttribute('data-actual-src') ||
-                                          el.getAttribute('data-cfsrc') ||
-                                          el.getAttribute('data-manga-src') ||
-                                          el.getAttribute('data-page-src') ||
-                                          el.getAttribute('data-full-src') ||
-                                          el.getAttribute('data-hi-res-src') ||
-                                          el.getAttribute('data-master') ||
-                                          el.getAttribute('data-img') ||
-                                          el.getAttribute('data-origin') ||
-                                          el.getAttribute('data-link') ||
-                                          el.getAttribute('data-echo');
-
-                            /* If element has lazy attribute and src is blank/placeholder, update src */
-                            if (dataSrc && el.tagName === 'IMG') {
-                                if (!el.src || el.src.indexOf('data:image') === 0 || el.src.indexOf('blank') !== -1 || el.src.indexOf('loading') !== -1 || el.src.indexOf('placeholder') !== -1) {
-                                    try { el.src = dataSrc; } catch(_e) {}
+                            var parentLink = (el.tagName === 'IMG') ? el.closest('a') : (el.tagName === 'A' ? el : null);
+                            if (parentLink && parentLink.href) {
+                                var href = parentLink.href.trim();
+                                if (/\.(?:jpg|jpeg|png|webp|avif|gif)(?:\?.*)?${'$'}/i.test(href)) {
+                                    addUrl(href);
+                                    return;
                                 }
                             }
 
-                            /* 3. currentSrc or src */
+                            var srcset = el.getAttribute('data-srcset') || el.getAttribute('srcset');
+                            var bestSrcset = bestFromSrcset(srcset);
+                            if (bestSrcset) { addUrl(bestSrcset); return; }
+
+                            var dataSrc = el.getAttribute('data-full-src') || 
+                                          el.getAttribute('data-hi-res-src') || 
+                                          el.getAttribute('data-high-res-src') || 
+                                          el.getAttribute('data-original') || 
+                                          el.getAttribute('data-zoom-src') ||
+                                          el.getAttribute('data-master') ||
+                                          el.getAttribute('data-manga-src') ||
+                                          el.getAttribute('data-page-src') ||
+                                          el.getAttribute('data-actual-src') ||
+                                          el.getAttribute('data-src') || 
+                                          el.getAttribute('data-lazy-src') || 
+                                          el.getAttribute('data-url') || 
+                                          el.getAttribute('data-cdn') || 
+                                          el.getAttribute('data-cfsrc') || 
+                                          el.getAttribute('data-img') || 
+                                          el.getAttribute('data-origin') || 
+                                          el.getAttribute('data-link') || 
+                                          el.getAttribute('data-echo');
+
+                            if (dataSrc) {
+                                if (el.tagName === 'IMG' && (!el.src || el.src.indexOf('data:image') === 0 || el.src.indexOf('blank') !== -1 || el.src.indexOf('loading') !== -1 || el.src.indexOf('placeholder') !== -1)) {
+                                    try { el.src = dataSrc; } catch(_e) {}
+                                }
+                                addUrl(dataSrc);
+                                return;
+                            }
+
                             var fallbackSrc = null;
                             if (el.currentSrc) {
                                 var csLower = el.currentSrc.toLowerCase();
@@ -8895,11 +9281,9 @@ class BrowserViewModel : ViewModel() {
                                 }
                             }
 
-                            var chosen = bestSrcset || dataSrc || fallbackSrc;
-                            if (chosen) addUrl(chosen);
+                            if (fallbackSrc) addUrl(fallbackSrc);
                         });
 
-                        /* CSS Background images */
                         var bgEls = document.querySelectorAll('div[style*="background"], a[style*="background"], span[style*="background"], section[style*="background"], .gdtm, .gdtl, [style*="url("]');
                         bgEls.forEach(function(el) {
                             var bg = el.style.backgroundImage || window.getComputedStyle(el).backgroundImage;
@@ -8915,10 +9299,8 @@ class BrowserViewModel : ViewModel() {
                         });
                     }
 
-                    /* 2. Extract Embedded Manga Chapter Arrays from Script Tags */
                     function extractScriptImages() {
                         try {
-                            /* Check global window chapter data candidates */
                             var globalCandidates = [
                                 window.chapter_images, window.pages, window.chapterData, window.imageData,
                                 window.img_list, window.img_url, window.sources, window.page_list, window.manga_pages
@@ -8935,7 +9317,6 @@ class BrowserViewModel : ViewModel() {
                                 }
                             });
 
-                            /* Parse inline <script> tags for image URL patterns */
                             var scripts = document.querySelectorAll('script');
                             var imageRegex = /https?:\/\/[^"'\s\\]+?\.(?:jpg|jpeg|png|webp|avif)(?:\?[^"'\s\\]*)?/gi;
                             scripts.forEach(function(s) {
@@ -8957,44 +9338,20 @@ class BrowserViewModel : ViewModel() {
                         } catch(_e) {}
                     }
 
-                    collectDomImages();
-                    extractScriptImages();
-
-                    /* Handle special paginated reader links (e.g. e-hentai / exhentai / gdtm) */
-                    var readerLinks = document.querySelectorAll('.gdtm a, .gdtl a, a[href*="/s/"]');
-                    if (readerLinks.length > 0) {
-                        var linkUrls = [];
-                        var linkSeen = {};
-                        readerLinks.forEach(function(a) {
-                            var href = a.href;
-                            if (href && href.indexOf('/s/') !== -1 && !linkSeen[href]) {
-                                linkSeen[href] = true;
-                                linkUrls.push(href);
-                            }
-                        });
-
-                        if (linkUrls.length > 0) {
-                            var promises = linkUrls.map(function(pageUrl) {
-                                return fetch(pageUrl)
-                                    .then(function(res) { return res.text(); })
-                                    .then(function(html) {
-                                        var match = html.match(/<img\s+id="img"\s+src="([^"]+)"/i) || 
-                                                    html.match(/src="([^"]+\/h\/[^"]+)"/i);
-                                        return match ? match[1] : null;
-                                    })
-                                    .catch(function() { return null; });
-                            });
-
-                            Promise.all(promises).then(function(results) {
-                                results.forEach(function(u) {
-                                    if (u) addUrl(u);
-                                });
-                                alert('OMNI_IMAGES:' + JSON.stringify(urls));
-                            });
-                            return;
-                        }
+                    if (extractNhentaiGallery()) {
+                        alert('OMNI_IMAGES:' + JSON.stringify(urls));
+                        return;
+                    }
+                    if (extractHitomiGallery()) {
+                        alert('OMNI_IMAGES:' + JSON.stringify(urls));
+                        return;
+                    }
+                    if (extractEhentaiGallery()) {
+                        return;
                     }
 
+                    collectDomImages();
+                    extractScriptImages();
                     alert('OMNI_IMAGES:' + JSON.stringify(urls));
                 } catch(e) {
                     alert('OMNI_IMAGES:[]');

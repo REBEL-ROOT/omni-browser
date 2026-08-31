@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">Wyjść i usuń wszystko</string>
     <string name="exit_quit_burn_all_desc">Zamknij i usuń karty, historię i pamięć podręczną</string>
     <string name="exit_cancel">Anuluj</string>
+    <string name="exit_dont_ask_again">Nie pytaj ponownie</string>
+    <string name="default_exit_action_title">Domyślna akcja wyjścia</string>
+    <string name="default_exit_action_desc">Akcja podczas wyjścia z ekranu głównego</string>
+    <string name="exit_action_always_ask">Zawsze pytaj</string>
     <string name="video_player_aspect_fit">Proporcje ekranu: Dopasuj do ekranu</string>
     <string name="video_player_aspect_fill">Proporcje ekranu: Wypełnij ekran</string>
     <string name="video_player_aspect_stretch">Proporcje ekranu: Rozciągnij</string>

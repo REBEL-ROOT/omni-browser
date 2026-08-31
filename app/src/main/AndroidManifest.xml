@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions required for web browsing and locker biometrics -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -299,6 +300,13 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+
+        <!-- Disable and remove GeckoView's CrashHelper service to prevent NullPointerException
+             on startup (Mozilla Bug 1963220) which triggers the "Omni Browser keeps stopping" dialog.
+             Crash handling is managed in-process via Thread.setDefaultUncaughtExceptionHandler. -->
+        <service
+            android:name="org.mozilla.gecko.crashhelper.CrashHelper"
+            tools:node="remove" />
     </application>
 
 </manifest>

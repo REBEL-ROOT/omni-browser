@@ -343,8 +343,6 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
         private val MAX_MESSAGE_STRING_LENGTH = 1_000_000 // 1 MB
 
         override fun onMessage(nativeApp: String, message: Any, sender: WebExtension.MessageSender): GeckoResult<Any>? {
-            Log.d(TAG, "🎬 onMessage called! nativeApp = $nativeApp, messageType = ${message.javaClass.name}")
-
             // Reject oversized messages to prevent memory DoS
             val messageString = message.toString()
             if (messageString.length > MAX_MESSAGE_STRING_LENGTH) {

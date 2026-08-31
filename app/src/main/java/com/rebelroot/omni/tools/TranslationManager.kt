@@ -161,6 +161,11 @@ class TranslationManager(platform: ModelPlatform? = null) {
     /** Expose the underlying coordinator (used by the page-translation bridge). */
     val translationCoordinator: TranslationCoordinator get() = coordinator
 
+    /** Unified Manga & Comic Image Translation Pipeline instance. */
+    val mangaPipeline: com.rebelroot.omni.ai.manga.MangaTranslationPipeline by lazy {
+        com.rebelroot.omni.ai.manga.MangaTranslationPipeline(coordinator)
+    }
+
     /** Release resident offline models (call when translation is no longer active). */
     suspend fun releaseModels() {
         runCatching { engineManager.releaseAll() }

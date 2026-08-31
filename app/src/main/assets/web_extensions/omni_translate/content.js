@@ -57,6 +57,51 @@
     }
   }
 
+  function imageToBase64(img) {
+    try {
+      var canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width || 300;
+      canvas.height = img.naturalHeight || img.height || 400;
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL("image/jpeg", 0.85);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function translateImages() {
+    if (!enabled) return;
+    var imgs = document.querySelectorAll("img");
+    imgs.forEach(function (img, idx) {
+      if (img.dataset && img.dataset.omniImgTranslated === "1") return;
+      var w = img.naturalWidth || img.width || 0;
+      var h = img.naturalHeight || img.height || 0;
+      // Target manga / comic pages or prominent graphics (>= 180x180)
+      if (w < 180 || h < 180) return;
+
+      var b64 = imageToBase64(img);
+      if (!b64) return;
+
+      var imgId = "img_" + idx + "_" + (img.src ? img.src.substring(img.src.lastIndexOf("/") + 1).slice(0, 20) : "page");
+      browser.runtime.sendMessage({
+        nativeApp: "omniTranslate",
+        type: "translateImage",
+        imageId: imgId,
+        base64: b64
+      }).then(function (resp) {
+        try {
+          var parsed = typeof resp === "string" ? JSON.parse(resp) : resp;
+          if (parsed && parsed.translatedSrc) {
+            if (!img.dataset.omniOriginalSrc) img.dataset.omniOriginalSrc = img.src;
+            img.src = parsed.translatedSrc;
+            img.dataset.omniImgTranslated = "1";
+          }
+        } catch (e) { /* keep original */ }
+      }).catch(function () {});
+    });
+  }
+
   function restore() {
     var root = document.body || document.documentElement;
     if (!root) return;
@@ -70,17 +115,27 @@
         delete el.dataset.omniOriginal;
       }
     }
+    var imgs = document.querySelectorAll("img[data-omni-img-translated='1']");
+    imgs.forEach(function (img) {
+      if (img.dataset.omniOriginalSrc) {
+        img.src = img.dataset.omniOriginalSrc;
+        delete img.dataset.omniOriginalSrc;
+      }
+      delete img.dataset.omniImgTranslated;
+    });
   }
 
   function translateOnce() {
     if (!enabled) return;
     var segs = collect();
-    if (!segs.length) return;
-    browser.runtime.sendMessage({ nativeApp: "omniTranslate", type: "translate", segments: segs })
-      .then(function (resp) {
-        try { applyMap(JSON.parse(resp)); } catch (e) { /* keep original */ }
-      })
-      .catch(function () { /* ignore */ });
+    if (segs.length) {
+      browser.runtime.sendMessage({ nativeApp: "omniTranslate", type: "translate", segments: segs })
+        .then(function (resp) {
+          try { applyMap(JSON.parse(resp)); } catch (e) { /* keep original */ }
+        })
+        .catch(function () { /* ignore */ });
+    }
+    translateImages();
   }
 
   function startLive() {
@@ -90,7 +145,7 @@
       for (var m = 0; m < mutations.length; m++) {
         mutations[m].addedNodes.forEach(function (node) {
           if (node.nodeType === 3 && node.nodeValue && node.nodeValue.trim()) hasNew = true;
-          else if (node.nodeType === 1 && node.querySelector && node.querySelector("body, div, span, p, a, li, td, h1, h2, h3")) hasNew = true;
+          else if (node.nodeType === 1 && node.querySelector && (node.querySelector("body, div, span, p, a, li, td, h1, h2, h3") || node.tagName === "IMG")) hasNew = true;
         });
       }
       if (hasNew) translateOnce();

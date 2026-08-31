@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">終了して全て削除</string>
     <string name="exit_quit_burn_all_desc">全タブ、履歴、キャッシュを削除する</string>
     <string name="exit_cancel">キャンセル</string>
+    <string name="exit_dont_ask_again">次回から確認しない</string>
+    <string name="default_exit_action_title">デフォルトの終了アクション</string>
+    <string name="default_exit_action_desc">ホーム画面から終了する際のアクション</string>
+    <string name="exit_action_always_ask">毎回確認する</string>
     <string name="video_player_aspect_fit">アスペクト比: 画面に合わせる</string>
     <string name="video_player_aspect_fill">アスペクト比: 画面いっぱいに表示</string>
     <string name="video_player_aspect_stretch">アスペクト比: 引き伸ばし</string>

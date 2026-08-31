@@ -218,6 +218,7 @@ fun DevNotesSheetContent(
                 viewModel.updateDevNote(currentNote.id, finalTitle, noteContent.text, noteType)
             }
         }
+        selectedNoteForEdit = null
     }
 
     androidx.compose.ui.window.Dialog(
@@ -548,41 +549,62 @@ fun DevNotesSheetContent(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .height(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color(0xFF141D2D) else Color.White)
+                            .border(
+                                width = 1.dp,
+                                color = if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                            .padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text(stringResource(id = R.string.devnotes_search_placeholder), color = Color.Gray, fontSize = 14.sp) },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Search, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Rounded.Close, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            shape = CircleShape,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = if (isDark) Color(0xFF141D2D) else Color.White,
-                                unfocusedContainerColor = if (isDark) Color(0xFF141D2D) else Color.White,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isDark) Color(0xFF1F2937) else Color.LightGray.copy(alpha = 0.5f),
-                                    shape = CircleShape
-                                )
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null,
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
                         )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    text = stringResource(id = R.string.devnotes_search_placeholder),
+                                    color = Color.Gray,
+                                    fontSize = 14.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = if (isDark) Color.White else Color.Black,
+                                    fontSize = 14.sp
+                                ),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Clear",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
 
                     // Filter Pills
@@ -693,7 +715,7 @@ fun DevNotesSheetContent(
                                     shape = RoundedCornerShape(16.dp),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                 ) {
-                                    Row(modifier = Modifier.fillMaxWidth()) {
+                                    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                                         // Left Accent Colored Border
                                         Box(
                                             modifier = Modifier
@@ -1843,9 +1865,30 @@ fun ImageGrabberSheetContent(
         viewModel.extractPageImages(context)
     }
 
+    val initialStyle = remember { com.rebelroot.omni.ai.manga.MangaPreferences.loadTypographyStyle(context) }
+    val initialLangs = remember { com.rebelroot.omni.ai.manga.MangaPreferences.loadLanguages(context) }
     var localImages by remember(viewModel.extractedImagesList) { mutableStateOf(viewModel.extractedImagesList) }
     var isFullscreenManga by remember { mutableStateOf(false) }
     var pendingDownloadType by remember { mutableStateOf<Boolean?>(null) } // null = hide, false = images, true = asPdf
+    var isTranslateMangaEnabled by remember { mutableStateOf(false) }
+    var selectedSourceLang by remember { mutableStateOf(initialLangs.first) }
+    var selectedTargetLang by remember { mutableStateOf(initialLangs.second) }
+    var typographyStyle by remember { mutableStateOf(initialStyle) }
+    var showComposerSheet by remember { mutableStateOf(false) }
+    val mangaPipeline = viewModel.translationManager.mangaPipeline
+
+    if (showComposerSheet) {
+        MangaTranslationComposerSheet(
+            sourceLang = selectedSourceLang,
+            targetLang = selectedTargetLang,
+            typographyStyle = typographyStyle,
+            onSourceLangChange = { selectedSourceLang = it },
+            onTargetLangChange = { selectedTargetLang = it },
+            onStyleChange = { typographyStyle = it },
+            onDismissRequest = { showComposerSheet = false },
+            isDark = isDark
+        )
+    }
 
     // Download destination prompt (Download Locally vs Save to Private Vault 🔒)
     pendingDownloadType?.let { asPdf ->
@@ -1933,6 +1976,16 @@ fun ImageGrabberSheetContent(
     if (isFullscreenManga && localImages.isNotEmpty()) {
         MangaFullscreenViewer(
             images = localImages,
+            pageUrl = viewModel.currentUrl,
+            downloadEngine = viewModel.streamDownloadEngine,
+            pipeline = mangaPipeline,
+            initialTranslate = isTranslateMangaEnabled,
+            sourceLanguage = selectedSourceLang.second,
+            targetLanguage = selectedTargetLang.second,
+            initialTypographyStyle = typographyStyle,
+            onTypographyStyleChange = { typographyStyle = it },
+            onSourceLangChange = { selectedSourceLang = it },
+            onTargetLangChange = { selectedTargetLang = it },
             onExitFullscreen = { isFullscreenManga = false }
         )
     }
@@ -2007,6 +2060,61 @@ fun ImageGrabberSheetContent(
                 }
             }
 
+            if (isMangaMode && localImages.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = isTranslateMangaEnabled,
+                            onClick = { isTranslateMangaEnabled = !isTranslateMangaEnabled },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.Translate,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = if (isTranslateMangaEnabled) MaterialTheme.colorScheme.primary else textColor
+                                )
+                            },
+                            label = {
+                                Text(
+                                    if (isTranslateMangaEnabled) "Live: ${selectedSourceLang.second.uppercase()}→${selectedTargetLang.second.uppercase()}" else "Translate Manga",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        )
+
+                        IconButton(
+                            onClick = { showComposerSheet = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Tune,
+                                contentDescription = "Translation Composer & Style",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    if (isTranslateMangaEnabled) {
+                        Text(
+                            text = "Long-press to peek",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
             HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
 
             if (viewModel.isExtractingImages) {
@@ -2042,28 +2150,16 @@ fun ImageGrabberSheetContent(
                         verticalArrangement = Arrangement.spacedBy(0.dp) // Zero gap for seamless manga reading!
                     ) {
                         items(localImages.size) { index ->
-                            val imgUrl = localImages[index]
-                            val request = remember(imgUrl, viewModel.currentUrl) {
-                                val referer = try {
-                                    val uri = android.net.Uri.parse(viewModel.currentUrl)
-                                    "${uri.scheme}://${uri.host}/"
-                                } catch (_: Exception) {
-                                    viewModel.currentUrl
-                                }
-                                coil.request.ImageRequest.Builder(context)
-                                    .data(imgUrl)
-                                    .addHeader("Referer", referer)
-                                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-                                    .crossfade(true)
-                                    .build()
-                            }
-                            coil.compose.AsyncImage(
-                                model = request,
-                                contentDescription = "Manga Page ${index + 1}",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .wrapContentHeight(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
+                            MangaContinuousPageItem(
+                                imgUrl = localImages[index],
+                                pageUrl = viewModel.currentUrl,
+                                index = index,
+                                isTranslateEnabled = isTranslateMangaEnabled,
+                                sourceLang = selectedSourceLang.second,
+                                targetLang = selectedTargetLang.second,
+                                typographyStyle = typographyStyle,
+                                pipeline = mangaPipeline,
+                                isDark = isDark
                             )
                         }
                     }
@@ -2099,18 +2195,20 @@ fun ImageGrabberSheetContent(
                     ) {
                         items(localImages.size) { index ->
                             val imgUrl = localImages[index]
-                            val request = remember(imgUrl, viewModel.currentUrl) {
-                                val referer = try {
-                                    val uri = android.net.Uri.parse(viewModel.currentUrl)
-                                    "${uri.scheme}://${uri.host}/"
-                                } catch (_: Exception) {
-                                    viewModel.currentUrl
-                                }
+                            var retryKey by remember(imgUrl) { mutableIntStateOf(0) }
+                            val request = remember(imgUrl, viewModel.currentUrl, retryKey) {
+                                val referer = ImageGrabberUtils.resolveReferer(imgUrl, viewModel.currentUrl)
                                 coil.request.ImageRequest.Builder(context)
                                     .data(imgUrl)
-                                    .addHeader("Referer", referer)
-                                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                                    .apply {
+                                        if (referer.isNotEmpty()) addHeader("Referer", referer)
+                                        addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                                        addHeader("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                                    }
                                     .crossfade(true)
+                                    .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                    .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                    .networkCachePolicy(coil.request.CachePolicy.ENABLED)
                                     .build()
                             }
 
@@ -2120,11 +2218,52 @@ fun ImageGrabberSheetContent(
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(cardBg)
                             ) {
-                                coil.compose.AsyncImage(
+                                coil.compose.SubcomposeAsyncImage(
                                     model = request,
-                                    contentDescription = null,
+                                    imageLoader = coil.Coil.imageLoader(context),
+                                    contentDescription = "Image ${index + 1}",
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    loading = {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(22.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    },
+                                    error = {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clickable { retryKey++ },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.Center,
+                                                modifier = Modifier.padding(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Refresh,
+                                                    contentDescription = "Retry",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "Retry",
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
                                 )
 
                                 // Top-Right (X) Remove Badge Button
@@ -2618,15 +2757,300 @@ private fun DevToolsStorageTab(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MangaContinuousPageItem(
+    imgUrl: String,
+    pageUrl: String,
+    index: Int,
+    isTranslateEnabled: Boolean,
+    sourceLang: String,
+    targetLang: String,
+    typographyStyle: com.rebelroot.omni.ai.manga.MangaTypographyStyle = com.rebelroot.omni.ai.manga.MangaTypographyStyle(),
+    pipeline: com.rebelroot.omni.ai.manga.MangaTranslationPipeline?,
+    isDark: Boolean,
+    onClick: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    var isTranslating by remember { mutableStateOf(false) }
+    var translatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var originalBitmapRef by remember { mutableStateOf<Bitmap?>(null) }
+    var showOriginal by remember { mutableStateOf(false) }
+    var showEditorSheet by remember { mutableStateOf(false) }
+    var retryKey by remember(imgUrl) { mutableIntStateOf(0) }
+
+    val request = remember(imgUrl, pageUrl, retryKey) {
+        val referer = ImageGrabberUtils.resolveReferer(imgUrl, pageUrl)
+        coil.request.ImageRequest.Builder(context)
+            .data(imgUrl)
+            .apply {
+                if (referer.isNotEmpty()) addHeader("Referer", referer)
+                addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                addHeader("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            }
+            .allowHardware(false)
+            .crossfade(true)
+            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+            .networkCachePolicy(coil.request.CachePolicy.ENABLED)
+            .build()
+    }
+
+    LaunchedEffect(isTranslateEnabled, imgUrl, sourceLang, targetLang, typographyStyle, retryKey) {
+        if (isTranslateEnabled && pipeline != null) {
+            isTranslating = true
+            try {
+                val imageLoader = coil.Coil.imageLoader(context)
+                val result = imageLoader.execute(request)
+                val drawable = result.drawable
+                if (drawable is android.graphics.drawable.BitmapDrawable) {
+                    val bmp = drawable.bitmap
+                    originalBitmapRef = bmp
+                    val res = pipeline.translateImage(imgUrl, bmp, sourceLang, targetLang, style = typographyStyle)
+                    translatedBitmap = res.translatedBitmap
+                }
+            } catch (e: Exception) {
+                translatedBitmap = null
+            } finally {
+                isTranslating = false
+            }
+        } else {
+            translatedBitmap = null
+            isTranslating = false
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
+        val currentTranslated = translatedBitmap
+        if (isTranslateEnabled && currentTranslated != null && !showOriginal) {
+            Image(
+                bitmap = currentTranslated.asImageBitmap(),
+                contentDescription = "Translated Manga Page ${index + 1}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = { showOriginal = !showOriginal }
+                    ),
+                contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
+            )
+        } else {
+            coil.compose.SubcomposeAsyncImage(
+                model = request,
+                imageLoader = coil.Coil.imageLoader(context),
+                contentDescription = "Manga Page ${index + 1}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = { if (translatedBitmap != null) showOriginal = !showOriginal }
+                    ),
+                contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                            .background(if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .background(if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                            .clickable { retryKey++ },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = "Retry Page ${index + 1}",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Tap to retry Page ${index + 1}",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            )
+        }
+
+        // Translation Badges & Quick Edit Action
+        if (isTranslateEnabled) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Edit Dialogue Button
+                if (translatedBitmap != null && !isTranslating) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.75f),
+                        modifier = Modifier.clickable { showEditorSheet = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "Edit Dialogue",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text("Edit", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    if (isTranslating) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(10.dp),
+                                strokeWidth = 1.5.dp,
+                                color = Color.White
+                            )
+                            Text("Translating...", color = Color.White, fontSize = 10.sp)
+                        }
+                    } else if (showOriginal) {
+                        Text("Original (Hold to switch)", color = Color(0xFFFFD54F), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("Translated", color = Color(0xFF81C784), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        if (showEditorSheet) {
+            val cachedBlocks = remember(imgUrl, sourceLang, targetLang) {
+                pipeline?.getCachedBlocks(imgUrl, sourceLang, targetLang) ?: emptyList()
+            }
+            MangaDialogueEditorSheet(
+                pageIndex = index,
+                imgUrl = imgUrl,
+                originalBitmap = originalBitmapRef,
+                currentBlocks = cachedBlocks,
+                sourceLanguage = sourceLang,
+                targetLanguage = targetLang,
+                typographyStyle = typographyStyle,
+                pipeline = pipeline,
+                onSaveAndApply = { _, updatedBmp ->
+                    translatedBitmap = updatedBmp
+                    showEditorSheet = false
+                },
+                onDismissRequest = { showEditorSheet = false },
+                isDark = isDark
+            )
+        }
+    }
+}
+
 @Composable
 private fun MangaFullscreenViewer(
     images: List<String>,
+    pageUrl: String = "",
+    downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null,
+    pipeline: com.rebelroot.omni.ai.manga.MangaTranslationPipeline?,
+    initialTranslate: Boolean = false,
+    sourceLanguage: String = "ja",
+    targetLanguage: String = "en",
+    initialTypographyStyle: com.rebelroot.omni.ai.manga.MangaTypographyStyle = com.rebelroot.omni.ai.manga.MangaTypographyStyle(),
+    onTypographyStyleChange: (com.rebelroot.omni.ai.manga.MangaTypographyStyle) -> Unit = {},
+    onSourceLangChange: (Pair<String, String>) -> Unit = {},
+    onTargetLangChange: (Pair<String, String>) -> Unit = {},
     onExitFullscreen: () -> Unit
 ) {
     var showControls by remember { mutableStateOf(true) }
+    var isTranslateEnabled by remember { mutableStateOf(initialTranslate) }
+    var selectedSourceLang by remember { mutableStateOf("Japanese" to sourceLanguage) }
+    var selectedTargetLang by remember { mutableStateOf("English" to targetLanguage) }
+    var typographyStyle by remember { mutableStateOf(initialTypographyStyle) }
+    var showComposerSheet by remember { mutableStateOf(false) }
+    var editingPageIndex by remember { mutableStateOf<Int?>(null) }
+
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val firstVisible = remember { derivedStateOf { listState.firstVisibleItemIndex + 1 } }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (showComposerSheet) {
+        MangaTranslationComposerSheet(
+            sourceLang = selectedSourceLang,
+            targetLang = selectedTargetLang,
+            typographyStyle = typographyStyle,
+            onSourceLangChange = {
+                selectedSourceLang = it
+                onSourceLangChange(it)
+            },
+            onTargetLangChange = {
+                selectedTargetLang = it
+                onTargetLangChange(it)
+            },
+            onStyleChange = {
+                typographyStyle = it
+                onTypographyStyleChange(it)
+            },
+            onDismissRequest = { showComposerSheet = false },
+            isDark = true
+        )
+    }
+
+    editingPageIndex?.let { editIdx ->
+        val currentImgUrl = images.getOrNull(editIdx) ?: ""
+        val cachedBlocks = remember(currentImgUrl, selectedSourceLang.second, selectedTargetLang.second) {
+            pipeline?.getCachedBlocks(currentImgUrl, selectedSourceLang.second, selectedTargetLang.second) ?: emptyList()
+        }
+        MangaDialogueEditorSheet(
+            pageIndex = editIdx,
+            imgUrl = currentImgUrl,
+            originalBitmap = null,
+            currentBlocks = cachedBlocks,
+            sourceLanguage = selectedSourceLang.second,
+            targetLanguage = selectedTargetLang.second,
+            typographyStyle = typographyStyle,
+            pipeline = pipeline,
+            downloadEngine = downloadEngine,
+            onSaveAndApply = { _, _ ->
+                editingPageIndex = null
+            },
+            onDismissRequest = { editingPageIndex = null },
+            isDark = true
+        )
+    }
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onExitFullscreen,
@@ -2653,28 +3077,17 @@ private fun MangaFullscreenViewer(
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 items(images.size) { index ->
-                    val imgUrl = images[index]
-                    val request = remember(imgUrl) {
-                        val referer = try {
-                            val uri = android.net.Uri.parse(images.firstOrNull() ?: "")
-                            "${uri.scheme}://${uri.host}/"
-                        } catch (_: Exception) {
-                            ""
-                        }
-                        coil.request.ImageRequest.Builder(context)
-                            .data(imgUrl)
-                            .addHeader("Referer", referer)
-                            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-                            .crossfade(true)
-                            .build()
-                    }
-                    coil.compose.AsyncImage(
-                        model = request,
-                        contentDescription = "Manga Page ${index + 1}",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
+                    MangaContinuousPageItem(
+                        imgUrl = images[index],
+                        pageUrl = pageUrl,
+                        index = index,
+                        isTranslateEnabled = isTranslateEnabled,
+                        sourceLang = selectedSourceLang.second,
+                        targetLang = selectedTargetLang.second,
+                        typographyStyle = typographyStyle,
+                        pipeline = pipeline,
+                        isDark = true,
+                        onClick = { showControls = !showControls }
                     )
                 }
             }
@@ -2716,13 +3129,50 @@ private fun MangaFullscreenViewer(
                             )
                         }
 
-                        IconButton(onClick = onExitFullscreen) {
-                            Icon(
-                                imageVector = Icons.Rounded.FullscreenExit,
-                                contentDescription = "Exit Fullscreen",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            // Live Translation Toggle
+                            IconButton(onClick = { isTranslateEnabled = !isTranslateEnabled }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Translate,
+                                    contentDescription = "Translate Manga",
+                                    tint = if (isTranslateEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            // Manual Dialogue Editor Button
+                            if (isTranslateEnabled) {
+                                IconButton(onClick = { editingPageIndex = (firstVisible.value - 1).coerceIn(0, images.size - 1) }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.EditNote,
+                                        contentDescription = "Edit Dialogue on Current Page",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            // Translation Composer Settings
+                            IconButton(onClick = { showComposerSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Tune,
+                                    contentDescription = "Customize Manga Translation",
+                                    tint = if (isTranslateEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+
+                            IconButton(onClick = onExitFullscreen) {
+                                Icon(
+                                    imageVector = Icons.Rounded.FullscreenExit,
+                                    contentDescription = "Exit Fullscreen",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -2756,7 +3206,7 @@ private fun MangaFullscreenViewer(
                         )
                         IconButton(
                             onClick = {
-                                downloadMangaImagesAndPdf(context, images, asPdf = false)
+                                downloadMangaImagesAndPdf(context, images, pageUrl = pageUrl, asPdf = false, downloadEngine = downloadEngine)
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -2769,7 +3219,7 @@ private fun MangaFullscreenViewer(
                         }
                         IconButton(
                             onClick = {
-                                downloadMangaImagesAndPdf(context, images, asPdf = true)
+                                downloadMangaImagesAndPdf(context, images, pageUrl = pageUrl, asPdf = true, downloadEngine = downloadEngine)
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -2786,6 +3236,827 @@ private fun MangaFullscreenViewer(
         }
     }
 }
+
+/**
+ * Interactive Manga Translation Composer Bottom Sheet.
+ * Lets users customize Source & Target languages, font scale, font typeface,
+ * speech bubble background fill, and text colors in real time.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MangaTranslationComposerSheet(
+    sourceLang: Pair<String, String>,
+    targetLang: Pair<String, String>,
+    typographyStyle: com.rebelroot.omni.ai.manga.MangaTypographyStyle,
+    onSourceLangChange: (Pair<String, String>) -> Unit,
+    onTargetLangChange: (Pair<String, String>) -> Unit,
+    onStyleChange: (com.rebelroot.omni.ai.manga.MangaTypographyStyle) -> Unit,
+    onDismissRequest: () -> Unit,
+    isDark: Boolean = androidx.compose.foundation.isSystemInDarkTheme()
+) {
+    val context = LocalContext.current
+    var applyToAll by remember { mutableStateOf(com.rebelroot.omni.ai.manga.MangaPreferences.loadApplyToAll(context)) }
+
+    val bg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val cardBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+
+    val handleSourceChange = { newSrc: Pair<String, String> ->
+        onSourceLangChange(newSrc)
+        if (applyToAll) {
+            com.rebelroot.omni.ai.manga.MangaPreferences.saveLanguages(context, newSrc, targetLang)
+        }
+    }
+    val handleTargetChange = { newTgt: Pair<String, String> ->
+        onTargetLangChange(newTgt)
+        if (applyToAll) {
+            com.rebelroot.omni.ai.manga.MangaPreferences.saveLanguages(context, sourceLang, newTgt)
+        }
+    }
+    val handleStyleChange = { newStyle: com.rebelroot.omni.ai.manga.MangaTypographyStyle ->
+        onStyleChange(newStyle)
+        if (applyToAll) {
+            com.rebelroot.omni.ai.manga.MangaPreferences.saveTypographyStyle(context, newStyle)
+        }
+    }
+
+    val sourceOptions = listOf(
+        "Auto Detect" to "auto",
+        "Japanese (日本語)" to "ja",
+        "Chinese (中文)" to "zh",
+        "Korean (한국어)" to "ko",
+        "English" to "en",
+        "Spanish" to "es",
+        "French" to "fr",
+        "German" to "de"
+    )
+
+    val targetOptions = listOf(
+        "English" to "en",
+        "Spanish" to "es",
+        "French" to "fr",
+        "German" to "de",
+        "Japanese" to "ja",
+        "Chinese" to "zh",
+        "Korean" to "ko",
+        "Hindi" to "hi",
+        "Portuguese" to "pt",
+        "Russian" to "ru",
+        "Arabic" to "ar",
+        "Indonesian" to "id",
+        "Vietnamese" to "vi"
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        containerColor = bg,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = "Manga Translation Composer",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                }
+
+                TextButton(
+                    onClick = {
+                        val def = com.rebelroot.omni.ai.manga.MangaTypographyStyle()
+                        handleStyleChange(def)
+                    }
+                ) {
+                    Text("Reset", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // Apply to All Translations Global Switch
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = cardBg
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AllInclusive,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Apply to all translations",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor
+                            )
+                            Text(
+                                text = "Use these settings as global defaults for all pages & future manga",
+                                fontSize = 11.sp,
+                                color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6C6C70)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = applyToAll,
+                        onCheckedChange = { checked ->
+                            applyToAll = checked
+                            com.rebelroot.omni.ai.manga.MangaPreferences.saveApplyToAll(context, checked)
+                            if (checked) {
+                                com.rebelroot.omni.ai.manga.MangaPreferences.saveTypographyStyle(context, typographyStyle)
+                                com.rebelroot.omni.ai.manga.MangaPreferences.saveLanguages(context, sourceLang, targetLang)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+
+            HorizontalDivider(color = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA))
+
+            // 1. Language Selection
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Source Language (OCR)",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(sourceOptions) { (name, code) ->
+                        FilterChip(
+                            selected = sourceLang.second == code,
+                            onClick = { handleSourceChange(name to code) },
+                            label = { Text(name, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Target Language",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(targetOptions) { (name, code) ->
+                        FilterChip(
+                            selected = targetLang.second == code,
+                            onClick = { handleTargetChange(name to code) },
+                            label = { Text(name, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA))
+
+            // 2. Font Size Scaling
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Font Size Scale",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                    Text(
+                        text = "${(typographyStyle.fontSizeScale * 100).toInt()}%",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            val newScale = (typographyStyle.fontSizeScale - 0.15f).coerceAtLeast(0.60f)
+                            handleStyleChange(typographyStyle.copy(fontSizeScale = newScale))
+                        }
+                    ) {
+                        Icon(Icons.Rounded.Remove, contentDescription = "Decrease Font Size")
+                    }
+
+                    LazyRow(
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(listOf("80%" to 0.80f, "100%" to 1.0f, "130%" to 1.30f, "160%" to 1.60f, "200%" to 2.00f, "250%" to 2.50f, "300%" to 3.00f)) { (lbl, scale) ->
+                            FilterChip(
+                                selected = (typographyStyle.fontSizeScale - scale).let { it > -0.06f && it < 0.06f },
+                                onClick = { handleStyleChange(typographyStyle.copy(fontSizeScale = scale)) },
+                                label = { Text(lbl, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = {
+                            val newScale = (typographyStyle.fontSizeScale + 0.15f).coerceAtMost(3.00f)
+                            handleStyleChange(typographyStyle.copy(fontSizeScale = newScale))
+                        }
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = "Increase Font Size")
+                    }
+                }
+            }
+
+            HorizontalDivider(color = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA))
+
+            // 3. Font Family
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Font Typeface",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "Comic Bold" to "Comic",
+                        "Sans-Serif" to "Sans",
+                        "Classic Serif" to "Serif",
+                        "Clean Mono" to "Clean"
+                    ).forEach { (label, key) ->
+                        FilterChip(
+                            selected = typographyStyle.fontFamily == key,
+                            onClick = { handleStyleChange(typographyStyle.copy(fontFamily = key)) },
+                            label = { Text(label, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA))
+
+            // 4. Background & Text Colors
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Bubble Background",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "Auto Snap" to "Auto",
+                        "Pure White" to "White",
+                        "Transparent" to "Transparent"
+                    ).forEach { (label, key) ->
+                        FilterChip(
+                            selected = typographyStyle.bgFillMode == key,
+                            onClick = { handleStyleChange(typographyStyle.copy(bgFillMode = key)) },
+                            label = { Text(label, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Text Color Mode",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "Auto Contrast" to "Auto",
+                        "Pure Black" to "Black",
+                        "White Outline" to "White"
+                    ).forEach { (label, key) ->
+                        FilterChip(
+                            selected = typographyStyle.textColorMode == key,
+                            onClick = { handleStyleChange(typographyStyle.copy(textColorMode = key)) },
+                            label = { Text(label, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = onDismissRequest,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("Apply & Close", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+        }
+    }
+}
+
+/**
+ * Interactive Dialogue Editor Bottom Sheet.
+ * Lets users review all detected speech balloons on a page, edit translated text,
+ * re-translate specific bubbles, add missing bubbles, and save/download the edited page.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MangaDialogueEditorSheet(
+    pageIndex: Int,
+    imgUrl: String,
+    originalBitmap: Bitmap?,
+    currentBlocks: List<com.rebelroot.omni.ai.manga.MangaDialogueBlock>,
+    sourceLanguage: String,
+    targetLanguage: String,
+    typographyStyle: com.rebelroot.omni.ai.manga.MangaTypographyStyle,
+    pipeline: com.rebelroot.omni.ai.manga.MangaTranslationPipeline?,
+    downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null,
+    onSaveAndApply: (List<com.rebelroot.omni.ai.manga.MangaDialogueBlock>, Bitmap) -> Unit,
+    onDismissRequest: () -> Unit,
+    isDark: Boolean = androidx.compose.foundation.isSystemInDarkTheme()
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val bg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF)
+    val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val cardBg = if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+
+    var editedBlocks by remember(currentBlocks) { mutableStateOf(currentBlocks.toMutableList()) }
+    var isSaving by remember { mutableStateOf(false) }
+    var translatingIndex by remember { mutableStateOf<Int?>(null) }
+    var activeBitmap by remember { mutableStateOf(originalBitmap) }
+
+    // If originalBitmap was not passed down directly, load it via Coil
+    LaunchedEffect(imgUrl) {
+        if (activeBitmap == null) {
+            try {
+                val req = coil.request.ImageRequest.Builder(context)
+                    .data(imgUrl)
+                    .allowHardware(false)
+                    .build()
+                val result = coil.Coil.imageLoader(context).execute(req)
+                val drawable = result.drawable
+                if (drawable is android.graphics.drawable.BitmapDrawable) {
+                    activeBitmap = drawable.bitmap
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = bg,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .fillMaxHeight(0.92f)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.EditNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Edit Page ${pageIndex + 1} Dialogue",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "${editedBlocks.size} speech bubbles detected",
+                            fontSize = 12.sp,
+                            color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6C6C70)
+                        )
+                    }
+                }
+
+                IconButton(onClick = onDismissRequest) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = textColor)
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA))
+
+            // Speech Bubbles List
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                if (editedBlocks.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No speech bubbles found on this page.\nTap below to add a custom dialogue block.",
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontSize = 13.sp,
+                                color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6C6C70)
+                            )
+                        }
+                    }
+                }
+
+                items(editedBlocks.size) { idx ->
+                    val block = editedBlocks[idx]
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = cardBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "#${idx + 1}",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Text(
+                                        text = if (block.isVertical) "Vertical Bubble" else "Horizontal Block",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6C6C70)
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    // Re-Translate Button
+                                    IconButton(
+                                        onClick = {
+                                            if (pipeline != null && block.rawText.isNotEmpty()) {
+                                                scope.launch {
+                                                    translatingIndex = idx
+                                                    val retranslated = pipeline.retranslateText(block.rawText, sourceLanguage, targetLanguage)
+                                                    val updatedList = editedBlocks.toMutableList()
+                                                    updatedList[idx] = block.copy(translatedText = retranslated)
+                                                    editedBlocks = updatedList
+                                                    translatingIndex = null
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        if (translatingIndex == idx) {
+                                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Translate,
+                                                contentDescription = "Re-Translate",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Delete Bubble Button
+                                    IconButton(
+                                        onClick = {
+                                            val updatedList = editedBlocks.toMutableList()
+                                            updatedList.removeAt(idx)
+                                            editedBlocks = updatedList
+                                        },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Remove Bubble",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Original OCR Raw Text
+                            if (block.rawText.isNotEmpty()) {
+                                Text(
+                                    text = "Original: ${block.rawText}",
+                                    fontSize = 12.sp,
+                                    color = if (isDark) Color(0xFFAAAAAA) else Color(0xFF555555),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+
+                            // Editable Translation Field
+                            OutlinedTextField(
+                                value = block.translatedText,
+                                onValueChange = { newText ->
+                                    val updatedList = editedBlocks.toMutableList()
+                                    updatedList[idx] = block.copy(translatedText = newText)
+                                    editedBlocks = updatedList
+                                },
+                                label = { Text("Translated Dialogue", fontSize = 11.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                textStyle = TextStyle(fontSize = 13.sp, color = textColor)
+                            )
+                        }
+                    }
+                }
+
+                // Add Custom Bubble Button
+                item {
+                    OutlinedButton(
+                        onClick = {
+                            val newBlock = com.rebelroot.omni.ai.manga.MangaDialogueBlock(
+                                id = "custom_${System.currentTimeMillis()}",
+                                rawText = "",
+                                translatedText = "",
+                                boundingBox = com.rebelroot.omni.ai.manga.MangaRect(50f, 50f, 250f, 150f)
+                            )
+                            val updatedList = editedBlocks.toMutableList()
+                            updatedList.add(newBlock)
+                            editedBlocks = updatedList
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(22.dp)
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add Custom Dialogue Bubble", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA))
+
+            // Bottom Actions (Save & Apply + Download Image / PDF)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Download Image
+                OutlinedButton(
+                    onClick = {
+                        val bmp = activeBitmap
+                        if (bmp != null && pipeline != null) {
+                            scope.launch {
+                                val res = pipeline.applyCustomBlocks(imgUrl, bmp, sourceLanguage, targetLanguage, editedBlocks, typographyStyle)
+                                saveOrDownloadSingleMangaPage(context, res.translatedBitmap, pageIndex, asPdf = false, saveToLocker = false, downloadEngine = downloadEngine)
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Save JPG", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Download PDF
+                OutlinedButton(
+                    onClick = {
+                        val bmp = activeBitmap
+                        if (bmp != null && pipeline != null) {
+                            scope.launch {
+                                val res = pipeline.applyCustomBlocks(imgUrl, bmp, sourceLanguage, targetLanguage, editedBlocks, typographyStyle)
+                                saveOrDownloadSingleMangaPage(context, res.translatedBitmap, pageIndex, asPdf = true, saveToLocker = false, downloadEngine = downloadEngine)
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Icon(Icons.Rounded.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Save PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Save & Apply Changes
+                Button(
+                    onClick = {
+                        val bmp = activeBitmap
+                        if (bmp != null && pipeline != null) {
+                            scope.launch {
+                                isSaving = true
+                                val res = pipeline.applyCustomBlocks(imgUrl, bmp, sourceLanguage, targetLanguage, editedBlocks, typographyStyle)
+                                onSaveAndApply(editedBlocks, res.translatedBitmap)
+                                isSaving = false
+                                onDismissRequest()
+                            }
+                        } else {
+                            onDismissRequest()
+                        }
+                    },
+                    modifier = Modifier.weight(1.3f).height(48.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    enabled = !isSaving
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                    } else {
+                        Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Save & Apply", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Saves or downloads a single rendered manga bitmap as JPEG image or PDF to Downloads / Vault.
+ */
+fun saveOrDownloadSingleMangaPage(
+    context: android.content.Context,
+    bitmap: Bitmap,
+    pageIndex: Int,
+    asPdf: Boolean = false,
+    saveToLocker: Boolean = false,
+    downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null
+) {
+    val appCtx = context.applicationContext
+    val timeStamp = System.currentTimeMillis() / 1000
+    val fileName = if (asPdf) "Manga_Page_${pageIndex + 1}_$timeStamp.pdf" else "Manga_Page_${pageIndex + 1}_$timeStamp.jpg"
+    val mimeType = if (asPdf) "application/pdf" else "image/jpeg"
+    val destText = if (saveToLocker) "Private Vault" else "Downloads"
+
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        try {
+            if (saveToLocker) {
+                val lockerManager = com.rebelroot.omni.tools.locker.PrivateLockerManager(appCtx)
+                val tempFile = java.io.File(appCtx.cacheDir, fileName)
+                java.io.FileOutputStream(tempFile).use { out ->
+                    if (asPdf) {
+                        val doc = android.graphics.pdf.PdfDocument()
+                        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create()
+                        val page = doc.startPage(pageInfo)
+                        page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                        doc.finishPage(page)
+                        doc.writeTo(out)
+                        doc.close()
+                    } else {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                    }
+                }
+                lockerManager.saveFileToLocker(tempFile, fileName, mimeType)
+                if (tempFile.exists()) tempFile.delete()
+            } else {
+                val resolver = appCtx.contentResolver
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/OmniBrowser")
+                }
+                val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        if (asPdf) {
+                            val doc = android.graphics.pdf.PdfDocument()
+                            val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create()
+                            val page = doc.startPage(pageInfo)
+                            page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            doc.finishPage(page)
+                            doc.writeTo(out)
+                            doc.close()
+                        } else {
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                        }
+                    }
+                }
+            }
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                Toast.makeText(appCtx, "Saved Page ${pageIndex + 1} to $destText!", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                Toast.makeText(appCtx, "Failed to save: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
+
 
 fun downloadMangaImagesAndPdf(
     context: android.content.Context,
@@ -2823,7 +4094,7 @@ fun downloadMangaImagesAndPdf(
 
         val folderName = "Manga_$timeStamp"
         val resolver = appCtx.contentResolver
-        val loader = coil.ImageLoader(appCtx)
+        val loader = coil.Coil.imageLoader(appCtx)
         val lockerManager = if (saveToLocker) com.rebelroot.omni.tools.locker.PrivateLockerManager(appCtx) else null
 
         val pdfDocument = if (asPdf) android.graphics.pdf.PdfDocument() else null
@@ -2840,10 +4111,11 @@ fun downloadMangaImagesAndPdf(
                 async(kotlinx.coroutines.Dispatchers.IO) {
                     semaphore.acquire()
                     try {
+                        val reqReferer = if (referer.isNotEmpty()) referer else ImageGrabberUtils.resolveReferer(url, pageUrl)
                         val request = coil.request.ImageRequest.Builder(appCtx)
                             .data(url)
                             .apply {
-                                if (referer.isNotEmpty()) addHeader("Referer", referer)
+                                if (reqReferer.isNotEmpty()) addHeader("Referer", reqReferer)
                                 addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
                             }
                             // Only disable hardware bitmaps for PNG — hardware bitmaps
@@ -3336,7 +4608,7 @@ fun AllInOneMenuSheet(
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                val canGoBack = activeTab?.canGoBack == true
+                val canGoBack = activeTab?.canGoBack == true && !showHomeScreen
                 val canGoForward = activeTab?.canGoForward == true
 
                 AllInOneBottomAction(

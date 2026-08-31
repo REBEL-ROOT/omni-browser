@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">退出并清除所有数据</string>
     <string name="exit_quit_burn_all_desc">关闭并删除所有标签、历史和缓存</string>
     <string name="exit_cancel">取消</string>
+    <string name="exit_dont_ask_again">不再提示</string>
+    <string name="default_exit_action_title">默认退出操作</string>
+    <string name="default_exit_action_desc">从主页退出时的操作</string>
+    <string name="exit_action_always_ask">总是询问</string>
     <string name="video_player_aspect_fit">宽高比：适应屏幕</string>
     <string name="video_player_aspect_fill">宽高比：填满屏幕</string>
     <string name="video_player_aspect_stretch">宽高比：拉伸</string>

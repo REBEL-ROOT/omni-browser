@@ -847,14 +847,27 @@ fun CuratedExtensionCard(
                         .background(extension.accentColor.copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    coil.compose.AsyncImage(
-                        model = coil.request.ImageRequest.Builder(LocalContext.current)
-                            .data(extension.iconUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier.size(30.dp)
-                    )
+                    var isImageError by androidx.compose.runtime.remember(extension.iconUrl) {
+                        androidx.compose.runtime.mutableStateOf(false)
+                    }
+                    if (isImageError) {
+                        Icon(
+                            imageVector = extension.iconVector,
+                            contentDescription = null,
+                            tint = extension.accentColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    } else {
+                        coil.compose.AsyncImage(
+                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                .data(extension.iconUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            onError = { isImageError = true },
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
                 }
 
                 // Name & Author details

@@ -219,6 +219,12 @@ fun HomeScreenContent(
     LaunchedEffect(searchText.text) {
         viewModel.fetchSearchSuggestions(searchText.text)
     }
+    LaunchedEffect(viewModel.activeTabId, viewModel.currentUrl) {
+        if (viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()) {
+            searchText = androidx.compose.ui.text.input.TextFieldValue("")
+            viewModel.searchSuggestions.clear()
+        }
+    }
     var showHomeMenu by remember { mutableStateOf(false) }
     var showAddShortcutSheet by remember { mutableStateOf(false) }
     var shortcutsExpanded by remember { mutableStateOf(false) }
@@ -236,7 +242,8 @@ fun HomeScreenContent(
                 val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 val spokenText = results?.firstOrNull() ?: ""
                 if (spokenText.isNotEmpty()) {
-                    searchText = androidx.compose.ui.text.input.TextFieldValue(spokenText)
+                    searchText = androidx.compose.ui.text.input.TextFieldValue("")
+                    viewModel.searchSuggestions.clear()
                     focusManager.clearFocus()
                     keyboardController?.hide()
                     onNavigateTo(spokenText)
@@ -634,6 +641,20 @@ fun HomeScreenContent(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(end = 4.dp)
                 ) {
+                    if (searchText.text.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                searchText = androidx.compose.ui.text.input.TextFieldValue("")
+                                viewModel.searchSuggestions.clear()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = {
                             try {
@@ -648,7 +669,7 @@ fun HomeScreenContent(
                                     }
                                     context.startActivity(intent)
                                 } catch (ex: Exception) {
-                                    Toast.makeText(context, "Google Lens is not installed on this device", Toast.LENGTH_SHORT).show()
+                                    onOpenQrTools()
                                 }
                             }
                         }
@@ -687,9 +708,12 @@ fun HomeScreenContent(
             keyboardActions = KeyboardActions(
                 onGo = {
                     if (searchText.text.isNotEmpty()) {
+                        val query = searchText.text
+                        searchText = androidx.compose.ui.text.input.TextFieldValue("")
+                        viewModel.searchSuggestions.clear()
                         focusManager.clearFocus()
                         keyboardController?.hide()
-                        onNavigateTo(searchText.text)
+                        onNavigateTo(query)
                     }
                 }
             ),
@@ -722,10 +746,12 @@ fun HomeScreenContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    searchText = androidx.compose.ui.text.input.TextFieldValue(suggestion, androidx.compose.ui.text.TextRange(suggestion.length))
+                                    val query = suggestion
+                                    searchText = androidx.compose.ui.text.input.TextFieldValue("")
+                                    viewModel.searchSuggestions.clear()
                                     focusManager.clearFocus()
                                     keyboardController?.hide()
-                                    onNavigateTo(suggestion)
+                                    onNavigateTo(query)
                                 }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,

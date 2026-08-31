@@ -147,10 +147,16 @@ function registerProxyApi() {
 
 const proxyOk = registerProxyApi();
 
-// Initial fetch, then keep the cached endpoint in sync with the app's state
-// (provider switches, connect/disconnect, bridge/custom-proxy edits). Only poll
-// if we could register the proxy API; otherwise polling is pointless.
+// Initial fetch, then refresh on tab updates and relaxed periodic heartbeat (30s)
+// instead of 1s loop to prevent CPU wakeups and log spam.
 if (proxyOk) {
   refresh();
-  setInterval(refresh, 1000);
+  if (api.tabs && api.tabs.onUpdated) {
+    api.tabs.onUpdated.addListener((tabId, changeInfo) => {
+      if (changeInfo.status === 'loading') {
+        refresh();
+      }
+    });
+  }
+  setInterval(refresh, 30000);
 }

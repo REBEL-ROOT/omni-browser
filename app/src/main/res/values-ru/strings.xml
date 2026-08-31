@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">Выйти и удалить всё</string>
     <string name="exit_quit_burn_all_desc">Закрыть и удалить все вкладки, историю и кэш</string>
     <string name="exit_cancel">Отмена</string>
+    <string name="exit_dont_ask_again">Больше не спрашивать</string>
+    <string name="default_exit_action_title">Действие при выходе по умолчанию</string>
+    <string name="default_exit_action_desc">Действие при выходе с главного экрана</string>
+    <string name="exit_action_always_ask">Всегда спрашивать</string>
     <string name="video_player_aspect_fit">Соотношение сторон: Вписать в экран</string>
     <string name="video_player_aspect_fill">Соотношение сторон: Заполнить экран</string>
     <string name="video_player_aspect_stretch">Соотношение сторон: Растянуть</string>

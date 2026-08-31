@@ -1580,7 +1580,7 @@ fun QrGeneratorDialog(
     onDismissRequest: () -> Unit,
     isDarkTheme: Boolean
 ) {
-    var urlText by remember { mutableStateOf(initialUrl) }
+    var urlText by remember(initialUrl) { mutableStateOf(initialUrl) }
     val context = LocalContext.current
 
     // Generate QR bitmap reactively

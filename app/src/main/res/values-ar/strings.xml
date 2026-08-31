@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">خروج وحذف كل شيء</string>
     <string name="exit_quit_burn_all_desc">إغلاق وحذف جميع التبويبات والسجل والذاكرة المؤقتة</string>
     <string name="exit_cancel">إلغاء</string>
+    <string name="exit_dont_ask_again">عدم السؤال مرة أخرى</string>
+    <string name="default_exit_action_title">إجراء الخروج الافتراضي</string>
+    <string name="default_exit_action_desc">الإجراء عند الخروج من الشاشة الرئيسية</string>
+    <string name="exit_action_always_ask">السؤال دائماً</string>
     <string name="video_player_aspect_fit">نسبة العرض إلى الارتفاع: الاحتواء في الشاشة</string>
     <string name="video_player_aspect_fill">نسبة العرض إلى الارتفاع: ملء الشاشة</string>
     <string name="video_player_aspect_stretch">نسبة العرض إلى الارتفاع: تمديد</string>

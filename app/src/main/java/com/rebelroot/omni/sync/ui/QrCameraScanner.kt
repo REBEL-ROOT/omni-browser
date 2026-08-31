@@ -27,17 +27,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.zxing.*
-import com.google.zxing.common.HybridBinarizer
-import java.nio.ByteBuffer
+import com.rebelroot.omni.tools.qrcode.QrCodeDecoder
 import java.util.concurrent.Executors
 
 class QrCodeImageAnalyzer(
     private val onQrCodeScanned: (String) -> Unit
 ) : ImageAnalysis.Analyzer {
-    private val reader = MultiFormatReader().apply {
-        setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE)))
-    }
     private var isScanned = false
 
     override fun analyze(imageProxy: ImageProxy) {
@@ -46,34 +41,13 @@ class QrCodeImageAnalyzer(
             return
         }
 
-        val plane = imageProxy.planes.firstOrNull()
-        if (plane == null) {
-            imageProxy.close()
-            return
-        }
-
-        val buffer: ByteBuffer = plane.buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-
-        val source = PlanarYUVLuminanceSource(
-            bytes,
-            imageProxy.width,
-            imageProxy.height,
-            0,
-            0,
-            imageProxy.width,
-            imageProxy.height,
-            false
-        )
-        val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
-
         try {
-            val result = reader.decodeWithState(binaryBitmap)
-            isScanned = true
-            onQrCodeScanned(result.text)
+            val result = QrCodeDecoder.decodeImageProxy(imageProxy)
+            if (result != null && !isScanned) {
+                isScanned = true
+                onQrCodeScanned(result)
+            }
         } catch (_: Exception) {
-            // No QR detected in this frame
         } finally {
             imageProxy.close()
         }

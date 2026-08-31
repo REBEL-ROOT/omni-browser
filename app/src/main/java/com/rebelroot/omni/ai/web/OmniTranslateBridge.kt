@@ -50,6 +50,10 @@ class OmniTranslateBridge(
 ) {
     @Volatile var request: TranslationRequest? = null
 
+    val mangaPipeline: com.rebelroot.omni.ai.manga.MangaTranslationPipeline by lazy {
+        com.rebelroot.omni.ai.manga.MangaTranslationPipeline(coordinator)
+    }
+
     private val delegate = object : WebExtension.MessageDelegate {
         override fun onMessage(
             nativeApp: String,
@@ -58,22 +62,58 @@ class OmniTranslateBridge(
         ): GeckoResult<Any>? {
             if (nativeApp != "omniTranslate") return null
             val msg = message as? JSONObject ?: return null
-            if (msg.optString("type") != "translate") return null
+            val type = msg.optString("type")
 
             val req = request ?: return GeckoResult.fromValue("{}")
-            val segments = parseSegments(msg.optJSONArray("segments") ?: return GeckoResult.fromValue("{}"))
-
             val result = GeckoResult<Any>()
-            scope.launch {
-                try {
-                    val out = PageTranslationPlanner.translateSegments(coordinator, segments, req.sourceLanguage, req.targetLanguage)
-                    result.complete(buildMap(out.segments))
-                } catch (e: Exception) {
-                    Log.e(TAG, "Page translation failed", e)
-                    result.complete("{}")
+
+            if (type == "translate") {
+                val segments = parseSegments(msg.optJSONArray("segments") ?: return GeckoResult.fromValue("{}"))
+                scope.launch {
+                    try {
+                        val out = PageTranslationPlanner.translateSegments(coordinator, segments, req.sourceLanguage, req.targetLanguage)
+                        result.complete(buildMap(out.segments))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Page translation failed", e)
+                        result.complete("{}")
+                    }
                 }
+                return result
+            } else if (type == "translateImage") {
+                val imageId = msg.optString("imageId", "img_0")
+                val base64Data = msg.optString("base64")
+                val srcLang = msg.optString("sourceLang").takeIf { it.isNotEmpty() } ?: req.sourceLanguage ?: "ja"
+                val tgtLang = msg.optString("targetLang").takeIf { it.isNotEmpty() } ?: req.targetLanguage
+
+                scope.launch {
+                    try {
+                        if (base64Data.isNotEmpty()) {
+                            val cleanBase64 = base64Data.substringAfter("base64,")
+                            val bytes = android.util.Base64.decode(cleanBase64, android.util.Base64.DEFAULT)
+                            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            if (bitmap != null) {
+                                val transRes = mangaPipeline.translateImage(imageId, bitmap, srcLang, tgtLang)
+                                val stream = java.io.ByteArrayOutputStream()
+                                transRes.translatedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, stream)
+                                val outData = "data:image/jpeg;base64," + android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
+
+                                val resp = org.json.JSONObject()
+                                resp.put("imageId", imageId)
+                                resp.put("translatedSrc", outData)
+                                result.complete(resp.toString())
+                                return@launch
+                            }
+                        }
+                        result.complete("{}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Image translation failed for $imageId", e)
+                        result.complete("{}")
+                    }
+                }
+                return result
             }
-            return result
+
+            return null
         }
     }
 

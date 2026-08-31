@@ -33,9 +33,86 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
-class OmniApplication : Application() {
+class OmniApplication : Application(), coil.ImageLoaderFactory {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun newImageLoader(): coil.ImageLoader {
+        val baseClient = okhttp3.OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+
+        val okHttpClient = baseClient.newBuilder()
+            .addInterceptor { chain ->
+                val originalRequest = chain.request()
+                val originalUrl = originalRequest.url.toString()
+
+                val referer = com.rebelroot.omni.browser.ImageGrabberUtils.resolveReferer(originalUrl)
+                val builder = originalRequest.newBuilder()
+                if (referer.isNotEmpty() && originalRequest.header("Referer") == null) {
+                    builder.addHeader("Referer", referer)
+                }
+                if (originalRequest.header("User-Agent") == null) {
+                    builder.addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                }
+                if (originalRequest.header("Accept") == null) {
+                    builder.addHeader("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                }
+                val requestWithHeaders = builder.build()
+
+                var response = try {
+                    chain.proceed(requestWithHeaders)
+                } catch (e: Exception) {
+                    null
+                }
+
+                // If request failed or returned non-2xx, probe candidate alternate URLs using isolated call on baseClient
+                if (response == null || !response.isSuccessful) {
+                    val failCode = response?.code ?: -1
+                    android.util.Log.d("ImageFallback", "Primary FAILED ($failCode): $originalUrl")
+                    val alternateUrls = com.rebelroot.omni.browser.ImageGrabberUtils.getCandidateAlternateUrls(originalUrl)
+                    android.util.Log.d("ImageFallback", "Candidates (${alternateUrls.size}): $alternateUrls")
+                    for (altUrl in alternateUrls) {
+                        try {
+                            val altReferer = com.rebelroot.omni.browser.ImageGrabberUtils.resolveReferer(altUrl)
+                            val altReqBuilder = requestWithHeaders.newBuilder().url(altUrl)
+                            if (altReferer.isNotEmpty()) {
+                                altReqBuilder.header("Referer", altReferer)
+                            }
+                            val altRequest = altReqBuilder.build()
+                            val altResponse = baseClient.newCall(altRequest).execute()
+                            android.util.Log.d("ImageFallback", "Candidate $altUrl -> ${altResponse.code}")
+                            if (altResponse.isSuccessful) {
+                                response?.close()
+                                android.util.Log.d("ImageFallback", "SUCCESS with: $altUrl")
+                                return@addInterceptor altResponse
+                            }
+                            altResponse.close()
+                        } catch (e: Exception) {
+                            android.util.Log.d("ImageFallback", "Candidate exception: $altUrl -> ${e.message}")
+                        }
+                    }
+                    android.util.Log.d("ImageFallback", "All candidates exhausted for: $originalUrl")
+                }
+
+                response ?: chain.proceed(requestWithHeaders)
+            }
+            .build()
+
+        return coil.ImageLoader.Builder(this)
+            .okHttpClient(okHttpClient)
+            .components {
+                add(coil.decode.SvgDecoder.Factory())
+                if (android.os.Build.VERSION.SDK_INT >= 28) {
+                    add(coil.decode.ImageDecoderDecoder.Factory())
+                } else {
+                    add(coil.decode.GifDecoder.Factory())
+                }
+            }
+            .crossfade(true)
+            .build()
+    }
 
     /**
      * Reads the startup preference snapshot, falling back to empty preferences
@@ -47,8 +124,34 @@ class OmniApplication : Application() {
             .catch { emit(emptyPreferences()) }
             .first()
 
+    private fun isMainProcess(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            getProcessName() == packageName
+        } else {
+            try {
+                val pid = android.os.Process.myPid()
+                val am = getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                val currentProcess = am?.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName
+                currentProcess == null || currentProcess == packageName
+            } catch (_: Exception) {
+                true
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+
+        // Skip UI, Coil, and DataStore initialization in child processes
+        // (e.g. GeckoView :gpu, :tab*, :socket child processes).
+        if (!isMainProcess()) {
+            return
+        }
+
+        // Set global Coil ImageLoader with auto-probing fallback interceptor
+        try {
+            coil.Coil.setImageLoader(newImageLoader())
+        } catch (_: Exception) {}
 
         // Apply hardcoded defaults immediately so the first Compose frame has a
         // valid theme — no main-thread stall, no white flash.

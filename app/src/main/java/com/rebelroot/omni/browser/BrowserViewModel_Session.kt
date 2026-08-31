@@ -387,15 +387,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 val json = message.removePrefix("OMNI_IMAGES:")
                 try {
                     val jsonArray = org.json.JSONArray(json)
-                    val urls = mutableListOf<String>()
+                    val rawUrls = mutableListOf<String>()
                     for (i in 0 until jsonArray.length()) {
                         val imgUrl = jsonArray.getString(i)
-                        if (imgUrl.isNotBlank() && !urls.contains(imgUrl)) {
-                            urls.add(imgUrl)
+                        if (imgUrl.isNotBlank()) {
+                            rawUrls.add(imgUrl)
                         }
                     }
+                    val processedUrls = ImageGrabberUtils.processAndUpgradeExtractedImages(rawUrls)
                     viewModelScope.launch(Dispatchers.Main) {
-                        extractedImagesList = urls
+                        extractedImagesList = processedUrls
                         isExtractingImages = false
                     }
                 } catch (e: Exception) {
@@ -577,7 +578,35 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             session: GeckoSession,
             prompt: GeckoSession.PromptDelegate.AutocompleteRequest<org.mozilla.geckoview.Autocomplete.LoginSelectOption>
         ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
-            Log.d(TAG, "🔑 [AutofillDiagnostics] onLoginSelect received with ${prompt.options.size} option(s), handled via native/Compose autofill")
+            if (tab.id != activeTabId) return GeckoResult.fromValue(prompt.dismiss())
+            val options = prompt.options
+            Log.d(TAG, "🔑 [Autofill] onLoginSelect received with ${options.size} option(s)")
+
+            val host = try { java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: "" } catch(_: Exception) { "" }
+            val vaultMatches = if (host.isNotEmpty()) getPasswordsForDomain(host) else emptyList()
+
+            val matches = if (vaultMatches.isNotEmpty()) {
+                vaultMatches
+            } else {
+                options.mapNotNull { opt ->
+                    val entry = opt.value
+                    if (entry != null && entry.username.isNotEmpty()) {
+                        BrowserViewModel.SavedPassword(
+                            domain = host.ifEmpty { entry.origin ?: "" },
+                            username = entry.username,
+                            password = entry.password
+                        )
+                    } else null
+                }
+            }
+
+            if (matches.isNotEmpty() && isOmniPasswordManagerEnabled) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    autofillMatches = matches
+                    showAutofillBottomSheet = true
+                }
+            }
+
             return GeckoResult.fromValue(prompt.dismiss())
         }
 
@@ -796,10 +825,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
                 val idx = tabs.indexOfFirst { it.id == tab.id }
                 if (idx != -1) {
-                    val currentTabUrl = tabs[idx].url
-                    if (it == "about:blank" && currentTabUrl != "about:blank" && currentTabUrl.isNotEmpty()) {
-                        return
-                    }
                     tabs[idx] = tabs[idx].copy(url = it, settingsVersion = currentSettingsVersion)
                     saveTabs()
                 }

@@ -274,6 +274,7 @@ fun PhoneAddressBar(
                         var totalDragX = 0f
                         var isMoved = false
                         val pointerId = down.id
+                        var pendingPosition: String? = null
 
                         do {
                             val event = awaitPointerEvent()
@@ -290,19 +291,27 @@ fun PhoneAddressBar(
                                         pointer.consume()
                                         isMoved = true
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        viewModel.saveAddressBarPosition(context, "Bottom")
+                                        pendingPosition = "Bottom"
                                     } else if (totalDragY < 0 && currentPos == "Bottom") {
                                         pointer.consume()
                                         isMoved = true
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        viewModel.saveAddressBarPosition(context, "Top")
+                                        pendingPosition = "Top"
                                     }
                                 }
                                 if (isMoved) {
                                     pointer.consume()
                                 }
+                            } else {
+                                if (isMoved) {
+                                    pointer.consume()
+                                }
                             }
                         } while (event.changes.any { it.pressed })
+
+                        pendingPosition?.let { newPos ->
+                            viewModel.saveAddressBarPosition(context, newPos)
+                        }
                     }
                 }
                 .combinedClickable(
@@ -958,7 +967,7 @@ fun omnimenuDropdownCard(
                 )
         ) {
             // ── Top Circular Quick Navigation Row ──────────────────
-            val canBack = activeTab?.canGoBack == true
+            val canBack = activeTab?.canGoBack == true && !isHome
             val canForward = activeTab?.canGoForward == true
             val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
             val quickNavBtnSize = if (isCompact) 32.dp else 40.dp

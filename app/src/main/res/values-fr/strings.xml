@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">Quitter et tout brûler</string>
     <string name="exit_quit_burn_all_desc">Fermer et supprimer tous les onglets, l’historique et le cache</string>
     <string name="exit_cancel">Annuler</string>
+    <string name="exit_dont_ask_again">Ne plus demander</string>
+    <string name="default_exit_action_title">Action de sortie par défaut</string>
+    <string name="default_exit_action_desc">Action lors de la fermeture depuis l\'écran d\'accueil</string>
+    <string name="exit_action_always_ask">Toujours demander</string>
     <string name="video_player_aspect_fit">Rapport d’aspect : Ajuster à l’écran</string>
     <string name="video_player_aspect_fill">Rapport d’aspect : Remplir l’écran</string>
     <string name="video_player_aspect_stretch">Format d’image : Étirer</string>

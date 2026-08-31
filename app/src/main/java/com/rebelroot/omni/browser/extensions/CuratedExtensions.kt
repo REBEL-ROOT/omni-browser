@@ -18,16 +18,10 @@ data class CuratedExtension(
     val category: String,
     val rating: Float,
     val downloadUrl: String,
+    val iconUrl: String,
     val iconVector: ImageVector,
     val accentColor: Color
-) {
-    val iconUrl: String
-        get() {
-            val addonNumber = downloadUrl.substringAfter("addon-").substringBefore("-latest.xpi")
-            val first3 = if (addonNumber.length >= 3) addonNumber.take(3) else "000"
-            return "https://addons.mozilla.org/user-media/addon_icons/$first3/$addonNumber-64.png"
-        }
-}
+)
 
 object CuratedExtensionRepository {
 
@@ -42,6 +36,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.8f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/addon-607454-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/607/607454-64.png",
             iconVector = Icons.Rounded.Shield,
             accentColor = Color(0xFFFF3B5C)
         ),
@@ -53,6 +48,7 @@ object CuratedExtensionRepository {
             category = "Utilities",
             rating = 4.7f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/darkreader/addon-396701-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/855/855413-64.png",
             iconVector = Icons.Rounded.DarkMode,
             accentColor = Color(0xFF818CF8)
         ),
@@ -64,6 +60,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.6f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/privacy-badger17/addon-506646-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/506/506646-64.png",
             iconVector = Icons.Rounded.Security,
             accentColor = Color(0xFF10B981)
         ),
@@ -75,6 +72,7 @@ object CuratedExtensionRepository {
             category = "Media",
             rating = 4.9f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/sponsorblock/addon-941199-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/2590/2590937-64.png",
             iconVector = Icons.Rounded.PlayCircle,
             accentColor = Color(0xFFF59E0B)
         ),
@@ -86,6 +84,7 @@ object CuratedExtensionRepository {
             category = "Productivity",
             rating = 4.7f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/traduzir-paginas-web/addon-961026-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/2623/2623538-64.png",
             iconVector = Icons.Rounded.Translate,
             accentColor = Color(0xFF3B82F6)
         ),
@@ -97,6 +96,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.6f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/clearurls/addon-899885-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/839/839767-64.png",
             iconVector = Icons.Rounded.LinkOff,
             accentColor = Color(0xFFEC4899)
         ),
@@ -108,6 +108,7 @@ object CuratedExtensionRepository {
             category = "Productivity",
             rating = 4.7f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/violentmonkey/addon-824131-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/797/797378-64.png",
             iconVector = Icons.Rounded.Code,
             accentColor = Color(0xFF14B8A6)
         ),
@@ -119,6 +120,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.5f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/decentraleyes/addon-674489-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/521/521554-64.png",
             iconVector = Icons.Rounded.Storage,
             accentColor = Color(0xFF6366F1)
         ),
@@ -130,6 +132,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.8f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/addon-854744-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/735/735894-64.png",
             iconVector = Icons.Rounded.Lock,
             accentColor = Color(0xFF175DDC)
         ),
@@ -141,6 +144,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.7f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/proton-pass/addon-1144005-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/2785/2785662-64.png",
             iconVector = Icons.Rounded.Key,
             accentColor = Color(0xFF6D4AFF)
         ),
@@ -152,6 +156,7 @@ object CuratedExtensionRepository {
             category = "Privacy",
             rating = 4.6f,
             downloadUrl = "https://addons.mozilla.org/firefox/downloads/latest/keepassxc-browser/addon-893540-latest.xpi",
+            iconUrl = "https://addons.mozilla.org/user-media/addon_icons/917/917354-64.png",
             iconVector = Icons.Rounded.VpnKey,
             accentColor = Color(0xFF53A048)
         )

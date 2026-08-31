@@ -716,6 +716,10 @@
     <string name="exit_quit_burn_all">Quit &amp; Burn All Data</string>
     <string name="exit_quit_burn_all_desc">Close and delete all tabs, history &amp; cache</string>
     <string name="exit_cancel">Cancel</string>
+    <string name="exit_dont_ask_again">Don\'t ask again</string>
+    <string name="default_exit_action_title">Default Exit Action</string>
+    <string name="default_exit_action_desc">Action when exiting from the home screen</string>
+    <string name="exit_action_always_ask">Always ask</string>
     <string name="video_player_aspect_fit">Aspect Ratio: Fit to Screen</string>
     <string name="video_player_aspect_fill">Aspect Ratio: Fill Screen</string>
     <string name="video_player_aspect_stretch">Aspect Ratio: Stretch</string>

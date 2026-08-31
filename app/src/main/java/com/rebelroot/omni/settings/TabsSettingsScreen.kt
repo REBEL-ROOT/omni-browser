@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,6 +55,7 @@ fun TabsSettingsScreen(
 
     var showAutoCloseDialog by remember { mutableStateOf(false) }
     var showLayoutDialog by remember { mutableStateOf(false) }
+    var showExitActionDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -146,6 +148,24 @@ fun TabsSettingsScreen(
                         textSecondaryColor = textSecondaryColor,
                         accentColor = accentColor
                     )
+
+                    if (!viewModel.confirmExit) {
+                        HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                        val exitActionSubtitle = when (viewModel.defaultExitAction) {
+                            "CLEAR_HISTORY" -> stringResource(R.string.exit_quit_clear_history)
+                            "BURN_ALL" -> stringResource(R.string.exit_quit_burn_all)
+                            else -> stringResource(R.string.exit_quit)
+                        }
+                        SettingsRow(
+                            icon = Icons.AutoMirrored.Rounded.Logout,
+                            title = stringResource(R.string.default_exit_action_title),
+                            subtitle = exitActionSubtitle,
+                            onClick = { showExitActionDialog = true },
+                            textPrimaryColor = textPrimaryColor,
+                            textSecondaryColor = textSecondaryColor,
+                            accentColor = accentColor
+                        )
+                    }
                 }
             }
         }
@@ -218,6 +238,45 @@ fun TabsSettingsScreen(
                                 onClick = {
                                     viewModel.saveAutoCloseTabsDays(context, value)
                                     showAutoCloseDialog = false
+                                }
+                            )
+                            Text(label, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // Default Exit Action Selector Dialog
+    if (showExitActionDialog) {
+        val actions = listOf(
+            "QUIT" to stringResource(id = R.string.exit_quit),
+            "CLEAR_HISTORY" to stringResource(id = R.string.exit_quit_clear_history),
+            "BURN_ALL" to stringResource(id = R.string.exit_quit_burn_all)
+        )
+        AlertDialog(
+            onDismissRequest = { showExitActionDialog = false },
+            title = { Text(stringResource(id = R.string.default_exit_action_title), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    actions.forEach { (actionKey, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.saveDefaultExitAction(context, actionKey)
+                                    showExitActionDialog = false
+                                }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = viewModel.defaultExitAction == actionKey,
+                                onClick = {
+                                    viewModel.saveDefaultExitAction(context, actionKey)
+                                    showExitActionDialog = false
                                 }
                             )
                             Text(label, modifier = Modifier.padding(start = 8.dp))

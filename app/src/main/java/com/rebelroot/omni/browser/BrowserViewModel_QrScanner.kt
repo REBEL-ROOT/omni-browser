@@ -28,9 +28,14 @@ fun BrowserViewModel.scanPageForQrCodes() {
             return@then GeckoResult.fromValue(false)
         }
 
-        // Run FOSS ZXing barcode detection on the captured bitmap
-        val result = QrCodeDecoder.decodeBitmap(bitmap)
-        val results = if (result != null) listOf(result) else emptyList()
+        // Run multi-strategy barcode detection on the captured bitmap
+        val results = try {
+            val decoded = QrCodeDecoder.decodeBitmapAll(bitmap)
+            bitmap.recycle()
+            decoded
+        } catch (_: Exception) {
+            emptyList()
+        }
         viewModelScope.launch(Dispatchers.Main) {
             isQrScanning = false
             qrScanResults = results

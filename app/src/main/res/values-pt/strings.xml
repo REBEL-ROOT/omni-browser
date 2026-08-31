@@ -644,6 +644,10 @@
     <string name="exit_quit_burn_all">Sair e queimar tudo</string>
     <string name="exit_quit_burn_all_desc">Fechar e apagar abas, histórico e cache</string>
     <string name="exit_cancel">Cancelar</string>
+    <string name="exit_dont_ask_again">Não perguntar novamente</string>
+    <string name="default_exit_action_title">Ação de saída padrão</string>
+    <string name="default_exit_action_desc">Ação ao sair pela tela inicial</string>
+    <string name="exit_action_always_ask">Sempre perguntar</string>
     <string name="video_player_aspect_fit">Proporção de tela: Ajustar à tela</string>
     <string name="video_player_aspect_fill">Proporção de tela: Preencher a tela</string>
     <string name="video_player_aspect_stretch">Proporção de tela: Esticar</string>
