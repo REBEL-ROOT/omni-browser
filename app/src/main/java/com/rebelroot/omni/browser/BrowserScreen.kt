@@ -2116,6 +2116,18 @@ fun BrowserScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(top = geckoTopPad, bottom = geckoBottomPad)
+                                        // Issue #115: shrink the web viewport above the soft
+                                        // keyboard whenever the IME is visible. With
+                                        // edge-to-edge (decorFitsSystemWindows=false) the window
+                                        // itself never resizes under adjustResize, so Gecko never
+                                        // learns the visible area shrank and leaves focused inputs
+                                        // hidden behind the keyboard — most visibly on immovable
+                                        // single-page layouts like duck.ai. Padding the engine host
+                                        // with the IME inset resizes the viewport, and Gecko then
+                                        // scrolls the focused text field into view automatically,
+                                        // the same mechanism Firefox/Chromium use. Applies for all
+                                        // toolbar positions and input locations.
+                                        .imePadding()
                                 ) {
                                     DisposableEffect(Unit) {
                                         onDispose {
