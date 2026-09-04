@@ -1132,6 +1132,60 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
             
+            // ── Issue #113: offer the native app for user-tapped https(s) app links ──
+            // Plain https:// deep links (YouTube, Reddit, etc.) previously always
+            // loaded in the browser even with "Open links in external apps" enabled,
+            // because the ask-first prompt only covered intent:// and custom schemes.
+            // For genuine user-gesture, same-window navigations (never redirects,
+            // iframes, or sub-resources — a site must never bounce the user into an
+            // app), resolve non-browser native app handlers for the URL and queue the
+            // consent dialog. Nothing ever opens natively without an explicit user
+            // confirmation; dismissing simply loads the page in the browser.
+            if (request.hasUserGesture &&
+                request.target == GeckoSession.NavigationDelegate.TARGET_WINDOW_CURRENT &&
+                isOpenExternalAppAllowed &&
+                pendingExternalAppRequest == null &&
+                !isAuthHost &&
+                (lowerUri.startsWith("http://") || lowerUri.startsWith("https://"))
+            ) {
+                val externalSitePerm = getSitePermissionValue(host, "externalApp")
+                if (externalSitePerm != "block") {
+                    val handler = getNativeAppHandlers(context, uri).firstOrNull()
+                    val handlerPkg = handler?.activityInfo?.packageName
+                    if (handlerPkg != null) {
+                        if (externalSitePerm == "allow") {
+                            // Remembered consent ("Always open" chosen previously for this site)
+                            Log.i(TAG, "✅ onLoadRequest: https app-link allowed by site permission for $host: $uri")
+                            viewModelScope.launch(Dispatchers.Main) {
+                                try {
+                                    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                                        addCategory(Intent.CATEGORY_BROWSABLE)
+                                        setPackage(handlerPkg)
+                                    }
+                                    context.startActivity(appIntent)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "https app-link launch failed — loading in browser instead", e)
+                                    tab.session.loadUri(uri)
+                                }
+                            }
+                        } else {
+                            Log.i(TAG, "❓ onLoadRequest: https app-link queued for user decision ($host): $uri")
+                            viewModelScope.launch(Dispatchers.Main) {
+                                pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
+                                    uri = uri,
+                                    packageName = handlerPkg,
+                                    fallbackUrl = null,
+                                    blockedAutomatically = false,
+                                    sourceHost = host,
+                                    webUrlFallback = true
+                                )
+                            }
+                        }
+                        return GeckoResult.fromValue(AllowOrDeny.DENY)
+                    }
+                }
+            }
+
             return GeckoResult.fromValue(AllowOrDeny.ALLOW)
         }
 

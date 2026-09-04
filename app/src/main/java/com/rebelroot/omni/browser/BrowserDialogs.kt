@@ -2343,6 +2343,19 @@ fun ExternalAppRedirectDialog(
 
     val siteLabel = request.sourceHost.ifBlank { "this site" }
 
+    // Issue #113: for plain https(s) app links, staying in the browser must
+    // actually load the tapped URL — the navigation was denied to allow the
+    // app handoff, so without this the user would land on a blank page.
+    val stayInBrowser = {
+        if (!request.fallbackUrl.isNullOrBlank()) {
+            viewModel.loadUrl(request.fallbackUrl)
+        } else if (request.webUrlFallback) {
+            viewModel.loadUrl(request.uri)
+        }
+        onDismiss()
+        Unit
+    }
+
     fun doLaunch() {
         try {
             val lowerUri = request.uri.lowercase()
@@ -2385,7 +2398,7 @@ fun ExternalAppRedirectDialog(
     }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { stayInBrowser() },
         containerColor = containerColor,
         icon = {
             Icon(
@@ -2453,10 +2466,7 @@ fun ExternalAppRedirectDialog(
                     onClick = {
                         viewModel.updateSitePermission(request.sourceHost, "externalApp", "block")
                         // Load fallback URL in-browser if available, otherwise stay
-                        if (!request.fallbackUrl.isNullOrBlank()) {
-                            viewModel.loadUrl(request.fallbackUrl)
-                        }
-                        onDismiss()
+                        stayInBrowser()
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

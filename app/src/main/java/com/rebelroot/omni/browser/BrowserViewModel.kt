@@ -594,7 +594,11 @@ class BrowserViewModel : ViewModel() {
         val packageName: String? = null,
         val fallbackUrl: String? = null,
         val blockedAutomatically: Boolean = false,
-        val sourceHost: String = ""
+        val sourceHost: String = "",
+        /** True for plain https(s) app links (issue #113): dismissing the prompt
+         *  must load the original web URL in the browser instead of leaving a
+         *  blank page (the navigation was denied to allow the app handoff). */
+        val webUrlFallback: Boolean = false
     )
     var pendingExternalAppRequest by mutableStateOf<PendingExternalAppRequest?>(null)
     var activeVideoCookies by mutableStateOf<String?>(null)
