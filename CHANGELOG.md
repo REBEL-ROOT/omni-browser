@@ -2,17 +2,31 @@
 
 All notable changes to the Omni Browser project will be documented in this file.
 
-## [1.2.9.5] - 2026-08-24
-
-### Optimized
-- **54% APK Size Reduction (~130 MB saved)**: Enabled native library compression (`useLegacyPackaging = true`) and stripped non-essential crash diagnostic binaries (`libminidump_analyzer.so`, `libcrashhelper.so`), cutting the `aarch64` release APK from 241 MB down to ~111 MB.
+## [1.3.5] - 2026-08-24
 
 ### Added
-- **Bitwarden & Password Manager WebExtension Support**: Enabled dynamic extension permissions (`onOptionalPrompt`, `onUpdatePrompt` returning `ALLOW`) for full compatibility with Bitwarden, Proton Pass, 1Password, and KeePassXC WebExtensions.
-- **Curated Password Managers**: Added official Bitwarden, Proton Pass, and KeePassXC-Browser entries to the curated extensions repository.
-- **Omni Password Manager Master ON/OFF Toggle**: Added master switch in Password Manager screen and Privacy & Security settings with complete saving and autofill suppression when turned off.
-- **GitHub APK Update Notification**: Automated system notifications with direct "Update Now" actions when a newer release is published on GitHub.
-- **Download Notification Navigation**: Tapping in-progress download notification immediately opens Omni Browser's Downloads section; tapping completed download notification opens the file directly or navigates to Downloads.
+- **Firefox Account Cloud Sync**: 1-Click login with Firefox Account to synchronize bookmarks, remote tabs from PC/Mac, browsing history, and passwords via official Mozilla Sync 1.5 Cloud.
+- **Remote Tabs Viewer**: Live bottom sheet displaying tabs currently open on paired desktop computers with 1-tap navigation in Omni.
+- **Omni Sync Mesh (Upcoming / Testing Phase)**: End-to-end encrypted zero-cloud P2P Wi-Fi synchronization for local devices, designed for testing with the companion desktop Omni Sync Extension.
+- **CRDT Fractional Indexing**: Dense Base-62 fractional ordering for bookmarks and folders, guaranteeing zero collisions and nested tree integrity.
+- **Privacy & Tombstone Isolation**: Strict quarantine of incognito tabs and deletion tombstones to ensure deleted bookmarks never resurrect.
+
+---
+
+## [1.3.4] - 2026-08-20
+
+### Added
+- **System Theme Mode**: Added three-way theme selection (*Follow System*, *Always Dark*, *Always Light*) with dynamic UI adaptation matching system dark mode state.
+- **Address Bar Quick Actions**: Added 1-tap quick action shortcuts (Copy URL, Share, Paste & Go) directly within the address bar and search overlay.
+- **Context Menu Background Tab**: Added *"Open in background tab"* to the link context menu to open links in new tabs without switching away from the current page.
+- **Confirm Before Exit Toggle**: Added configurable *"Confirm before exiting browser"* setting with confirmation dialog to prevent accidental app dismissals.
+- **In-App BitTorrent Engine**: Integrated embedded BitTorrent engine (`jlibtorrent`) with support for magnet links, `.torrent` files, DHT node bootstrapping, and fallback tracker injection.
+- **Torrent Status Bar Notifications**: Added real-time persistent background notifications displaying live download speed, progress percentage, and torrent state.
+- **Root-Level Download Destination Picker**: Intercepts tab downloads and generic web file requests with an interactive root-level folder and destination picker.
+
+### Improved
+- **16 KB ELF Page-Size Alignment**: Enforced 16 KB RELRO segment alignment across all bundled prebuilt native libraries (`.so`) for Android 15+ and Google Play compliance.
+- **Web Video Player UX**: Centered fullscreen toggle buttons, pinned top media sniffer bar, and eliminated navigation reload loops.
 
 ---
 

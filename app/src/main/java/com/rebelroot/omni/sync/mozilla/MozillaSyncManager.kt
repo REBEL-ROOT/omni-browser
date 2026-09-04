@@ -31,6 +31,7 @@ class MozillaSyncManager(
     val tabBridge: MozillaTabBridge = MozillaTabBridge(),
     val historyBridge: MozillaHistoryBridge = MozillaHistoryBridge(),
     val loginBridge: MozillaLoginBridge = MozillaLoginBridge(),
+    val syncBridge: com.rebelroot.omni.sync.core.SyncBridge = com.rebelroot.omni.sync.core.SyncBridge.getInstance(),
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     private val mainDispatcher: CoroutineDispatcher = try {
         Dispatchers.Main.immediate
@@ -85,7 +86,7 @@ class MozillaSyncManager(
                 onMain {
                     _syncState.value = MozSyncState.Syncing(SyncEngine.BOOKMARKS, "Authenticating with Mozilla Cloud...")
                 }
-                val credsResult = syncClient.fetchStorageCredentials(token)
+                val credsResult = syncClient.fetchStorageCredentials(token, accountManager.getSyncKey())
                 
                 val apiEndpoint: String
                 val authToken: String
@@ -210,6 +211,16 @@ class MozillaSyncManager(
                 // 5. Update last sync timestamp
                 val finishTime = System.currentTimeMillis()
                 accountManager.setLastSyncTime(finishTime)
+                val userEmail = (accountManager.accountState.value as? FxaState.SignedIn)?.email ?: "Firefox Account"
+                val appCtx = com.rebelroot.omni.OmniApplication.appContext
+                if (appCtx != null) {
+                    com.rebelroot.omni.sync.notification.SyncNotificationManager.notifyFirefoxSync(
+                        context = appCtx,
+                        email = userEmail,
+                        summary = "Bookmarks, tabs, and logins updated"
+                    )
+                }
+
                 onMain {
                     _syncState.value = MozSyncState.Done(finishTime)
                     try { onComplete?.invoke(true) } catch (_: Exception) {}

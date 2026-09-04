@@ -37,4 +37,21 @@ class MozillaSyncClientTest {
         assertEquals(7200L, resp.durationSeconds)
         assertEquals("sha256", resp.hashAlgorithm)
     }
+
+    @Test
+    fun testGenerateHawkHeader() {
+        val client = MozillaSyncClient()
+        val url = java.net.URL("https://token.services.mozilla.com/1.0/sync/1.5")
+        val hawkHeader = client.generateHawkHeader(
+            id = "test_user_id",
+            key = "secret_key_12345",
+            method = "GET",
+            url = url
+        )
+
+        assertTrue(hawkHeader.startsWith("Hawk id=\"test_user_id\""))
+        assertTrue(hawkHeader.contains("ts="))
+        assertTrue(hawkHeader.contains("nonce="))
+        assertTrue(hawkHeader.contains("mac="))
+    }
 }

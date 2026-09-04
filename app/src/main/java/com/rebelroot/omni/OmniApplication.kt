@@ -148,6 +148,9 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
             return
         }
 
+        appContext = this
+        com.rebelroot.omni.sync.notification.SyncNotificationManager.createNotificationChannel(this)
+
         // Set global Coil ImageLoader with auto-probing fallback interceptor
         try {
             coil.Coil.setImageLoader(newImageLoader())
@@ -200,10 +203,23 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
             } catch (_: Exception) {
                 // Defaults already applied above; nothing else to do.
             }
+
+            // Start global Omni Sync LAN server so desktop extensions can connect & sync anytime
+            try {
+                val baseDir = filesDir
+                val collection = com.rebelroot.omni.bookmarks.storage.loadBookmarks(this@OmniApplication)
+                val coord = SyncCoordinatorHolder.getOrCreate(baseDir, collection)
+                com.rebelroot.omni.sync.core.SyncBridge.getInstance().tabBridge = com.rebelroot.omni.sync.mozilla.MozillaSyncManager.getInstance().tabBridge
+            } catch (e: Exception) {
+                android.util.Log.e("OmniApplication", "Failed to initialize global SyncCoordinator", e)
+            }
         }
     }
 
     companion object {
+        @Volatile var appContext: OmniApplication? = null
+            private set
+
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")
         val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color_enabled")
@@ -246,4 +262,19 @@ object UiStateHolder {
     @Volatile var wallpaperScale: Float = 1.0f
     @Volatile var wallpaperOffsetX: Float = 0f
     @Volatile var wallpaperOffsetY: Float = 0f
+}
+
+object SyncCoordinatorHolder {
+    @Volatile
+    var coordinator: com.rebelroot.omni.sync.coordinator.SyncCoordinator? = null
+        private set
+
+    fun getOrCreate(baseDir: java.io.File, collection: com.rebelroot.omni.bookmarks.model.BookmarkCollection): com.rebelroot.omni.sync.coordinator.SyncCoordinator {
+        return coordinator ?: synchronized(this) {
+            coordinator ?: com.rebelroot.omni.sync.coordinator.SyncCoordinator(
+                baseDir = baseDir,
+                collection = collection
+            ).also { coordinator = it }
+        }
+    }
 }

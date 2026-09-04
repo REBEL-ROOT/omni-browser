@@ -82,7 +82,7 @@ jobs:
       - name: Rename APKs
         run: |
           export VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ]; then export VERSION="v1.3.1.2"; fi
+          if [ -z "$VERSION" ]; then export VERSION="v1.2.6.3"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -124,19 +124,37 @@ jobs:
 
             ## 🚀 What's New in ${{ github.ref_name }}
 
-            ### 🎨 AI Manga & Comic Translation Engine
-            - **On-Device Manga & Comic OCR/Translation**: Integrated smart AI detection, text replacement overlays, and multi-language support for manga and comic reading.
-            - **Webpage Translation Bridge**: Enhanced DOM text translation and dynamic content handling.
+            ### 🛠️ Critical Bug Fixes
+            - **OAuth Popup & New Window Navigation**: Fixed a bug where sites like Deezer trying to open third-party logins (Facebook, Google, Spotify, etc.) were blocked. Expanded the authentication host bypass to handle all major OAuth, SSO, and OIDC endpoints.
+            - **Keyboard Layout & Resize Stability**: Added `adjustResize` support and fixed dynamic bar-hiding to prevent soft keyboard interactions from breaking fixed/sticky web page elements, overlapping layouts, or forms.
+            - **Google Sign-In Black Screen Fix**: Resolved an issue where closing a Google OAuth popup tab left the parent browser session in a blank/black screen state by implementing a secure GeckoView session-rebind counter.
+            - **Firefox Account OAuth Flow**: Fully repaired the Firefox Sync OAuth login loop ("Something went wrong. Please close this tab and try again") by enabling third-party cookies, correcting authorization scopes, and bypassing bot protection using a dedicated Firefox Mobile User-Agent.
+            - **WebExtension Click Crash**: Fixed a native browser crash/restart that triggered when clicking on certain extension actions.
+            - **Responsive 3-Dot Menu**: Improved UI responsiveness by dynamically adapting the three-dot dropdown width on smaller screen form factors.
 
-            ### 📷 QR Code & Media Tools
-            - **Advanced QR Code Scanner & Generator**: Support for camera scanning, gallery image decoding, multi-format QR/barcode decoding, and direct action triggers.
-            - **High-Res Media Grabber**: Upgraded asset extraction, media grabber resolution enhancements, and batch downloads.
+            ---
 
-            ### 🌐 Gecko Engine v154 & Core Enhancements
-            - **Gecko Engine v154**: Faster page loads, smoother scrolling, and modern web standards.
-            - **Firefox Sync**: End-to-end sync for bookmarks, logins, open tabs, and browsing history.
-            - **Tab & Navigation Settings**: Granular control over tab layouts, close confirmations, and UI customization.
-            - **Universal Mobile Extension Compatibility**: Mobile-friendly overlay clamping and viewport responsiveness.
+            ## 🔑 Password Managers & WebExtensions (v1.2.9.4)
+            - **Bitwarden & Password Manager WebExtension Support**: Updated GeckoView prompt delegates (`onOptionalPrompt` and `onUpdatePrompt`) to allow dynamic host and clipboard permissions (`browser.permissions.request()`). Bitwarden, Proton Pass, 1Password, and KeePassXC can now dynamically inspect web forms, search vaults, and autofill credentials across all websites.
+            - **Curated Extensions Store Expansion**: Added official entries for Bitwarden, Proton Pass, and KeePassXC-Browser to the built-in curated extension repository for 1-tap installation. Enhanced options page navigation with private browsing support.
+            - **Omni Password Manager Master Toggle**: Added a master toggle switch in the Password Manager vault screen and Settings. When turned OFF, it completely silences login save prompts and autocomplete sheets.
+
+            ## 📥 Download Notifications & Deep-Link Navigation (v1.2.9.4)
+            - **In-Progress Download Tap**: Tapping the system notification of an ongoing download brings Omni Browser to the foreground and opens the Downloads section directly.
+            - **Completed Download Tap & Direct File Opening**: Tapping a completed download notification opens the file directly with the default viewer via FileProvider. Added dual action buttons on the notification: "Open" and "Downloads".
+            - **Deep Link Handlers**: Integrated robust event handlers in MainActivity to handle both cold starts and background resumes.
+
+            ## 🔔 In-App OTA Update Notification System (v1.2.9.4)
+            - **Automated GitHub Update Notifications**: Added a background check on app startup (throttled to at most once per 12 hours) to check the GitHub Releases API. Issues a high-priority system status bar notification when a new version is available.
+
+            ## 🔄 Omni Sync & Firefox Account Cloud Integration (v1.2.9.4)
+            - **Firefox Account Cloud Sync**: End-to-end encrypted cloud sync for bookmarks, history, tabs, and settings via Firefox Account infrastructure.
+            - **P2P / Local Mesh Device Pairing**: Secure QR-code pairing and LAN transport sync across devices without third-party servers.
+            - **Localization**: Translated and synchronized all sync UI strings across 11 supported languages (English, Hindi, Spanish, French, German, Portuguese, Polish, Russian, Japanese, Chinese, Arabic).
+
+            ## 🎨 UI, Engine & Performance Stability (v1.2.9.4)
+            - **Blank Screen on Startup Resolved**: Fixed proxy initialization, removed premature JavaScript injections, and resolved EGL crash flags on incompatible GPUs.
+            - **OLED Dark Mode Improvements**: Eliminated mutation observer infinite feedback loops with 200ms debouncing, and scoped force-dark CSS variables to eliminate white text on light pages.
 
             ---
 

@@ -1942,7 +1942,19 @@ fun ImageGrabberSheetContent(
                     onClick = {
                         val isPdf = asPdf
                         pendingDownloadType = null
-                        downloadMangaImagesAndPdf(context, localImages, viewModel.currentUrl, asPdf = isPdf, saveToLocker = false, downloadEngine = viewModel.streamDownloadEngine)
+                        downloadMangaImagesAndPdf(
+                            context = context,
+                            urls = localImages,
+                            pageUrl = viewModel.currentUrl,
+                            asPdf = isPdf,
+                            saveToLocker = false,
+                            downloadEngine = viewModel.streamDownloadEngine,
+                            isTranslateEnabled = isTranslateMangaEnabled,
+                            sourceLang = selectedSourceLang.second,
+                            targetLang = selectedTargetLang.second,
+                            typographyStyle = typographyStyle,
+                            pipeline = mangaPipeline
+                        )
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(25.dp),
@@ -1957,7 +1969,19 @@ fun ImageGrabberSheetContent(
                     onClick = {
                         val isPdf = asPdf
                         pendingDownloadType = null
-                        downloadMangaImagesAndPdf(context, localImages, viewModel.currentUrl, asPdf = isPdf, saveToLocker = true, downloadEngine = viewModel.streamDownloadEngine)
+                        downloadMangaImagesAndPdf(
+                            context = context,
+                            urls = localImages,
+                            pageUrl = viewModel.currentUrl,
+                            asPdf = isPdf,
+                            saveToLocker = true,
+                            downloadEngine = viewModel.streamDownloadEngine,
+                            isTranslateEnabled = isTranslateMangaEnabled,
+                            sourceLang = selectedSourceLang.second,
+                            targetLang = selectedTargetLang.second,
+                            typographyStyle = typographyStyle,
+                            pipeline = mangaPipeline
+                        )
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(25.dp),
@@ -3206,7 +3230,19 @@ private fun MangaFullscreenViewer(
                         )
                         IconButton(
                             onClick = {
-                                downloadMangaImagesAndPdf(context, images, pageUrl = pageUrl, asPdf = false, downloadEngine = downloadEngine)
+                                downloadMangaImagesAndPdf(
+                                    context = context,
+                                    urls = images,
+                                    pageUrl = pageUrl,
+                                    asPdf = false,
+                                    saveToLocker = false,
+                                    downloadEngine = downloadEngine,
+                                    isTranslateEnabled = isTranslateEnabled,
+                                    sourceLang = selectedSourceLang.second,
+                                    targetLang = selectedTargetLang.second,
+                                    typographyStyle = typographyStyle,
+                                    pipeline = pipeline
+                                )
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -3219,7 +3255,19 @@ private fun MangaFullscreenViewer(
                         }
                         IconButton(
                             onClick = {
-                                downloadMangaImagesAndPdf(context, images, pageUrl = pageUrl, asPdf = true, downloadEngine = downloadEngine)
+                                downloadMangaImagesAndPdf(
+                                    context = context,
+                                    urls = images,
+                                    pageUrl = pageUrl,
+                                    asPdf = true,
+                                    saveToLocker = false,
+                                    downloadEngine = downloadEngine,
+                                    isTranslateEnabled = isTranslateEnabled,
+                                    sourceLang = selectedSourceLang.second,
+                                    targetLang = selectedTargetLang.second,
+                                    typographyStyle = typographyStyle,
+                                    pipeline = pipeline
+                                )
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -4001,24 +4049,44 @@ fun saveOrDownloadSingleMangaPage(
     val mimeType = if (asPdf) "application/pdf" else "image/jpeg"
     val destText = if (saveToLocker) "Private Vault" else "Downloads"
 
+    val registered = downloadEngine?.registerExternalJob(
+        filename = fileName,
+        url = "",
+        saveToLocker = saveToLocker,
+        isGeneric = true
+    )
+    val jobId = registered?.first
+
     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
         try {
+            val safeBitmap = if (bitmap.config == android.graphics.Bitmap.Config.HARDWARE) {
+                bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: bitmap
+            } else {
+                bitmap
+            }
+
+            var savedFile: java.io.File? = null
+            var savedUri: android.net.Uri? = null
+            var fileSize = 0L
+
             if (saveToLocker) {
                 val lockerManager = com.rebelroot.omni.tools.locker.PrivateLockerManager(appCtx)
                 val tempFile = java.io.File(appCtx.cacheDir, fileName)
                 java.io.FileOutputStream(tempFile).use { out ->
                     if (asPdf) {
                         val doc = android.graphics.pdf.PdfDocument()
-                        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create()
+                        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(safeBitmap.width, safeBitmap.height, 1).create()
                         val page = doc.startPage(pageInfo)
-                        page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                        page.canvas.drawBitmap(safeBitmap, 0f, 0f, null)
                         doc.finishPage(page)
                         doc.writeTo(out)
                         doc.close()
                     } else {
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                        safeBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
                     }
                 }
+                fileSize = tempFile.length()
+                savedFile = tempFile
                 lockerManager.saveFileToLocker(tempFile, fileName, mimeType)
                 if (tempFile.exists()) tempFile.delete()
             } else {
@@ -4030,26 +4098,37 @@ fun saveOrDownloadSingleMangaPage(
                 }
                 val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
                 if (uri != null) {
+                    savedUri = uri
+                    val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                    savedFile = java.io.File(downloadsDir, "OmniBrowser/$fileName")
                     resolver.openOutputStream(uri)?.use { out ->
                         if (asPdf) {
                             val doc = android.graphics.pdf.PdfDocument()
-                            val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create()
+                            val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(safeBitmap.width, safeBitmap.height, 1).create()
                             val page = doc.startPage(pageInfo)
-                            page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            page.canvas.drawBitmap(safeBitmap, 0f, 0f, null)
                             doc.finishPage(page)
                             doc.writeTo(out)
                             doc.close()
                         } else {
-                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                            safeBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
                         }
                     }
                 }
+            }
+
+            if (jobId != null) {
+                val targetFile = savedFile ?: java.io.File(appCtx.cacheDir, fileName)
+                downloadEngine?.completeExternalJob(jobId, fileName, targetFile, fileSize, savedUri)
             }
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 Toast.makeText(appCtx, "Saved Page ${pageIndex + 1} to $destText!", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
+            if (jobId != null) {
+                downloadEngine?.failExternalJob(jobId, fileName, e.localizedMessage ?: "Failed to save")
+            }
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 Toast.makeText(appCtx, "Failed to save: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }
@@ -4057,14 +4136,18 @@ fun saveOrDownloadSingleMangaPage(
     }
 }
 
-
 fun downloadMangaImagesAndPdf(
     context: android.content.Context,
     urls: List<String>,
     pageUrl: String = "",
     asPdf: Boolean = false,
     saveToLocker: Boolean = false,
-    downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null
+    downloadEngine: com.rebelroot.omni.media.StreamDownloadEngine? = null,
+    isTranslateEnabled: Boolean = false,
+    sourceLang: String = "auto",
+    targetLang: String = "en",
+    typographyStyle: com.rebelroot.omni.ai.manga.MangaTypographyStyle = com.rebelroot.omni.ai.manga.MangaTypographyStyle(),
+    pipeline: com.rebelroot.omni.ai.manga.MangaTranslationPipeline? = null
 ) {
     if (urls.isEmpty()) return
     val appCtx = context.applicationContext
@@ -4102,112 +4185,178 @@ fun downloadMangaImagesAndPdf(
         var totalBytesDownloaded = 0L
         var firstSavedUri: android.net.Uri? = null
         var firstSavedFile: java.io.File? = null
-        val downloadedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val processedCount = java.util.concurrent.atomic.AtomicInteger(0)
 
-        // Download images in parallel (4 at a time) for maximum speed
-        val semaphore = Semaphore(4)
-        coroutineScope {
-            val deferreds = urls.mapIndexed { index, url ->
-                async(kotlinx.coroutines.Dispatchers.IO) {
-                    semaphore.acquire()
-                    try {
-                        val reqReferer = if (referer.isNotEmpty()) referer else ImageGrabberUtils.resolveReferer(url, pageUrl)
-                        val request = coil.request.ImageRequest.Builder(appCtx)
-                            .data(url)
-                            .apply {
-                                if (reqReferer.isNotEmpty()) addHeader("Referer", reqReferer)
-                                addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+        // Helper function to fetch and translate a single page
+        suspend fun fetchAndProcessPage(index: Int, url: String): Bitmap? {
+            val reqReferer = if (referer.isNotEmpty()) referer else ImageGrabberUtils.resolveReferer(url, pageUrl)
+
+            // Try primary URL first, then fallback alternate candidates if needed
+            val candidateUrls = listOf(url) + ImageGrabberUtils.getCandidateAlternateUrls(url)
+            var loadedBitmap: Bitmap? = null
+
+            for (candidate in candidateUrls) {
+                try {
+                    val request = coil.request.ImageRequest.Builder(appCtx)
+                        .data(candidate)
+                        .apply {
+                            if (reqReferer.isNotEmpty()) addHeader("Referer", reqReferer)
+                            addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                            addHeader("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                        }
+                        .allowHardware(false) // Must be software bitmap for PDF and OCR
+                        .size(coil.size.Size.ORIGINAL)
+                        .build()
+
+                    val result = loader.execute(request)
+                    val drawable = result.drawable
+                    if (drawable is android.graphics.drawable.BitmapDrawable) {
+                        val bmp = drawable.bitmap
+                        if (bmp != null && !bmp.isRecycled && bmp.width > 10 && bmp.height > 10) {
+                            loadedBitmap = if (bmp.config == android.graphics.Bitmap.Config.HARDWARE) {
+                                bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: bmp
+                            } else {
+                                bmp
                             }
-                            // Only disable hardware bitmaps for PNG — hardware bitmaps
-                            // cannot be read by BitmapDrawable.bitmap for CPU access.
-                            // JPEG pages use hardware-backed bitmaps where possible;
-                            // Bitmap.compress() copies to software internally when needed.
-                            .allowHardware(!url.contains(".png", ignoreCase = true))
-                            .size(coil.size.Size.ORIGINAL) // Full original resolution — no downsampling
-                            .build()
+                            break
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("MangaDownload", "Failed fetching candidate $candidate for page ${index + 1}: ${e.message}")
+                }
+            }
 
-                        val result = loader.execute(request)
-                        val drawable = result.drawable
-                        if (drawable is android.graphics.drawable.BitmapDrawable) {
-                            val bitmap = drawable.bitmap
+            if (loadedBitmap == null) {
+                android.util.Log.e("MangaDownload", "Skipping buffering/failed page ${index + 1}: $url")
+                return null
+            }
 
-                            if (asPdf && pdfDocument != null) {
-                                synchronized(pdfDocument) {
-                                    val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, index + 1).create()
-                                    val page = pdfDocument.startPage(pageInfo)
-                                    page.canvas.drawBitmap(bitmap, 0f, 0f, null)
-                                    pdfDocument.finishPage(page)
+            // Translate if enabled
+            if (isTranslateEnabled && pipeline != null) {
+                try {
+                    val transRes = pipeline.translateImage(
+                        cacheKey = url,
+                        bitmap = loadedBitmap,
+                        sourceLanguage = sourceLang,
+                        targetLanguage = targetLang,
+                        style = typographyStyle
+                    )
+                    return transRes.translatedBitmap
+                } catch (e: Exception) {
+                    android.util.Log.w("MangaDownload", "Translation failed for page ${index + 1}, using original image", e)
+                    return loadedBitmap
+                }
+            }
+
+            return loadedBitmap
+        }
+
+        // Concurrently fetch and translate up to 3 pages in parallel for speed,
+        // but collect and compile in strict index order
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+        val deferreds = urls.mapIndexed { index, url ->
+            async(kotlinx.coroutines.Dispatchers.IO) {
+                semaphore.acquire()
+                try {
+                    val bmp = fetchAndProcessPage(index, url)
+                    index to bmp
+                } finally {
+                    semaphore.release()
+                }
+            }
+        }
+
+        for (deferred in deferreds) {
+            val (index, pageBitmap) = deferred.await()
+            val done = processedCount.incrementAndGet()
+            val percent = (done * 100) / targetCount
+
+            if (pageBitmap != null && !pageBitmap.isRecycled) {
+                try {
+                    if (asPdf && pdfDocument != null) {
+                        val pageNumber = successCount + 1
+                        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(
+                            pageBitmap.width,
+                            pageBitmap.height,
+                            pageNumber
+                        ).create()
+                        val page = pdfDocument.startPage(pageInfo)
+                        page.canvas.drawBitmap(pageBitmap, 0f, 0f, null)
+                        pdfDocument.finishPage(page)
+                        successCount++
+                    } else {
+                        val isPng = urls[index].contains(".png", true)
+                        val ext = if (isPng) ".png" else ".jpg"
+                        val mimeType = if (isPng) "image/png" else "image/jpeg"
+                        val fileName = "${folderName}_page_${successCount + 1}$ext"
+
+                        if (saveToLocker && lockerManager != null) {
+                            val tempFile = java.io.File(appCtx.cacheDir, fileName)
+                            java.io.FileOutputStream(tempFile).use { out ->
+                                if (isPng) {
+                                    pageBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                                } else {
+                                    pageBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                                }
+                            }
+                            totalBytesDownloaded += tempFile.length()
+                            if (firstSavedFile == null) firstSavedFile = tempFile
+                            lockerManager.saveFileToLocker(tempFile, fileName, mimeType)
+                            if (tempFile.exists()) tempFile.delete()
+                            successCount++
+                        } else {
+                            val contentValues = android.content.ContentValues().apply {
+                                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "page_${successCount + 1}$ext")
+                                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/OmniBrowser/$folderName")
+                            }
+                            val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                            if (uri != null) {
+                                if (firstSavedUri == null) firstSavedUri = uri
+                                resolver.openOutputStream(uri)?.use { out ->
+                                    if (isPng) {
+                                        pageBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                                    } else {
+                                        pageBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                                    }
                                 }
                                 successCount++
-                            } else {
-                                val isPng = url.contains(".png", true)
-                                val ext = if (isPng) ".png" else ".jpg"
-                                val mimeType = if (isPng) "image/png" else "image/jpeg"
-                                val fileName = "${folderName}_page_${index + 1}$ext"
-
-                                if (saveToLocker && lockerManager != null) {
-                                    val tempFile = java.io.File(appCtx.cacheDir, fileName)
-                                    java.io.FileOutputStream(tempFile).use { out ->
-                                        if (isPng) {
-                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                                        } else {
-                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, out)
-                                        }
-                                    }
-                                    totalBytesDownloaded += tempFile.length()
-                                    if (firstSavedFile == null) firstSavedFile = tempFile
-                                    lockerManager.saveFileToLocker(tempFile, fileName, mimeType)
-                                    if (tempFile.exists()) tempFile.delete()
-                                    successCount++
-                                } else {
-                                    val contentValues = android.content.ContentValues().apply {
-                                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "page_${index + 1}$ext")
-                                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
-                                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_DOWNLOADS}/OmniBrowser/$folderName")
-                                    }
-                                    val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                                    if (uri != null) {
-                                        if (firstSavedUri == null) firstSavedUri = uri
-                                        resolver.openOutputStream(uri)?.use { out ->
-                                            if (isPng) {
-                                                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                                            } else {
-                                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, out)
-                                            }
-                                        }
-                                        successCount++
-                                    }
-                                }
                             }
-                            // Recycle the decoded bitmap immediately after writing —
-                            // each manga page can be several MB and there are up to 4
-                            // concurrent downloads; holding them all would spike RSS.
-                            if (!bitmap.isRecycled) bitmap.recycle()
                         }
-
-                        val done = downloadedCount.incrementAndGet()
-                        val percent = (done * 100) / targetCount
-                        if (jobId != null) {
-                            downloadEngine?.updateExternalJobProgress(
-                                jobId = jobId,
-                                filename = filename,
-                                progress = percent,
-                                statusText = "$done of $targetCount pages downloaded",
-                                bytesDownloaded = totalBytesDownloaded
-                            )
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("MangaDownload", "Error fetching page ${index + 1}: $url", e)
-                        downloadedCount.incrementAndGet()
-                    } finally {
-                        semaphore.release()
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MangaDownload", "Error writing page ${index + 1}", e)
+                } finally {
+                    if (!pageBitmap.isRecycled) {
+                        pageBitmap.recycle()
                     }
                 }
             }
-            deferreds.awaitAll()
+
+            if (jobId != null) {
+                downloadEngine?.updateExternalJobProgress(
+                    jobId = jobId,
+                    filename = filename,
+                    progress = percent,
+                    statusText = "$done of $targetCount pages processed ($successCount saved)",
+                    bytesDownloaded = totalBytesDownloaded
+                )
+            }
         }
 
+        // PDF Finalization
         if (asPdf && pdfDocument != null) {
+            if (successCount == 0) {
+                pdfDocument.close()
+                if (jobId != null) {
+                    downloadEngine?.failExternalJob(jobId, filename, "No valid pages to compile")
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(appCtx, "No pages could be downloaded or compiled into PDF.", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+
             try {
                 val pdfFileName = "Manga_$timeStamp.pdf"
                 if (saveToLocker && lockerManager != null) {
@@ -4259,6 +4408,17 @@ fun downloadMangaImagesAndPdf(
                 }
             }
         } else {
+            // Images Finalization
+            if (successCount == 0) {
+                if (jobId != null) {
+                    downloadEngine?.failExternalJob(jobId, filename, "No valid images downloaded")
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(appCtx, "No images could be downloaded.", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+
             val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
             val folderFile = java.io.File(downloadsDir, "OmniBrowser/$folderName")
             if (jobId != null) {

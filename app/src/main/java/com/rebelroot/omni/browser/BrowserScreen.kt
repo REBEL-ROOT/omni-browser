@@ -125,9 +125,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.Channel
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import kotlin.math.abs
- import androidx.compose.foundation.gestures.rememberTransformableState
- import androidx.compose.foundation.gestures.transformable
-import androidx.compose.ui.zIndex
+ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import kotlin.math.abs
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
@@ -324,6 +323,7 @@ fun BrowserScreen(
     val playableMedia by viewModel.mediaInterceptor.playableMedia.collectAsState()
     val hasPlayableMedia by viewModel.mediaInterceptor.hasPlayableMedia.collectAsState()
     var showDownloadSheet by remember { mutableStateOf(false) }
+    val showSnifferSettingsDialogState = remember { mutableStateOf(false) }
     var isAlohaBannerDismissed by remember { mutableStateOf(false) }
     val nonDrmMedia = remember(detectedMedia) { detectedMedia.filter { !it.isDrmProtected } }
     val showAlohaBanner = nonDrmMedia.isNotEmpty() && !isAlohaBannerDismissed && !showHomeScreen && !viewModel.isReaderModeActive && !viewModel.isFullscreen && viewModel.isMediaGrabberEnabled && !viewModel.isUrlBlockedByMediaSniffer(viewModel.currentUrl)
@@ -468,6 +468,7 @@ fun BrowserScreen(
     var showTorrentDownloaderDialog by remember { mutableStateOf(false) }
     var showSpeedDialSheet by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showOmniChatSheet by remember { mutableStateOf(false) }
     var isHomeSearchFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(isKeyboardVisible) {
@@ -1096,6 +1097,14 @@ fun BrowserScreen(
         )
     }
 
+    // Media Sniffer Settings dialog (rendered at root of BrowserScreen, outside Scaffold)
+    if (showSnifferSettingsDialogState.value) {
+        MediaSnifferSettingsDialog(
+            viewModel = viewModel,
+            onDismissRequest = { showSnifferSettingsDialogState.value = false }
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // ── <select> Choice Prompt Dialog (Issue #74) ──────────────────────────
         // Rendered at TOP LEVEL (outside Scaffold) so it's never gated by
@@ -1107,10 +1116,9 @@ fun BrowserScreen(
                     ChoicePromptDialog(
                         title = pending.prompt.message ?: "Select an option",
                         choices = choices.toList(),
-                        initialSelectedIndex = choices.indexOfFirst { it.selected }.coerceAtLeast(0),
                         isMultiple = pending.prompt.type == org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Type.MULTIPLE,
-                        onConfirm = { selectedIndex ->
-                            viewModel.deliverChoicePromptResult(selectedIndex)
+                        onConfirm = { selectedChoices ->
+                            viewModel.deliverChoicePromptResult(selectedChoices)
                         },
                         onDismiss = {
                             viewModel.cancelChoicePrompt()
@@ -1125,8 +1133,8 @@ fun BrowserScreen(
         // toggles these dialog/sheet triggers. Reading them here, in BrowserScreen's own
         // composition scope, forces a recomposition so the content slot and root dialogs
         // re-execute and show them reliably.
-        val _observeDialogTriggers = viewModel.showMediaSnifferSettingsDialog ||
-            showDownloadSheet || showVideoOverviewDialog || (viewModel.pendingGenericDownload != null) || (viewModel.pendingTorrentUrl != null)
+        val _observeDialogTriggers = showSnifferSettingsDialogState.value ||
+            showDownloadSheet || showVideoOverviewDialog || (viewModel.pendingGenericDownload != null) || (viewModel.pendingTorrentUrl != null) || (viewModel.pendingSiteDownloadUrl != null)
         if (_observeDialogTriggers) { /* observation only */ }
 
         var bottomBarHeightPx by remember { mutableIntStateOf(0) }
@@ -1541,6 +1549,7 @@ fun BrowserScreen(
                                         onShowThemeSheet = { showThemeSheet = true },
                                         onShowQuickTools = { showQuickToolsSheet = true },
                                         onShowFeedbackDialog = { showFeedbackDialog = true },
+                                        onShowSpeedDialSheet = { showSpeedDialSheet = true },
                                         onShowCustomizationSheet = { showCustomizationSheet = true },
                                         onShowPlayerSettings = { showPlayerSettingsDialog = true },
                                         onShowTabGroups = { showTabGroupsSheet = true },
@@ -1590,7 +1599,7 @@ fun BrowserScreen(
                                 onDismiss = { isAlohaBannerDismissed = true },
                                 onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
                                 onDownloadClick = { showDownloadSheet = true },
-                                onOpenSettings = { viewModel.showMediaSnifferSettingsDialog = true }
+                                onOpenSettings = { showSnifferSettingsDialogState.value = true }
                             )
                         }
                     }
@@ -1735,6 +1744,7 @@ fun BrowserScreen(
                             onShowThemeSheet = { showThemeSheet = true },
                             onShowQuickTools = { showQuickToolsSheet = true },
                             onShowFeedbackDialog = { showFeedbackDialog = true },
+                            onShowSpeedDialSheet = { showSpeedDialSheet = true },
                             onShowCustomizationSheet = { showCustomizationSheet = true },
                             onShowPlayerSettings = { showPlayerSettingsDialog = true },
                             onShowTabGroups = { showTabGroupsSheet = true },
@@ -2024,7 +2034,7 @@ fun BrowserScreen(
                         onDismiss = { isAlohaBannerDismissed = true },
                         onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
                         onDownloadClick = { showDownloadSheet = true },
-                        onOpenSettings = { viewModel.showMediaSnifferSettingsDialog = true }
+                        onOpenSettings = { showSnifferSettingsDialogState.value = true }
                     )
                 }
 
@@ -4123,6 +4133,182 @@ fun BrowserScreen(
                 }
             }
 
+            // Site Player Download Quality Selector (ExoPlayer-style)
+            viewModel.pendingSiteDownloadInfo?.let { info ->
+                AlertDialog(
+                    onDismissRequest = {
+                        viewModel.pendingSiteDownloadUrl = null
+                        viewModel.pendingSiteDownloadInfo = null
+                    },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Download,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.video_player_select_quality),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val url = info.url
+                                        val title = info.title
+                                        viewModel.pendingSiteDownloadUrl = null
+                                        viewModel.pendingSiteDownloadInfo = null
+                                        coroutineScope.launch {
+                                            val mediaType = when {
+                                                info.mimeType.contains("m3u8") || info.mimeType.contains("mpegurl") -> com.rebelroot.omni.media.MediaInterceptor.MediaType.HLS
+                                                info.mimeType.contains("mpd") || info.mimeType.contains("dash") -> com.rebelroot.omni.media.MediaInterceptor.MediaType.DASH
+                                                info.mimeType.contains("webm") -> com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM
+                                                info.mimeType.contains("audio") -> com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO
+                                                else -> com.rebelroot.omni.media.MediaInterceptor.MediaType.MP4
+                                            }
+                                            val cleanName = title.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+                                            val ext = when (mediaType) {
+                                                com.rebelroot.omni.media.MediaInterceptor.MediaType.HLS -> ".mp4"
+                                                com.rebelroot.omni.media.MediaInterceptor.MediaType.DASH -> ".mp4"
+                                                com.rebelroot.omni.media.MediaInterceptor.MediaType.WEBM -> ".webm"
+                                                com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO -> ".mp3"
+                                                com.rebelroot.omni.media.MediaInterceptor.MediaType.MP4 -> ".mp4"
+                                            }
+                                            viewModel.streamDownloadEngine.startDownload(
+                                                url = url,
+                                                suggestedName = if (cleanName.endsWith(ext, ignoreCase = true)) cleanName else "$cleanName$ext",
+                                                type = mediaType,
+                                                saveToLocker = false,
+                                                referrerUrl = info.pageUrl,
+                                                cookies = info.cookies ?: "",
+                                                audioUrl = null
+                                            )
+                                            Toast.makeText(context, "Download started", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.HighQuality,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.download_quality_source_hd_original),
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = info.title,
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Rounded.Download,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val url = info.url
+                                        viewModel.pendingSiteDownloadUrl = null
+                                        viewModel.pendingSiteDownloadInfo = null
+                                        coroutineScope.launch {
+                                            val cleanName = info.title.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+                                            viewModel.streamDownloadEngine.startDownload(
+                                                url = url,
+                                                suggestedName = "$cleanName-Audio",
+                                                type = com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO,
+                                                saveToLocker = false,
+                                                referrerUrl = info.pageUrl,
+                                                cookies = info.cookies ?: "",
+                                                audioUrl = null
+                                            )
+                                            Toast.makeText(context, "Extracting audio...", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.AudioFile,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.download_sheet_mp3),
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.download_quality_extract_audio),
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Rounded.AudioFile,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            }
+
             // Autofill picker sheet: appears when user taps a login input field
             if (viewModel.showAutofillBottomSheet && viewModel.autofillMatches.isNotEmpty()) {
                 ModalBottomSheet(
@@ -5430,6 +5616,16 @@ fun BrowserScreen(
                         }
                     }
                 }
+            }
+
+            // Omni Beam — Live P2P Chat & File Drop Sheet
+            if (showOmniChatSheet) {
+                com.rebelroot.omni.sync.chat.ui.OmniChatSheet(
+                    activeTabTitle = activeTab?.title ?: "",
+                    activeTabUrl = activeTab?.url ?: "",
+                    onOpenUrl = { url -> viewModel.loadUrl(url) },
+                    onDismiss = { showOmniChatSheet = false }
+                )
             }
 
             // 3. DevTools Pro Developer Console Bottom Sheet
@@ -6975,7 +7171,7 @@ fun BrowserScreen(
                                     extMediaSnifferDesc,
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
                                     { viewModel.toggleMediaGrabber(context) },
-                                    { viewModel.showMediaSnifferSettingsDialog = true }),
+                                    { showSnifferSettingsDialogState.value = true }),
                                 BuiltInExt(Icons.Rounded.Translate, extOmniTranslate, extTeamAuthor,
                                     extOmniTranslateDesc,
                                     true, false,
@@ -7132,28 +7328,15 @@ fun BrowserScreen(
             // so users can interact with it fully: zoom in/out, pinch gesture, etc.
             if (viewModel.activeExtensionPopupSession != null) {
 
-                // Zoom & pan state — reset each time a new extension popup is opened
+                // Zoom state — reset each time a new extension popup is opened
                 key(viewModel.activeExtensionPopupSession) {
                     var popupScale by remember { mutableStateOf(1f) }
-                    var popupOffset by remember { mutableStateOf(Offset.Zero) }
 
-                    // Pinch-to-zoom + two-finger pan (single touch passes through to GeckoView)
-                    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-                        popupScale = (popupScale * zoomChange).coerceIn(0.4f, 4f)
-                        // Reset offset when near 1x so content snaps back to center
-                        popupOffset = if (popupScale > 1.02f) popupOffset + panChange else Offset.Zero
-                    }
-
-                    ModalBottomSheet(
-                        onDismissRequest = { viewModel.dismissExtensionPopup() },
-                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                        containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-                    ) {
+                    val popupContent: @Composable () -> Unit = {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight(0.9f)
+                                .fillMaxHeight(0.65f)
                                 .navigationBarsPadding()
                         ) {
                             // ── Header ──────────────────────────────────────────────
@@ -7210,7 +7393,6 @@ fun BrowserScreen(
                                     IconButton(
                                         onClick = {
                                             popupScale = (popupScale - 0.15f).coerceAtLeast(0.4f)
-                                            if (popupScale <= 1.02f) popupOffset = Offset.Zero
                                         },
                                         modifier = Modifier.size(34.dp)
                                     ) {
@@ -7224,7 +7406,7 @@ fun BrowserScreen(
 
                                     // Zoom percentage chip — tap to reset
                                     Surface(
-                                        onClick = { popupScale = 1f; popupOffset = Offset.Zero },
+                                        onClick = { popupScale = 1f },
                                         shape = RoundedCornerShape(8.dp),
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                                         modifier = Modifier.widthIn(min = 42.dp)
@@ -7277,7 +7459,6 @@ fun BrowserScreen(
                                     .fillMaxWidth()
                                     .weight(1f)
                                     .clipToBounds()
-                                    .transformable(state = transformState)
                             ) {
                                 AndroidView(
                                     factory = { ctx ->
@@ -7310,8 +7491,6 @@ fun BrowserScreen(
                                         } catch (_: Exception) {}
                                         geckoView.scaleX = popupScale
                                         geckoView.scaleY = popupScale
-                                        geckoView.translationX = popupOffset.x
-                                        geckoView.translationY = popupOffset.y
                                     },
                                     onRelease = { geckoView ->
                                         try {
@@ -7334,6 +7513,16 @@ fun BrowserScreen(
                                 }
                             }
                         }
+                    }
+
+                    // Bottom sheet for all extensions
+                    ModalBottomSheet(
+                        onDismissRequest = { viewModel.dismissExtensionPopup() },
+                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                        containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                    ) {
+                        popupContent()
                     }
                 } // key block
             }
@@ -7430,7 +7619,7 @@ fun BrowserScreen(
                 onDismissRequest = { showPlayerSettingsDialog = false },
                 onShowSnifferSettings = {
                     showPlayerSettingsDialog = false
-                    viewModel.showMediaSnifferSettingsDialog = true
+                    showSnifferSettingsDialogState.value = true
                 }
             )
         }
@@ -7493,7 +7682,7 @@ fun BrowserScreen(
                             mutableStateListOf<String>().also { list ->
                                 val vmOrder = viewModel.quickToolsOrder
                                  val allTools = listOf(
-                                    "speed_dial", "image_grabber", "page_inspector", "block_area", "spoof_identity", "force_zoom", "vpn",
+                                    "image_grabber", "page_inspector", "block_area", "spoof_identity", "force_zoom", "vpn",
                                     "torrent_downloader", "omni_config",
                                     "qr_scanner", "safe_locker", "translator", "edit_page",
                                     "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
@@ -7508,7 +7697,6 @@ fun BrowserScreen(
 
                         // Resolve tool display info
                         fun toolTitle(id: String): String = when (id) {
-                            "speed_dial"          -> "Speed Dial"
                             "image_grabber"       -> context.getString(R.string.tool_image_grabber)
                             "page_inspector"      -> context.getString(R.string.tool_page_inspector)
                             "block_area"          -> context.getString(R.string.tool_block_area)
@@ -7539,10 +7727,10 @@ fun BrowserScreen(
                             "console_log"    -> context.getString(R.string.tool_console_log)
                             "dev_notes"      -> context.getString(R.string.tool_dev_notes)
                             "site_style"     -> context.getString(R.string.tool_site_style)
+                            "omni_beam"      -> "Omni Beam"
                             else -> id
                         }
                         fun toolIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector = when (id) {
-                            "speed_dial"          -> Icons.Rounded.Apps
                             "image_grabber"      -> Icons.Rounded.Collections
                             "page_inspector"     -> Icons.Rounded.Code
                             "block_area"          -> Icons.Rounded.LayersClear
@@ -7567,13 +7755,10 @@ fun BrowserScreen(
                             "console_log"    -> Icons.Rounded.Terminal
                             "dev_notes"      -> Icons.Rounded.Description
                             "site_style"     -> Icons.Rounded.Palette
+                            "omni_beam"      -> Icons.Rounded.Devices
                             else -> Icons.Rounded.Build
                         }
                         fun toolAction(id: String): () -> Unit = when (id) {
-                            "speed_dial" -> ({
-                                showQuickToolsSheet = false
-                                showSpeedDialSheet = true
-                            })
                             "image_grabber" -> ({
                                 showQuickToolsSheet = false
                                 if (!showHomeScreen && activeTab != null) showImageGrabberSheet = true
@@ -7697,6 +7882,10 @@ fun BrowserScreen(
                             "site_style" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
                                 else { showQuickToolsSheet = false; showSiteStyleCustomizerSheet = true }
+                            })
+                            "omni_beam" -> ({
+                                showQuickToolsSheet = false
+                                showOmniChatSheet = true
                             })
                             else -> ({})
                         }
@@ -8361,15 +8550,8 @@ fun BrowserScreen(
         }
 
 
-        // Media Sniffer Settings dialog (rendered at root of BrowserScreen)
-        if (viewModel.showMediaSnifferSettingsDialog) {
-            MediaSnifferSettingsDialog(
-                viewModel = viewModel,
-                onDismissRequest = { viewModel.showMediaSnifferSettingsDialog = false }
-            )
-        }
-    }
 }
+    }
 }
 }
 
@@ -8511,22 +8693,70 @@ private fun ExitOptionRow(
     }
 }
 
-// ── Choice Prompt Dialog (for <select> elements) — Issue #74 ────────────────────
+// ── Choice Prompt Dialog (for <select> elements) — Issue #74, #116 ──────────────
 /**
  * Renders a native AlertDialog with a radio-list or checkbox-list of choices,
  * matching the GeckoView ChoicePrompt specification.
+ *
+ * Handles <optgroup> categories: a Choice whose [Choice.items] is non-empty is
+ * rendered as a non-selectable group header followed by its child options
+ * (Issue #116 — sub-options under categories were previously missing).
  */
+private sealed class ChoiceDisplayRow {
+    data class Header(val label: String) : ChoiceDisplayRow()
+    data class Option(val choice: org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice) : ChoiceDisplayRow()
+    data object Separator : ChoiceDisplayRow()
+}
+
+private fun flattenChoiceRows(choices: List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>): List<ChoiceDisplayRow> {
+    val rows = mutableListOf<ChoiceDisplayRow>()
+    fun walk(list: List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>) {
+        for (choice in list) {
+            val children = choice.items
+            when {
+                choice.separator -> rows += ChoiceDisplayRow.Separator
+                children != null && children.isNotEmpty() -> {
+                    rows += ChoiceDisplayRow.Header(choice.label)
+                    walk(children.toList())
+                }
+                else -> rows += ChoiceDisplayRow.Option(choice)
+            }
+        }
+    }
+    walk(choices)
+    return rows
+}
+
+private fun collectSelectedChoiceIds(choices: List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>): Set<String> {
+    val ids = mutableSetOf<String>()
+    fun walk(list: List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>) {
+        for (choice in list) {
+            if (choice.selected) ids += choice.id
+            val children = choice.items
+            if (children != null && children.isNotEmpty()) walk(children.toList())
+        }
+    }
+    walk(choices)
+    return ids
+}
+
 @Composable
 fun ChoicePromptDialog(
     title: String,
     choices: List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>,
-    initialSelectedIndex: Int = 0,
     isMultiple: Boolean = false,
-    onConfirm: (Int) -> Unit,
+    onConfirm: (List<org.mozilla.geckoview.GeckoSession.PromptDelegate.ChoicePrompt.Choice>) -> Unit,
     onDismiss: () -> Unit,
     isDarkTheme: Boolean = false
 ) {
-    val selectedIndex = remember { mutableStateOf(initialSelectedIndex) }
+    // Flattened rows: group headers + their child options (Issue #116)
+    val rows = remember(choices) { flattenChoiceRows(choices) }
+    // Selected choice IDs — initialized from the page's pre-selected options
+    val selectedIds = remember(choices) {
+        mutableStateOf(collectSelectedChoiceIds(choices))
+    }
+
+    val rowTextColor = if (isDarkTheme) Color.White else Color.Black
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -8534,69 +8764,83 @@ fun ChoicePromptDialog(
             Text(
                 text = title,
                 fontWeight = FontWeight.Bold,
-                color = if (isDarkTheme) Color.White else Color.Black,
+                color = rowTextColor,
                 maxLines = 3
             )
         },
         text = {
             LazyColumn {
-                itemsIndexed(choices) { index, choice ->
-                    if (choice.separator) {
-                        Divider(
-                            color = if (isDarkTheme) Color(0xFF333333) else Color(0xFFE0E0E0),
-                            thickness = 1.dp,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = !choice.disabled) {
-                                    selectedIndex.value = index
-                                    if (!isMultiple) {
-                                        onConfirm(index)
+                itemsIndexed(rows) { _, row ->
+                    when (row) {
+                        is ChoiceDisplayRow.Separator -> {
+                            HorizontalDivider(
+                                color = if (isDarkTheme) Color(0xFF333333) else Color(0xFFE0E0E0),
+                                thickness = 1.dp,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        is ChoiceDisplayRow.Header -> {
+                            // <optgroup> category header — visible but not selectable
+                            Text(
+                                text = row.label,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        is ChoiceDisplayRow.Option -> {
+                            val choice = row.choice
+                            val isSelected = choice.id in selectedIds.value
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !choice.disabled) {
+                                        if (isMultiple) {
+                                            selectedIds.value =
+                                                if (isSelected) selectedIds.value - choice.id
+                                                else selectedIds.value + choice.id
+                                        } else {
+                                            selectedIds.value = setOf(choice.id)
+                                            onConfirm(listOf(choice))
+                                        }
                                     }
-                                }
-                                .padding(vertical = 12.dp, horizontal = 8.dp)
-                                .alpha(if (choice.disabled) 0.4f else 1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Radio or checkbox indicator
-                            if (!choice.disabled) {
+                                    .padding(vertical = 10.dp, horizontal = 8.dp)
+                                    .alpha(if (choice.disabled) 0.4f else 1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 if (isMultiple) {
                                     Checkbox(
-                                        checked = selectedIndex.value == index,
-                                        onCheckedChange = {
-                                            selectedIndex.value = index
-                                        }
+                                        checked = isSelected,
+                                        onCheckedChange = null,
+                                        enabled = !choice.disabled
                                     )
                                 } else {
                                     RadioButton(
-                                        selected = selectedIndex.value == index,
-                                        onClick = null
+                                        selected = isSelected,
+                                        onClick = null,
+                                        enabled = !choice.disabled
                                     )
                                 }
-                            } else {
-                                Spacer(modifier = Modifier.size(48.dp))
-                            }
 
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Text(
-                                text = choice.label,
-                                color = if (isDarkTheme) Color.White else Color.Black,
-                                fontSize = 16.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            // Icon if available
-                            if (!choice.icon.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.width(8.dp))
-                                coil.compose.AsyncImage(
-                                    model = choice.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(24.dp)
+
+                                Text(
+                                    text = choice.label,
+                                    color = rowTextColor,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.weight(1f)
                                 )
+
+                                // Icon if available
+                                if (!choice.icon.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    coil.compose.AsyncImage(
+                                        model = choice.icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -8606,7 +8850,11 @@ fun ChoicePromptDialog(
         confirmButton = {
             if (isMultiple) {
                 Button(
-                    onClick = { onConfirm(selectedIndex.value) },
+                    onClick = {
+                        val selected = rows.mapNotNull { (it as? ChoiceDisplayRow.Option)?.choice }
+                            .filter { it.id in selectedIds.value }
+                        onConfirm(selected)
+                    },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
                     ),

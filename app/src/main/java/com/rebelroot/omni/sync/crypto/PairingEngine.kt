@@ -9,6 +9,8 @@ data class PairingInvitation(
     val deviceName: String,
     val publicKeyBase64: String,
     val nonceBase64: String,
+    val lanHost: String? = null,
+    val lanPort: Int? = null,
     val timestamp: Long = System.currentTimeMillis()
 ) {
     fun toJson(): String = JSONObject().apply {
@@ -17,6 +19,8 @@ data class PairingInvitation(
         put("deviceName", deviceName)
         put("publicKey", publicKeyBase64)
         put("nonce", nonceBase64)
+        lanHost?.let { put("lanHost", it) }
+        lanPort?.let { put("lanPort", it) }
         put("timestamp", timestamp)
     }.toString()
 
@@ -28,12 +32,17 @@ data class PairingInvitation(
             val ver = if (obj.has("version")) obj.getInt("version") else 1
             val ts = if (obj.has("timestamp")) obj.getLong("timestamp") else System.currentTimeMillis()
             val name = if (obj.has("deviceName")) obj.getString("deviceName") else "Omni Device"
+            val host = if (obj.has("lanHost")) obj.getString("lanHost") else null
+            val port = if (obj.has("lanPort")) obj.getInt("lanPort") else null
+
             return PairingInvitation(
                 version = ver,
                 deviceId = obj.getString("deviceId"),
                 deviceName = name,
                 publicKeyBase64 = pubKey,
                 nonceBase64 = nonce,
+                lanHost = host,
+                lanPort = port,
                 timestamp = ts
             )
         }
@@ -53,13 +62,18 @@ class PairingEngine(
         const val PAIRING_EXPIRY_MS = 5 * 60 * 1000L
     }
 
-    fun createInvitation(): PairingInvitation {
+    fun createInvitation(
+        lanHost: String? = com.rebelroot.omni.sync.transport.lan.LanWebSocketServer.getLocalIpAddress(),
+        lanPort: Int? = 8765
+    ): PairingInvitation {
         val nonce = CryptoEngine.generateRandomNonce(16)
         return PairingInvitation(
             deviceId = keyManager.deviceId,
             deviceName = keyManager.deviceName,
             publicKeyBase64 = keyManager.publicKeyBase64,
-            nonceBase64 = Base64.getEncoder().encodeToString(nonce)
+            nonceBase64 = Base64.getEncoder().encodeToString(nonce),
+            lanHost = lanHost,
+            lanPort = lanPort
         )
     }
 
@@ -87,6 +101,8 @@ class PairingEngine(
                 deviceId = inv.deviceId,
                 deviceName = inv.deviceName,
                 publicKeyBase64 = inv.publicKeyBase64,
+                lanHost = inv.lanHost,
+                lanPort = inv.lanPort,
                 pairedAt = now
             )
             trustManager.addTrustedDevice(trusted)

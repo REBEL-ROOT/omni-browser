@@ -60,6 +60,15 @@ class SyncCoordinator(
     val conflictEngine = ConflictEngine(adapter, storage)
 
     val lanServer = LanTransportServer(lanPort, keyManager, trustManager)
+    val webSocketServer = com.rebelroot.omni.sync.transport.lan.LanWebSocketServer(
+        port = if (lanPort > 0) lanPort else 8765,
+        keyManager = keyManager,
+        trustManager = trustManager,
+        storage = storage,
+        conflictEngine = conflictEngine,
+        collection = collection,
+        syncBridge = com.rebelroot.omni.sync.core.SyncBridge.getInstance()
+    )
     val lanDiscovery = LanDiscoveryService(
         deviceId = keyManager.deviceId,
         deviceName = keyManager.deviceName,
@@ -84,6 +93,7 @@ class SyncCoordinator(
     }
 
     private fun startLanServices() {
+        webSocketServer.start()
         lanServer.start { session ->
             handleIncomingSession(session)
         }
@@ -165,7 +175,10 @@ class SyncCoordinator(
         }
     }
 
-    fun createPairingInvitation(): PairingInvitation = pairingEngine.createInvitation()
+    fun createPairingInvitation(): PairingInvitation = pairingEngine.createInvitation(
+        lanHost = com.rebelroot.omni.sync.transport.lan.LanWebSocketServer.getLocalIpAddress(),
+        lanPort = webSocketServer.port
+    )
 
     fun processPairingInvitation(invitationJson: String): PairingResult {
         val result = pairingEngine.processIncomingInvitation(invitationJson)
@@ -192,5 +205,6 @@ class SyncCoordinator(
     fun shutdown() {
         lanDiscovery.stop()
         lanServer.stop()
+        webSocketServer.stop()
     }
 }

@@ -270,6 +270,7 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
     android.os.Handler(android.os.Looper.getMainLooper()).post {
         activeExtensionPopupSession = session
         activeExtensionPopupName = extension.safeMetaData?.name ?: extension.safeId ?: "Extension"
+        activeExtensionPopupId = extension.safeId ?: ""
     }
 
     return GeckoResult.fromValue(session)
@@ -279,6 +280,7 @@ fun BrowserViewModel.dismissExtensionPopup() {
     val sessionToClose = activeExtensionPopupSession
     activeExtensionPopupSession = null
     activeExtensionPopupName = ""
+    activeExtensionPopupId = ""
     activeExtensionPopupLoading = true
     if (sessionToClose != null) {
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -390,6 +392,8 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                     handleRequestHandoff(message, sender)
                 } else if (type == "REQUEST_DOWNLOAD") {
                     handleRequestDownload(message, sender)
+                } else if (type == "SITE_DOWNLOAD_REQUEST") {
+                    handleSiteDownloadRequest(message, sender)
                 } else if (type == "HANDOFF_RESTORED") {
                     handleHandoffRestored(message)
                 } else if (type == "PLAY_IN_NATIVE") {
@@ -948,6 +952,83 @@ private fun BrowserViewModel.handleRequestDownload(message: Any, sender: WebExte
                 Toast.makeText(appContext, "Media stream is unavailable for download", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+}
+
+/**
+ * Handles SITE_DOWNLOAD_REQUEST directly from the site player overlay button.
+ * Starts the download immediately without going through the resolution pipeline,
+ * making it reliable for the Quetta-style download button on video elements.
+ */
+private fun BrowserViewModel.handleSiteDownloadRequest(message: Any, sender: WebExtension.MessageSender? = null) {
+    val rawUrl = if (message is org.json.JSONObject) {
+        if (message.has("url")) message.getString("url") else null
+    } else {
+        (message as? Map<*, *>)?.get("url") as? String
+    } ?: ""
+
+    if (rawUrl.isBlank()) {
+        Log.w(TAG, "📥 SITE_DOWNLOAD_REQUEST ignored — no URL provided")
+        return
+    }
+
+    val title = if (message is org.json.JSONObject) {
+        if (message.has("title")) message.getString("title") else null
+    } else {
+        (message as? Map<*, *>)?.get("title") as? String
+    } ?: "video_${System.currentTimeMillis()}"
+
+    val mimeType = if (message is org.json.JSONObject) {
+        if (message.has("mimeType")) message.getString("mimeType") else null
+    } else {
+        (message as? Map<*, *>)?.get("mimeType") as? String
+    } ?: "video/mp4"
+
+    val mediaType = when {
+        mimeType.contains("m3u8") || mimeType.contains("mpegurl") -> MediaInterceptor.MediaType.HLS
+        mimeType.contains("mpd") || mimeType.contains("dash") -> MediaInterceptor.MediaType.DASH
+        mimeType.contains("webm") -> MediaInterceptor.MediaType.WEBM
+        mimeType.contains("audio") -> MediaInterceptor.MediaType.AUDIO
+        else -> MediaInterceptor.MediaType.MP4
+    }
+
+    val pageUrl = if (message is org.json.JSONObject) {
+        if (message.has("pageUrl")) message.getString("pageUrl") else null
+    } else {
+        (message as? Map<*, *>)?.get("pageUrl") as? String
+    } ?: rawUrl
+
+    val cookies = if (message is org.json.JSONObject) {
+        if (message.has("cookies")) message.getString("cookies") else null
+    } else {
+        (message as? Map<*, *>)?.get("cookies") as? String
+    }
+
+    Log.i(TAG, "📥 SITE_DOWNLOAD_REQUEST: url=$rawUrl, type=$mediaType, title=$title")
+
+    // Set the pending site download state so the UI can show a quality selector dialog
+    this@handleSiteDownloadRequest.pendingSiteDownloadUrl = rawUrl
+    this@handleSiteDownloadRequest.pendingSiteDownloadInfo = BrowserViewModel.SiteDownloadInfo(
+        url = rawUrl,
+        title = title,
+        mimeType = mimeType,
+        pageUrl = pageUrl,
+        cookies = cookies
+    )
+
+    // Also feed the media into the interceptor so the media sniffer banner appears
+    // as a fallback — the user can always download from there.
+    mediaInterceptor.onAggressiveMediaGrabbed(rawUrl, mimeType, cookies)
+
+    // Show a toast to confirm the download request was received
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
+        try {
+            android.widget.Toast.makeText(
+                appContext,
+                "Processing download request...",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        } catch (_: Exception) {}
     }
 }
 

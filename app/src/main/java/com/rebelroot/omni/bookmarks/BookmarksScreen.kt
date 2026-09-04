@@ -64,8 +64,9 @@ fun BookmarksScreen(
     val context = LocalContext.current
 
     // File picker for importing bookmarks (Netscape HTML)
+    // File picker for importing bookmarks (Netscape HTML from any browser)
     val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             viewModel.prepareImportPreview(
@@ -136,7 +137,17 @@ fun BookmarksScreen(
                                     addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
                                 val chooser = android.content.Intent.createChooser(shareIntent, context.getString(R.string.export_share_title))
-                                context.startActivity(chooser)
+                                // Always add NEW_TASK flag so the chooser can launch from any context
+                                chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                try {
+                                    context.startActivity(chooser)
+                                } catch (e: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }.onFailure { e ->
                                 Toast.makeText(
                                     context,
@@ -153,7 +164,7 @@ fun BookmarksScreen(
                         )
                     }
                     // Import button
-                    IconButton(onClick = { importLauncher.launch("text/html") }) {
+                    IconButton(onClick = { importLauncher.launch(arrayOf("text/html", "text/plain")) }) {
                         Icon(
                             imageVector = Icons.Rounded.FileUpload,
                             contentDescription = stringResource(id = R.string.bookmarks_import),

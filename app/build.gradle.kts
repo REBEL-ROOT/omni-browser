@@ -6,11 +6,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// DO NOT remove the ABI offsets in the onVariants block!
-// baseVersionCode = 2027 on its own wouldn't clear the old 1002004 bug. 
-// It only works because of the per-ABI +1M/2M/3M offsets.
-val baseVersionCode = 2050
-val baseVersionName = "1.3.1.2"
+// Single version code for all flavors (Play Store upload).
+val baseVersionCode = 35
+val baseVersionName = "1.3.6"
 
 android {
     namespace = "com.rebelroot.omni"
@@ -27,6 +25,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
+
+    // Allow unit tests to use Android framework methods (e.g. android.util.Log)
+    // without Robolectric by returning default values instead of throwing.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     androidResources {
@@ -134,11 +138,19 @@ android {
 
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            // Using `resource-noexec-tor` (JNI shared library) ensures full 16 KB page
+            // alignment compatibility on Android 15+ (API 35+) and avoids native load crashes.
+            useLegacyPackaging = false
             pickFirsts.addAll(listOf("**/libjsc.so", "**/libc++_shared.so"))
             excludes.addAll(listOf(
                 "**/libminidump_analyzer.so",
-                "**/libcrashhelper.so"
+                "**/libcrashhelper.so",
+                // Strip emulator-only ABIs from the universal bundle. Play Store already
+                // delivers only the device's own ABI to each user, so these x86/x86_64
+                // slices (incl. GeckoView's ~160 MB libxul.so) only bloat the uploaded
+                // AAB without ever reaching a real phone. arm64-v8a + armeabi-v7a remain.
+                "**/x86/**",
+                "**/x86_64/**"
             ))
         }
         resources {
@@ -173,20 +185,6 @@ android {
 
 tasks.matching { it.name.startsWith("check") && it.name.endsWith("AarMetadata") }.configureEach {
     enabled = false
-}
-
-androidComponents {
-    onVariants { variant ->
-        val versionOffset = when (variant.flavorName) {
-            "arm" -> 1000000
-            "aarch64" -> 2000000
-            "universal" -> 3000000
-            else -> 0
-        }
-        variant.outputs.forEach { output ->
-            output.versionCode.set(baseVersionCode + versionOffset)
-        }
-    }
 }
 
 // Exclude io.opencensus transitive dependencies pulled in by io.grpc.

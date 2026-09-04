@@ -7,6 +7,11 @@ Omni Browser is a privacy-first, feature-rich Android web browser built on Mozil
 • Incognito mode with private browsing
 • Vault — encrypted local file storage for sensitive downloads
 
+<b>Omni Sync & Cloud Backup</b>
+• Firefox Account Cloud Sync — 1-click login to sync bookmarks, remote tabs from PC/Mac, history, and passwords
+• Remote Tabs Viewer — view and switch tabs currently open on your computer
+• Omni Sync Mesh (Upcoming / Testing) — zero-cloud P2P Wi-Fi synchronization via companion desktop extension
+
 <b>Browser Features</b>
 • Full Firefox extension support — install any extension from addons.mozilla.org
 • QR code scanner — decode from screenshots, gallery images, or live camera

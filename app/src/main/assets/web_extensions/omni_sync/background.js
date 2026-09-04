@@ -1,47 +1,44 @@
-// packages/extension-chrome/src/background/bookmark-mapper.ts
-var BookmarkMapper = class {
-  chromeToSync = /* @__PURE__ */ new Map();
-  syncToChrome = /* @__PURE__ */ new Map();
-  // Well-known Chrome root container mappings
+// packages/extension-firefox/src/background/firefox-mapper.ts
+var FirefoxPlacesMapper = class {
+  guidToSync = /* @__PURE__ */ new Map();
+  syncToGuid = /* @__PURE__ */ new Map();
   constructor() {
-    this.registerMapping("1", "bookmarks_bar", true);
-    this.registerMapping("2", "other_bookmarks", true);
-    this.registerMapping("3", "mobile_bookmarks", true);
+    this.registerMapping("root________", "root");
+    this.registerMapping("menu________", "root");
+    this.registerMapping("toolbar_____", "bookmarks_bar");
+    this.registerMapping("unfiled_____", "other_bookmarks");
+    this.registerMapping("mobile______", "mobile_bookmarks");
   }
-  registerMapping(chromeId, syncId, isFolder = false) {
-    this.chromeToSync.set(chromeId, syncId);
-    this.syncToChrome.set(syncId, chromeId);
+  registerMapping(guid, syncId) {
+    this.guidToSync.set(guid, syncId);
+    this.syncToGuid.set(syncId, guid);
   }
-  getSyncId(chromeId) {
-    return this.chromeToSync.get(chromeId);
-  }
-  getChromeId(syncId) {
-    return this.syncToChrome.get(syncId);
-  }
-  removeMapping(chromeId) {
-    const syncId = this.chromeToSync.get(chromeId);
+  removeMapping(guid) {
+    const syncId = this.guidToSync.get(guid);
     if (syncId) {
-      this.chromeToSync.delete(chromeId);
-      this.syncToChrome.delete(syncId);
+      this.syncToGuid.delete(syncId);
     }
+    this.guidToSync.delete(guid);
+  }
+  getSyncId(guid) {
+    return this.guidToSync.get(guid);
+  }
+  getGuid(syncId) {
+    return this.syncToGuid.get(syncId);
   }
   exportMappings() {
-    const list = [];
-    for (const [chromeId, syncId] of this.chromeToSync.entries()) {
-      list.push({ chromeId, syncId, isFolder: syncId.startsWith("fld_") });
-    }
-    return list;
+    return Object.fromEntries(this.guidToSync.entries());
   }
   loadMappings(mappings) {
-    for (const m of mappings) {
-      this.registerMapping(m.chromeId, m.syncId, m.isFolder);
+    for (const [guid, syncId] of Object.entries(mappings)) {
+      this.registerMapping(guid, syncId);
     }
   }
 };
 
-// packages/extension-chrome/src/background/sync-bridge.ts
-var SyncBridge = class {
-  mapper = new BookmarkMapper();
+// packages/extension-firefox/src/background/sync-bridge.ts
+var FirefoxSyncBridge = class {
+  mapper = new FirefoxPlacesMapper();
   isApplyingRemote = false;
   constructor() {
   }
@@ -54,13 +51,10 @@ var SyncBridge = class {
   setRemoteApplying(applying) {
     this.isApplyingRemote = applying;
   }
-  /**
-   * Converts Chrome bookmark creation into a canonical SyncOperation.
-   */
-  handleChromeBookmarkCreated(id, bookmark, hlcString) {
+  handleFirefoxBookmarkCreated(id, bookmark, hlcString) {
     const isFolder = !bookmark.url;
     const syncId = isFolder ? `fld_${id}` : `bmk_${id}`;
-    this.mapper.registerMapping(id, syncId, isFolder);
+    this.mapper.registerMapping(id, syncId);
     const parentSyncId = bookmark.parentId ? this.mapper.getSyncId(bookmark.parentId) ?? "root" : "root";
     if (isFolder) {
       return {
@@ -97,10 +91,7 @@ var SyncBridge = class {
       };
     }
   }
-  /**
-   * Converts Chrome bookmark removal into a canonical DELETE SyncOperation.
-   */
-  handleChromeBookmarkRemoved(id, hlcString) {
+  handleFirefoxBookmarkRemoved(id, hlcString) {
     const syncId = this.mapper.getSyncId(id) ?? `bmk_${id}`;
     const isFolder = syncId.startsWith("fld_");
     this.mapper.removeMapping(id);
@@ -112,6 +103,64 @@ var SyncBridge = class {
       hlc: hlcString,
       isLocalOrigin: true
     };
+  }
+  async applyRemoteOperation(op) {
+    this.setRemoteApplying(true);
+    const bookmarksApi = globalThis.browser?.bookmarks || globalThis.chrome?.bookmarks;
+    if (!bookmarksApi) {
+      this.setRemoteApplying(false);
+      return;
+    }
+    try {
+      if (op.opType === "DELETE") {
+        const guid = this.mapper.getGuid(op.entityId);
+        if (guid) {
+          try {
+            await bookmarksApi.removeTree(guid);
+          } catch (_e) {
+            try {
+              await bookmarksApi.remove(guid);
+            } catch (_e2) {
+            }
+          }
+          this.mapper.removeMapping(guid);
+        }
+      } else if (op.opType === "CREATE") {
+        const existingGuid = this.mapper.getGuid(op.entityId);
+        if (existingGuid) return;
+        const parentGuid = (op.bookmarkPayload?.parentId || op.folderPayload?.parentId) === "root" ? "toolbar_____" : this.mapper.getGuid(op.bookmarkPayload?.parentId || op.folderPayload?.parentId || "") || "toolbar_____";
+        if (op.entityType === "FOLDER" && op.folderPayload) {
+          const created = await bookmarksApi.create({
+            parentId: parentGuid,
+            title: op.folderPayload.title || "Folder"
+          });
+          this.mapper.registerMapping(created.id, op.entityId);
+        } else if (op.entityType === "BOOKMARK" && op.bookmarkPayload) {
+          const created = await bookmarksApi.create({
+            parentId: parentGuid,
+            title: op.bookmarkPayload.title || op.bookmarkPayload.url || "Bookmark",
+            url: op.bookmarkPayload.url || "https://"
+          });
+          this.mapper.registerMapping(created.id, op.entityId);
+        }
+      } else if (op.opType === "UPDATE_CONTENT") {
+        const guid = this.mapper.getGuid(op.entityId);
+        if (guid) {
+          const changes = {};
+          if (op.bookmarkPayload) {
+            if (op.bookmarkPayload.title) changes.title = op.bookmarkPayload.title;
+            if (op.bookmarkPayload.url) changes.url = op.bookmarkPayload.url;
+          } else if (op.folderPayload) {
+            if (op.folderPayload.title) changes.title = op.folderPayload.title;
+          }
+          await bookmarksApi.update(guid, changes);
+        }
+      }
+    } catch (e) {
+      console.warn("[Omni Sync Firefox] Failed to apply remote operation:", op, e);
+    } finally {
+      this.setRemoteApplying(false);
+    }
   }
 };
 
@@ -421,26 +470,27 @@ var HistorySyncManager = class _HistorySyncManager {
   }
 };
 
-// packages/extension-chrome/src/background/service-worker.ts
-var bridge = new SyncBridge();
+// packages/extension-firefox/src/background/service-worker.ts
+var browserApi = globalThis.browser || globalThis.chrome;
+var bridge = new FirefoxSyncBridge();
 var clock;
 var storage = new SyncStorage();
 var myDeviceId = "";
-var myDeviceName = "Chrome Desktop";
+var myDeviceName = "Firefox Desktop";
 var trustedDevices = [];
 async function initialize() {
-  const stored = await chrome.storage.local.get(["deviceId", "deviceName", "trustedDevices", "mappings"]);
+  const stored = await browserApi.storage.local.get(["deviceId", "deviceName", "trustedDevices", "mappings"]);
   if (stored.deviceId) {
     myDeviceId = stored.deviceId;
   } else {
-    myDeviceId = `dev_chrome_${crypto.randomUUID().slice(0, 8)}`;
-    await chrome.storage.local.set({ deviceId: myDeviceId });
+    myDeviceId = `dev_firefox_${crypto.randomUUID().slice(0, 8)}`;
+    await browserApi.storage.local.set({ deviceId: myDeviceId });
   }
   if (stored.deviceName) {
     myDeviceName = stored.deviceName;
   } else {
-    myDeviceName = "Chrome Desktop";
-    await chrome.storage.local.set({ deviceName: myDeviceName });
+    myDeviceName = "Firefox Desktop";
+    await browserApi.storage.local.set({ deviceName: myDeviceName });
   }
   trustedDevices = stored.trustedDevices || [];
   clock = new HlcClock(myDeviceId);
@@ -449,12 +499,12 @@ async function initialize() {
   }
 }
 initialize();
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+browserApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     if (!clock) await initialize();
     switch (message.type) {
       case "GET_STATE": {
-        const stored = await chrome.storage.local.get(["trustedDevices", "lastSyncTime"]);
+        const stored = await browserApi.storage.local.get(["trustedDevices", "lastSyncTime"]);
         trustedDevices = stored.trustedDevices || [];
         sendResponse({
           deviceId: myDeviceId,
@@ -504,11 +554,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             deviceId: inv.deviceId,
             deviceName: inv.deviceName || "Omni Android Device",
             publicKeyBase64: pubKey,
+            lanHost: inv.lanHost || null,
+            lanPort: inv.lanPort || 8765,
             pairedAt: Date.now()
           };
           trustedDevices = trustedDevices.filter((d) => d.deviceId !== newDevice.deviceId);
           trustedDevices.push(newDevice);
-          await chrome.storage.local.set({ trustedDevices });
+          await browserApi.storage.local.set({ trustedDevices });
           sendResponse({ success: true, sasCode: sas, device: newDevice });
         } catch (e) {
           sendResponse({ success: false, error: e.message || "Failed to parse invitation." });
@@ -517,12 +569,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       case "UNPAIR_DEVICE": {
         trustedDevices = trustedDevices.filter((d) => d.deviceId !== message.deviceId);
-        await chrome.storage.local.set({ trustedDevices });
+        await browserApi.storage.local.set({ trustedDevices });
         sendResponse({ success: true, trustedDevices });
         break;
       }
       case "SYNC_NOW": {
-        const stored = await chrome.storage.local.get(["trustedDevices"]);
+        const stored = await browserApi.storage.local.get(["trustedDevices"]);
         const peers = stored.trustedDevices || [];
         if (peers.length === 0) {
           sendResponse({
@@ -531,14 +583,90 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           });
           return;
         }
-        const outbox = storage.pendingOutboxOperations();
-        const lastSync = Date.now();
-        await chrome.storage.local.set({ lastSyncTime: lastSync });
+        let outbox = storage.pendingOutboxOperations();
+        if (outbox.length === 0) {
+          const tree = await new Promise((resolve) => {
+            const bmkApi = browserApi?.bookmarks;
+            if (bmkApi?.getTree) {
+              const res = bmkApi.getTree((t) => resolve(t || []));
+              if (res && typeof res.then === "function") res.then((t) => resolve(t || [])).catch(() => resolve([]));
+            } else {
+              resolve([]);
+            }
+          });
+          if (tree && tree.length > 0) {
+            let harvest2 = function(nodes) {
+              for (const n of nodes) {
+                if (n.url) {
+                  const hlc = clock.now().toString();
+                  const op = bridge.handleFirefoxBookmarkCreated(n.id, n, hlc);
+                  storage.recordLocalMutation(op);
+                }
+                if (n.children) harvest2(n.children);
+              }
+            };
+            var harvest = harvest2;
+            harvest2(tree);
+            outbox = storage.pendingOutboxOperations();
+          }
+        }
+        const localTabs = await new Promise((resolve) => {
+          const tabsApi = browserApi?.tabs;
+          if (tabsApi?.query) {
+            const res = tabsApi.query({}, (tabs) => {
+              const cleaned = (tabs || []).filter((t) => t.url && !t.incognito && !t.url.startsWith("chrome://") && !t.url.startsWith("about:")).map((t) => ({ title: t.title || t.url, url: t.url, favicon: t.favIconUrl || null }));
+              resolve(cleaned);
+            });
+            if (res && typeof res.then === "function") {
+              res.then((tabs) => {
+                const cleaned = (tabs || []).filter((t) => t.url && !t.incognito && !t.url.startsWith("chrome://") && !t.url.startsWith("about:")).map((t) => ({ title: t.title || t.url, url: t.url, favicon: t.favIconUrl || null }));
+                resolve(cleaned);
+              }).catch(() => resolve([]));
+            }
+          } else {
+            resolve([]);
+          }
+        });
+        let totalApplied = 0;
+        let lastSync = Date.now();
+        let syncErrors = [];
+        for (const peer of peers) {
+          try {
+            const result = await syncWithLanPeer(peer, outbox, localTabs);
+            if (result && result.remoteOperations && Array.isArray(result.remoteOperations)) {
+              for (const remoteOp of result.remoteOperations) {
+                await bridge.applyRemoteOperation(remoteOp);
+                totalApplied++;
+              }
+              await persistMappings();
+            }
+            if (result && result.remoteTabs && Array.isArray(result.remoteTabs)) {
+              await browserApi.storage.local.set({
+                remoteTabs: result.remoteTabs,
+                remoteDeviceName: peer.deviceName || "Omni Android Phone"
+              });
+            }
+          } catch (err) {
+            console.warn(`[Omni Sync Firefox] LAN sync with ${peer.deviceName || peer.deviceId} failed:`, err.message);
+            syncErrors.push(`${peer.deviceName || "Peer"}: ${err.message}`);
+          }
+        }
+        await browserApi.storage.local.set({ lastSyncTime: lastSync });
+        if (syncErrors.length < peers.length) {
+          triggerSuccessBadge();
+          const peerNames = peers.map((p) => p.deviceName || "Phone").join(", ");
+          showSyncNotification(
+            "Omni Sync: Synchronized",
+            `Synced ${outbox.length} bookmarks & ${localTabs.length} tabs with ${peerNames}`
+          );
+        }
         sendResponse({
-          success: true,
+          success: syncErrors.length < peers.length,
           syncedCount: outbox.length,
+          appliedRemoteCount: totalApplied,
           peerCount: peers.length,
-          lastSyncTime: lastSync
+          lastSyncTime: lastSync,
+          errors: syncErrors.length > 0 ? syncErrors : void 0
         });
         break;
       }
@@ -548,25 +676,124 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   })();
   return true;
 });
-chrome.bookmarks?.onCreated?.addListener((id, bookmark) => {
+function showSyncNotification(title, message) {
+  try {
+    const notifApi = browserApi?.notifications || chrome?.notifications;
+    if (notifApi?.create) {
+      notifApi.create({
+        type: "basic",
+        iconUrl: browserApi?.runtime?.getURL("icons/icon128.png") || "icons/icon128.png",
+        title,
+        message,
+        priority: 1
+      });
+    }
+  } catch (_e) {
+  }
+}
+function triggerSuccessBadge() {
+  try {
+    const action = browserApi?.browserAction || chrome?.action || chrome?.browserAction;
+    if (action?.setBadgeText) {
+      action.setBadgeText({ text: "\u2713" });
+      action.setBadgeBackgroundColor({ color: "#10B981" });
+      setTimeout(() => {
+        try {
+          action.setBadgeText({ text: "" });
+        } catch (_e) {
+        }
+      }, 3500);
+    }
+  } catch (_e) {
+  }
+}
+async function syncWithLanPeer(device, outboxOps, openTabs = []) {
+  const candidateHosts = [];
+  if (device.lanHost) candidateHosts.push(device.lanHost);
+  if (device.lanHost === "10.0.2.15" || device.lanHost && device.lanHost.startsWith("10.0.2.")) {
+    candidateHosts.unshift("127.0.0.1", "localhost");
+  } else if (!candidateHosts.includes("127.0.0.1")) {
+    candidateHosts.push("127.0.0.1");
+  }
+  const port = device.lanPort || 8765;
+  const payload = {
+    action: "SYNC_EXCHANGE",
+    deviceId: myDeviceId,
+    deviceName: myDeviceName,
+    operations: outboxOps,
+    openTabs,
+    timestamp: Date.now()
+  };
+  let lastError = null;
+  for (const host of candidateHosts) {
+    try {
+      const wsUrl = `ws://${host}:${port}/sync`;
+      const result = await new Promise((resolve, reject) => {
+        const ws = new WebSocket(wsUrl);
+        const timer = setTimeout(() => {
+          try {
+            ws.close();
+          } catch (_e) {
+          }
+          reject(new Error("WebSocket timeout on " + host));
+        }, 3e3);
+        ws.onopen = () => {
+          ws.send(JSON.stringify(payload));
+        };
+        ws.onmessage = (event) => {
+          clearTimeout(timer);
+          try {
+            const data = JSON.parse(event.data);
+            try {
+              ws.close();
+            } catch (_e) {
+            }
+            resolve(data);
+          } catch (e) {
+            reject(e);
+          }
+        };
+        ws.onerror = (err) => {
+          clearTimeout(timer);
+          reject(err);
+        };
+      });
+      return result;
+    } catch (_wsErr) {
+      try {
+        const httpUrl = `http://${host}:${port}/api/sync/exchange`;
+        const resp = await fetch(httpUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (resp.ok) {
+          return await resp.json();
+        }
+      } catch (httpErr) {
+        lastError = httpErr;
+      }
+    }
+  }
+  throw lastError || new Error("Could not connect to peer on any host (" + candidateHosts.join(", ") + ")");
+}
+browserApi.bookmarks?.onCreated?.addListener((id, bookmark) => {
   if (bridge.isRemoteApplying()) return;
-  if (!clock) clock = new HlcClock(myDeviceId || "dev_chrome");
+  if (!clock) clock = new HlcClock(myDeviceId || "dev_firefox");
   const hlc = clock.now().toString();
-  const op = bridge.handleChromeBookmarkCreated(id, bookmark, hlc);
+  const op = bridge.handleFirefoxBookmarkCreated(id, bookmark, hlc);
   storage.recordLocalMutation(op);
-  console.log("[Omni Sync] Recorded local mutation:", op);
   persistMappings();
 });
-chrome.bookmarks?.onRemoved?.addListener((id) => {
+browserApi.bookmarks?.onRemoved?.addListener((id) => {
   if (bridge.isRemoteApplying()) return;
-  if (!clock) clock = new HlcClock(myDeviceId || "dev_chrome");
+  if (!clock) clock = new HlcClock(myDeviceId || "dev_firefox");
   const hlc = clock.now().toString();
-  const op = bridge.handleChromeBookmarkRemoved(id, hlc);
+  const op = bridge.handleFirefoxBookmarkRemoved(id, hlc);
   storage.recordLocalMutation(op);
-  console.log("[Omni Sync] Recorded deletion:", op);
   persistMappings();
 });
 async function persistMappings() {
   const mappings = bridge.getMapper().exportMappings();
-  await chrome.storage.local.set({ mappings });
+  await browserApi.storage.local.set({ mappings });
 }

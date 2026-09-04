@@ -301,16 +301,7 @@
       </div>
 
       <div class="segmented-control">
-        <button id="tab-qr" class="seg-btn active">
-          <svg class="icon-svg seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-          <span>Show QR</span>
-        </button>
-        <button id="tab-enter" class="seg-btn">
+        <button id="tab-enter" class="seg-btn active">
           <svg class="icon-svg seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
             <line x1="6" y1="8" x2="6.01" y2="8"></line>
@@ -318,16 +309,41 @@
             <line x1="14" y1="8" x2="14.01" y2="8"></line>
             <line x1="18" y1="8" x2="18.01" y2="8"></line>
           </svg>
-          <span>Enter Code</span>
+          <span>Pair with Phone</span>
+        </button>
+        <button id="tab-qr" class="seg-btn">
+          <svg class="icon-svg seg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Show Desktop QR</span>
         </button>
       </div>
 
+      <!-- VIEW: ENTER CODE -->
+      <div id="view-enter" class="tab-pane">
+        <p class="guide-text">1. On Phone: Settings &gt; Omni Sync &gt; Pair &gt; Tap "Copy Phone Code"<br>2. Paste below to link directly over Wi-Fi:</p>
+        <textarea id="input-invitation" rows="3" placeholder='Paste phone invitation JSON or IP:8765'></textarea>
+        <div class="modal-cta-row">
+          <button id="btn-paste-clip" class="btn btn-tonal">
+            <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+            </svg>
+            <span>Paste</span>
+          </button>
+          <button id="btn-submit-pair" class="btn btn-filled flex-grow">Verify &amp; Link</button>
+        </div>
+      </div>
+
       <!-- VIEW: QR CODE -->
-      <div id="view-qr" class="tab-pane">
+      <div id="view-qr" class="tab-pane hidden">
         <div class="qr-viewport">
           <canvas id="qr-canvas"></canvas>
         </div>
-        <p class="guide-text">Scan with Omni Browser on Android, or copy the cryptographic string below:</p>
+        <p class="guide-text">Scan with Omni Browser on Android (Settings &gt; Omni Sync &gt; Scan Desktop QR):</p>
         <textarea id="output-qr-code" rows="2" readonly placeholder="Generating keypair..."></textarea>
         <div class="modal-cta-row" style="margin-top: 8px;">
           <button id="btn-copy-qr-text" class="btn btn-tonal" style="flex: 1;">
@@ -337,29 +353,12 @@
             </svg>
             <span>Copy Key</span>
           </button>
-          <button id="btn-qr-next-sas" class="btn btn-filled" style="flex: 1.5;">
-            <span>Next: Confirm Code</span>
+          <button id="btn-qr-done" class="btn btn-filled" style="flex: 1.5;">
             <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
+              <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
+            <span>Scanned on Phone</span>
           </button>
-        </div>
-      </div>
-
-      <!-- VIEW: ENTER CODE -->
-      <div id="view-enter" class="tab-pane hidden">
-        <p class="guide-text">Paste the invitation JSON token from Omni Browser mobile:</p>
-        <textarea id="input-invitation" rows="4" placeholder='{"version":1,"deviceId":"...","publicKey":"..."}'></textarea>
-        <div class="modal-cta-row">
-          <button id="btn-paste-clip" class="btn btn-tonal">
-            <svg class="icon-svg btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-            </svg>
-            <span>Paste</span>
-          </button>
-          <button id="btn-submit-pair" class="btn btn-filled flex-grow">Verify & Link</button>
         </div>
       </div>
 
