@@ -308,6 +308,7 @@ class BrowserViewModel : ViewModel() {
     val sessionExtensionActions = mutableStateMapOf<String, MutableMap<String, WebExtension.Action>>()
     var activeExtensionPopupSession by mutableStateOf<GeckoSession?>(null)
     var activeExtensionPopupName by mutableStateOf("")
+    var activeExtensionPopupId by mutableStateOf("")
     var activeExtensionPopupLoading by mutableStateOf(true)
 
     var pendingIntentUrl: String? = null
@@ -503,7 +504,7 @@ class BrowserViewModel : ViewModel() {
     var hasSeenDevNotesOverview by mutableStateOf(false)
 
     val DEFAULT_QUICK_TOOLS_ORDER = listOf(
-        "qr_scanner", "safe_locker", "translator", "edit_page",
+        "omni_beam", "qr_scanner", "safe_locker", "translator", "edit_page",
         "save_pdf", "vpn", "pin_web_app", "auto_scroll", "qr_scan_page",
         "qr_generator", "console_log", "dev_notes", "site_style"
     )
@@ -883,6 +884,16 @@ class BrowserViewModel : ViewModel() {
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
     var pendingTorrentUrl by mutableStateOf<String?>(null)
+    var pendingSiteDownloadUrl by mutableStateOf<String?>(null)
+    var pendingSiteDownloadInfo by mutableStateOf<SiteDownloadInfo?>(null)
+
+    data class SiteDownloadInfo(
+        val url: String,
+        val title: String,
+        val mimeType: String,
+        val pageUrl: String,
+        val cookies: String?
+    )
 
     fun handleGenericDownload(
         url: String,
@@ -1525,18 +1536,25 @@ class BrowserViewModel : ViewModel() {
 
     // ── <select> Choice Prompt Result Delivery ──────────────────────────────────
     /**
-     * Called when the user selects a choice from the native dropdown dialog.
-     * [choiceIndex] is the index into prompt.choices, or -1 to dismiss (cancel).
+     * Called when the user selects choice(s) from the native dropdown dialog.
+     * For single-select prompts the list contains one choice; for multi-select
+     * it contains every checked choice. Pass an empty list to dismiss (cancel).
+     * Supports optgroup child choices (Issue #116) since the actual [Choice]
+     * objects are passed through rather than flat indices.
      */
-    fun deliverChoicePromptResult(choiceIndex: Int) {
+    fun deliverChoicePromptResult(selectedChoices: List<GeckoSession.PromptDelegate.ChoicePrompt.Choice>) {
         val pending = pendingChoicePrompt ?: return
         pendingChoicePrompt = null
-        if (choiceIndex < 0 || pending.prompt.choices.isEmpty()) {
-            pending.geckoResult.complete(pending.prompt.dismiss())
-        } else {
-            val choices = pending.prompt.choices
-            val safeIndex = choiceIndex.coerceAtMost(choices.size - 1)
-            pending.geckoResult.complete(pending.prompt.confirm(choices[safeIndex]))
+        when {
+            selectedChoices.isEmpty() || pending.prompt.choices.isEmpty() -> {
+                pending.geckoResult.complete(pending.prompt.dismiss())
+            }
+            selectedChoices.size == 1 -> {
+                pending.geckoResult.complete(pending.prompt.confirm(selectedChoices.first()))
+            }
+            else -> {
+                pending.geckoResult.complete(pending.prompt.confirm(selectedChoices.toTypedArray()))
+            }
         }
     }
 

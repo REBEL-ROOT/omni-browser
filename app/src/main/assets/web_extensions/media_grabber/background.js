@@ -13,16 +13,12 @@ const MEDIA_URL_PATTERNS = [
     /\.mp3(\?|$|#)/i,
     /\.m4a(\?|$|#)/i,
     /\.m4v(\?|$|#)/i,
-    /\/\d+\.ts(\?|$|#)/i,
-    /seg[\w-]*\.ts(\?|$|#)/i,
     /\.aac(\?|$|#)/i,
     /\.ogg(\?|$|#)/i,
     /\.flv(\?|$|#)/i,
     /\.avi(\?|$|#)/i,
     /\/hls\//i,
     /\/dash\//i,
-    /\/video\//i,
-    /\/audio\//i,
     /manifest.*\.m3u8/i,
     /manifest.*\.mpd/i,
     /index.*\.m3u8/i,
@@ -73,7 +69,14 @@ function isMediaUrl(url) {
     if (!url || url.startsWith('blob:') || url.startsWith('data:')) return false;
     if (url.includes('pixel') || url.includes('beacon') || url.includes('analytics')) return false;
     if (url.startsWith('moz-extension:') || url.startsWith('chrome-extension:')) return false;
-    
+    // Exclude subtitle/cue/manifest sidecar files that often pass pattern checks
+    const lower = url.toLowerCase();
+    if (lower.includes('.vtt') || lower.includes('.srt') || lower.includes('.ass') || lower.includes('.ssa') ||
+        lower.includes('.webvtt') || lower.includes('thumbnail') || lower.includes('thumb') ||
+        lower.includes('/thumbnails/')) {
+        return false;
+    }
+
     return MEDIA_URL_PATTERNS.some(pattern => pattern.test(url));
 }
 
@@ -334,6 +337,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
         } else {
             sendDownload("");
+        }
+    } else if (message.type === 'SITE_DOWNLOAD_REQUEST') {
+        const url = message.url;
+        const pageUrl = message.pageUrl || (sender.tab ? sender.tab.url : '');
+        const tabId = sender.tab ? String(sender.tab.id) : '';
+        try {
+            chrome.cookies.getAll({ url: url }, (cookiesList) => {
+                let cookiesStr = "";
+                if (cookiesList && cookiesList.length > 0) {
+                    cookiesStr = cookiesList.map(c => `${c.name}=${c.value}`).join('; ');
+                }
+                chrome.runtime.sendNativeMessage('omniApp', {
+                    type: 'SITE_DOWNLOAD_REQUEST',
+                    url: url,
+                    pageUrl: pageUrl,
+                    tabId: tabId,
+                    mimeType: message.mimeType || 'video/mp4',
+                    title: message.title || '',
+                    cookies: cookiesStr || ''
+                }).catch((err) => {
+                    console.error('[background.js] Error sending SITE_DOWNLOAD_REQUEST:', err);
+                });
+            });
+        } catch (e) {
+            console.error('[background.js] Native message failed for SITE_DOWNLOAD_REQUEST:', e);
         }
     } else if (message.type === 'HANDOFF_RESTORED') {
         try {

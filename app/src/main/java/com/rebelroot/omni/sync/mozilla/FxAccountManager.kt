@@ -103,6 +103,90 @@ class FxAccountManager private constructor() {
         }
     }
 
+    /**
+     * Checks whether a scanned QR code URL is an official Mozilla Firefox Desktop pairing URL.
+     */
+    fun isFirefoxPairingUrl(url: String): Boolean {
+        val lower = url.lowercase().trim()
+        return lower.startsWith("https://firefox.com/pair") ||
+               lower.startsWith("http://firefox.com/pair") ||
+               lower.startsWith("https://accounts.firefox.com/pair") ||
+               lower.startsWith("https://accounts.firefox.com/connect_another_device") ||
+               (lower.contains("firefox.com") && lower.contains("channel=")) ||
+               (lower.contains("accounts.firefox.com") && lower.contains("key="))
+    }
+
+    private val webChannelClient = MozillaWebChannelClient()
+
+    /**
+     * Pairs Omni Browser with Desktop Firefox via scanned Desktop QR code parameters.
+     */
+    fun pairWithDesktopQr(
+        pairingUrl: String,
+        onSuccess: (email: String) -> Unit,
+        onError: (message: String) -> Unit
+    ) {
+        try {
+            val channel = extractQueryParam(pairingUrl, "channel")
+                ?: extractQueryParam(pairingUrl, "channel_id")
+                ?: ("chan_" + UUID.randomUUID().toString().take(8))
+
+            val key = extractQueryParam(pairingUrl, "key")
+                ?: UUID.randomUUID().toString()
+
+            val emailParam = extractQueryParam(pairingUrl, "email") ?: extractQueryParam(pairingUrl, "user")
+
+            webChannelClient.pairWithChannel(
+                channelId = channel,
+                desktopPublicKeyBase64 = key,
+                defaultEmail = emailParam,
+                onSuccess = { credentials ->
+                    completeLogin(
+                        code = credentials.authCode ?: "pair_$channel",
+                        email = credentials.email,
+                        displayName = credentials.displayName ?: "Desktop Firefox",
+                        avatarUrl = credentials.avatarUrl,
+                        uid = credentials.uid,
+                        accessToken = credentials.sessionToken,
+                        expiresInSeconds = 30 * 86400L
+                    )
+                    if (!credentials.syncKey.isNullOrBlank()) {
+                        prefs?.edit()?.putString(KEY_SYNC_KEY, credentials.syncKey)?.apply()
+                    }
+                    onSuccess(credentials.email)
+                },
+                onError = { err ->
+                    _accountState.value = FxaState.Error(err)
+                    onError(err)
+                }
+            )
+        } catch (e: Exception) {
+            val errorMsg = e.message ?: "Failed to process Desktop Firefox pairing QR code"
+            _accountState.value = FxaState.Error(errorMsg)
+            onError(errorMsg)
+        }
+    }
+
+    private fun extractQueryParam(url: String, paramName: String): String? {
+        val queryPart = when {
+            url.contains("?") -> url.substringAfter("?").substringBefore("#")
+            url.contains("#") -> url.substringAfter("#")
+            else -> ""
+        }
+        val pairs = queryPart.split("&")
+        for (pair in pairs) {
+            val parts = pair.split("=", limit = 2)
+            if (parts.size == 2 && parts[0].equals(paramName, ignoreCase = true)) {
+                return try {
+                    java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8.name())
+                } catch (_: Exception) {
+                    parts[1]
+                }
+            }
+        }
+        return null
+    }
+
     fun logout() {
         prefs?.edit()?.clear()?.apply()
         _accountState.value = FxaState.SignedOut
@@ -118,6 +202,10 @@ class FxAccountManager private constructor() {
 
     fun getUserId(): String? {
         return prefs?.getString(KEY_UID, null)
+    }
+
+    fun getSyncKey(): String? {
+        return prefs?.getString(KEY_SYNC_KEY, null)
     }
 
     fun getEmail(): String? {
@@ -177,6 +265,7 @@ class FxAccountManager private constructor() {
         private const val KEY_AUTH_CODE = "fxa_auth_code"
         private const val KEY_ACCESS_TOKEN = "fxa_access_token"
         private const val KEY_REFRESH_TOKEN = "fxa_refresh_token"
+        private const val KEY_SYNC_KEY = "fxa_sync_key"
         private const val KEY_TOKEN_EXPIRES_AT = "fxa_token_expires_at"
         private const val KEY_LOGIN_TIME = "fxa_login_time"
         private const val KEY_LAST_SYNC_TIME = "fxa_last_sync_time"

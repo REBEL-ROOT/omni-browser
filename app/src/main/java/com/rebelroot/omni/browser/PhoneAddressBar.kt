@@ -158,7 +158,8 @@ fun PhoneAddressBar(
     onShowTabGroups: () -> Unit = {},
     onShowSiteInfo: () -> Unit = {},
     onShowAllInOneMenuSheet: () -> Unit = {},
-    onOpenMediaSheet: () -> Unit = {}
+    onOpenMediaSheet: () -> Unit = {},
+    onShowSpeedDialSheet: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -214,33 +215,46 @@ fun PhoneAddressBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedVisibility(visible = !isInputFocused) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { viewModel.loadUrl("about:blank") },
-                    modifier = Modifier.size(config.barIconSize)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Home,
-                        contentDescription = "Go Home",
-                        modifier = Modifier.size(config.innerIconSize),
-                        tint = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF202124)
-                    )
-                }
+            IconButton(
+                onClick = { viewModel.loadUrl("about:blank") },
+                modifier = Modifier.size(config.barIconSize)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Home,
+                    contentDescription = "Go Home",
+                    modifier = Modifier.size(config.innerIconSize),
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
+        }
 
-                // Quick Tools (Toolbox) — visible on Left Hand Side in All-in-One mode
-                if (viewModel.chromeNavBarEnabled) {
-                    IconButton(
-                        onClick = onShowToolsSheet,
-                        modifier = Modifier.size(config.barIconSize)
-                    ) {
-                        Icon(
-                            imageVector = BlackholeIcon,
-                            contentDescription = "Quick Tools",
-                            tint = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.size(config.innerIconSize)
-                        )
-                    }
-                }
+        // Speed Dial — dedicated button in All-in-One and Split nav modes
+        AnimatedVisibility(visible = !isInputFocused && (viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Split")) {
+            IconButton(
+                onClick = onShowSpeedDialSheet,
+                modifier = Modifier.size(config.barIconSize)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Speed,
+                    contentDescription = "Speed Dial",
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(config.innerIconSize)
+                )
+            }
+        }
+
+        // Quick Tools (Toolbox) — visible on Left Hand Side in All-in-One mode
+        AnimatedVisibility(visible = !isInputFocused && viewModel.chromeNavBarEnabled) {
+            IconButton(
+                onClick = onShowToolsSheet,
+                modifier = Modifier.size(config.barIconSize)
+            ) {
+                Icon(
+                    imageVector = BlackholeIcon,
+                    contentDescription = "Quick Tools",
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(config.innerIconSize)
+                )
             }
         }
 

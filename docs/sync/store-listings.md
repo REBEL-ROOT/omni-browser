@@ -1,17 +1,27 @@
 # Omni Sync Store Listings & Marketplace Metadata
 
-**Name:** Omni Sync  
-**Short Description:** Private, end-to-end encrypted, zero-cloud bookmark and tab sync for Omni Browser.
+**Name:** Omni Sync & Cloud Backup  
+**Short Description:** Seamless Firefox Account cloud sync and upcoming end-to-end encrypted zero-cloud P2P mesh sync for Omni Browser.
 
 ## Detailed Description
-Omni Sync connects your desktop browsers (Chrome, Firefox, Edge, Brave, Safari) directly to Omni Browser on Android without central cloud servers or third-party storage.
+Omni Sync brings seamless synchronization to Omni Browser on Android with two powerful layers:
+
+1. 🦊 **Firefox Account Cloud Sync (Available Now):**
+   - 1-Click login with your Firefox Account.
+   - Automatically sync bookmarks, open tabs across PC/Mac/mobile, browsing history, and passwords via Mozilla Cloud.
+   - Full bidirectional merge with safe hierarchy protection and tombstone deletion tracking.
+
+2. ⚡ **Omni Sync Mesh (Upcoming · Testing Phase):**
+   - Direct zero-cloud, 100% peer-to-peer (P2P) local Wi-Fi synchronization.
+   - Requires installing the **Omni Sync Extension (Testing)** on desktop Chrome, Firefox, Edge, Brave, or Safari.
+   - NIST P-256 ECDH authenticated key exchange with AES-256-GCM encryption and 6-digit numeric SAS code verification.
 
 ### Key Features:
-- ⚡ **Zero-Cloud & E2EE:** Direct peer-to-peer and local Wi-Fi synchronization encrypted with AES-256-GCM.
-- 📱 **QR Code & SAS Pairing:** Simple, instant camera pairing with 6-digit numeric security confirmation.
-- 📑 **Real-Time Tabs:** View and send open tabs across all your devices.
-- 🛡️ **Privacy-First:** Incognito tabs and private browsing history are never synchronized.
-- 🚀 **Fractional Indexing CRDT:** Seamless conflict resolution that preserves your bookmark folder hierarchy.
+- ☁️ **1-Click Firefox Account Sign-In:** Direct in-app OAuth login with instant synchronization.
+- 📑 **Remote Open Tabs:** View and switch tabs open on your computer directly inside Omni.
+- 📚 **Fractional Indexing CRDT:** Dense Base-62 ordering preserves nested bookmark folder hierarchies without collisions.
+- 🛡️ **Privacy Guaranteed:** Incognito tabs and private sessions are structurally isolated and never synced.
+- 🧩 **Desktop Extension (Testing):** Optional companion extension for desktop browsers to test experimental P2P mesh sync.
 
 **Category:** Productivity / Privacy & Security  
 **License:** GPL-3.0 Open Source  

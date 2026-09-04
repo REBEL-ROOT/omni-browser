@@ -70,6 +70,12 @@ class MangaTranslationPipeline(
         isRtl: Boolean = true,
         style: MangaTypographyStyle = MangaTypographyStyle()
     ): MangaTranslationResult = withContext(Dispatchers.Default) {
+        val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: bitmap
+        } else {
+            bitmap
+        }
+
         val normalizedSrc = sourceLanguage?.lowercase() ?: "auto"
         val normalizedTgt = targetLanguage.lowercase()
         val textCacheKey = "${cacheKey}_${normalizedSrc}_${normalizedTgt}"
@@ -80,7 +86,7 @@ class MangaTranslationPipeline(
         val cachedBlocks = blocksCache.get(textCacheKey)
         if (cachedBitmap != null && cachedBlocks != null) {
             return@withContext MangaTranslationResult(
-                originalBitmap = bitmap,
+                originalBitmap = safeBitmap,
                 translatedBitmap = cachedBitmap,
                 blocks = cachedBlocks,
                 sourceLanguage = sourceLanguage,
@@ -94,14 +100,14 @@ class MangaTranslationPipeline(
                 cachedBlocks
             } else {
                 // OCR Text Localization & Speech Bubble Detection
-                val detectedBlocks = detector.detectDialogueBlocks(bitmap, sourceLanguage, isRtl)
+                val detectedBlocks = detector.detectDialogueBlocks(safeBitmap, sourceLanguage, isRtl)
 
                 if (detectedBlocks.isEmpty()) {
-                    bitmapCache.put(renderCacheKey, bitmap)
+                    bitmapCache.put(renderCacheKey, safeBitmap)
                     blocksCache.put(textCacheKey, emptyList())
                     return@withContext MangaTranslationResult(
-                        originalBitmap = bitmap,
-                        translatedBitmap = bitmap,
+                        originalBitmap = safeBitmap,
+                        translatedBitmap = safeBitmap,
                         blocks = emptyList(),
                         sourceLanguage = sourceLanguage,
                         targetLanguage = targetLanguage
@@ -129,11 +135,11 @@ class MangaTranslationPipeline(
             }
 
             // 3. Render Typography with the requested style
-            val translatedBitmap = inpainter.inpaintAndRender(bitmap, translatedBlocks, style)
+            val translatedBitmap = inpainter.inpaintAndRender(safeBitmap, translatedBlocks, style)
             bitmapCache.put(renderCacheKey, translatedBitmap)
 
             MangaTranslationResult(
-                originalBitmap = bitmap,
+                originalBitmap = safeBitmap,
                 translatedBitmap = translatedBitmap,
                 blocks = translatedBlocks,
                 sourceLanguage = sourceLanguage,
@@ -142,8 +148,8 @@ class MangaTranslationPipeline(
         } catch (e: Exception) {
             Log.e(TAG, "Manga image translation failed for $cacheKey", e)
             MangaTranslationResult(
-                originalBitmap = bitmap,
-                translatedBitmap = bitmap,
+                originalBitmap = safeBitmap,
+                translatedBitmap = safeBitmap,
                 blocks = emptyList(),
                 sourceLanguage = sourceLanguage,
                 targetLanguage = targetLanguage
@@ -192,17 +198,23 @@ class MangaTranslationPipeline(
         customBlocks: List<MangaDialogueBlock>,
         style: MangaTypographyStyle = MangaTypographyStyle()
     ): MangaTranslationResult = withContext(Dispatchers.Default) {
+        val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: bitmap
+        } else {
+            bitmap
+        }
+
         val normalizedSrc = sourceLanguage?.lowercase() ?: "auto"
         val normalizedTgt = targetLanguage.lowercase()
         val textCacheKey = "${cacheKey}_${normalizedSrc}_${normalizedTgt}"
         val renderCacheKey = "${textCacheKey}_${style.cacheKey}"
 
         blocksCache.put(textCacheKey, customBlocks)
-        val translatedBitmap = inpainter.inpaintAndRender(bitmap, customBlocks, style)
+        val translatedBitmap = inpainter.inpaintAndRender(safeBitmap, customBlocks, style)
         bitmapCache.put(renderCacheKey, translatedBitmap)
 
         MangaTranslationResult(
-            originalBitmap = bitmap,
+            originalBitmap = safeBitmap,
             translatedBitmap = translatedBitmap,
             blocks = customBlocks,
             sourceLanguage = sourceLanguage,

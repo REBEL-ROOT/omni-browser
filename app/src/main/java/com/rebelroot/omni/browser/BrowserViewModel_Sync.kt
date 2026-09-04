@@ -9,7 +9,7 @@ import android.util.Log
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.WebExtensionController
 
-private const val OMNI_SYNC_EXTENSION_ID = "omni-sync@rebelroot.com"
+internal const val OMNI_SYNC_EXTENSION_ID = "omni-sync@rebelroot.com"
 
 internal fun BrowserViewModel.installOmniSyncExtension(runtime: GeckoRuntime) {
     runtime.webExtensionController.ensureBuiltIn(

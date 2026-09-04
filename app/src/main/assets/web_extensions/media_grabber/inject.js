@@ -295,6 +295,19 @@
         }, '*');
     }
 
+    // Direct download for the site overlay button — uses a simpler path that bypasses
+    // the media resolution pipeline and starts the download immediately.
+    function requestSiteDownload(video, videoUrl) {
+        if (!videoUrl) return;
+        window.postMessage({
+            type: 'SITE_DOWNLOAD_REQUEST',
+            url: videoUrl,
+            pageUrl: window.location.href,
+            mimeType: getMimeType(videoUrl),
+            title: document.title || 'Video'
+        }, '*');
+    }
+
     function getVideoUrl(video) {
         if (!video) return null;
 
@@ -333,6 +346,11 @@
     function isPlayableMediaUrl(url) {
         if (!url) return false;
         const lower = url.toLowerCase();
+        // Exclude non-playable resources that often pass other checks
+        if (lower.includes('.vtt') || lower.includes('.srt') || lower.includes('.ass') || lower.includes('.ssa') ||
+            lower.includes('.webvtt') || lower.includes('thumbnail') || lower.includes('thumb')) {
+            return false;
+        }
         if (lower.includes('/segment') || lower.includes('/fragment') || lower.includes('.ts') || lower.includes('.m4s') || lower.includes('analytics') || lower.includes('telemetry')) {
             return false;
         }
@@ -341,8 +359,8 @@
                lower.includes('.mp4')  ||
                lower.includes('.webm') ||
                lower.includes('.mkv')  ||
-               lower.includes('/hls/') ||
-               lower.includes('/dash/') ||
+               (lower.includes('/hls/') && !lower.includes('/thumbnails/')) ||
+               (lower.includes('/dash/') && !lower.includes('/thumbnails/')) ||
                lower.includes('mpegurl') ||
                lower.includes('googlevideo.com') ||
                lower.includes('videoplayback');
@@ -469,5 +487,202 @@
         if (lower.includes('.mp4')) return 'video/mp4';
         if (lower.includes('.m4a') || lower.includes('.mp3') || lower.includes('.aac') || lower.includes('.ogg')) return 'audio/mpeg';
         return 'video/mp4';
+    }
+
+    // =========================================================
+    // Site Player Overlay — Quetta-Style Download Button
+    // =========================================================
+
+    const OVERLAY_STYLE_ID = '_omni_site_overlay_style';
+    const OVERLAY_BUTTON_CLASS = '_omni_site_overlay_btn';
+    const OVERLAY_CLASS = '_omni_site_overlay';
+
+    function ensureOverlayStyles() {
+        if (document.getElementById(OVERLAY_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = OVERLAY_STYLE_ID;
+        style.textContent = [
+            '.' + OVERLAY_CLASS + ' {',
+            '  position: absolute;',
+            '  z-index: 2147483646;',
+            '  pointer-events: none;',
+            '  opacity: 0;',
+            '  transition: opacity 0.18s ease, transform 0.18s ease;',
+            '  transform: translateY(6px);',
+            '  display: flex;',
+            '  align-items: center;',
+            '  gap: 6px;',
+            '}',
+            '.' + OVERLAY_CLASS + '._omni_visible {',
+            '  opacity: 1;',
+            '  transform: translateY(0);',
+            '}',
+            '.' + OVERLAY_CLASS + '._omni_right { right: 12px; top: 12px; flex-direction: column; }',
+            '.' + OVERLAY_CLASS + '._omni_top { top: 12px; }',
+            '.' + OVERLAY_CLASS + '._omni_bottom { bottom: 12px; }',
+            '.' + OVERLAY_BUTTON_CLASS + ' {',
+            '  pointer-events: auto;',
+            '  width: 40px;',
+            '  height: 40px;',
+            '  border-radius: 22px;',
+            '  background: rgba(0, 0, 0, 0.55);',
+            '  backdrop-filter: blur(8px);',
+            '  -webkit-backdrop-filter: blur(8px);',
+            '  color: #fff;',
+            '  border: 1px solid rgba(255, 255, 255, 0.18);',
+            '  display: inline-flex;',
+            '  align-items: center;',
+            '  justify-content: center;',
+            '  cursor: pointer;',
+            '  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);',
+            '  transition: background 0.15s ease, transform 0.15s ease;',
+            '}',
+            '.' + OVERLAY_BUTTON_CLASS + ':hover {',
+            '  background: rgba(20, 20, 20, 0.85);',
+            '  transform: scale(1.05);',
+            '}',
+            '.' + OVERLAY_BUTTON_CLASS + ':active {',
+            '  transform: scale(0.95);',
+            '}',
+            '.' + OVERLAY_BUTTON_CLASS + ' svg { width: 20px; height: 20px; }',
+            '@media (prefers-color-scheme: light) {',
+            '  .' + OVERLAY_BUTTON_CLASS + ' {',
+            '    background: rgba(255, 255, 255, 0.85);',
+            '    color: #111;',
+            '    border-color: rgba(0, 0, 0, 0.1);',
+            '  }',
+            '}'
+        ].join('\n');
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    const DOWNLOAD_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
+
+    function buildOverlay(video) {
+        const overlay = document.createElement('div');
+        overlay.className = OVERLAY_CLASS + ' _omni_right';
+        overlay.dataset.omniOverlay = '1';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = OVERLAY_BUTTON_CLASS;
+        btn.title = 'Download with Omni';
+        btn.setAttribute('aria-label', 'Download with Omni');
+        btn.innerHTML = DOWNLOAD_ICON_SVG;
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                const videoUrl = getVideoUrl(video);
+                // Try the direct SITE_DOWNLOAD_REQUEST first (no resolution pipeline)
+                requestSiteDownload(video, videoUrl);
+                // Also send REQUEST_DOWNLOAD as a fallback for the media sniffer pipeline
+                setTimeout(() => {
+                    requestDownload(video, videoUrl);
+                }, 200);
+            } catch (err) {
+                console.error('[inject.js] Site overlay download failed:', err);
+            }
+        });
+
+        overlay.appendChild(btn);
+        return overlay;
+    }
+
+    function attachOverlayToVideo(video) {
+        if (!video || video._omniOverlay) return;
+        ensureOverlayStyles();
+        const position = window.getComputedStyle(video).position;
+        if (position === 'static') {
+            video.style.position = 'relative';
+        }
+        const overlay = buildOverlay(video);
+        const host = video.parentElement || video;
+        host.appendChild(overlay);
+        video._omniOverlay = overlay;
+        video._omniOverlayHost = host;
+
+        const show = () => overlay.classList.add('_omni_visible');
+        const hide = () => overlay.classList.remove('_omni_visible');
+        video.addEventListener('mouseenter', show);
+        video.addEventListener('mouseleave', hide);
+        video.addEventListener('play', show);
+        video.addEventListener('pause', hide);
+        video.addEventListener('touchstart', show, { passive: true });
+        if (!video.paused) show();
+    }
+
+    function detachOverlayFromVideo(video) {
+        const overlay = video._omniOverlay;
+        const host = video._omniOverlayHost || (video.parentElement || video);
+        if (overlay && overlay.parentElement === host) {
+            host.removeChild(overlay);
+        }
+        video._omniOverlay = null;
+        video._omniOverlayHost = null;
+    }
+
+    function isOverlayCandidate(video) {
+        if (!video || video.tagName !== 'VIDEO') return false;
+        const rect = video.getBoundingClientRect();
+        if (rect.width < 200 || rect.height < 120) return false;
+        if (video.muted && video.controls === false && video.getAttribute('autoplay') !== null && rect.width < 400) {
+            return false;
+        }
+        return true;
+    }
+
+    const siteOverlayObserver = new MutationObserver(() => {
+        document.querySelectorAll('video').forEach(v => {
+            if (isOverlayCandidate(v) && !v._omniOverlay) {
+                registerVideo(v);
+                attachOverlayToVideo(v);
+            } else if (v._omniOverlay && !isOverlayCandidate(v)) {
+                detachOverlayFromVideo(v);
+            }
+        });
+    });
+
+    function scanAndAttachSiteOverlays() {
+        document.querySelectorAll('video').forEach(v => {
+            if (isOverlayCandidate(v) && !v._omniOverlay) {
+                registerVideo(v);
+                attachOverlayToVideo(v);
+            }
+        });
+    }
+
+    if (document.body) {
+        siteOverlayObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.body) {
+                siteOverlayObserver.observe(document.body, { childList: true, subtree: true });
+            }
+        });
+    }
+
+    scanAndAttachSiteOverlays();
+    window.addEventListener('DOMContentLoaded', scanAndAttachSiteOverlays);
+    window.addEventListener('resize', scanAndAttachSiteOverlays);
+
+    const removalObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            if (mutation.type === 'childList') {
+                for (const node of mutation.removedNodes) {
+                    if (node.tagName === 'VIDEO' && node._omniOverlay) {
+                        detachOverlayFromVideo(node);
+                    } else if (node.querySelectorAll) {
+                        node.querySelectorAll('video').forEach(v => {
+                            if (v._omniOverlay) detachOverlayFromVideo(v);
+                        });
+                    }
+                }
+            }
+        }
+    });
+    if (document.body) {
+        removalObserver.observe(document.body, { childList: true, subtree: true });
     }
 })();

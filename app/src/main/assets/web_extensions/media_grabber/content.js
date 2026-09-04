@@ -122,6 +122,15 @@ window.addEventListener('message', (event) => {
             videoId: data.videoId,
             requestId: data.requestId
         });
+    } else if (data.type === 'SITE_DOWNLOAD_REQUEST') {
+        chrome.runtime.sendMessage({
+            type: 'SITE_DOWNLOAD_REQUEST',
+            url: data.url,
+            pageUrl: data.pageUrl,
+            mimeType: data.mimeType,
+            title: data.title,
+            cookies: data.cookies || ''
+        });
     } else if (data.type === 'HANDOFF_RESTORED') {
         chrome.runtime.sendMessage({
             type: 'HANDOFF_RESTORED',

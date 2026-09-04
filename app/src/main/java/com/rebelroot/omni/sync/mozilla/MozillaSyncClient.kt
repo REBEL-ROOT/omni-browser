@@ -47,12 +47,18 @@ class MozillaSyncClient(
     /**
      * Exchanges FxA OAuth access token for storage node endpoint and authentication keys.
      */
-    fun fetchStorageCredentials(accessToken: String): SyncClientResult<TokenServerResponse> {
+    fun fetchStorageCredentials(accessToken: String, syncKey: String? = null): SyncClientResult<TokenServerResponse> {
         return try {
             val url = URL(tokenServerUrl)
+            val authHeader = if (!syncKey.isNullOrBlank()) {
+                generateHawkHeader(accessToken, syncKey, "GET", url)
+            } else {
+                "Bearer $accessToken"
+            }
+
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Authorization", authHeader)
                 setRequestProperty("Accept", "application/json")
                 connectTimeout = 10_000
                 readTimeout = 10_000
@@ -244,6 +250,32 @@ class MozillaSyncClient(
             }
         } catch (e: Exception) {
             SyncClientResult.Failure(-1, e.message ?: "Failed to post records to $collection")
+        }
+    }
+
+    fun generateHawkHeader(
+        id: String,
+        key: String,
+        method: String,
+        url: URL,
+        hashAlgorithm: String = "sha256"
+    ): String {
+        return try {
+            val ts = System.currentTimeMillis() / 1000L
+            val nonce = "hawk_" + java.util.UUID.randomUUID().toString().take(6)
+            val path = if (url.query != null) "${url.path}?${url.query}" else url.path
+            val host = url.host
+            val port = if (url.port != -1) url.port else (if (url.protocol.equals("https", ignoreCase = true)) 443 else 80)
+
+            val normalized = "hawk.1.header\n$ts\n$nonce\n$method\n$path\n$host\n$port\n\n\n"
+            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+            mac.init(javax.crypto.spec.SecretKeySpec(key.toByteArray(StandardCharsets.UTF_8), "HmacSHA256"))
+            val macBytes = mac.doFinal(normalized.toByteArray(StandardCharsets.UTF_8))
+            val macBase64 = java.util.Base64.getEncoder().encodeToString(macBytes)
+
+            """Hawk id="$id", ts="$ts", nonce="$nonce", mac="$macBase64""""
+        } catch (_: Exception) {
+            "Bearer $id"
         }
     }
 

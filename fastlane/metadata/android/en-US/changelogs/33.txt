@@ -1,0 +1,9 @@
+• Fixed: Google Sign-In & Sign-Up OAuth accounts fix
+• New: In-app BitTorrent & magnet downloader with DHT
+• New: Live status bar download progress & speed alerts
+• New: System theme support (Follow System/Dark/Light)
+• New: Address bar quick actions (Copy, Share, Paste)
+• New: Open in new background tab from context menu
+• New: Confirm before exiting browser toggle
+• Fixed: Download destination sheet prompt on all files
+• Improved: Full 16 KB page-size alignment (Android 15+)

@@ -2,8 +2,10 @@ package com.rebelroot.omni.browser
 
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -37,7 +39,7 @@ data class ShortcutLauncherItem(
     val isBookmark: Boolean
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SpeedDialLauncherSheet(
     viewModel: BrowserViewModel,
@@ -48,6 +50,9 @@ fun SpeedDialLauncherSheet(
     var searchQuery by remember { mutableStateOf("") }
     var selectedLetter by remember { mutableStateOf("ALL") }
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // Delete confirmation state
+    var itemToDelete by remember { mutableStateOf<ShortcutLauncherItem?>(null) }
 
     val accentColor = MaterialTheme.colorScheme.primary
     val bgColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.background
@@ -84,6 +89,52 @@ fun SpeedDialLauncherSheet(
     }
 
     val alphabetList = remember { listOf("ALL", "#") + ('A'..'Z').map { it.toString() } }
+
+    // Delete confirmation dialog
+    if (itemToDelete != null) {
+        val item = itemToDelete!!
+        AlertDialog(
+            onDismissRequest = { itemToDelete = null },
+            title = {
+                Text(
+                    text = "Delete from Speed Dial",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove \"${item.title}\" from Speed Dial?",
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (item.isBookmark) {
+                            viewModel.removeBookmark(item.url)
+                        } else {
+                            val shortcut = viewModel.shortcutsList.find { it.id == item.id }
+                            if (shortcut != null) {
+                                viewModel.deleteShortcut(shortcut)
+                            }
+                        }
+                        Toast.makeText(context, "Removed from Speed Dial", Toast.LENGTH_SHORT).show()
+                        itemToDelete = null
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -231,6 +282,9 @@ fun SpeedDialLauncherSheet(
                             onClick = {
                                 onDismissRequest()
                                 onOpenUrl(item.url)
+                            },
+                            onLongClick = {
+                                itemToDelete = item
                             }
                         )
                     }
@@ -240,13 +294,18 @@ fun SpeedDialLauncherSheet(
     }
 
     if (showAddDialog) {
+        val currentTabTitle = remember(viewModel.activeTabId) {
+            viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: ""
+        }
         AddSpeedDialShortcutDialog(
             onDismiss = { showAddDialog = false },
             onAdd = { title, url ->
                 viewModel.addShortcut(title, url)
                 Toast.makeText(context, "Added to Speed Dial", Toast.LENGTH_SHORT).show()
                 showAddDialog = false
-            }
+            },
+            initialUrl = viewModel.currentUrl,
+            initialTitle = currentTabTitle
         )
     }
 }
@@ -254,10 +313,12 @@ fun SpeedDialLauncherSheet(
 @Composable
 fun AddSpeedDialShortcutDialog(
     onDismiss: () -> Unit,
-    onAdd: (String, String) -> Unit
+    onAdd: (String, String) -> Unit,
+    initialUrl: String = "",
+    initialTitle: String = ""
 ) {
-    var title by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf(initialTitle) }
+    var url by remember { mutableStateOf(initialUrl) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -362,10 +423,12 @@ fun getSiteBrandStyle(url: String, title: String): SiteBrandStyle {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SpeedDialGridTile(
     item: ShortcutLauncherItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     val textPrimary = MaterialTheme.colorScheme.onSurface
     val brandStyle = remember(item.url, item.title) { getSiteBrandStyle(item.url, item.title) }
@@ -384,7 +447,10 @@ fun SpeedDialGridTile(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(4.dp)
     ) {
         Box(

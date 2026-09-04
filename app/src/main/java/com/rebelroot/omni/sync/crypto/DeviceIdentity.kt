@@ -15,6 +15,8 @@ data class TrustedDevice(
     val deviceId: String,
     val deviceName: String,
     val publicKeyBase64: String,
+    val lanHost: String? = null,
+    val lanPort: Int? = null,
     val pairedAt: Long = System.currentTimeMillis(),
     val isRevoked: Boolean = false,
     val revokedAt: Long? = null
@@ -119,6 +121,8 @@ class TrustManager(
                 deviceId = obj.getString("deviceId"),
                 deviceName = obj.getString("deviceName"),
                 publicKeyBase64 = obj.getString("publicKey"),
+                lanHost = if (obj.has("lanHost")) obj.getString("lanHost") else null,
+                lanPort = if (obj.has("lanPort")) obj.getInt("lanPort") else null,
                 pairedAt = obj.optLong("pairedAt", System.currentTimeMillis()),
                 isRevoked = obj.optBoolean("isRevoked", false),
                 revokedAt = if (obj.has("revokedAt")) obj.getLong("revokedAt") else null
@@ -135,6 +139,8 @@ class TrustManager(
                 put("deviceId", dev.deviceId)
                 put("deviceName", dev.deviceName)
                 put("publicKey", dev.publicKeyBase64)
+                dev.lanHost?.let { put("lanHost", it) }
+                dev.lanPort?.let { put("lanPort", it) }
                 put("pairedAt", dev.pairedAt)
                 put("isRevoked", dev.isRevoked)
                 dev.revokedAt?.let { put("revokedAt", it) }

@@ -118,17 +118,31 @@ class MozillaTabBridge {
                     val dev = RemoteDeviceTabs(
                         deviceId = bso.id,
                         deviceName = deviceName,
-                        lastModified = (bso.modified * 1000.0).toLong(),
+                        deviceType = "desktop",
+                        lastModified = (bso.modified * 1000).toLong(),
                         tabs = parsedTabs
                     )
                     list.add(dev)
-                    updateRemoteDeviceTabs(dev)
+                    remoteTabsByDevice[bso.id] = dev
                 }
-            } catch (e: Exception) {
-                // Ignore malformed device record
-            }
+            } catch (_: Exception) {}
         }
+
+        _remoteTabsFlow.value = remoteTabsByDevice.values.toList()
         return list
+    }
+
+    fun updateDirectRemoteTabs(deviceId: String, deviceName: String, tabs: List<TabInfo>) {
+        synchronized(remoteTabsByDevice) {
+            remoteTabsByDevice[deviceId] = RemoteDeviceTabs(
+                deviceId = deviceId,
+                deviceName = deviceName,
+                deviceType = "desktop",
+                lastModified = System.currentTimeMillis(),
+                tabs = tabs
+            )
+            _remoteTabsFlow.value = remoteTabsByDevice.values.toList()
+        }
     }
 
     /**

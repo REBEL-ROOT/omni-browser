@@ -72,6 +72,7 @@ fun ImportPreviewScreen(
     val warningColor = Color(0xFFFFA726)
 
     Scaffold(
+        modifier = Modifier.navigationBarsPadding(),
         topBar = {
             TopAppBar(
                 title = {
@@ -103,13 +104,13 @@ fun ImportPreviewScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp),
+                    .wrapContentHeight(),
                 color = cardColor,
                 border = BorderStroke(0.5.dp, cardBorderColor.copy(alpha = 0.3f))
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -183,7 +184,9 @@ fun ImportPreviewScreen(
                                 viewModel.clearImportPreview()
                                 onNavigateBack()
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(stringResource(id = R.string.import_cancel))
@@ -197,7 +200,9 @@ fun ImportPreviewScreen(
                                 )
                             },
                             enabled = preview != null && !preview.hasFatalIssues && !viewModel.isImporting,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             if (viewModel.isImporting) {

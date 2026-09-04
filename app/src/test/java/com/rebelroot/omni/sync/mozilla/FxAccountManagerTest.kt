@@ -20,12 +20,33 @@ class FxAccountManagerTest {
     }
 
     @Test
-    fun testIsRedirectUrl() {
+    fun testIsFirefoxPairingUrl() {
         val manager = FxAccountManager.getInstance()
 
-        assertTrue(manager.isRedirectUrl("https://accounts.firefox.com/oauth/success/a2270f727f45f648?code=123"))
-        assertTrue(manager.isRedirectUrl("omni://fxa-auth?code=123"))
-        assertFalse(manager.isRedirectUrl("https://accounts.firefox.com/authorization"))
-        assertFalse(manager.isRedirectUrl("https://google.com"))
+        assertTrue(manager.isFirefoxPairingUrl("https://firefox.com/pair?channel=abc&key=123"))
+        assertTrue(manager.isFirefoxPairingUrl("https://accounts.firefox.com/pair?channel=xyz"))
+        assertTrue(manager.isFirefoxPairingUrl("https://accounts.firefox.com/connect_another_device?channel=456"))
+        assertFalse(manager.isFirefoxPairingUrl("https://google.com"))
+        assertFalse(manager.isFirefoxPairingUrl("https://firefox.com/about"))
+    }
+
+    @Test
+    fun testPairWithDesktopQr() {
+        val manager = FxAccountManager.getInstance()
+        var successEmail: String? = null
+        var errorMsg: String? = null
+
+        val sampleQrUrl = "https://firefox.com/pair?channel=test_chan_123&key=test_key_456&email=desktop.user%40example.com"
+        manager.pairWithDesktopQr(
+            pairingUrl = sampleQrUrl,
+            onSuccess = { email -> successEmail = email },
+            onError = { err -> errorMsg = err }
+        )
+
+        assertNull(errorMsg)
+        assertEquals("desktop.user@example.com", successEmail)
+        val state = manager.accountState.value
+        assertTrue(state is FxaState.SignedIn)
+        assertEquals("desktop.user@example.com", (state as FxaState.SignedIn).email)
     }
 }

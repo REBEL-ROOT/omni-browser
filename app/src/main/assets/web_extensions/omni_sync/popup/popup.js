@@ -2106,7 +2106,7 @@ var require_browser = __commonJS({
   }
 });
 
-// packages/extension-chrome/src/popup/popup.ts
+// packages/extension-firefox/src/popup/popup.ts
 var import_qrcode = __toESM(require_browser(), 1);
 
 // packages/core/dist/src/crypto.js
@@ -2305,7 +2305,22 @@ var HistorySyncManager = class _HistorySyncManager {
   }
 };
 
-// packages/extension-chrome/src/popup/popup.ts
+// packages/extension-firefox/src/popup/popup.ts
+var browserApi = globalThis.browser || globalThis.chrome;
+function detectBrowserName() {
+  const ua = navigator.userAgent;
+  if (ua.includes("Firefox")) return "Firefox Desktop";
+  if (ua.includes("Edg")) return "Edge Desktop";
+  if (ua.includes("Safari") && !ua.includes("Chrome")) return "Safari Desktop";
+  return "Chrome Desktop";
+}
+function detectPrefix() {
+  const ua = navigator.userAgent;
+  if (ua.includes("Firefox")) return "dev_firefox_";
+  if (ua.includes("Edg")) return "dev_edge_";
+  if (ua.includes("Safari") && !ua.includes("Chrome")) return "dev_safari_";
+  return "dev_chrome_";
+}
 function base64ToBytes2(base64) {
   const binary = globalThis.atob(base64);
   const len = binary.length;
@@ -2314,6 +2329,101 @@ function base64ToBytes2(base64) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+async function storageGet(keys) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof browserApi?.storage?.local?.get === "function") {
+        const ret = browserApi.storage.local.get(keys, (res) => {
+          resolve(res || {});
+        });
+        if (ret && typeof ret.then === "function") {
+          ret.then((res) => resolve(res || {})).catch(() => resolve({}));
+        }
+      } else {
+        resolve({});
+      }
+    } catch (_e) {
+      resolve({});
+    }
+  });
+}
+async function storageSet(items) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof browserApi?.storage?.local?.set === "function") {
+        const ret = browserApi.storage.local.set(items, () => {
+          resolve();
+        });
+        if (ret && typeof ret.then === "function") {
+          ret.then(() => resolve()).catch(() => resolve());
+        }
+      } else {
+        resolve();
+      }
+    } catch (_e) {
+      resolve();
+    }
+  });
+}
+async function countBrowserBookmarks() {
+  return new Promise((resolve) => {
+    try {
+      let countNodes2 = function(nodes) {
+        let count = 0;
+        for (const node of nodes) {
+          if (node.url) count++;
+          if (node.children) count += countNodes2(node.children);
+        }
+        return count;
+      };
+      var countNodes = countNodes2;
+      const bmkApi = browserApi?.bookmarks;
+      if (!bmkApi) return resolve(0);
+      const ret = bmkApi.getTree((tree) => {
+        resolve(tree ? countNodes2(tree) : 0);
+      });
+      if (ret && typeof ret.then === "function") {
+        ret.then((tree) => resolve(tree ? countNodes2(tree) : 0)).catch(() => resolve(0));
+      }
+    } catch (_e) {
+      resolve(0);
+    }
+  });
+}
+async function countOpenTabs() {
+  return new Promise((resolve) => {
+    try {
+      const tabsApi = browserApi?.tabs;
+      if (!tabsApi) return resolve(0);
+      const ret = tabsApi.query({}, (tabs) => {
+        resolve(tabs ? tabs.length : 0);
+      });
+      if (ret && typeof ret.then === "function") {
+        ret.then((tabs) => resolve(tabs ? tabs.length : 0)).catch(() => resolve(0));
+      }
+    } catch (_e) {
+      resolve(0);
+    }
+  });
+}
+async function sendRuntimeMessage(msg) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof browserApi?.runtime?.sendMessage === "function") {
+        const ret = browserApi.runtime.sendMessage(msg, (response) => {
+          resolve(response);
+        });
+        if (ret && typeof ret.then === "function") {
+          ret.then((res) => resolve(res)).catch(() => resolve(null));
+        }
+      } else {
+        resolve(null);
+      }
+    } catch (_e) {
+      resolve(null);
+    }
+  });
 }
 document.addEventListener("DOMContentLoaded", async () => {
   const statusBadge = document.getElementById("sync-status");
@@ -2358,7 +2468,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const sasCodeEl = document.getElementById("sas-code");
   let currentInvitationJson = "";
   let myDeviceId = "";
-  let myDeviceName = "Chrome Desktop";
+  let myDeviceName = detectBrowserName();
   let myPubKeyBase64 = "";
   function showToast(message, type = "error") {
     toastEl.textContent = message;
@@ -2372,43 +2482,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     const item = document.createElement("div");
     item.className = "journal-entry";
     item.innerHTML = `<span class="journal-time">${timeStr}</span><span class="journal-msg">${text}</span>`;
-    activityLogEl.prepend(item);
-  }
-  async function countChromeBookmarks() {
-    return new Promise((resolve) => {
-      chrome.bookmarks?.getTree((tree) => {
-        let count = 0;
-        function traverse(nodes) {
-          for (const node of nodes) {
-            if (node.url) count++;
-            if (node.children) traverse(node.children);
-          }
-        }
-        if (tree) traverse(tree);
-        resolve(count);
-      });
-    });
-  }
-  async function countOpenTabs() {
-    return new Promise((resolve) => {
-      chrome.tabs?.query({}, (tabs) => {
-        resolve(tabs ? tabs.length : 0);
-      });
-    });
+    activityLogEl?.prepend(item);
   }
   async function getOrCreatePersistentKey() {
-    const stored = await chrome.storage.local.get(["myPublicKeyBase64"]);
+    const stored = await storageGet(["myPublicKeyBase64"]);
     if (stored.myPublicKeyBase64) {
       return stored.myPublicKeyBase64;
     }
     const keyPair = await CryptoEngine.generateKeyPair();
     const pubKey = await CryptoEngine.exportPublicKeyBase64(keyPair.publicKey);
-    await chrome.storage.local.set({ myPublicKeyBase64: pubKey });
+    await storageSet({ myPublicKeyBase64: pubKey });
     return pubKey;
   }
   async function loadState() {
     try {
-      const stored = await chrome.storage.local.get([
+      const stored = await storageGet([
         "deviceId",
         "deviceName",
         "trustedDevices",
@@ -2419,17 +2507,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         "syncPasswords",
         "syncSettings"
       ]);
+      const defaultDevName = detectBrowserName();
+      const prefix = detectPrefix();
       if (stored.deviceId) {
         myDeviceId = stored.deviceId;
       } else {
-        myDeviceId = `dev_chrome_${crypto.randomUUID().slice(0, 8)}`;
-        await chrome.storage.local.set({ deviceId: myDeviceId });
+        myDeviceId = `${prefix}${crypto.randomUUID().slice(0, 8)}`;
+        await storageSet({ deviceId: myDeviceId });
       }
-      if (stored.deviceName) {
+      if (stored.deviceName && (!stored.deviceName.includes("Chrome") || defaultDevName === "Chrome Desktop")) {
         myDeviceName = stored.deviceName;
       } else {
-        myDeviceName = "Chrome Desktop";
-        await chrome.storage.local.set({ deviceName: myDeviceName });
+        myDeviceName = defaultDevName;
+        await storageSet({ deviceName: myDeviceName });
       }
       myPubKeyBase64 = await getOrCreatePersistentKey();
       devNameEl.textContent = myDeviceName;
@@ -2439,7 +2529,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (toggleHistory) toggleHistory.checked = stored.syncHistory === true;
       if (togglePasswords) togglePasswords.checked = stored.syncPasswords !== false;
       if (toggleSettings) toggleSettings.checked = stored.syncSettings !== false;
-      const bmkCount = await countChromeBookmarks();
+      const bmkCount = await countBrowserBookmarks();
       const tabCount = await countOpenTabs();
       const devices = stored.trustedDevices || [];
       statBookmarksEl.textContent = bmkCount.toString();
@@ -2454,146 +2544,159 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (devices.length === 0) {
         statusText.textContent = "Unpaired";
         statusBadge.className = "status-pill status-unpaired";
-        emptyStateEl.classList.remove("hidden");
-        deviceListEl.innerHTML = "";
-        deviceListEl.appendChild(emptyStateEl);
+        emptyStateEl?.classList.remove("hidden");
+        if (deviceListEl) {
+          deviceListEl.innerHTML = "";
+          if (emptyStateEl) deviceListEl.appendChild(emptyStateEl);
+        }
       } else {
         statusText.textContent = "Connected";
         statusBadge.className = "status-pill status-connected";
-        emptyStateEl.classList.add("hidden");
-        deviceListEl.innerHTML = "";
-        devices.forEach((dev) => {
-          const item = document.createElement("div");
-          item.className = "mesh-peer-item";
-          item.innerHTML = `
-            <div>
-              <div class="peer-name">${dev.deviceName || "Omni Android Phone"}</div>
-              <div class="peer-sub">ID: ${(dev.deviceId || "").slice(0, 12)}... &bull; Verified</div>
-            </div>
-            <button class="btn-peer-revoke" data-id="${dev.deviceId}">
-              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          `;
-          item.querySelector(".btn-peer-revoke")?.addEventListener("click", async () => {
-            const current = await chrome.storage.local.get(["trustedDevices"]);
-            const updated = (current.trustedDevices || []).filter((d) => d.deviceId !== dev.deviceId);
-            await chrome.storage.local.set({ trustedDevices: updated });
-            showToast(`Revoked ${dev.deviceName}`, "success");
-            addActivity(`Revoked trusted peer: ${dev.deviceName}`);
-            loadState();
+        emptyStateEl?.classList.add("hidden");
+        if (deviceListEl) {
+          deviceListEl.innerHTML = "";
+          devices.forEach((dev) => {
+            const item = document.createElement("div");
+            item.className = "mesh-peer-item";
+            item.innerHTML = `
+              <div>
+                <div class="peer-name">${dev.deviceName || "Omni Android Phone"}</div>
+                <div class="peer-sub">ID: ${(dev.deviceId || "").slice(0, 12)}... &bull; Verified</div>
+              </div>
+              <button class="btn-peer-revoke" data-id="${dev.deviceId}">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            `;
+            item.querySelector(".btn-peer-revoke")?.addEventListener("click", async () => {
+              const current = await storageGet(["trustedDevices"]);
+              const updated = (current.trustedDevices || []).filter((d) => d.deviceId !== dev.deviceId);
+              await storageSet({ trustedDevices: updated });
+              showToast(`Revoked ${dev.deviceName}`, "success");
+              addActivity(`Revoked trusted peer: ${dev.deviceName}`);
+              loadState();
+            });
+            deviceListEl.appendChild(item);
           });
-          deviceListEl.appendChild(item);
-        });
+        }
       }
     } catch (e) {
       console.error("Error loading state:", e);
     }
   }
   await loadState();
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local") {
-      loadState();
-    }
-  });
+  if (browserApi?.storage?.onChanged) {
+    browserApi.storage.onChanged.addListener((_changes, area) => {
+      if (area === "local") {
+        loadState();
+      }
+    });
+  }
   async function persistToggles() {
-    await chrome.storage.local.set({
-      syncBookmarks: toggleBookmarks.checked,
-      syncTabs: toggleTabs.checked,
-      syncHistory: toggleHistory.checked,
-      syncPasswords: togglePasswords.checked,
-      syncSettings: toggleSettings.checked
+    await storageSet({
+      syncBookmarks: toggleBookmarks?.checked,
+      syncTabs: toggleTabs?.checked,
+      syncHistory: toggleHistory?.checked,
+      syncPasswords: togglePasswords?.checked,
+      syncSettings: toggleSettings?.checked
     });
     showToast("Sync dataset preferences saved", "success");
     addActivity("Updated active dataset preferences");
   }
-  toggleBookmarks.addEventListener("change", persistToggles);
-  toggleTabs.addEventListener("change", persistToggles);
-  toggleHistory.addEventListener("change", persistToggles);
-  togglePasswords.addEventListener("change", persistToggles);
-  toggleSettings.addEventListener("change", persistToggles);
-  importPhoneBtn.addEventListener("click", async () => {
-    const stored = await chrome.storage.local.get(["trustedDevices"]);
+  toggleBookmarks?.addEventListener("change", persistToggles);
+  toggleTabs?.addEventListener("change", persistToggles);
+  toggleHistory?.addEventListener("change", persistToggles);
+  togglePasswords?.addEventListener("change", persistToggles);
+  toggleSettings?.addEventListener("change", persistToggles);
+  importPhoneBtn?.addEventListener("click", async () => {
+    const stored = await storageGet(["trustedDevices"]);
     const peers = stored.trustedDevices || [];
     if (peers.length === 0) {
       showToast("Pair with phone first to import data", "error");
       return;
     }
-    chrome.bookmarks?.search({ title: "Omni Phone Bookmarks" }, (results) => {
-      const parentFolderId = "1";
-      if (!results || results.length === 0) {
-        chrome.bookmarks?.create({
-          parentId: parentFolderId,
-          title: "Omni Phone Bookmarks"
-        }, () => {
-          showToast("Imported bookmarks into 'Omni Phone Bookmarks'", "success");
-          addActivity("Non-destructive import: Created phone sync folder");
+    const bmkApi = browserApi?.bookmarks;
+    if (bmkApi?.search) {
+      bmkApi.search({ title: "Omni Phone Bookmarks" }, (results) => {
+        const parentFolderId = "1";
+        if (!results || results.length === 0) {
+          bmkApi.create({
+            parentId: parentFolderId,
+            title: "Omni Phone Bookmarks"
+          }, () => {
+            showToast("Imported bookmarks into 'Omni Phone Bookmarks'", "success");
+            addActivity("Non-destructive import: Created phone sync folder");
+            loadState();
+          });
+        } else {
+          showToast("Phone bookmarks synced in 'Omni Phone Bookmarks'", "success");
+          addActivity("Non-destructive import: Updated phone sync folder");
           loadState();
-        });
-      } else {
-        showToast("Phone bookmarks synced in 'Omni Phone Bookmarks'", "success");
-        addActivity("Non-destructive import: Updated phone sync folder");
-        loadState();
-      }
-    });
+        }
+      });
+    }
   });
-  exportPhoneBtn.addEventListener("click", async () => {
-    const stored = await chrome.storage.local.get(["trustedDevices"]);
+  exportPhoneBtn?.addEventListener("click", async () => {
+    const stored = await storageGet(["trustedDevices"]);
     const peers = stored.trustedDevices || [];
     if (peers.length === 0) {
       showToast("Pair with phone first to export data", "error");
       return;
     }
-    const bmkCount = await countChromeBookmarks();
+    const bmkCount = await countBrowserBookmarks();
     const tabCount = await countOpenTabs();
     showToast(`Exported ${bmkCount} bookmarks & ${tabCount} tabs to phone`, "success");
     addActivity(`Exported ${bmkCount} bookmarks & ${tabCount} tabs to phone`);
   });
-  exportHtmlBtn.addEventListener("click", () => {
-    chrome.bookmarks?.getTree((tree) => {
-      let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<!-- Automatically generated by Omni Sync. -->\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n';
-      function traverse(nodes, indent) {
-        const prefix = "  ".repeat(indent);
-        for (const n of nodes) {
-          if (n.url) {
-            html += prefix + '<DT><A HREF="' + n.url + '">' + (n.title || n.url) + "</A>\n";
-          } else if (n.children) {
-            if (n.id !== "0") {
-              html += prefix + "<DT><H3>" + (n.title || "Folder") + "</H3>\n" + prefix + "<DL><p>\n";
-            }
-            traverse(n.children, indent + 1);
-            if (n.id !== "0") {
-              html += prefix + "</DL><p>\n";
+  exportHtmlBtn?.addEventListener("click", () => {
+    const bmkApi = browserApi?.bookmarks;
+    if (bmkApi?.getTree) {
+      bmkApi.getTree((tree) => {
+        let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<!-- Automatically generated by Omni Sync. -->\n<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n<TITLE>Bookmarks</TITLE>\n<H1>Bookmarks</H1>\n<DL><p>\n';
+        function traverse(nodes, indent) {
+          const prefix = "  ".repeat(indent);
+          for (const n of nodes) {
+            if (n.url) {
+              html += prefix + '<DT><A HREF="' + n.url + '">' + (n.title || n.url) + "</A>\n";
+            } else if (n.children) {
+              if (n.id !== "0" && n.id !== "root________") {
+                html += prefix + "<DT><H3>" + (n.title || "Folder") + "</H3>\n" + prefix + "<DL><p>\n";
+              }
+              traverse(n.children, indent + 1);
+              if (n.id !== "0" && n.id !== "root________") {
+                html += prefix + "</DL><p>\n";
+              }
             }
           }
         }
-      }
-      if (tree) traverse(tree, 1);
-      html += "</DL><p>\n";
-      const blob = new Blob([html], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "omni-bookmarks-backup-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + ".html";
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("Downloaded Netscape Bookmark HTML file", "success");
-      addActivity("Exported HTML backup file");
-    });
+        if (tree) traverse(tree, 1);
+        html += "</DL><p>\n";
+        const blob = new Blob([html], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "omni-bookmarks-backup-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + ".html";
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Downloaded Netscape Bookmark HTML file", "success");
+        addActivity("Exported HTML backup file");
+      });
+    }
   });
-  importHtmlBtn.addEventListener("click", () => {
-    fileHtmlInput.click();
+  importHtmlBtn?.addEventListener("click", () => {
+    fileHtmlInput?.click();
   });
-  fileHtmlInput.addEventListener("change", (e) => {
+  fileHtmlInput?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const bmkApi = browserApi?.bookmarks;
     const reader = new FileReader();
     reader.onload = (evt) => {
       const content = evt.target?.result;
-      if (content) {
-        chrome.bookmarks?.create({
+      if (content && bmkApi?.create) {
+        bmkApi.create({
           parentId: "1",
           title: "Imported (" + (/* @__PURE__ */ new Date()).toLocaleDateString() + ")"
         }, (importFolder) => {
@@ -2603,7 +2706,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           let imported = 0;
           links.forEach((a) => {
             if (a.href && importFolder?.id) {
-              chrome.bookmarks?.create({
+              bmkApi.create({
                 parentId: importFolder.id,
                 title: a.textContent || a.href,
                 url: a.href
@@ -2620,10 +2723,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     reader.readAsText(file);
     fileHtmlInput.value = "";
   });
-  syncBtn.addEventListener("click", async () => {
+  syncBtn?.addEventListener("click", async () => {
     statusText.textContent = "Syncing...";
     statusBadge.className = "status-pill status-syncing";
-    const stored = await chrome.storage.local.get(["trustedDevices"]);
+    const stored = await storageGet(["trustedDevices"]);
     const peers = stored.trustedDevices || [];
     if (peers.length === 0) {
       statusText.textContent = "Unpaired";
@@ -2631,37 +2734,49 @@ document.addEventListener("DOMContentLoaded", async () => {
       showToast("No devices linked yet. Click 'Pair Device' to begin.", "error");
       return;
     }
-    const bmkCount = toggleBookmarks.checked ? await countChromeBookmarks() : 0;
-    const tabCount = toggleTabs.checked ? await countOpenTabs() : 0;
-    const now = Date.now();
-    await chrome.storage.local.set({ lastSyncTime: now });
-    setTimeout(() => {
-      statusText.textContent = "Connected";
-      statusBadge.className = "status-pill status-connected";
-      showToast("Synced " + bmkCount + " bookmarks & " + tabCount + " tabs with " + peers.length + " peer(s)", "success");
-      addActivity("Synced " + bmkCount + " bookmarks & " + tabCount + " tabs with mesh");
-      loadState();
-    }, 450);
+    try {
+      const response = await sendRuntimeMessage({ type: "SYNC_NOW" });
+      const bmkCount = await countBrowserBookmarks();
+      const tabCount = await countOpenTabs();
+      if (response && response.success) {
+        statusText.textContent = "Connected";
+        statusBadge.className = "status-pill status-connected";
+        const msg = `Synced ${bmkCount} bookmarks & ${tabCount} tabs (${response.appliedRemoteCount || 0} remote changes)`;
+        showToast(msg, "success");
+        addActivity(msg);
+      } else {
+        statusText.textContent = "Connected";
+        statusBadge.className = "status-pill status-connected";
+        const errMsg = response?.errors?.[0] || response?.error || "Synced with local cache";
+        showToast(errMsg, response?.success ? "success" : "error");
+        addActivity(errMsg);
+      }
+    } catch (err) {
+      showToast(err.message || "Sync failed", "error");
+    } finally {
+      await loadState();
+    }
   });
-  pairBtn.addEventListener("click", () => {
+  pairBtn?.addEventListener("click", () => {
     modal.classList.remove("hidden");
-    showTab("qr");
+    showTab("enter");
   });
-  closeModalBtn.addEventListener("click", () => {
+  closeModalBtn?.addEventListener("click", () => {
     modal.classList.add("hidden");
   });
   function showTab(tab) {
-    tabQr.classList.toggle("active", tab === "qr");
-    tabEnter.classList.toggle("active", tab === "enter");
-    viewQr.classList.toggle("hidden", tab !== "qr");
-    viewEnter.classList.toggle("hidden", tab !== "enter");
-    viewSas.classList.toggle("hidden", tab !== "sas");
+    tabQr?.classList.toggle("active", tab === "qr");
+    tabEnter?.classList.toggle("active", tab === "enter");
+    viewQr?.classList.toggle("hidden", tab !== "qr");
+    viewEnter?.classList.toggle("hidden", tab !== "enter");
+    viewSas?.classList.toggle("hidden", tab !== "sas");
     if (tab === "qr") {
       generateAndRenderQr();
     }
   }
   async function generateAndRenderQr() {
     try {
+      if (outputQrCode) outputQrCode.value = "Generating keypair...";
       myPubKeyBase64 = await getOrCreatePersistentKey();
       const nonce = CryptoEngine.generateRandomNonce(16);
       let binaryNonce = "";
@@ -2669,7 +2784,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         binaryNonce += String.fromCharCode(nonce[i]);
       }
       const nonceBase64 = globalThis.btoa(binaryNonce);
-      await chrome.storage.local.set({ activePairingNonce: nonceBase64 });
+      await storageSet({ activePairingNonce: nonceBase64 });
       const invitation = {
         version: 1,
         deviceId: myDeviceId,
@@ -2693,19 +2808,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     } catch (err) {
       console.error("QR Code generation error:", err);
+      if (outputQrCode) outputQrCode.value = "Failed: " + (err.message || err);
+      showToast("QR generation error: " + (err.message || err), "error");
     }
   }
-  tabQr.addEventListener("click", () => showTab("qr"));
-  tabEnter.addEventListener("click", () => showTab("enter"));
-  copyQrTextBtn.addEventListener("click", () => {
+  tabQr?.addEventListener("click", () => showTab("qr"));
+  tabEnter?.addEventListener("click", () => showTab("enter"));
+  copyQrTextBtn?.addEventListener("click", () => {
     if (currentInvitationJson) {
       navigator.clipboard.writeText(currentInvitationJson);
       showToast("Copied invitation key to clipboard", "success");
     }
   });
-  btnQrNextSas?.addEventListener("click", () => {
-    showTab("enter");
-    showToast("Paste the phone confirmation code to finalize mesh link", "success");
+  const btnQrDone = document.getElementById("btn-qr-done");
+  btnQrDone?.addEventListener("click", async () => {
+    modal?.classList.add("hidden");
+    showToast("Tap 'Codes Match' on your phone to complete pairing", "success");
+    addActivity("Pairing QR generated & shared with phone");
+    await loadState();
   });
   pasteClipBtn?.addEventListener("click", async () => {
     try {
@@ -2715,18 +2835,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         showToast("Pasted from clipboard", "success");
       }
     } catch {
-      inputInv.focus();
+      inputInv?.focus();
     }
   });
-  submitPairBtn.addEventListener("click", async () => {
-    const raw = inputInv.value.trim();
+  submitPairBtn?.addEventListener("click", async () => {
+    const raw = inputInv?.value.trim();
     if (!raw) {
-      showToast("Please enter an invitation token", "error");
+      showToast("Please enter an invitation token or IP:Port", "error");
       return;
     }
     submitPairBtn.textContent = "Verifying...";
     try {
-      const inv = JSON.parse(raw);
+      let inv;
+      if (raw.startsWith("{") && raw.endsWith("}")) {
+        inv = JSON.parse(raw);
+      } else {
+        const hostParts = raw.split(":");
+        const ip = hostParts[0].trim();
+        const port2 = hostParts[1] ? parseInt(hostParts[1].trim(), 10) : 8765;
+        const resp = await fetch(`http://${ip}:${port2}/`);
+        if (!resp.ok) throw new Error("Could not connect to Phone at " + ip + ":" + port2);
+        const phoneStatus = await resp.json();
+        inv = {
+          version: 1,
+          deviceId: phoneStatus.deviceId,
+          deviceName: phoneStatus.deviceName,
+          publicKeyBase64: phoneStatus.publicKeyBase64,
+          lanHost: ip,
+          lanPort: port2,
+          nonce: ""
+        };
+      }
       const remotePubKey = inv.publicKey || inv.publicKeyBase64;
       const remoteDeviceId = inv.deviceId;
       if (!remoteDeviceId || !remotePubKey) {
@@ -2737,7 +2876,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       myPubKeyBase64 = await getOrCreatePersistentKey();
       const myPubKeyBytes = base64ToBytes2(myPubKeyBase64);
       const remotePubKeyBytes = base64ToBytes2(remotePubKey);
-      const storedNonce = await chrome.storage.local.get(["activePairingNonce"]);
+      const storedNonce = await storageGet(["activePairingNonce"]);
       const nonceStr = inv.nonce || storedNonce.activePairingNonce;
       const nonceBytes = nonceStr ? base64ToBytes2(nonceStr) : CryptoEngine.generateRandomNonce(16);
       const sas = await CryptoEngine.deriveSasCode(
@@ -2749,13 +2888,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         deviceId: remoteDeviceId,
         deviceName: inv.deviceName || "Omni Android Phone",
         publicKeyBase64: remotePubKey,
+        lanHost: inv.lanHost || null,
+        lanPort: inv.lanPort || 8765,
         pairedAt: Date.now()
       };
-      const stored = await chrome.storage.local.get(["trustedDevices"]);
+      const stored = await storageGet(["trustedDevices"]);
       const existing = (stored.trustedDevices || []).filter((d) => d.deviceId !== remoteDeviceId);
       existing.push(newDevice);
-      await chrome.storage.local.set({ trustedDevices: existing });
-      sasCodeEl.textContent = `${sas.slice(0, 3)} ${sas.slice(3)}`;
+      await storageSet({ trustedDevices: existing });
+      const candidateHosts = [];
+      if (inv.lanHost) candidateHosts.push(inv.lanHost);
+      if (inv.lanHost === "10.0.2.15" || inv.lanHost && inv.lanHost.startsWith("10.0.2.")) {
+        candidateHosts.unshift("127.0.0.1", "localhost");
+      } else if (!candidateHosts.includes("127.0.0.1")) {
+        candidateHosts.push("127.0.0.1");
+      }
+      const port = inv.lanPort || 8765;
+      const pairRegistrationPayload = {
+        action: "PAIR_REGISTER",
+        deviceId: myDeviceId,
+        deviceName: myDeviceName,
+        publicKey: myPubKeyBase64,
+        nonce: nonceStr || "",
+        timestamp: Date.now()
+      };
+      for (const host of candidateHosts) {
+        try {
+          const resp = await fetch(`http://${host}:${port}/api/sync/pair`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pairRegistrationPayload)
+          });
+          if (resp.ok) {
+            console.log(`[Omni Sync] Phone successfully acknowledged mutual pairing at ${host}:${port}`);
+            newDevice.lanHost = host;
+            break;
+          }
+        } catch (_netErr) {
+        }
+      }
+      if (sasCodeEl) sasCodeEl.textContent = `${sas.slice(0, 3)} ${sas.slice(3)}`;
       showTab("sas");
       addActivity("Handshake verified with " + newDevice.deviceName);
       showToast("Peer identity verified. Confirm security digits.", "success");
@@ -2766,10 +2938,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       submitPairBtn.textContent = "Verify & Link";
     }
   });
-  confirmSasBtn.addEventListener("click", async () => {
-    modal.classList.add("hidden");
-    showToast("Mesh link established successfully", "success");
+  confirmSasBtn?.addEventListener("click", async () => {
+    modal?.classList.add("hidden");
+    showToast("Mesh link established! Syncing...", "success");
     addActivity("Mesh pairing confirmed & active");
     await loadState();
+    try {
+      await sendRuntimeMessage({ type: "SYNC_NOW" });
+      await loadState();
+    } catch (_e) {
+    }
   });
 });

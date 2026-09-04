@@ -56,7 +56,7 @@ fun OmniSyncShowcaseScreen(
 ) {
     val context = LocalContext.current
     val coordinator = remember {
-        SyncCoordinator(
+        com.rebelroot.omni.SyncCoordinatorHolder.getOrCreate(
             baseDir = context.filesDir,
             collection = loadBookmarks(context)
         )
@@ -346,15 +346,30 @@ fun OmniSyncShowcaseScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
-                            Button(
-                                onClick = { showFxAuthDialog = true },
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Rounded.AccountCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.sync_sign_in_fxa), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Button(
+                                    onClick = { showCameraScanner = true },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Scan Desktop QR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+
+                                OutlinedButton(
+                                    onClick = { showFxAuthDialog = true },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Rounded.AccountCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Sign In", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                }
                             }
                         }
                     }
@@ -896,12 +911,29 @@ fun OmniSyncShowcaseScreen(
             QrCameraScanner(
                 onQrDetected = { scannedText ->
                     showCameraScanner = false
-                    val res = coordinator.processPairingInvitation(scannedText)
-                    if (res is PairingResult.Success) {
-                        showSasDialog = res.sasCode
-                        Toast.makeText(context, "QR Code scanned! Verifying security code...", Toast.LENGTH_SHORT).show()
-                    } else if (res is PairingResult.Failed) {
-                        Toast.makeText(context, "Pairing failed: " + res.reason, Toast.LENGTH_LONG).show()
+                    if (fxAccountManager.isFirefoxPairingUrl(scannedText)) {
+                        fxAccountManager.pairWithDesktopQr(
+                            pairingUrl = scannedText,
+                            onSuccess = { email ->
+                                Toast.makeText(context, "Paired with Desktop Firefox ($email)!", Toast.LENGTH_LONG).show()
+                                mozillaSyncManager.syncNow(
+                                    context = context,
+                                    collection = coordinator.collection,
+                                    tabs = viewModel.tabs.toList()
+                                )
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, "Firefox pairing failed: $err", Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    } else {
+                        val res = coordinator.processPairingInvitation(scannedText)
+                        if (res is PairingResult.Success) {
+                            showSasDialog = res.sasCode
+                            Toast.makeText(context, "QR Code scanned! Verifying security code...", Toast.LENGTH_SHORT).show()
+                        } else if (res is PairingResult.Failed) {
+                            Toast.makeText(context, "Pairing failed: " + res.reason, Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 onClose = { showCameraScanner = false }

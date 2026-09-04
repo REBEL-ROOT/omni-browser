@@ -1,20 +1,26 @@
-# Omni Sync Privacy Policy & Zero-Data Collection Disclosure
+# Omni Sync Privacy Policy & Data Handling Disclosure
 
-**Effective Date:** August 22, 2026  
+**Effective Date:** August 24, 2026  
 **Developer:** RebelRoot Ltd (Contact: rebelroot.ai@gmail.com)
 
-## 1. Zero Cloud Data Collection
-Omni Sync does not collect, store, track, sell, or transmit any personal data, browsing history, bookmarks, open tabs, or device identifiers to any central server or third party.
+## 1. Synchronization Architecture & Data Choices
 
-## 2. End-to-End Encryption (E2EE)
-All synchronization data transferred between paired devices (over Local Area Network Wi-Fi or peer-to-peer WebRTC) is encrypted end-to-end using standard, audited cryptographic primitives:
-- **Key Agreement:** NIST P-256 (`secp256r1`) Elliptic Curve Diffie-Hellman (ECDH).
-- **Payload Encryption:** Authenticated AES-256-GCM with unique, non-repeating Initialization Vectors (IV) and sequence numbers.
-- **Key Derivation:** HKDF-SHA256 with distinct salt and info context strings.
-- **Short Authentication String (SAS):** 6-digit numeric out-of-band visual verification.
+Omni Browser provides users with complete transparency and control over how their data is synchronized:
 
-## 3. Local Storage Only
-Encryption keys, trusted device public keys, and synchronization outbox/inbox journals are stored exclusively in the browser's local sandbox (`chrome.storage.local` or Android EncryptedSharedPreferences/Keystore).
+### A. Firefox Account Cloud Sync (Optional)
+When you choose to sign in with your Firefox Account:
+- Authentication tokens and sync data are communicated directly and securely with Mozilla's official TokenServer and Sync 1.5 endpoints.
+- RebelRoot does not operate intermediate servers, intercept tokens, or store your Firefox credentials.
+- Incognito/private tabs and internal browser URLs are never sent to Mozilla Sync servers.
 
-## 4. Open Source & Verifiable
+### B. Omni Sync Mesh (Upcoming / Testing Phase)
+When using direct peer-to-peer (P2P) mesh synchronization with the companion desktop extension:
+- **Zero Cloud Storage:** All data is transferred directly between your devices over local Wi-Fi.
+- **End-to-End Encryption (E2EE):** Authenticated `AES-256-GCM` with NIST `P-256` ECDH key agreement and 6-digit numeric SAS code verification.
+- No central database, tracking, or telemetry servers are involved.
+
+## 2. Local Storage & Security
+Encryption keys, trusted device pairings, and local sync journals are stored exclusively within the browser's sandboxed storage (`EncryptedSharedPreferences` / Android Keystore).
+
+## 3. Open Source & Verifiable
 The complete source code of Omni Sync is open source under the GNU General Public License v3.0 (GPL-3.0). Anyone can independently inspect, audit, and build the software from source.
