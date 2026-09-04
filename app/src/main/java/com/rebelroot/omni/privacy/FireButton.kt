@@ -37,18 +37,28 @@ class FireButton(
     /**
      * Incinerates ALL browsing data: cookies, caches, storage, history, permissions,
      * and site settings via [StorageController.ClearFlags.ALL].
+     *
+     * The GeckoView purge is fully awaited (blocking poll with timeout) before this
+     * function returns — callers may bring the process down right after (e.g.
+     * "Burn & Exit" calls finishAffinity), and killing the process mid-purge
+     * corrupts the Gecko profile, which surfaces as a blank error page on the
+     * next launch (issue #117).
      */
     suspend fun burn() = withContext(Dispatchers.IO) {
         Log.i(TAG, "🔥 Initiating 1-tap data incineration...")
-        
+
         try {
             // 1. Clear ALL GeckoView storage — cookies, cache, DOM storage, history,
             //    auth sessions, permissions, and site settings in one pass.
-            withContext(Dispatchers.Main) {
-                runtime.storageController.clearData(StorageController.ClearFlags.ALL).accept(
-                    { Log.d(TAG, "GeckoView storageController clear completed successfully.") },
-                    { err -> Log.e(TAG, "GeckoView storageController clear error", err) }
-                )
+            //    Await completion: poll() blocks this IO thread while the purge runs
+            //    on Gecko's own thread, so there is no deadlock risk.
+            val purgeResult: org.mozilla.geckoview.GeckoResult<Void> =
+                runtime.storageController.clearData(StorageController.ClearFlags.ALL)
+            try {
+                purgeResult.poll(30_000L)
+                Log.d(TAG, "GeckoView storageController clear completed successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "GeckoView storageController clear error", e)
             }
 
             // 2. Wipes standard HTTP WebView caches and temp cacheDir files recursively
@@ -57,7 +67,7 @@ class FireButton(
                 cacheDir.deleteRecursively()
                 cacheDir.mkdirs()
             }
-            
+
             // 3. Wipes temporary download folders
             val tempDownloadsDir = File(context.filesDir, "temp_downloads")
             if (tempDownloadsDir.exists()) {

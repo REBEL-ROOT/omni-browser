@@ -2677,6 +2677,15 @@ class BrowserViewModel : ViewModel() {
         // 4. Persist the now-empty tab list so it survives a relaunch
         saveTabs()
 
+        // 4b. Wipe durable per-tab SessionState blobs — otherwise the pre-burn
+        // session file survives on disk and can resurrect burned pages if a
+        // crash ever leaves the old tab list behind (privacy + issue #117).
+        try {
+            sessionStatePersistence?.clearAll()
+        } catch (e: Exception) {
+            Log.e(TAG, "burnAllData: error clearing session state persistence", e)
+        }
+
         // 5. Open one clean normal tab — browser must always have at least one tab
         createNewTab(ctx, "about:blank")
 
