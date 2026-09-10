@@ -217,7 +217,7 @@ fun SettingsScreen(
                 RoleManagerHelper.isDefaultBrowser(context)
             } else {
                 val defaultBrowserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com"))
-                val resolveInfo = context.packageManager.resolveActivity(defaultBrowserIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                val resolveInfo = context.packageManager.resolveActivity(defaultBrowserIntent, android.content.pm.PackageManager.MATCH_ALL)
                 resolveInfo?.activityInfo?.packageName == context.packageName
             }
         )
@@ -230,7 +230,7 @@ fun SettingsScreen(
             RoleManagerHelper.isDefaultBrowser(context)
         } else {
             val defaultBrowserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com"))
-            val resolveInfo = context.packageManager.resolveActivity(defaultBrowserIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            val resolveInfo = context.packageManager.resolveActivity(defaultBrowserIntent, android.content.pm.PackageManager.MATCH_ALL)
             resolveInfo?.activityInfo?.packageName == context.packageName
         }
     }

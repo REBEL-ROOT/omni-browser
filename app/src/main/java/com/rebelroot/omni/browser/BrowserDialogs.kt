@@ -2387,7 +2387,23 @@ fun ExternalAppRedirectDialog(
             }
             val pm = context.packageManager
             val handlers = try {
-                pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                // Use MATCH_ALL instead of MATCH_DEFAULT_ONLY so that
+                // installed apps which are not set as default handlers are
+                // still discovered (fixes intent:// links on Android 11+).
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    pm.queryIntentActivities(
+                        intent,
+                        android.content.pm.PackageManager.ResolveInfoFlags.of(
+                            android.content.pm.PackageManager.MATCH_ALL.toLong()
+                        )
+                    ).filter { it.activityInfo.packageName != context.packageName }
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.queryIntentActivities(
+                        intent,
+                        android.content.pm.PackageManager.MATCH_ALL
+                    ).filter { it.activityInfo.packageName != context.packageName }
+                }
             } catch (_: Exception) { emptyList() }
 
             when {

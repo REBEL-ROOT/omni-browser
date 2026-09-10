@@ -1480,14 +1480,14 @@ internal fun getNativeAppHandlers(context: Context, uri: String): List<android.c
                 pm.queryIntentActivities(
                     targetIntent,
                     android.content.pm.PackageManager.ResolveInfoFlags.of(
-                        android.content.pm.PackageManager.MATCH_DEFAULT_ONLY.toLong()
+                        android.content.pm.PackageManager.MATCH_ALL.toLong()
                     )
                 )
             } else {
                 @Suppress("DEPRECATION")
                 pm.queryIntentActivities(
                     targetIntent,
-                    android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                    android.content.pm.PackageManager.MATCH_ALL
                 )
             }
         }
