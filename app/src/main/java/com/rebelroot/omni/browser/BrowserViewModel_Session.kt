@@ -1213,7 +1213,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             val currentTabHost = try { Uri.parse(tab.url).host?.lowercase() ?: "" } catch (_: Exception) { "" }
             val isSameSiteNavigation = currentTabHost.isNotEmpty() && (host == currentTabHost || host.endsWith(".$currentTabHost") || currentTabHost.endsWith(".$host"))
 
-            if (request.hasUserGesture &&
+            if ((request.hasUserGesture || request.isDirectNavigation) &&
                 request.target == GeckoSession.NavigationDelegate.TARGET_WINDOW_CURRENT &&
                 isOpenExternalAppAllowed &&
                 pendingExternalAppRequest == null &&
@@ -1235,6 +1235,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                     val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
                                         addCategory(Intent.CATEGORY_BROWSABLE)
                                         setPackage(handlerPkg)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     }
                                     context.startActivity(appIntent)
                                 } catch (e: Exception) {
@@ -1654,14 +1655,22 @@ internal fun getNativeAppHandlers(context: Context, uri: String): List<android.c
                 .map { it.activityInfo.packageName }
                 .toSet()
 
-            resolveInfos.filter { info ->
+            val filtered = resolveInfos.filter { info ->
                 val pkg = info.activityInfo.packageName
                 pkg != context.packageName && !browserPackages.contains(pkg)
             }
+            if (filtered.isNotEmpty()) {
+                Log.d("getNativeAppHandlers", "Found native handlers for $uri: ${filtered.map { it.activityInfo.packageName }}")
+            }
+            filtered
         } else {
-            resolveInfos.filter { info ->
+            val filtered = resolveInfos.filter { info ->
                 info.activityInfo.packageName != context.packageName
             }
+            if (filtered.isNotEmpty()) {
+                Log.d("getNativeAppHandlers", "Found native handlers for $uri: ${filtered.map { it.activityInfo.packageName }}")
+            }
+            filtered
         }
     } catch (e: Exception) {
         emptyList()

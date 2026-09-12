@@ -1234,6 +1234,39 @@ fun omnimenuDropdownCard(
             )
 
             if (!isHome) {
+                val nativeHandler = remember(viewModel.currentUrl) {
+                    if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
+                        getNativeAppHandlers(context, viewModel.currentUrl).firstOrNull()
+                    } else null
+                }
+                if (nativeHandler != null) {
+                    val appName = remember(nativeHandler) {
+                        try {
+                            context.packageManager.getApplicationLabel(nativeHandler.activityInfo.applicationInfo).toString()
+                        } catch (_: Exception) { "App" }
+                    }
+                    MinimalMenuItem(
+                        text = "Open in $appName",
+                        icon = Icons.Rounded.OpenInNew,
+                        iconTint = accentColor,
+                        textColor = accentColor,
+                        isCompact = isCompact,
+                        onClick = {
+                            onDismissRequest()
+                            try {
+                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.currentUrl)).apply {
+                                    addCategory(Intent.CATEGORY_BROWSABLE)
+                                    setPackage(nativeHandler.activityInfo.packageName)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(appIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Could not open $appName", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+
                 MinimalMenuItem(
                     text = stringResource(R.string.menu_desktop_site_item),
                     icon = Icons.Rounded.Computer,

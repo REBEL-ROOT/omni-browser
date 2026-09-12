@@ -2342,8 +2342,8 @@ fun ExternalAppRedirectDialog(
     val textSecondary = if (isDark) Color(0xFF8E9AA8) else MaterialTheme.colorScheme.onSurfaceVariant
     val accentColor = MaterialTheme.colorScheme.primary
 
-    // Derive a display name: app package label > scheme > truncated URI
-    val appLabel = remember(request.packageName) {
+    // Derive a display name: app package label > resolved intent label > scheme > truncated URI
+    val appLabel = remember(request.packageName, request.uri) {
         if (!request.packageName.isNullOrBlank()) {
             try {
                 context.packageManager
@@ -2352,7 +2352,16 @@ fun ExternalAppRedirectDialog(
                     ).toString()
             } catch (_: Exception) { request.packageName }
         } else {
-            try { Uri.parse(request.uri).scheme ?: request.uri } catch (_: Exception) { request.uri }
+            val resolvedApp = try {
+                val lowerUri = request.uri.lowercase()
+                val testIntent = if (lowerUri.startsWith("intent:")) {
+                    Intent.parseUri(request.uri, Intent.URI_INTENT_SCHEME)
+                } else {
+                    Intent(Intent.ACTION_VIEW, Uri.parse(request.uri))
+                }
+                context.packageManager.resolveActivity(testIntent, 0)?.loadLabel(context.packageManager)?.toString()
+            } catch (_: Exception) { null }
+            resolvedApp ?: try { Uri.parse(request.uri).scheme ?: request.uri } catch (_: Exception) { request.uri }
         }
     }
 
@@ -2388,6 +2397,7 @@ fun ExternalAppRedirectDialog(
                     if (!request.packageName.isNullOrBlank()) {
                         setPackage(request.packageName)
                     }
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             } else {
                 Intent(Intent.ACTION_VIEW, Uri.parse(request.uri)).apply {
@@ -2396,21 +2406,41 @@ fun ExternalAppRedirectDialog(
                     if (!request.packageName.isNullOrBlank()) {
                         setPackage(request.packageName)
                     }
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             }
             val pm = context.packageManager
             val handlers = try {
-                pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    pm.queryIntentActivities(
+                        intent,
+                        android.content.pm.PackageManager.ResolveInfoFlags.of(
+                            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY.toLong()
+                        )
+                    ).filter { it.activityInfo.packageName != context.packageName }
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.queryIntentActivities(
+                        intent,
+                        android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                    ).filter { it.activityInfo.packageName != context.packageName }
+                }
             } catch (_: Exception) { emptyList() }
 
             when {
                 handlers.size == 1 || !intent.getPackage().isNullOrBlank() ->
                     context.startActivity(intent)
                 handlers.size > 1 -> {
-                    val chooser = Intent.createChooser(intent, "Open with")
+                    val chooser = Intent.createChooser(intent, "Open with").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                     context.startActivity(chooser)
                 }
-                else -> Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
+                else -> {
+                    // Try launching directly via system resolver in case package visibility hid the handler.
+                    // If truly no handler is installed, ActivityNotFoundException is caught below.
+                    context.startActivity(intent)
+                }
             }
         } catch (e: android.content.ActivityNotFoundException) {
             // Try fallback URL if present

@@ -98,6 +98,30 @@
         <package android:name="hu.tagsoft.ttorrent.pro" />
         <package android:name="com.torrent.torrdroid" />
 
+        <!-- Native apps for deep-link / app-link delegation on Android 11+ -->
+        <package android:name="com.google.android.youtube" />              <!-- YouTube -->
+        <package android:name="com.google.android.apps.youtube.music" />   <!-- YouTube Music -->
+        <package android:name="com.twitter.android" />                     <!-- Twitter / X -->
+        <package android:name="com.twitter.android.lite" />                <!-- Twitter Lite -->
+        <package android:name="com.reddit.frontpage" />                    <!-- Reddit -->
+        <package android:name="com.instagram.android" />                   <!-- Instagram -->
+        <package android:name="com.facebook.katana" />                     <!-- Facebook -->
+        <package android:name="com.facebook.lite" />                       <!-- Facebook Lite -->
+        <package android:name="com.spotify.music" />                       <!-- Spotify -->
+        <package android:name="com.spotify.lite" />                        <!-- Spotify Lite -->
+        <package android:name="com.google.android.apps.maps" />            <!-- Google Maps -->
+        <package android:name="org.telegram.messenger" />                  <!-- Telegram -->
+        <package android:name="org.telegram.messenger.web" />              <!-- Telegram Web -->
+        <package android:name="org.thunderdog.challegram" />               <!-- Telegram X -->
+        <package android:name="com.discord" />                             <!-- Discord -->
+        <package android:name="com.netflix.mediaclient" />                 <!-- Netflix -->
+        <package android:name="tv.twitch.android.app" />                   <!-- Twitch -->
+        <package android:name="com.pinterest" />                           <!-- Pinterest -->
+        <package android:name="com.linkedin.android" />                    <!-- LinkedIn -->
+        <package android:name="com.zhiliaoapp.musically" />                <!-- TikTok -->
+        <package android:name="com.ss.android.ugc.trill" />                <!-- TikTok -->
+
+
         <!-- For intent:// scheme links (payment gateways like Razorpay, PayU) -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
