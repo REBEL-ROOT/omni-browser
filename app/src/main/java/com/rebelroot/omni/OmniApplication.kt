@@ -69,31 +69,35 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
 
                 // If request failed or returned non-2xx, probe candidate alternate URLs using isolated call on baseClient
                 if (response == null || !response.isSuccessful) {
-                    val failCode = response?.code ?: -1
-                    android.util.Log.d("ImageFallback", "Primary FAILED ($failCode): $originalUrl")
-                    val alternateUrls = com.rebelroot.omni.browser.ImageGrabberUtils.getCandidateAlternateUrls(originalUrl)
-                    android.util.Log.d("ImageFallback", "Candidates (${alternateUrls.size}): $alternateUrls")
-                    for (altUrl in alternateUrls) {
-                        try {
-                            val altReferer = com.rebelroot.omni.browser.ImageGrabberUtils.resolveReferer(altUrl)
-                            val altReqBuilder = requestWithHeaders.newBuilder().url(altUrl)
-                            if (altReferer.isNotEmpty()) {
-                                altReqBuilder.header("Referer", altReferer)
+                    if (!exhaustedAlternateUrls.contains(originalUrl)) {
+                        val failCode = response?.code ?: -1
+                        android.util.Log.d("ImageFallback", "Primary FAILED ($failCode): $originalUrl")
+                        val alternateUrls = com.rebelroot.omni.browser.ImageGrabberUtils.getCandidateAlternateUrls(originalUrl)
+                        android.util.Log.d("ImageFallback", "Candidates (${alternateUrls.size}): $alternateUrls")
+                        for (altUrl in alternateUrls) {
+                            try {
+                                val altReferer = com.rebelroot.omni.browser.ImageGrabberUtils.resolveReferer(altUrl)
+                                val altReqBuilder = requestWithHeaders.newBuilder().url(altUrl)
+                                if (altReferer.isNotEmpty()) {
+                                    altReqBuilder.header("Referer", altReferer)
+                                }
+                                val altRequest = altReqBuilder.build()
+                                val altResponse = baseClient.newCall(altRequest).execute()
+                                android.util.Log.d("ImageFallback", "Candidate $altUrl -> ${altResponse.code}")
+                                if (altResponse.isSuccessful) {
+                                    response?.close()
+                                    android.util.Log.d("ImageFallback", "SUCCESS with: $altUrl")
+                                    return@addInterceptor altResponse
+                                }
+                                altResponse.close()
+                            } catch (e: Exception) {
+                                android.util.Log.d("ImageFallback", "Candidate exception: $altUrl -> ${e.message}")
                             }
-                            val altRequest = altReqBuilder.build()
-                            val altResponse = baseClient.newCall(altRequest).execute()
-                            android.util.Log.d("ImageFallback", "Candidate $altUrl -> ${altResponse.code}")
-                            if (altResponse.isSuccessful) {
-                                response?.close()
-                                android.util.Log.d("ImageFallback", "SUCCESS with: $altUrl")
-                                return@addInterceptor altResponse
-                            }
-                            altResponse.close()
-                        } catch (e: Exception) {
-                            android.util.Log.d("ImageFallback", "Candidate exception: $altUrl -> ${e.message}")
                         }
+                        android.util.Log.d("ImageFallback", "All candidates exhausted for: $originalUrl")
+                        if (exhaustedAlternateUrls.size > 500) exhaustedAlternateUrls.clear()
+                        exhaustedAlternateUrls.add(originalUrl)
                     }
-                    android.util.Log.d("ImageFallback", "All candidates exhausted for: $originalUrl")
                 }
 
                 response ?: chain.proceed(requestWithHeaders)
@@ -219,6 +223,11 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
     companion object {
         @Volatile var appContext: OmniApplication? = null
             private set
+
+        // Negative cache for exhausted candidate URLs to prevent repeated redundant network floods
+        val exhaustedAlternateUrls: MutableSet<String> = java.util.Collections.synchronizedSet(
+            java.util.LinkedHashSet<String>()
+        )
 
         val DARK_THEME_ENABLED_KEY = booleanPreferencesKey("dark_theme_enabled")
         val AMOLED_MODE_KEY = booleanPreferencesKey("amoled_mode")

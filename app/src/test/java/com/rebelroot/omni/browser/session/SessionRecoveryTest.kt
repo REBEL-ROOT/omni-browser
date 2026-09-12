@@ -225,4 +225,14 @@ class SessionRecoveryTest {
         persistence.removeDurableState("never-existed")
         persistence.shutdown()
     }
+
+    @Test
+    fun persistence_removeDurableState_removesPersistedState() {
+        val dir = tempDir()
+        val persistence = SessionStatePersistence(dir)
+        persistence.removeDurableState("tab-about-blank-test")
+        val states = persistence.readAllDurableStates()
+        assertFalse(states.containsKey("tab-about-blank-test"))
+        persistence.shutdown()
+    }
 }

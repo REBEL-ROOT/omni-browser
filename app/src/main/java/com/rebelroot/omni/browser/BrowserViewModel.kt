@@ -114,7 +114,7 @@ class BrowserViewModel : ViewModel() {
         internal const val TAG = "BrowserViewModel"
 
         /** Default maximum number of background tabs with live GeckoSessions. */
-        internal const val DEFAULT_MAX_LIVE_TABS = 24
+        internal const val DEFAULT_MAX_LIVE_TABS = 12
 
         /**
          * Maximum number of background tabs that may be soft-suspended (session open
@@ -122,7 +122,7 @@ class BrowserViewModel : ViewModel() {
          * hard-suspended (session closed). Keeping sessions open preserves JS/DOM state
          * for dynamic sites (YouTube, Instagram, etc.) so switching never shows a blank page.
          */
-        internal const val MAX_SOFT_SUSPENDED_TABS = 8
+        internal const val MAX_SOFT_SUSPENDED_TABS = 2
 
         internal const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
         internal const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
@@ -295,7 +295,7 @@ class BrowserViewModel : ViewModel() {
 
     // Engine Session & Runtime
     var geckoSession by mutableStateOf(GeckoSession())
-        private set
+        internal set
     var isIncognitoMode by mutableStateOf(false)
         private set
 
@@ -326,6 +326,31 @@ class BrowserViewModel : ViewModel() {
         private set
     var activeIncognitoTabId by mutableStateOf<String?>(null)
         private set
+
+    /**
+     * Synchronizes [geckoSession] with the active tab's session, or a specific provided session.
+     */
+    fun syncActiveSession(session: GeckoSession? = null) {
+        val target = session ?: activeTab?.session
+        if (target != null && geckoSession != target) {
+            geckoSession = target
+        }
+    }
+
+    /**
+     * Returns the [GeckoSession] for the active tab, synchronizing [geckoSession] if needed.
+     * Falls back to the class-level [geckoSession] if no active tab session exists.
+     */
+    fun getActiveSession(): GeckoSession {
+        val currentTabSession = activeTab?.session
+        if (currentTabSession != null) {
+            if (geckoSession != currentTabSession) {
+                geckoSession = currentTabSession
+            }
+            return currentTabSession
+        }
+        return geckoSession
+    }
 
     // Tab Groups
     val tabGroups = mutableStateListOf<TabGroup>()
@@ -421,6 +446,7 @@ class BrowserViewModel : ViewModel() {
         try {
             val states = mutableMapOf<String, Pair<org.mozilla.geckoview.GeckoSession.SessionState, com.rebelroot.omni.browser.session.OmniSessionState.TabMetadata>>()
             tabs.forEach { tab ->
+                if (tab.url == "about:blank" || tab.url.isEmpty()) return@forEach
                 val state = tab.savedSessionState ?: return@forEach
                 states[tab.id] = state to com.rebelroot.omni.browser.session.OmniSessionState.TabMetadata(
                     title = tab.title,
@@ -443,6 +469,7 @@ class BrowserViewModel : ViewModel() {
      * Called from onSessionStateChange and tab-switch boundaries.
      */
     fun requestSessionStatePersist(tab: TabState) {
+        if (tab.url == "about:blank" || tab.url.isEmpty()) return
         val persistence = sessionStatePersistence ?: return
         val state = tab.savedSessionState ?: return
         persistence.requestPersist(
@@ -598,9 +625,16 @@ class BrowserViewModel : ViewModel() {
         /** True for plain https(s) app links (issue #113): dismissing the prompt
          *  must load the original web URL in the browser instead of leaving a
          *  blank page (the navigation was denied to allow the app handoff). */
-        val webUrlFallback: Boolean = false
+        val webUrlFallback: Boolean = false,
+        /** True when the original navigation requested a new window/tab
+         *  (TARGET_WINDOW_NEW). "Stay on page" should open a new tab
+         *  instead of loading in the current one. */
+        val isNewWindow: Boolean = false
     )
     var pendingExternalAppRequest by mutableStateOf<PendingExternalAppRequest?>(null)
+    /** Set synchronously before returning DENY in onLoadRequest (#113).
+     *  Consumed in onLoadError to suppress the spurious error page. */
+    var lastDeniedExternalAppUrl: String? = null
     var activeVideoCookies by mutableStateOf<String?>(null)
     val customVpnConfig: String? = null
     var proxyProvider by mutableStateOf("direct")
@@ -884,7 +918,8 @@ class BrowserViewModel : ViewModel() {
     data class PendingGenericDownload(
         val url: String,
         val filename: String,
-        val contentType: String?
+        val contentType: String?,
+        val sizeBytes: Long? = null
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
     var pendingTorrentUrl by mutableStateOf<String?>(null)
@@ -896,25 +931,74 @@ class BrowserViewModel : ViewModel() {
         val title: String,
         val mimeType: String,
         val pageUrl: String,
-        val cookies: String?
+        val cookies: String?,
+        val sizeBytes: Long? = null
     )
 
     fun handleGenericDownload(
         url: String,
         filename: String,
         contentType: String?,
-        context: Context
+        context: Context,
+        contentLength: Long? = null
     ) {
         val safeFilename = SecurityPolicy.sanitizeFilename(filename).ifBlank { "download.bin" }
         val pending = PendingGenericDownload(
             url = url,
             filename = safeFilename,
-            contentType = contentType
+            contentType = contentType,
+            sizeBytes = contentLength?.takeIf { it > 0 }
         )
 
-        Log.i(TAG, "🚀 [DownloadSheet] Opening generic download sheet: filename=$safeFilename, url=$url")
+        Log.i(TAG, "🚀 [DownloadSheet] Opening generic download sheet: filename=$safeFilename, url=$url, size=$contentLength")
         viewModelScope.launch(Dispatchers.Main) {
             pendingGenericDownload = pending
+        }
+
+        if (contentLength == null || contentLength <= 0) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val conn = (java.net.URL(url).openConnection() as? java.net.HttpURLConnection) ?: return@launch
+                    conn.requestMethod = "HEAD"
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    activeVideoCookies?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Cookie", it) }
+                    currentUrl.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Referer", it) }
+                    conn.setRequestProperty("User-Agent", CHROME_UA)
+                    conn.connect()
+                    val len = conn.contentLengthLong.takeIf { it > 0 }
+                    conn.disconnect()
+                    if (len != null) {
+                        withContext(Dispatchers.Main) {
+                            if (pendingGenericDownload?.url == url) {
+                                pendingGenericDownload = pendingGenericDownload?.copy(sizeBytes = len)
+                            }
+                        }
+                    } else {
+                        val getConn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                        getConn.requestMethod = "GET"
+                        getConn.setRequestProperty("Range", "bytes=0-1")
+                        getConn.connectTimeout = 5000
+                        getConn.readTimeout = 5000
+                        activeVideoCookies?.takeIf { it.isNotBlank() }?.let { getConn.setRequestProperty("Cookie", it) }
+                        currentUrl.takeIf { it.isNotBlank() }?.let { getConn.setRequestProperty("Referer", it) }
+                        getConn.setRequestProperty("User-Agent", CHROME_UA)
+                        getConn.connect()
+                        val contentRange = getConn.getHeaderField("Content-Range")
+                        val total = contentRange?.substringAfterLast("/", "")?.toLongOrNull()?.takeIf { it > 0 }
+                        getConn.disconnect()
+                        if (total != null) {
+                            withContext(Dispatchers.Main) {
+                                if (pendingGenericDownload?.url == url) {
+                                    pendingGenericDownload = pendingGenericDownload?.copy(sizeBytes = total)
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.d(TAG, "Size probe failed for $url: ${e.message}")
+                }
+            }
         }
     }
 
@@ -1375,12 +1459,13 @@ class BrowserViewModel : ViewModel() {
         Log.i(TAG, "Handling external download response: ${response.uri}")
         val filename = parseFilenameFromContentDisposition(disposition)
             ?: guessDownloadFilename(response.uri, contentType)
+        val contentLength = headers["Content-Length"]?.toLongOrNull() ?: headers["content-length"]?.toLongOrNull()
         viewModelScope.launch(Dispatchers.Main) {
             val activeTab = tabs.find { it.id == activeTabId }
             if (activeTab != null && activeTab.parentId != null && (activeTab.url.isBlank() || activeTab.url == "about:blank" || activeTab.url == response.uri)) {
                 closeTab(activeTab.id, context)
             }
-            handleGenericDownload(response.uri, filename, contentType, context)
+            handleGenericDownload(response.uri, filename, contentType, context, contentLength)
         }
     }
 
@@ -1440,7 +1525,10 @@ class BrowserViewModel : ViewModel() {
                 Log.e(TAG, "Error executing SELECT_ALL action", e)
                 // Fallback to JS Selection API
                 try {
-                    geckoSession.loadUri("javascript:window.getSelection()?.selectAllChildren(document.body);")
+                    val session = getActiveSession()
+                    if (session.isOpen) {
+                        session.loadUri("javascript:window.getSelection()?.selectAllChildren(document.body);")
+                    }
                 } catch (jsEx: Exception) {
                     Log.e(TAG, "Error fallback selectAll JS", jsEx)
                 }
@@ -1448,7 +1536,10 @@ class BrowserViewModel : ViewModel() {
         } else {
             // Fallback to evaluating JS selectall command
             try {
-                geckoSession.loadUri("javascript:window.getSelection()?.selectAllChildren(document.body);")
+                val session = getActiveSession()
+                if (session.isOpen) {
+                    session.loadUri("javascript:window.getSelection()?.selectAllChildren(document.body);")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error fallback selectAll JS", e)
             }
@@ -1642,6 +1733,7 @@ class BrowserViewModel : ViewModel() {
             pendingDatePrompt = null
             p?.geckoResult?.complete(p.prompt.dismiss())
         }
+        pendingExternalAppRequest = null
     }
 
     // ── Find In Page ─────────────────────────────────────────────────────────────
@@ -2365,52 +2457,103 @@ class BrowserViewModel : ViewModel() {
             }
         }
 
-        // If the target tab is suspended, restore its GeckoSession before switching.
-        // resumeTab uses the stored appContext; it's a no-op if already live.
-        val ctx = appContext
-        if (tabs[tabIndex].isSuspended && ctx != null) {
-            resumeTab(tabId, ctx)
-        }
-
         val tab = tabs[tabIndex]
-        tabs[tabIndex] = tab.copy(lastActiveTime = System.currentTimeMillis())
+
+        // Set activeTabId, currentUrl, and geckoSession right away before resuming
+        // so that any callbacks fired during resume know this tab is already the active tab.
         val oldSession = geckoSession
         activeTabId = tabId
-        geckoSession = tab.session
         currentUrl = tab.url
-        checkAutofillForUrl(tab.url)
+        geckoSession = tab.session
         isIncognitoMode = tab.isIncognito
-        
+
         if (tab.isIncognito) {
             activeIncognitoTabId = tabId
         } else {
             activeNormalTabId = tabId
         }
+
+        // If the target tab is suspended, restore its GeckoSession before switching.
+        // resumeTab uses the stored appContext; it's a no-op if already live.
+        val ctx = appContext
+        if (tab.isSuspended && ctx != null) {
+            resumeTab(tabId, ctx)
+        }
+
+        val freshIdx = tabs.indexOfFirst { it.id == tabId }
+        var currentTab = if (freshIdx != -1) tabs[freshIdx] else tab
+
+        // If the tab's URI was loaded lazily and hasn't actually been requested yet, load it now!
+        // Lazy tabs (created during cold-start without opening a live GeckoSession) need:
+        //   1. Session opened on the runtime
+        //   2. SessionState restored from disk if available, else URL load
+        // This must occur BEFORE calling setTabActive so that the extension event dispatcher targets
+        // an active, live session window.
+        if (!currentTab.isUriLoaded || currentTab.isLazy) {
+            val runtime = getGeckoRuntime(appContext ?: return)
+            if (!currentTab.session.isOpen) {
+                currentTab.session.open(runtime)
+                recoveryCoordinator?.updateTabGeckoState(tabId, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logSessionOpened(tabId, currentTab.sessionGenerationId)
+            }
+            val restoredState = if (currentTab.isLazy) sessionStatePersistence?.readDurableState(tabId) else null
+            currentTab = currentTab.copy(isUriLoaded = true, isLazy = false)
+            if (freshIdx != -1) {
+                tabs[freshIdx] = currentTab
+            }
+            if (restoredState != null && currentTab.url != "about:blank" && currentTab.url.isNotEmpty()) {
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(tabId, "durable_state_lazy")
+                currentTab.session.restoreState(restoredState)
+            } else if (currentTab.url != "about:blank" && currentTab.url.isNotEmpty()) {
+                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(tabId, "url_load_lazy")
+                currentTab.session.loadUri(currentTab.url)
+            }
+        }
+
+        val isHomeTab = (currentTab.url == "about:blank" || currentTab.url.isEmpty())
+        currentTab = currentTab.copy(
+            lastActiveTime = System.currentTimeMillis(),
+            savedSessionState = if (isHomeTab) null else currentTab.savedSessionState,
+            canGoBack = if (isHomeTab) false else currentTab.canGoBack,
+            canGoForward = if (isHomeTab) false else currentTab.canGoForward
+        )
+        if (freshIdx != -1) {
+            tabs[freshIdx] = currentTab
+        }
+        geckoSession = currentTab.session
+        currentUrl = currentTab.url
+        canGoBack = if (isHomeTab) false else currentTab.canGoBack
+        canGoForward = if (isHomeTab) false else currentTab.canGoForward
+        if (isHomeTab) {
+            sessionStatePersistence?.removeDurableState(tabId)
+        }
+        checkAutofillForUrl(currentTab.url)
         
         // Notify Gecko runtime's web extension controller of the active tab change
         val controller = geckoRuntime?.webExtensionController
         if (controller != null) {
             val oldActiveTab = tabs.find { it.session == oldSession }
-            if (oldActiveTab != null && oldActiveTab.session != tab.session) {
+            if (oldActiveTab != null && oldActiveTab.session != currentTab.session && oldActiveTab.session.isOpen) {
                 try {
                     controller.setTabActive(oldActiveTab.session, false)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error deactivating old tab session", e)
                 }
             }
-            try {
-                controller.setTabActive(tab.session, true)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error activating new tab session", e)
+            if (currentTab.session.isOpen) {
+                try {
+                    controller.setTabActive(currentTab.session, true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error activating new tab session", e)
+                }
             }
         }
         
         applySiteStyleToActiveTab()
         
         // Restore the tab's own saved navigation state
-        canGoBack = tab.canGoBack
-        canGoForward = tab.canGoForward
-
+        canGoBack = if (isHomeTab) false else currentTab.canGoBack
+        canGoForward = if (isHomeTab) false else currentTab.canGoForward
 
         // Clear media list when switching tabs to ensure only active tab's media is tracked
         mediaInterceptor.clear()
@@ -2418,30 +2561,6 @@ class BrowserViewModel : ViewModel() {
         isVideoPlayingInPage = false
         // Dismiss Find-in-Page when switching tabs — GeckoView highlights are per-session
         if (showFindInPage) closeFindInPage()
-        
-        // If the tab's URI was loaded lazily and hasn't actually been requested yet, load it now!
-        // Lazy tabs (created during cold-start without opening a live GeckoSession) need:
-        //   1. Session opened on the runtime
-        //   2. SessionState restored from disk if available, else URL load
-        var workingTab = tab
-        if (!tab.isUriLoaded || tab.isLazy) {
-            val runtime = getGeckoRuntime(appContext ?: return)
-            if (!tab.session.isOpen) {
-                tab.session.open(runtime)
-                recoveryCoordinator?.updateTabGeckoState(tabId, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
-                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logSessionOpened(tabId, tab.sessionGenerationId)
-            }
-            val restoredState = if (tab.isLazy) sessionStatePersistence?.readDurableState(tabId) else null
-            workingTab = tab.copy(isUriLoaded = true, isLazy = false)
-            tabs[tabIndex] = workingTab
-            if (restoredState != null && tab.url != "about:blank" && tab.url.isNotEmpty()) {
-                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(tabId, "durable_state_lazy")
-                tab.session.restoreState(restoredState)
-            } else if (tab.url != "about:blank" && tab.url.isNotEmpty()) {
-                com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics.logTabRestoreDecision(tabId, "url_load_lazy")
-                tab.session.loadUri(tab.url)
-            }
-        }
         
         saveTabs()
 
@@ -2584,7 +2703,7 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
-    private fun loadUrlInTab(tab: TabState, url: String) {
+    internal fun loadUrlInTab(tab: TabState, url: String) {
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
 
@@ -2594,12 +2713,30 @@ class BrowserViewModel : ViewModel() {
         }
 
         if (formattedUrl.startsWith("about:") || formattedUrl.startsWith("omni:")) {
+            val isHome = (formattedUrl == "about:blank")
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
-                tabs[idx] = tabs[idx].copy(url = formattedUrl, title = if (formattedUrl == "about:blank") "New Tab" else formattedUrl, isUriLoaded = true)
+                tabs[idx] = tabs[idx].copy(
+                    url = formattedUrl,
+                    title = if (isHome) "New Tab" else formattedUrl,
+                    savedSessionState = if (isHome) null else tabs[idx].savedSessionState,
+                    canGoBack = if (isHome) false else tabs[idx].canGoBack,
+                    canGoForward = if (isHome) false else tabs[idx].canGoForward,
+                    isUriLoaded = true
+                )
+            }
+            if (isHome) {
+                sessionStatePersistence?.removeDurableState(tab.id)
             }
             if (tab.id == activeTabId) {
                 currentUrl = formattedUrl
+                if (isHome) {
+                    canGoBack = false
+                    canGoForward = false
+                }
+            }
+            if (isHome) {
+                runCatching { tab.session.stop() }
             }
             tab.session.loadUri(formattedUrl)
             return
@@ -2873,7 +3010,7 @@ class BrowserViewModel : ViewModel() {
                 // explosion and LMK kills when loading sites with multiple cross-origin iframes.
                 // Content process count scales with device RAM (Chrome/Firefox Mobile parity).
                 val processCount = computeProcessCount()
-                val webIsolatedCount = (processCount / 2).coerceAtLeast(1)
+                val webIsolatedCount = processCount
                 sb.append("  fission.autostart: false\n")
                 sb.append("  dom.ipc.processCount: $processCount\n")
                 sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
@@ -2976,6 +3113,10 @@ class BrowserViewModel : ViewModel() {
                     sb.append("  canvas.captureStream.enabled: false\n")
                     sb.append("  dom.webaudio.enabled: false\n")
                 }
+                // WebExtension reliability & performance preferences
+                sb.append("  dom.ipc.keepProcessesAlive.extension: 1\n")
+                sb.append("  extensions.webextensions.early_background_wakeup_on_request: true\n")
+                sb.append("  extensions.webextOptionalPermissionPrompts: true\n")
                 configFile.writeText(sb.toString())
                 // DIAGNOSTIC: dump the config file content at startup so we can
                 // verify the proxy prefs are actually present on disk (and not
@@ -2993,6 +3134,8 @@ class BrowserViewModel : ViewModel() {
                 .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
                 .locales(targetLocales) // Configures Accept-Language headers with English fallback
                 .contentBlocking(cbSettings)
+                .extensionsProcessEnabled(false)
+                .extensionsWebAPIEnabled(true)
                 .configFilePath(configFile.absolutePath)
 
             val settings = builder.build()
@@ -3015,6 +3158,8 @@ class BrowserViewModel : ViewModel() {
                         .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_SYSTEM)
                         .locales(targetLocales)
                         .contentBlocking(cbSettings)
+                        .extensionsProcessEnabled(false)
+                        .extensionsWebAPIEnabled(true)
                         .build()
                         
                     geckoRuntime = GeckoRuntime.create(appCtx, fallbackSettings)
@@ -3125,6 +3270,56 @@ class BrowserViewModel : ViewModel() {
                     val safeOrigins = (origins as? Array<*>)?.mapNotNull { it?.toString() } ?: emptyList()
                     Log.i(TAG, "Granting update permissions for extension: ${extension.safeId} (perms=$safePerms, origins=$safeOrigins)")
                     return org.mozilla.geckoview.GeckoResult.fromValue(org.mozilla.geckoview.AllowOrDeny.ALLOW)
+                }
+            })
+            geckoRuntime!!.webExtensionController.setAddonManagerDelegate(object : org.mozilla.geckoview.WebExtensionController.AddonManagerDelegate {
+                override fun onReady(extension: org.mozilla.geckoview.WebExtension) {
+                    val id = extension.safeId ?: return
+                    Log.i(TAG, "WebExtension onReady: $id")
+                    val ctx = appContext
+                    if (ctx != null) {
+                        attachSessionDelegates(extension, ctx)
+                    }
+                    val controller = geckoRuntime?.webExtensionController
+                    val currentActiveTab = tabs.find { it.id == activeTabId }
+                    if (controller != null && currentActiveTab != null && currentActiveTab.session.isOpen && !currentActiveTab.isSuspended) {
+                        try {
+                            controller.setTabActive(currentActiveTab.session, true)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error setting active tab on WebExtension onReady: $id", e)
+                        }
+                    }
+                }
+                override fun onEnabled(extension: org.mozilla.geckoview.WebExtension) {
+                    val id = extension.safeId ?: return
+                    Log.i(TAG, "WebExtension onEnabled: $id")
+                    val ctx = appContext
+                    if (ctx != null) {
+                        attachSessionDelegates(extension, ctx)
+                    }
+                    val controller = geckoRuntime?.webExtensionController
+                    val currentActiveTab = tabs.find { it.id == activeTabId }
+                    if (controller != null && currentActiveTab != null && currentActiveTab.session.isOpen && !currentActiveTab.isSuspended) {
+                        try {
+                            controller.setTabActive(currentActiveTab.session, true)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error setting active tab on WebExtension onEnabled: $id", e)
+                        }
+                    }
+                }
+                override fun onDisabled(extension: org.mozilla.geckoview.WebExtension) {
+                    Log.i(TAG, "WebExtension onDisabled: ${extension.safeId}")
+                }
+                override fun onInstalled(extension: org.mozilla.geckoview.WebExtension) {
+                    Log.i(TAG, "WebExtension onInstalled: ${extension.safeId}")
+                    syncUserExtensions()
+                }
+                override fun onUninstalled(extension: org.mozilla.geckoview.WebExtension) {
+                    Log.i(TAG, "WebExtension onUninstalled: ${extension.safeId}")
+                    syncUserExtensions()
+                }
+                override fun onInstallationFailed(extension: org.mozilla.geckoview.WebExtension?, error: org.mozilla.geckoview.WebExtension.InstallException) {
+                    Log.w(TAG, "WebExtension onInstallationFailed: ${extension?.safeId}", error)
                 }
             })
         }
@@ -3649,8 +3844,13 @@ class BrowserViewModel : ViewModel() {
                         } else {
                             (message as? Map<*, *>)?.get("cookies") as? String
                         }
+                        val sizeBytes = if (message is org.json.JSONObject) {
+                            if (message.has("sizeBytes") && !message.isNull("sizeBytes")) message.optLong("sizeBytes", -1L).takeIf { it > 0 } else null
+                        } else {
+                            ((message as? Map<*, *>)?.get("sizeBytes") as? Number)?.toLong()?.takeIf { it > 0 }
+                        }
                         if (url != null) {
-                            mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies)
+                            mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies, sizeBytes)
                         }
                     } else if (type == "PLAY_IN_NATIVE") {
                         val videoUrl = if (message is org.json.JSONObject) {
@@ -4285,8 +4485,8 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[SHOW_SCROLL_BUTTONS_KEY] = enabled }
             showScrollButtons = enabled
-            val session = geckoSession
-            if (session != null) {
+            val session = getActiveSession()
+            if (session.isOpen) {
                 if (enabled) {
                     session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
                 } else {
@@ -5165,10 +5365,18 @@ class BrowserViewModel : ViewModel() {
         val action = if (currentlyEnabled) {
             runtime.webExtensionController.disable(extension, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
         } else {
+            try {
+                runtime.webExtensionController.setAllowedInPrivateBrowsing(extension, true)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to allow in private browsing: ${extension.safeId}", e)
+            }
             runtime.webExtensionController.enable(extension, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
         }
         action.accept(
             {
+                if (!currentlyEnabled) {
+                    attachSessionDelegates(extension, context)
+                }
                 if (extId == FORCE_DARK_EXTENSION_ID) {
                     saveForceDarkWebsites(context, !currentlyEnabled)
                 }
@@ -5965,7 +6173,7 @@ class BrowserViewModel : ViewModel() {
             sb.append("prefs:\n")
             sb.append("  fission.autostart: false\n")
             val processCount = computeProcessCount()
-            val webIsolatedCount = (processCount / 2).coerceAtLeast(1)
+            val webIsolatedCount = processCount
             sb.append("  dom.ipc.processCount: $processCount\n")
             sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
             if (isForceHighRefreshRate) {
@@ -6080,6 +6288,10 @@ class BrowserViewModel : ViewModel() {
             sb.append("  app.shield.optoutstudies.enabled: false\n")
             // === Firefox Accounts — enable FxA identity services for sync ===
             sb.append("  identity.fxaccounts.enabled: true\n")
+            // === WebExtension reliability & performance preferences ===
+            sb.append("  dom.ipc.keepProcessesAlive.extension: 1\n")
+            sb.append("  extensions.webextensions.early_background_wakeup_on_request: true\n")
+            sb.append("  extensions.webextOptionalPermissionPrompts: true\n")
             val tmpFile = File(ctx.filesDir, "geckoview-config.tmp")
             tmpFile.writeText(sb.toString())
             if (tmpFile.exists() && tmpFile.length() > 0) {
@@ -6270,6 +6482,7 @@ class BrowserViewModel : ViewModel() {
 
     // --- Browser Navigation ---
     fun loadUrl(url: String) {
+        pendingExternalAppRequest = null
         searchSuggestions.clear()
         historySuggestions.clear()
         var formattedUrl = url.trim()
@@ -6285,6 +6498,10 @@ class BrowserViewModel : ViewModel() {
         }
 
         val lower = formattedUrl.lowercase()
+        if (lower == "about:blank" || lower == "about:home") {
+            navigateHomeDirectly()
+            return
+        }
         if (lower.startsWith("magnet:")) {
             pendingTorrentUrl = formattedUrl
             return
@@ -6312,7 +6529,16 @@ class BrowserViewModel : ViewModel() {
                 }
             }
             currentUrl = formattedUrl
-            geckoSession.loadUri(formattedUrl)
+            val targetSession = getActiveSession()
+            val ctx = appContext ?: MainActivity.getActiveActivity()?.applicationContext
+            if (ctx != null && !targetSession.isOpen) {
+                try { targetSession.open(getGeckoRuntime(ctx)) } catch (e: Exception) { Log.w(TAG, "Failed to open targetSession: ${e.message}") }
+            }
+            try {
+                targetSession.loadUri(formattedUrl)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to loadUri: ${e.message}", e)
+            }
             return
         }
 
@@ -6339,7 +6565,16 @@ class BrowserViewModel : ViewModel() {
                     currentUrl = formattedUrl
                 }
             }
-            geckoSession.loadUri(formattedUrl)
+            val targetSession = getActiveSession()
+            val ctx = appContext ?: MainActivity.getActiveActivity()?.applicationContext
+            if (ctx != null && !targetSession.isOpen) {
+                try { targetSession.open(getGeckoRuntime(ctx)) } catch (e: Exception) { Log.w(TAG, "Failed to open targetSession: ${e.message}") }
+            }
+            try {
+                targetSession.loadUri(formattedUrl)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to loadUri: ${e.message}", e)
+            }
             return
         }
         
@@ -6351,12 +6586,22 @@ class BrowserViewModel : ViewModel() {
             }
         }
         currentUrl = formattedUrl
-        geckoSession.loadUri(formattedUrl)
+        val targetSession = getActiveSession()
+        val ctx = appContext ?: MainActivity.getActiveActivity()?.applicationContext
+        if (ctx != null && !targetSession.isOpen) {
+            try { targetSession.open(getGeckoRuntime(ctx)) } catch (e: Exception) { Log.w(TAG, "Failed to open targetSession: ${e.message}") }
+        }
+        try {
+            targetSession.loadUri(formattedUrl)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to loadUri: ${e.message}", e)
+        }
     }
 
     fun goBack() {
         try {
-            if (canGoBack) geckoSession.goBack()
+            val session = getActiveSession()
+            if (canGoBack && session.isOpen) session.goBack()
         } catch (e: Exception) {
             Log.w(TAG, "goBack() failed: ${e.message}")
         }
@@ -6364,7 +6609,8 @@ class BrowserViewModel : ViewModel() {
 
     fun goForward() {
         try {
-            if (canGoForward) geckoSession.goForward()
+            val session = getActiveSession()
+            if (canGoForward && session.isOpen) session.goForward()
         } catch (e: Exception) {
             Log.w(TAG, "goForward() failed: ${e.message}")
         }
@@ -6372,7 +6618,14 @@ class BrowserViewModel : ViewModel() {
 
     fun reload() {
         try {
-            geckoSession.reload()
+            val session = getActiveSession()
+            val ctx = appContext ?: MainActivity.getActiveActivity()?.applicationContext
+            if (ctx != null && !session.isOpen) {
+                try { session.open(getGeckoRuntime(ctx)) } catch (_: Exception) {}
+            }
+            if (session.isOpen) {
+                session.reload()
+            }
         } catch (e: Exception) {
             Log.w(TAG, "reload() failed: ${e.message}")
         }
@@ -6387,16 +6640,31 @@ class BrowserViewModel : ViewModel() {
         val activeId = activeTabId ?: return
         val idx = tabs.indexOfFirst { it.id == activeId }
         if (idx != -1) {
-            tabs[idx] = tabs[idx].copy(url = "about:blank", title = "New Tab", isUriLoaded = true)
+            tabs[idx] = tabs[idx].copy(
+                url = "about:blank",
+                title = "New Tab",
+                savedSessionState = null,
+                canGoBack = false,
+                canGoForward = false,
+                isUriLoaded = true
+            )
             currentUrl = "about:blank"
             canGoBack = false
+            canGoForward = false
         }
+        sessionStatePersistence?.removeDurableState(activeId)
         searchSuggestions.clear()
         historySuggestions.clear()
         // Then actually load it in the session so back history is cleared
         viewModelScope.launch(Dispatchers.Main) {
-            try { geckoSession.loadUri("about:blank") } catch (e: Exception) {
-                Log.w(TAG, "navigateHomeDirectly geckoSession.loadUri failed: ${e.message}")
+            try {
+                val session = getActiveSession()
+                if (session.isOpen) {
+                    runCatching { session.stop() }
+                    session.loadUri("about:blank")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "navigateHomeDirectly loadUri failed: ${e.message}")
             }
         }
     }
@@ -6517,7 +6785,10 @@ class BrowserViewModel : ViewModel() {
                     "    if(bar){ bar.style.width = scrolled + '%'; }" +
                     "});" +
                     "})();"
-            geckoSession.loadUri(js)
+            val session = getActiveSession()
+            if (session.isOpen) {
+                session.loadUri(js)
+            }
             isReaderModeActive = true
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 applyReaderSettings()
@@ -6576,7 +6847,10 @@ class BrowserViewModel : ViewModel() {
                  "  var style = document.getElementById('omni-reader-styles');" +
                  "  if (style) { style.innerHTML = '$escapedCss'; }" +
                  "})();"
-        geckoSession.loadUri(js)
+        val session = getActiveSession()
+        if (session.isOpen) {
+            session.loadUri(js)
+        }
     }
 
     fun updateReaderFontFamily(family: String) {
@@ -6642,7 +6916,10 @@ class BrowserViewModel : ViewModel() {
                  "  var text = document.getElementById('omni-reader-container')?.innerText || document.body.innerText || '';" +
                  "  window.postMessage({ type: 'OMNI_CONSOLE_LOG', level: 'READER_TTS_CONTENT', message: text }, '*');" +
                  "})();"
-        geckoSession.loadUri(js)
+        val session = getActiveSession()
+        if (session.isOpen) {
+            session.loadUri(js)
+        }
     }
 
     fun toggleIncognitoMode(context: Context) {
@@ -6722,7 +6999,10 @@ class BrowserViewModel : ViewModel() {
             var observer = new MutationObserver(function(){ removeTranslateUI(); });
             observer.observe(document.documentElement, {childList:true, subtree:true});
         })();"""
-        geckoSession.loadUri(js)
+        val session = getActiveSession()
+        if (session.isOpen) {
+            session.loadUri(js)
+        }
     }
 
     fun installExtensionFromUrl(url: String, context: Context) {
@@ -6747,8 +7027,23 @@ class BrowserViewModel : ViewModel() {
                                 if (ext != null) {
                                     runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
                                     runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
+                                        .accept(
+                                            { enabledExt ->
+                                                Log.i(TAG, "Extension ${enabledExt?.id ?: ext.id} enabled successfully")
+                                                syncUserExtensions()
+                                                // Reload active tab so newly installed extension (e.g. ad blocker) takes immediate effect
+                                                if (currentUrl != "about:blank" && currentUrl.isNotEmpty()) {
+                                                    reload()
+                                                }
+                                            },
+                                            { enableErr ->
+                                                Log.e(TAG, "Failed enabling extension ${ext.id}", enableErr)
+                                                syncUserExtensions()
+                                            }
+                                        )
+                                } else {
+                                    syncUserExtensions()
                                 }
-                                syncUserExtensions()
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                                     Toast.makeText(context, "🧩 Extension installed: ${ext?.id}", Toast.LENGTH_LONG).show()
                                 }
@@ -6986,6 +7281,25 @@ class BrowserViewModel : ViewModel() {
                                     } catch (e: Exception) {
                                         Log.w(TAG, "Icon load failed for $id", e)
                                     }
+                                }
+                            }
+
+                            // Attach Session delegates so extensions receive tab actions, badges, and can close popups
+                            val ctx = appContext
+                            if (ctx != null) {
+                                filtered.forEach { ext ->
+                                    attachSessionDelegates(ext, ctx)
+                                }
+                            }
+
+                            // Notify Gecko runtime's WebExtensionController of the currently active tab
+                            val activeTab = tabs.find { it.id == activeTabId }
+                            if (activeTab != null && !activeTab.isSuspended && activeTab.session.isOpen) {
+                                try {
+                                    runtime.webExtensionController.setTabActive(activeTab.session, true)
+                                    Log.i(TAG, "Notified extensions of active tab session ${activeTab.id}")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error activating current tab session after extension sync", e)
                                 }
                             }
                         }
@@ -9736,9 +10050,10 @@ class BrowserViewModel : ViewModel() {
         am.getMemoryInfo(mi)
         val totalGb = mi.totalMem / (1024L * 1024L * 1024L)
         return when {
-            totalGb <= 2 -> 6
-            totalGb <= 4 -> 12
-            else -> DEFAULT_MAX_LIVE_TABS  // 24
+            totalGb <= 2 -> 2
+            totalGb <= 4 -> 4
+            totalGb <= 6 -> 8
+            else -> DEFAULT_MAX_LIVE_TABS  // 12
         }
     }
 
@@ -9749,21 +10064,23 @@ class BrowserViewModel : ViewModel() {
      *
      * | Device RAM | processCount |
      * |------------|--------------|
-     * | ≤ 2 GB     | 4            |
-     * | 3–4 GB     | 6            |
-     * | ≥ 6 GB     | 8            |
+     * | ≤ 2 GB     | 2            |
+     * | 3–4 GB     | 3            |
+     * | 5–6 GB     | 4            |
+     * | ≥ 8 GB     | 6            |
      */
     fun computeProcessCount(): Int {
-        val ctx = appContext ?: return 4
+        val ctx = appContext ?: return 2
         val am = ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            ?: return 4
+            ?: return 2
         val mi = android.app.ActivityManager.MemoryInfo()
         am.getMemoryInfo(mi)
         val totalGb = mi.totalMem / (1024L * 1024L * 1024L)
         return when {
-            totalGb <= 2 -> 4
-            totalGb <= 4 -> 6
-            else -> 8
+            totalGb <= 2 -> 2
+            totalGb <= 4 -> 3
+            totalGb <= 6 -> 4
+            else -> 6
         }
     }
 
@@ -9870,6 +10187,11 @@ class BrowserViewModel : ViewModel() {
                 // ── SOFT resume ── session is still alive, just wake it up
                 runCatching { tab.session.setActive(true) }
                 tabs[idx] = tab.copy(isSuspended = false)
+                if (tabId == activeTabId) {
+                    runCatching {
+                        getGeckoRuntime(context).webExtensionController.setTabActive(tab.session, true)
+                    }
+                }
                 Log.d(TAG, "Soft-resumed tab ${tab.id} (${tab.url}) — session was kept open")
                 return
             }
@@ -9899,12 +10221,27 @@ class BrowserViewModel : ViewModel() {
             )
             setupTabSessionListeners(resumedTab, context)
             tabs[idx] = resumedTab
+            if (tabId == activeTabId) {
+                geckoSession = newSession
+            }
             newSession.open(runtime)
+            if (tabId == activeTabId) {
+                try {
+                    runtime.webExtensionController.setTabActive(newSession, true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting resumed active tab in webExtensionController", e)
+                }
+            }
 
-            if (savedState != null) {
+            if (tab.url == "about:blank" || tab.url.isEmpty()) {
+                tabs[idx] = resumedTab.copy(savedSessionState = null, canGoBack = false, canGoForward = false)
+                sessionStatePersistence?.removeDurableState(tab.id)
+                newSession.loadUri("about:blank")
+                Log.d(TAG, "Hard-resumed tab ${tab.id} as clean about:blank")
+            } else if (savedState != null) {
                 newSession.restoreState(savedState)
                 Log.d(TAG, "Hard-resumed tab ${tab.id} (${tab.url}) with restored SessionState")
-            } else if (tab.url != "about:blank" && tab.url.isNotEmpty()) {
+            } else {
                 newSession.loadUri(tab.url)
                 Log.d(TAG, "Hard-resumed tab ${tab.id} (${tab.url}) by URL reload")
             }

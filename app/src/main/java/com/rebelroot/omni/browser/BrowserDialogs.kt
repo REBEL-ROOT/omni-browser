@@ -2361,11 +2361,16 @@ fun ExternalAppRedirectDialog(
     // Issue #113: for plain https(s) app links, staying in the browser must
     // actually load the tapped URL — the navigation was denied to allow the
     // app handoff, so without this the user would land on a blank page.
+    // For new-window navigations, open a new tab instead of loading in-place.
     val stayInBrowser = {
         if (!request.fallbackUrl.isNullOrBlank()) {
             viewModel.loadUrl(request.fallbackUrl)
         } else if (request.webUrlFallback) {
-            viewModel.loadUrl(request.uri)
+            if (request.isNewWindow) {
+                viewModel.createNewTab(context, request.uri)
+            } else {
+                viewModel.loadUrl(request.uri)
+            }
         }
         onDismiss()
         Unit
@@ -2379,10 +2384,18 @@ fun ExternalAppRedirectDialog(
                     addCategory(Intent.CATEGORY_BROWSABLE)
                     setComponent(null)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) setSelector(null)
+                    // Target the specific app if we already resolved it
+                    if (!request.packageName.isNullOrBlank()) {
+                        setPackage(request.packageName)
+                    }
                 }
             } else {
                 Intent(Intent.ACTION_VIEW, Uri.parse(request.uri)).apply {
                     addCategory(Intent.CATEGORY_BROWSABLE)
+                    // Target the specific app if we already resolved it
+                    if (!request.packageName.isNullOrBlank()) {
+                        setPackage(request.packageName)
+                    }
                 }
             }
             val pm = context.packageManager

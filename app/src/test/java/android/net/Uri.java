@@ -13,6 +13,7 @@ public abstract class Uri {
 
     public abstract String getScheme();
     public abstract String getHost();
+    public abstract String getQueryParameter(String key);
     public abstract Builder buildUpon();
 
     @Override
@@ -98,6 +99,40 @@ public abstract class Uri {
             } catch (Exception e) {
                 return null;
             }
+        }
+
+        @Override
+        public String getQueryParameter(String key) {
+            String str = toString();
+            if (str == null || key == null) return null;
+            try {
+                // Find the query portion: after '?' and before '#'
+                int qStart = str.indexOf('?');
+                if (qStart == -1) return null;
+                String query = str.substring(qStart + 1);
+                int hashIdx = query.indexOf('#');
+                if (hashIdx != -1) {
+                    query = query.substring(0, hashIdx);
+                }
+                for (String param : query.split("&")) {
+                    String[] kv = param.split("=", 2);
+                    if (kv.length >= 1) {
+                        try {
+                            String decodedKey = java.net.URLDecoder.decode(kv[0], "UTF-8");
+                            if (decodedKey.equals(key)) {
+                                return kv.length == 2 ? java.net.URLDecoder.decode(kv[1], "UTF-8") : "";
+                            }
+                        } catch (Exception ignored) {
+                            if (kv[0].equals(key)) {
+                                return kv.length == 2 ? kv[1] : "";
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // fall through
+            }
+            return null;
         }
 
         @Override

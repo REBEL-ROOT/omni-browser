@@ -13,7 +13,7 @@ package com.rebelroot.omni.browser
 import android.widget.Toast
 
 fun BrowserViewModel.toggleVisualBlockMode() {
-    val session = geckoSession ?: return
+    val session = getActiveSession()
     isVisualBlockModeActive = !isVisualBlockModeActive
     if (isVisualBlockModeActive) {
         // Calculate bottom offset so the JS toolbar always floats above the browser chrome.
@@ -26,12 +26,12 @@ fun BrowserViewModel.toggleVisualBlockMode() {
             else -> 32                             // Top: only system nav gesture zone
         }
         val script = visualBlockManager.getInspectorJsScript(bottomOffsetPx)
-        session.loadUri(script)
+        if (session.isOpen) session.loadUri(script)
         appContext?.let {
             Toast.makeText(it, "Block Area: Tap any element to select & hide", Toast.LENGTH_SHORT).show()
         }
     } else {
-        session.loadUri("javascript:(function(){ if (window.__omniVisualBlockCleanup) window.__omniVisualBlockCleanup(); })();")
+        if (session.isOpen) session.loadUri("javascript:(function(){ if (window.__omniVisualBlockCleanup) window.__omniVisualBlockCleanup(); })();")
     }
 }
 

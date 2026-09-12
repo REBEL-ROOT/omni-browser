@@ -246,6 +246,24 @@ class SessionRecoveryCoordinator(
     ): Pair<Boolean, String> = withContext(Dispatchers.Main) {
         val info = tabRecoveryInfo[tabId]!!
 
+        // 0. Clean home guard: if url is about:blank or empty, never revive old webpage state
+        if (url == "about:blank" || url.isEmpty()) {
+            SessionRecoveryDiagnostics.logRecoveryStep(tabId, "about_blank_clean")
+            withContext(Dispatchers.IO) {
+                persistence.removeDurableState(tabId)
+            }
+            val newGen = nextGenerationId()
+            val newSession = createReplacementSession(isIncognito, isDesktopMode, context)
+            createSession(newSession)
+            info.generationId = newGen
+            info.geckoState = GeckoState.OPENING
+            newSession.open(runtime)
+            newSession.loadUri("about:blank")
+            info.geckoState = GeckoState.READY
+            SessionRecoveryDiagnostics.logRecoverySuccess(tabId, "about_blank_clean")
+            return@withContext Pair(true, "about_blank_clean")
+        }
+
         // 1. Try in-memory SessionState (same process, session was hard-suspended)
         if (inMemoryState != null) {
             SessionRecoveryDiagnostics.logRecoveryStep(tabId, "in_memory_state")

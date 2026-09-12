@@ -41,6 +41,36 @@ class AdBlockManager(private val context: Context) {
         private const val KEY_TOTAL_BLOCKED = "total_blocked"
         private const val KEY_PROVIDERS_JSON = "providers_json"
 
+        private val DOMAIN_REGEX = Regex("^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$")
+        private val IPV4_REGEX = Regex("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$")
+
+        private val IMMUNE_ROOT_DOMAINS = setOf(
+            "google.com", "bing.com", "duckduckgo.com", "yahoo.com", "baidu.com", "yandex.com", "yandex.ru",
+            "ecosia.org", "startpage.com", "brave.com", "kagi.com", "qwant.com",
+            "wikipedia.org", "wikimedia.org", "archive.org",
+            "youtube.com", "youtu.be", "spotify.com", "amazon.com", "apple.com", "icloud.com",
+            "microsoft.com", "live.com", "office.com", "outlook.com", "github.com", "gitlab.com",
+            "reddit.com", "twitter.com", "x.com", "facebook.com", "instagram.com", "threads.net", "whatsapp.com",
+            "linkedin.com", "netflix.com", "twitch.tv", "pinterest.com", "cloudflare.com", "mozilla.org", "android.com"
+        )
+
+        private val SEARCH_SHOPPING_REGIONAL_REGEX = Regex("^(?:www\\.)?(google|amazon|yahoo|yandex)\\.[a-z]{2,3}(?:\\.[a-z]{2})?$")
+
+        fun isImmuneDomain(host: String?): Boolean {
+            if (host.isNullOrBlank()) return false
+            val clean = host.lowercase().trim().removePrefix("www.")
+            if (IMMUNE_ROOT_DOMAINS.contains(clean)) return true
+            if (SEARCH_SHOPPING_REGIONAL_REGEX.matches(clean)) return true
+            return false
+        }
+
+        fun isValidDomainCandidate(candidate: String): Boolean {
+            if (candidate.length in 4..253 && (DOMAIN_REGEX.matches(candidate) || (IPV4_REGEX.matches(candidate) && candidate != "0.0.0.0" && candidate != "127.0.0.1"))) {
+                return true
+            }
+            return false
+        }
+
         val PRESET_PROVIDERS = listOf(
             AdBlockProvider(
                 id = "easylist_base",
@@ -265,36 +295,84 @@ class AdBlockManager(private val context: Context) {
         }
     }
 
-    private fun parseFilterRules(text: String): List<String> {
+    internal fun parseFilterRules(text: String): List<String> {
         val domains = mutableListOf<String>()
         val lines = text.lineSequence()
         for (rawLine in lines) {
             val line = rawLine.trim()
-            if (line.isBlank() || line.startsWith("!") || line.startsWith("#") || line.startsWith("[")) continue
+            // Skip empty lines, comments, metadata, whitelists, and element hiding rules
+            if (line.isBlank() ||
+                line.startsWith("!") ||
+                line.startsWith("#") ||
+                line.startsWith("[") ||
+                line.startsWith("@@") ||
+                line.startsWith("$") ||
+                line.contains("##") ||
+                line.contains("#?#") ||
+                line.contains("#@#") ||
+                line.contains("#$#") ||
+                line.contains("\$badfilter")
+            ) {
+                continue
+            }
 
+            // Hosts file format: 127.0.0.1 domain or 0.0.0.0 domain
             if (line.startsWith("127.0.0.1") || line.startsWith("0.0.0.0")) {
                 val parts = line.split("\\s+".toRegex())
                 if (parts.size >= 2) {
-                    val host = parts[1].trim().lowercase()
-                    if (host != "localhost" && host.contains(".")) {
-                        domains.add(host)
+                    val candidate = parts[1].trim().lowercase().removePrefix("www.")
+                    if (candidate != "localhost" &&
+                        candidate != "broadcasthost" &&
+                        candidate != "local" &&
+                        isValidDomainCandidate(candidate) &&
+                        !isImmuneDomain(candidate)
+                    ) {
+                        domains.add(candidate)
                     }
                 }
                 continue
             }
 
+            // Adblock Plus domain blocking format: ||domain.com^ or ||domain.com^$options
             if (line.startsWith("||")) {
-                val domain = line.removePrefix("||")
-                    .takeWhile { it != '^' && it != '/' && it != ':' && it != '$' }
-                    .lowercase()
-                if (domain.contains(".")) {
-                    domains.add(domain)
+                val after = line.removePrefix("||")
+                val caret = after.indexOf('^')
+                if (caret != -1) {
+                    val rest = after.substring(caret + 1)
+                    // In a full domain block, after '^' must be end-of-string or '$options'
+                    // Path characters (like ||google.com^*/ads) indicate a URL path filter, not whole domain block
+                    if (rest.isEmpty() || rest.startsWith("$")) {
+                        // Exclude modifier options that don't represent whole-domain network drops
+                        if (rest.startsWith("$")) {
+                            val options = rest.substring(1).lowercase().split(",")
+                            val isExcluded = options.any { opt ->
+                                opt.startsWith("domain=") ||
+                                opt.startsWith("from=") ||
+                                opt.startsWith("removeparam") ||
+                                opt.startsWith("csp") ||
+                                opt.startsWith("redirect") ||
+                                opt.startsWith("replace") ||
+                                opt.startsWith("header") ||
+                                opt == "badfilter" ||
+                                opt == "generichide" ||
+                                opt == "ghide"
+                            }
+                            if (isExcluded) continue
+                        }
+
+                        val candidate = after.substring(0, caret).trim().lowercase().removePrefix("www.")
+                        if (isValidDomainCandidate(candidate) && !isImmuneDomain(candidate)) {
+                            domains.add(candidate)
+                        }
+                    }
                 }
                 continue
             }
 
-            if (!line.contains("/") && !line.contains(" ") && line.contains(".")) {
-                domains.add(line.lowercase())
+            // Plain domain entry (one per line, e.g. custom or seed lists)
+            val candidate = line.lowercase().removePrefix("www.")
+            if (isValidDomainCandidate(candidate) && !isImmuneDomain(candidate)) {
+                domains.add(candidate)
             }
         }
         return domains.distinct()
@@ -321,9 +399,44 @@ class AdBlockManager(private val context: Context) {
                 }
             }
         }
+
+        // If cache is empty (fresh install or cache cleared), load pre-bundled seed rules from assets
+        if (newSet.isEmpty()) {
+            loadSeedDomainsFromAssets(newSet)
+        }
+
         blockedDomains.clear()
         blockedDomains.addAll(newSet)
         Log.i(TAG, "Loaded ${blockedDomains.size} active blocked domains into memory")
+
+        // If rules were empty and only seed was loaded, trigger background sync for full lists
+        checkAndTriggerBackgroundSync()
+    }
+
+    private fun loadSeedDomainsFromAssets(outSet: MutableSet<String>) {
+        try {
+            context.assets.open("adblock_seed.txt").bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    val trimmed = line.trim().lowercase()
+                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && !trimmed.startsWith("!")) {
+                        outSet.add(trimmed)
+                    }
+                }
+            }
+            Log.i(TAG, "Loaded ${outSet.size} seed domains from assets/adblock_seed.txt")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load seed domains from assets", e)
+        }
+    }
+
+    private fun checkAndTriggerBackgroundSync() {
+        val hasAnyCache = _providers.value.any { p ->
+            p.isEnabled && File(context.cacheDir, "adblock_${p.id}.txt").exists()
+        }
+        if (!hasAnyCache && isMasterEnabled) {
+            Log.i(TAG, "No cached adblock lists found on disk — auto-triggering background syncAllProviders()")
+            syncAllProviders()
+        }
     }
 
     /**
@@ -349,8 +462,9 @@ class AdBlockManager(private val context: Context) {
         if (!isMasterEnabled || host.isNullOrEmpty()) return false
         val cleanHost = host.lowercase().trim().removePrefix("www.")
 
-        // Essential authentication & identity domains must never be blocked
-        if (cleanHost == "accounts.google.com" ||
+        // Essential authentication, identity, and platform root domains must never be blocked
+        if (isImmuneDomain(cleanHost) ||
+            cleanHost == "accounts.google.com" ||
             cleanHost == "apis.google.com" ||
             cleanHost == "ssl.gstatic.com" ||
             cleanHost == "accounts.youtube.com" ||
@@ -362,12 +476,20 @@ class AdBlockManager(private val context: Context) {
             return false
         }
 
-        if (blockedDomains.contains(cleanHost)) return true
-
-        val parts = cleanHost.split(".")
-        if (parts.size > 2) {
-            val rootDomain = parts.takeLast(2).joinToString(".")
-            if (blockedDomains.contains(rootDomain)) return true
+        // Hierarchical domain suffix check:
+        // Checks cleanHost (e.g. sub.ads.exoclick.com), then ads.exoclick.com, then exoclick.com
+        var current: String? = cleanHost
+        while (!current.isNullOrEmpty() && current.contains('.')) {
+            if (isImmuneDomain(current)) {
+                // If a parent domain suffix is an immune domain (e.g. "google.com", "amazon.com", "spotify.com"),
+                // break out to avoid false-positive root domain matching.
+                break
+            }
+            if (blockedDomains.contains(current)) return true
+            val dotIdx = current.indexOf('.')
+            current = if (dotIdx != -1 && dotIdx + 1 < current.length) {
+                current.substring(dotIdx + 1)
+            } else null
         }
         return false
     }

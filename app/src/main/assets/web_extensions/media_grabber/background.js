@@ -54,6 +54,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     }
 });
 
+function isSegmentUrl(url) {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    if (lower.includes('.ts') || lower.includes('.m4s') || lower.includes('.vtt') || lower.includes('.srt')) {
+        if (/\.(ts|m4s|vtt|srt)(\?|$|#)/i.test(url) || lower.includes('/segment') || lower.includes('/fragment')) {
+            return true;
+        }
+    }
+    if (lower.includes('/segment') || lower.includes('/fragment') || lower.includes('seg-') || lower.includes('frag-') ||
+        lower.includes('/chunks/') || lower.includes('/chunk-')) {
+        return true;
+    }
+    return false;
+}
+
 function classifyUrl(url) {
     const lower = url.toLowerCase();
     if (lower.includes('.m3u8') || lower.includes('mpegurl')) return 'application/x-mpegURL';
@@ -66,9 +81,10 @@ function classifyUrl(url) {
 }
 
 function isMediaUrl(url) {
-    if (!url || url.startsWith('blob:') || url.startsWith('data:')) return false;
+    if (!url || url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('javascript:')) return false;
     if (url.includes('pixel') || url.includes('beacon') || url.includes('analytics')) return false;
     if (url.startsWith('moz-extension:') || url.startsWith('chrome-extension:')) return false;
+    if (isSegmentUrl(url)) return false;
     // Exclude subtitle/cue/manifest sidecar files that often pass pattern checks
     const lower = url.toLowerCase();
     if (lower.includes('.vtt') || lower.includes('.srt') || lower.includes('.ass') || lower.includes('.ssa') ||
@@ -80,7 +96,7 @@ function isMediaUrl(url) {
     return MEDIA_URL_PATTERNS.some(pattern => pattern.test(url));
 }
 
-function reportToNative(url, mimeType, tabId) {
+function reportToNative(url, mimeType, tabId, sizeBytes) {
     if (reportedUrls.has(url)) return;
     reportedUrls.add(url);
     
@@ -94,7 +110,7 @@ function reportToNative(url, mimeType, tabId) {
             if (!tabMediaMap.has(tabId)) {
                 tabMediaMap.set(tabId, new Set());
             }
-            const mediaItem = JSON.stringify({ url: url, mimeType: mimeType || 'video/mp4', cookies: cookieString || '' });
+            const mediaItem = JSON.stringify({ url: url, mimeType: mimeType || 'video/mp4', cookies: cookieString || '', sizeBytes: (sizeBytes && sizeBytes > 0) ? sizeBytes : null });
             const tabSet = tabMediaMap.get(tabId);
             tabSet.add(mediaItem);
             
@@ -110,7 +126,8 @@ function reportToNative(url, mimeType, tabId) {
                 url: url,
                 mimeType: mimeType || 'video/mp4',
                 cookies: cookieString || '',
-                tabId: (tabId !== undefined && tabId !== null) ? String(tabId) : ''
+                tabId: (tabId !== undefined && tabId !== null) ? String(tabId) : '',
+                sizeBytes: (sizeBytes && sizeBytes > 0) ? sizeBytes : null
             }).catch(() => {});
         } catch (e) {
             console.error('[MediaGrabber] Native message failed:', e);
@@ -122,7 +139,8 @@ function reportToNative(url, mimeType, tabId) {
                     type: 'NETWORK_MEDIA_DETECTED',
                     url: url,
                     mimeType: mimeType || 'video/mp4',
-                    cookies: cookieString || ''
+                    cookies: cookieString || '',
+                    sizeBytes: (sizeBytes && sizeBytes > 0) ? sizeBytes : null
                 });
             } catch (e) {}
         }
@@ -158,19 +176,21 @@ chrome.webRequest.onBeforeRequest.addListener(
 chrome.webRequest.onHeadersReceived.addListener(
     function(details) {
         const url = details.url;
-        if (!url || url.startsWith('blob:') || url.startsWith('data:')) return;
+        if (!url || url.startsWith('blob:') || url.startsWith('data:') || url.startsWith('javascript:')) return;
+        if (isSegmentUrl(url)) return;
 
         const responseHeaders = details.responseHeaders || [];
         for (const header of responseHeaders) {
             if (header.name.toLowerCase() === 'content-type') {
                 const contentType = (header.value || '').toLowerCase();
+                if (contentType.includes('video/mp2t')) return;
                 const isMedia = MEDIA_CONTENT_TYPES.some(mt => contentType.includes(mt));
                 if (isMedia) {
                     const contentLength = responseHeaders.find(h => h.name.toLowerCase() === 'content-length');
                     const size = contentLength ? parseInt(contentLength.value, 10) : -1;
                     if (size > 0 && size < 50000) return;
                     
-                    reportToNative(url, contentType, details.tabId);
+                    reportToNative(url, contentType, details.tabId, size > 0 ? size : undefined);
                 }
                 break;
             }
@@ -377,8 +397,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
     } else if (message.type === 'MEDIA_GRABBED') {
         const url = message.url;
-        if (url && !url.startsWith('blob:')) {
-            reportToNative(url, message.mimeType || 'video/mp4', sender.tab ? sender.tab.id : undefined);
+        if (url && !url.startsWith('blob:') && !isSegmentUrl(url)) {
+            reportToNative(url, message.mimeType || 'video/mp4', sender.tab ? sender.tab.id : undefined, message.sizeBytes);
         }
     } else if (message.type === 'VIDEO_STATE_CHANGE') {
         try {

@@ -1489,7 +1489,18 @@ fun VideoPlayerScreen(
                                 onClick = {
                                     coroutineScope.launch {
                                         isFetchingQualities = true
-                                        val parsed = fetchVideoQualities(decodedPath, viewModel?.activeVideoCookies, sourceHdLabel, sourceStreamLabel, extractAudioLabel)
+                                        val streamDuration = if (duration > 0L) duration else (exoPlayerInstance?.duration?.takeIf { it > 0 } ?: 0L)
+                                        val streamBitrate = exoPlayerInstance?.videoFormat?.bitrate ?: -1
+                                        val parsed = fetchVideoQualities(
+                                            streamUrl = decodedPath,
+                                            cookies = viewModel?.activeVideoCookies,
+                                            sourceHdLabel = sourceHdLabel,
+                                            sourceStreamLabel = sourceStreamLabel,
+                                            extractAudioLabel = extractAudioLabel,
+                                            durationMs = streamDuration,
+                                            activeBitrate = streamBitrate,
+                                            referrer = if (referrerUrl.isNotEmpty()) referrerUrl else null
+                                        )
                                         isFetchingQualities = false
                                         
                                         if (decodedPath.contains(".m3u8") && parsed.count { !it.isAudioOnly } <= 1) {
@@ -2238,12 +2249,22 @@ fun VideoPlayerScreen(
                                         tint = if (option.isAudioOnly) Color(0xFFFF9800) else accentColor,
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Text(
-                                        text = option.label,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp
-                                    )
+                                    Column {
+                                        Text(
+                                            text = option.label,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp
+                                        )
+                                        if (option.sizeBytes != null && option.sizeBytes > 0L) {
+                                            Text(
+                                                text = formatFileSize(option.sizeBytes),
+                                                color = if (option.isAudioOnly) Color(0xFFFFB74D) else accentColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
                                 }
                                 
                                 Icon(
@@ -2562,6 +2583,16 @@ private fun formatDuration(millis: Long): String {
     }
 }
 
+/** Format bytes into a human-readable string (KB, MB, GB). */
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1_000L -> "$bytes B"
+        bytes < 1_000_000L -> "%.0f KB".format(bytes / 1_000.0)
+        bytes < 1_000_000_000L -> "%.1f MB".format(bytes / 1_000_000.0)
+        else -> "%.2f GB".format(bytes / 1_000_000_000.0)
+    }
+}
+
 @Composable
 private fun translateQualityLabel(quality: String?): String {
     return when (quality) {
@@ -2592,61 +2623,212 @@ private fun isDirectVideoUrl(url: String): Boolean {
 data class VideoQualityOption(
     val label: String,
     val url: String,
-    val isAudioOnly: Boolean = false
+    val isAudioOnly: Boolean = false,
+    val sizeBytes: Long? = null
 )
 
-private suspend fun fetchVideoQualities(streamUrl: String, cookies: String?, sourceHdLabel: String, sourceStreamLabel: String, extractAudioLabel: String): List<VideoQualityOption> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+private fun probeDirectStreamSize(urlStr: String, cookies: String?, referrer: String?): Long? {
+    var currentUrl = urlStr
+    var redirects = 0
+    while (redirects < 4) {
+        try {
+            val url = java.net.URL(currentUrl)
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 4000
+            conn.readTimeout = 4000
+            conn.requestMethod = "HEAD"
+            if (!cookies.isNullOrEmpty()) conn.setRequestProperty("Cookie", cookies)
+            if (!referrer.isNullOrEmpty()) conn.setRequestProperty("Referer", referrer)
+            conn.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            )
+            conn.connect()
+            val code = conn.responseCode
+            if (code in 301..308) {
+                val loc = conn.getHeaderField("Location")
+                conn.disconnect()
+                if (!loc.isNullOrEmpty()) {
+                    currentUrl = if (loc.startsWith("http")) loc else java.net.URL(url, loc).toString()
+                    redirects++
+                    continue
+                }
+            }
+            val len = conn.contentLengthLong.takeIf { it > 0 }
+            conn.disconnect()
+            if (len != null) return len
+
+            // Fallback to GET bytes=0-1 range probe
+            val getConn = java.net.URL(currentUrl).openConnection() as java.net.HttpURLConnection
+            getConn.instanceFollowRedirects = true
+            getConn.connectTimeout = 4000
+            getConn.readTimeout = 4000
+            getConn.requestMethod = "GET"
+            getConn.setRequestProperty("Range", "bytes=0-1")
+            if (!cookies.isNullOrEmpty()) getConn.setRequestProperty("Cookie", cookies)
+            if (!referrer.isNullOrEmpty()) getConn.setRequestProperty("Referer", referrer)
+            getConn.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            )
+            getConn.connect()
+            val getCode = getConn.responseCode
+            if (getCode in 301..308) {
+                val loc = getConn.getHeaderField("Location")
+                getConn.disconnect()
+                if (!loc.isNullOrEmpty()) {
+                    currentUrl = if (loc.startsWith("http")) loc else java.net.URL(url, loc).toString()
+                    redirects++
+                    continue
+                }
+            }
+            val contentRange = getConn.getHeaderField("Content-Range")
+            val total = contentRange?.substringAfterLast("/", "")?.trim()?.toLongOrNull()?.takeIf { it > 0 }
+            val fallbackLen = getConn.contentLengthLong.takeIf { it > 0 }
+            getConn.disconnect()
+            return total ?: fallbackLen
+        } catch (_: Exception) {
+            return null
+        }
+    }
+    return null
+}
+
+private suspend fun fetchVideoQualities(
+    streamUrl: String,
+    cookies: String?,
+    sourceHdLabel: String,
+    sourceStreamLabel: String,
+    extractAudioLabel: String,
+    durationMs: Long = 0L,
+    activeBitrate: Int = -1,
+    referrer: String? = null
+): List<VideoQualityOption> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val options = mutableListOf<VideoQualityOption>()
-    
+    val baseDurationSec = if (durationMs > 0) durationMs / 1000.0 else 0.0
+
     if (!streamUrl.contains(".m3u8")) {
-        options.add(VideoQualityOption(sourceHdLabel, streamUrl))
-        options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true))
+        val directSize = probeDirectStreamSize(streamUrl, cookies, referrer)
+        val fallbackVideoSize = if (directSize != null && directSize > 0) {
+            directSize
+        } else if (activeBitrate > 0 && baseDurationSec > 0) {
+            ((activeBitrate / 8.0) * baseDurationSec).toLong()
+        } else null
+
+        val audioSize = if (baseDurationSec > 0) (16_000.0 * baseDurationSec).toLong() else null
+
+        options.add(VideoQualityOption(sourceHdLabel, streamUrl, sizeBytes = fallbackVideoSize))
+        options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true, sizeBytes = audioSize))
         return@withContext options
     }
-    
+
     try {
         val connection = java.net.URL(streamUrl).openConnection() as java.net.HttpURLConnection
+        connection.connectTimeout = 5000
+        connection.readTimeout = 5000
         if (!cookies.isNullOrEmpty()) {
             connection.setRequestProperty("Cookie", cookies)
         }
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+        if (!referrer.isNullOrEmpty()) {
+            connection.setRequestProperty("Referer", referrer)
+        }
+        connection.setRequestProperty(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        )
         connection.connect()
         val manifestContent = connection.inputStream.bufferedReader().use { it.readText() }
-        
+
         val lines = manifestContent.lines()
-        var currentResolution = ""
         val baseUri = streamUrl.substring(0, streamUrl.lastIndexOf("/") + 1)
-        
+
+        var isMasterPlaylist = false
+        var currentResolution = ""
+        var currentBandwidth = 0L
+
+        var manifestDurationSec = 0.0
+        val segmentUrls = mutableListOf<String>()
+
         for (line in lines) {
             val trimmed = line.trim()
             if (trimmed.startsWith("#EXT-X-STREAM-INF")) {
+                isMasterPlaylist = true
                 val resMatch = Regex("RESOLUTION=(\\d+x\\d+)").find(trimmed)
                 if (resMatch != null) {
                     val res = resMatch.groupValues[1]
                     val height = res.substringAfter("x").toIntOrNull() ?: 0
                     currentResolution = "${height}p"
-                } else {
-                    val bwMatch = Regex("BANDWIDTH=(\\d+)").find(trimmed)
-                    if (bwMatch != null) {
-                        val kbps = (bwMatch.groupValues[1].toIntOrNull() ?: 0) / 1000
-                        currentResolution = "${kbps}kbps"
+                }
+                val bwMatch = Regex("BANDWIDTH=(\\d+)").find(trimmed)
+                if (bwMatch != null) {
+                    val bw = bwMatch.groupValues[1].toLongOrNull() ?: 0L
+                    currentBandwidth = bw
+                    if (currentResolution.isEmpty()) {
+                        currentResolution = "${bw / 1000}kbps"
                     }
                 }
-            } else if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && currentResolution.isNotEmpty()) {
-                val fullUrl = if (trimmed.startsWith("http")) trimmed else "$baseUri$trimmed"
-                options.add(VideoQualityOption(currentResolution, fullUrl))
-                currentResolution = ""
+            } else if (trimmed.startsWith("#EXTINF:")) {
+                val durStr = trimmed.substringAfter("#EXTINF:").substringBefore(",").trim()
+                durStr.toDoubleOrNull()?.let { manifestDurationSec += it }
+            } else if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
+                if (isMasterPlaylist && currentResolution.isNotEmpty()) {
+                    val fullUrl = if (trimmed.startsWith("http")) trimmed else "$baseUri$trimmed"
+                    val estimatedBytes = if (currentBandwidth > 0 && baseDurationSec > 0) {
+                        ((currentBandwidth / 8.0) * baseDurationSec).toLong()
+                    } else null
+                    options.add(VideoQualityOption(currentResolution, fullUrl, sizeBytes = estimatedBytes))
+                    currentResolution = ""
+                    currentBandwidth = 0L
+                } else {
+                    segmentUrls.add(if (trimmed.startsWith("http")) trimmed else "$baseUri$trimmed")
+                }
             }
         }
+
+        val effectiveDurationSec = if (manifestDurationSec > 0) manifestDurationSec else baseDurationSec
+
+        if (!isMasterPlaylist && segmentUrls.isNotEmpty()) {
+            val firstSegBytes = probeDirectStreamSize(segmentUrls.first(), cookies, referrer)
+            var computedSize: Long? = null
+            if (firstSegBytes != null && firstSegBytes > 0) {
+                computedSize = firstSegBytes * segmentUrls.size
+            } else if (activeBitrate > 0 && effectiveDurationSec > 0) {
+                computedSize = ((activeBitrate / 8.0) * effectiveDurationSec).toLong()
+            } else if (effectiveDurationSec > 0) {
+                val inferredRate = when {
+                    streamUrl.contains("1080", ignoreCase = true) -> 500_000L
+                    streamUrl.contains("720", ignoreCase = true) -> 250_000L
+                    streamUrl.contains("480", ignoreCase = true) -> 125_000L
+                    streamUrl.contains("360", ignoreCase = true) -> 75_000L
+                    else -> 200_000L
+                }
+                computedSize = (inferredRate * effectiveDurationSec).toLong()
+            }
+
+            val label = when {
+                streamUrl.contains("1080", ignoreCase = true) -> "1080p (Source)"
+                streamUrl.contains("720", ignoreCase = true) -> "720p (Source)"
+                streamUrl.contains("480", ignoreCase = true) -> "480p (Source)"
+                streamUrl.contains("360", ignoreCase = true) -> "360p (Source)"
+                else -> sourceStreamLabel
+            }
+            options.add(VideoQualityOption(label, streamUrl, sizeBytes = computedSize))
+        }
+
+        val audioBytes = if (effectiveDurationSec > 0) (16_000.0 * effectiveDurationSec).toLong() else null
+        options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true, sizeBytes = audioBytes))
+
     } catch (e: Exception) {
         android.util.Log.e("VideoPlayer", "Failed to parse HLS variants in player", e)
     }
-    
+
     if (options.isEmpty()) {
+        val audioBytes = if (baseDurationSec > 0) (16_000.0 * baseDurationSec).toLong() else null
         options.add(VideoQualityOption(sourceStreamLabel, streamUrl))
+        options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true, sizeBytes = audioBytes))
     }
-    options.add(VideoQualityOption(extractAudioLabel, streamUrl, isAudioOnly = true))
-    
+
     return@withContext options.distinctBy { it.label }
 }
 

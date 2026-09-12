@@ -216,7 +216,7 @@ fun PhoneAddressBar(
     ) {
         AnimatedVisibility(visible = !isInputFocused) {
             IconButton(
-                onClick = { viewModel.loadUrl("about:blank") },
+                onClick = { viewModel.navigateHomeDirectly() },
                 modifier = Modifier.size(config.barIconSize)
             ) {
                 Icon(

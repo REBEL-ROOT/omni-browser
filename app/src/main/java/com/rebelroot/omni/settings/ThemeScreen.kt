@@ -302,7 +302,7 @@ fun ThemeScreen(
                                                 )
                                                 .border(
                                                     1.dp,
-                                                    if (key == "Default") Color.LightGray.copy(alpha = 0.4f)
+                                                    if (key == "Light" || key == "Default") Color.LightGray.copy(alpha = 0.4f)
                                                     else Color.Transparent,
                                                     RoundedCornerShape(14.dp)
                                                 ),
@@ -316,10 +316,9 @@ fun ThemeScreen(
                                                     modifier = Modifier.size(60.dp)
                                                 )
                                             } else {
-                                                Icon(
+                                                Image(
                                                     painter = painterResource(id = resId),
                                                     contentDescription = null,
-                                                    tint = iconCol,
                                                     modifier = Modifier.size(38.dp)
                                                 )
                                             }

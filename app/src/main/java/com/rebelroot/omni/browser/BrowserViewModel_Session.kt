@@ -88,6 +88,25 @@ private fun isAuthRelatedUrl(uri: String): Boolean {
 
 internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: Context) {
     applyUserAgentForTab(tab)
+
+    // Attach SessionTabDelegate and ActionDelegate for active WebExtensions
+    if (userExtensions.isNotEmpty()) {
+        val sessionTabDel = createSessionTabDelegate(context)
+        val sessionActionDel = createSessionActionDelegate(tab.session)
+        userExtensions.forEach { ext ->
+            try {
+                tab.session.webExtensionController.setTabDelegate(ext, sessionTabDel)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed setting SessionTabDelegate on tab ${tab.id} for ${ext.safeId}", e)
+            }
+            try {
+                tab.session.webExtensionController.setActionDelegate(ext, sessionActionDel)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed setting ActionDelegate on tab ${tab.id} for ${ext.safeId}", e)
+            }
+        }
+    }
+
     tab.session.contentBlockingDelegate = object : org.mozilla.geckoview.ContentBlocking.Delegate {
         override fun onContentBlocked(session: GeckoSession, event: org.mozilla.geckoview.ContentBlocking.BlockEvent) {
             incrementTrackersBlocked(context, 1)
@@ -718,15 +737,19 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
             // Mark session as dead and invalidate generation so stale callbacks are ignored.
             val deadGeneration = tabs[idx].sessionGenerationId
-            val deadState = tabs[idx].savedSessionState
             val deadUrl = tabs[idx].url
+            val isDeadHome = (deadUrl == "about:blank" || deadUrl.isEmpty())
+            val deadState = if (isDeadHome) null else tabs[idx].savedSessionState
             val deadIncognito = tabs[idx].isIncognito
 
             // Close the dead session.
             runCatching { session.close() }
 
             // Update tab state to reflect death.
-            tabs[idx] = tabs[idx].copy(isSuspended = true)
+            tabs[idx] = tabs[idx].copy(
+                isSuspended = true,
+                savedSessionState = if (isDeadHome) null else tabs[idx].savedSessionState
+            )
 
             // If this is the active tab, trigger recovery.
             if (tab.id == activeTabId) {
@@ -738,7 +761,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     tabId = tab.id,
                     context = context,
                     runtime = runtime,
-                    url = deadUrl,
+                    url = if (isDeadHome) "about:blank" else deadUrl,
                     isIncognito = deadIncognito,
                     isDesktopMode = isDesktopMode,
                     inMemoryState = deadState,
@@ -748,8 +771,18 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                             session = newSession,
                             isSuspended = false,
                             sessionGenerationId = newGen,
-                            savedSessionState = null
+                            savedSessionState = null,
+                            url = if (isDeadHome) "about:blank" else tabs[idx].url,
+                            title = if (isDeadHome) "New Tab" else tabs[idx].title
                         )
+                        if (tab.id == activeTabId) {
+                            geckoSession = newSession
+                            if (isDeadHome) {
+                                currentUrl = "about:blank"
+                                canGoBack = false
+                                canGoForward = false
+                            }
+                        }
                         setupTabSessionListeners(tabs[idx], context)
                         recoveryCoordinator?.registerTab(tab.id, newGen, com.rebelroot.omni.browser.session.SessionRecoveryCoordinator.GeckoState.OPEN)
                     },
@@ -757,11 +790,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                         isRecoveringActiveTab = false
                         if (success) {
                             Log.i(TAG, "Session recovered for ${tab.id} via $method")
-                            // Re-attach to GeckoView if this is still the active tab.
-                            if (tab.id == activeTabId) {
+                            // Re-attach to GeckoView only if active tab and NOT on home screen.
+                            if (tab.id == activeTabId && method != "about_blank_clean" && tabs[idx].url != "about:blank" && tabs[idx].url.isNotEmpty()) {
+                                geckoSession = tabs[idx].session
                                 activeGeckoViewRef?.get()?.let { gv ->
                                     gv.setSession(tabs[idx].session)
                                     tabs[idx].session.setActive(true)
+                                }
+                                try {
+                                    runtime.webExtensionController.setTabActive(tabs[idx].session, true)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error setting recovered tab active for extensions", e)
                                 }
                             }
                         } else {
@@ -823,13 +862,42 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 // Dynamically update allowJavascript setting for the new domain
                 session.settings.allowJavascript = (getSitePermissionValue(it, "javascript") == "allow")
 
+                val isBlankOrEmpty = (it == "about:blank" || it.isEmpty())
                 val idx = tabs.indexOfFirst { it.id == tab.id }
-                if (idx != -1) {
-                    tabs[idx] = tabs[idx].copy(url = it, settingsVersion = currentSettingsVersion)
-                    saveTabs()
+                if (idx == -1) return
+
+                val currentTab = tabs[idx]
+                // 🛡️ CRITICAL: Ignore transient initial "about:blank" fired by Gecko during session
+                // initialization or resumption when the tab is intended to be a real web page.
+                // Otherwise, Gecko's initial blank document will clobber the real URL, wipe savedSessionState,
+                // call session.stop(), and throw the user back to the home screen!
+                if (isBlankOrEmpty && currentTab.url.isNotEmpty() && currentTab.url != "about:blank") {
+                    Log.d(TAG, "onLocationChange: ignoring transient initial about:blank for tab ${tab.id} (target=${currentTab.url})")
+                    return
                 }
+
+                val isHome = isBlankOrEmpty
+                tabs[idx] = tabs[idx].copy(
+                    url = it,
+                    title = if (isHome) "New Tab" else tabs[idx].title,
+                    savedSessionState = if (isHome) null else tabs[idx].savedSessionState,
+                    canGoBack = if (isHome) false else tabs[idx].canGoBack,
+                    canGoForward = if (isHome) false else tabs[idx].canGoForward,
+                    settingsVersion = currentSettingsVersion
+                )
+                if (isHome) {
+                    sessionStatePersistence?.removeDurableState(tab.id)
+                }
+                saveTabs()
+
                 if (tab.id == activeTabId) {
                     currentUrl = it
+                    if (isHome) {
+                        canGoBack = false
+                        canGoForward = false
+                        runCatching { session.stop() }
+                    }
+                    syncActiveSession(session)
                     checkAutofillForUrl(it)
                     mediaInterceptor.clear()
                     notifyPageNavigation()
@@ -846,22 +914,26 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         }
 
         override fun onCanGoBack(session: GeckoSession, canGoBackValue: Boolean) {
+            val isHome = (tab.url == "about:blank" || tab.url.isEmpty())
+            val effective = if (isHome) false else canGoBackValue
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
-                tabs[idx] = tabs[idx].copy(canGoBack = canGoBackValue)
+                tabs[idx] = tabs[idx].copy(canGoBack = effective)
             }
             if (tab.id == activeTabId) {
-                canGoBack = canGoBackValue
+                canGoBack = effective
             }
         }
 
         override fun onCanGoForward(session: GeckoSession, canGoForwardValue: Boolean) {
+            val isHome = (tab.url == "about:blank" || tab.url.isEmpty())
+            val effective = if (isHome) false else canGoForwardValue
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
-                tabs[idx] = tabs[idx].copy(canGoForward = canGoForwardValue)
+                tabs[idx] = tabs[idx].copy(canGoForward = effective)
             }
             if (tab.id == activeTabId) {
-                canGoForward = canGoForwardValue
+                canGoForward = effective
             }
         }
 
@@ -899,10 +971,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
 
             val host = SecurityPolicy.extractEffectiveHost(uri)
-            if (host.isNotEmpty() && !isAuthHost && adBlockManager.isHostBlocked(host)) {
+            if (host.isNotEmpty() && !request.isDirectNavigation && !isAuthHost && adBlockManager.isHostBlocked(host)) {
                 Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker sub-navigation: $uri")
                 incrementTrackersBlocked(context, 1)
                 try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
+                if (tab.parentId != null) {
+                    Log.i(TAG, "🚫 onLoadRequest: Auto-closing blocked popup tab ${tab.id} (parent=${tab.parentId})")
+                    viewModelScope.launch(Dispatchers.Main) {
+                        closeTab(tab.id, context)
+                    }
+                }
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
@@ -998,68 +1076,22 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 } catch (_: Exception) { "" }
                 val sitePerm = getSitePermissionValue(sourceHost, "externalApp")
 
-                // Helper for a browser-style external-app prompt.
-                val performFallback: (intentPackage: String?, isBlocked: Boolean) -> Unit = { intentPackage, isBlocked ->
-                    val fallbackUrl = extractFallbackUrl(uri)
-                    if (!intentPackage.isNullOrBlank() || fallbackUrl != null) {
-                        viewModelScope.launch(Dispatchers.Main) {
-                            pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
-                                uri = uri,
-                                packageName = intentPackage,
-                                fallbackUrl = fallbackUrl,
-                                blockedAutomatically = isBlocked,
-                                sourceHost = sourceHost
-                            )
-                        }
-                    } else {
-                        val toastMsg = if (isBlocked) {
-                            "Blocked automatic redirect to an external app"
-                        } else {
-                            "No app found to handle this link"
-                        }
-                        Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
-                    }
-                }
-
                 // Global toggle OFF → block everything
                 if (!isOpenExternalAppAllowed) {
                     Log.w(TAG, "🚫 onLoadRequest: External app launches disabled in settings: $uri")
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
-                // Check per-site permission for all external app intents
-                when (sitePerm) {
-                    "allow" -> {
-                        // Per-site always-allow: proceed to launch external app intent
-                        Log.i(TAG, "✅ onLoadRequest: External app launch allowed by site permission for $sourceHost: $uri")
-                    }
-                    "block" -> {
-                        Log.w(TAG, "🚫 onLoadRequest: External app launch blocked by site permission for $sourceHost: $uri")
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
-                    else -> {
-                        // "ask" (default): ALWAYS prompt user for permission before opening any external app!
-                        Log.i(TAG, "❓ onLoadRequest: External app launch queued for user permission ($sourceHost): $uri")
-                        viewModelScope.launch(Dispatchers.Main) {
-                            val intentPackage = if (lowerUri.startsWith("intent:")) {
-                                try { Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage() } catch (_: Exception) { null }
-                            } else if (lowerUri.startsWith("market:")) {
-                                try { Uri.parse(uri).getQueryParameter("id") } catch (_: Exception) { null }
-                            } else {
-                                try {
-                                    Intent.parseUri(uri, Intent.URI_INTENT_SCHEME).getPackage()
-                                        ?: Uri.parse(uri).getQueryParameter("package")
-                                } catch (_: Exception) { null }
-                            }
-                            performFallback(intentPackage, false)
-                        }
-                        return GeckoResult.fromValue(AllowOrDeny.DENY)
-                    }
+                // Per-site "block" → deny silently
+                if (sitePerm == "block") {
+                    Log.w(TAG, "🚫 onLoadRequest: External app launch blocked by site permission for $sourceHost: $uri")
+                    return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
+                // ── intent:// and market:// URIs ─────────────────────────────────────
                 if (lowerUri.startsWith("intent:") || lowerUri.startsWith("market:")) {
                     Log.i(TAG, "Intercepted intent/market URI: $uri")
-                    
+
                     try {
                         val intent = if (lowerUri.startsWith("intent:")) {
                             Intent.parseUri(uri, Intent.URI_INTENT_SCHEME)
@@ -1071,17 +1103,19 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                         } else {
                             Uri.parse(uri).getQueryParameter("id")
                         }
-                        
+
+                        // Calendar-spam guard (must run before any launch)
                         val isCalendarSpam = intentPackage?.contains("calendar") == true || intentPackage?.contains("cal") == true ||
                                 intent.dataString?.contains("calendar") == true || intent.dataString?.contains("webcal") == true || intent.dataString?.contains(".ics") == true
-                        
+
                         if (isCalendarSpam) {
                             Log.w(TAG, "🚫 Blocked calendar/adware intent: package=$intentPackage, data=${intent.dataString}")
                             viewModelScope.launch(Dispatchers.Main) {
                                 Toast.makeText(context, "Blocked calendar spam intent", Toast.LENGTH_SHORT).show()
                             }
                         } else if (sitePerm == "allow") {
-                            Log.i(TAG, "Launching external app intent safely (sitePerm=allow): package=$intentPackage")
+                            // Per-site always-allow: launch directly
+                            Log.i(TAG, "✅ onLoadRequest: Launching intent (sitePerm=allow): package=$intentPackage uri=$uri")
                             viewModelScope.launch(Dispatchers.Main) {
                                 try {
                                     intent.addCategory(Intent.CATEGORY_BROWSABLE)
@@ -1091,22 +1125,38 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                     }
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    performFallback(intentPackage, false)
+                                    Log.e(TAG, "Intent launch failed, showing fallback", e)
+                                    val fallbackUrl = extractFallbackUrl(uri)
+                                    if (!fallbackUrl.isNullOrBlank()) {
+                                        loadUrl(fallbackUrl)
+                                    } else {
+                                        Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         } else {
-                            // Default ("ask") or "block": ALWAYS prompt user for permission!
-                            Log.i(TAG, "❓ External intent queued for user decision ($sourceHost, sitePerm=$sitePerm): $uri")
+                            // "ask" (default): show consent dialog — ALWAYS, even if package is null
+                            Log.i(TAG, "❓ onLoadRequest: intent queued for user permission ($sourceHost): $uri")
+                            val fallbackUrl = extractFallbackUrl(uri)
                             viewModelScope.launch(Dispatchers.Main) {
-                                performFallback(intentPackage, false)
+                                pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
+                                    uri = uri,
+                                    packageName = intentPackage,
+                                    fallbackUrl = fallbackUrl,
+                                    blockedAutomatically = false,
+                                    sourceHost = sourceHost
+                                )
                             }
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error parsing intent URI", e)
                     }
+                    // Cache so onLoadError can suppress the spurious error page
+                    lastDeniedExternalAppUrl = uri
                     return GeckoResult.fromValue(AllowOrDeny.DENY)
                 }
 
+                // ── Custom scheme URIs (myapp://, tel:, mailto:, etc.) ───────────────
                 Log.i(TAG, "Handling custom protocol URI: $uri")
                 viewModelScope.launch(Dispatchers.Main) {
                     val intentPackage = try {
@@ -1116,19 +1166,37 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                         null
                     }
                     if (sitePerm == "allow") {
+                        // Per-site always-allow: launch directly
+                        Log.i(TAG, "✅ onLoadRequest: Launching custom scheme (sitePerm=allow): $uri")
                         try {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
                                 addCategory(Intent.CATEGORY_BROWSABLE)
                             }
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            performFallback(intentPackage, false)
+                            Log.e(TAG, "Custom scheme launch failed, showing fallback", e)
+                            val fallbackUrl = extractFallbackUrl(uri)
+                            if (!fallbackUrl.isNullOrBlank()) {
+                                loadUrl(fallbackUrl)
+                            } else {
+                                Toast.makeText(context, "No app found to handle this link", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     } else {
-                        Log.i(TAG, "❓ Custom protocol queued for user decision ($sourceHost, sitePerm=$sitePerm): $uri")
-                        performFallback(intentPackage, false)
+                        // "ask" (default): show consent dialog — ALWAYS
+                        Log.i(TAG, "❓ onLoadRequest: Custom protocol queued for user permission ($sourceHost): $uri")
+                        val fallbackUrl = extractFallbackUrl(uri)
+                        pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
+                            uri = uri,
+                            packageName = intentPackage,
+                            fallbackUrl = fallbackUrl,
+                            blockedAutomatically = false,
+                            sourceHost = sourceHost
+                        )
                     }
                 }
+                // Cache so onLoadError can suppress the spurious error page
+                lastDeniedExternalAppUrl = uri
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
             
@@ -1141,11 +1209,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             // app), resolve non-browser native app handlers for the URL and queue the
             // consent dialog. Nothing ever opens natively without an explicit user
             // confirmation; dismissing simply loads the page in the browser.
+            val isSearchEngine = host.contains("google.") || host.contains("bing.") || host.contains("duckduckgo.") || host.contains("yahoo.") || host.contains("yandex.") || host.contains("brave.") || host.contains("ecosia.") || host.contains("startpage.") || host.contains("qwant.")
+            val currentTabHost = try { Uri.parse(tab.url).host?.lowercase() ?: "" } catch (_: Exception) { "" }
+            val isSameSiteNavigation = currentTabHost.isNotEmpty() && (host == currentTabHost || host.endsWith(".$currentTabHost") || currentTabHost.endsWith(".$host"))
+
             if (request.hasUserGesture &&
                 request.target == GeckoSession.NavigationDelegate.TARGET_WINDOW_CURRENT &&
                 isOpenExternalAppAllowed &&
                 pendingExternalAppRequest == null &&
                 !isAuthHost &&
+                !isSearchEngine &&
+                !isSameSiteNavigation &&
                 (lowerUri.startsWith("http://") || lowerUri.startsWith("https://"))
             ) {
                 val externalSitePerm = getSitePermissionValue(host, "externalApp")
@@ -1181,6 +1255,8 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                                 )
                             }
                         }
+                        // Cache so onLoadError can suppress the spurious error page
+                        lastDeniedExternalAppUrl = uri
                         return GeckoResult.fromValue(AllowOrDeny.DENY)
                     }
                 }
@@ -1206,12 +1282,17 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             
             // Check if this error is an ERROR_UNKNOWN (17) caused by us returning DENY
             // in onLoadRequest for direct videos, spam calendars, or external app links.
+            val deniedExtUrl = lastDeniedExternalAppUrl
             val isDeniedByCustomIntercept = error.code == org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN && (
                 (isNativePlayerEnabled && isDirectVideoUrl(uri ?: "")) ||
-                (!lowerUri.startsWith("http://") && !lowerUri.startsWith("https://") && !lowerUri.startsWith("about:") && !lowerUri.startsWith("javascript:") && !lowerUri.startsWith("data:"))
+                (!lowerUri.startsWith("http://") && !lowerUri.startsWith("https://") && !lowerUri.startsWith("about:") && !lowerUri.startsWith("javascript:") && !lowerUri.startsWith("data:")) ||
+                // Issue #113: http(s) URL denied for external app prompt
+                (deniedExtUrl != null && (deniedExtUrl == uri || deniedExtUrl.equals(uri, ignoreCase = true)))
             )
             
             if (isDeniedByCustomIntercept) {
+                // Clear the cache so subsequent genuine errors are not suppressed
+                if (deniedExtUrl != null) lastDeniedExternalAppUrl = null
                 Log.i(TAG, "🔑 Ignored onLoadError (code 17) for custom denied URL: $uri")
                 return null
             }
@@ -1292,6 +1373,65 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     return null
                 }
 
+                // ── Issue #113: offer the native app for new-window https(s) deep links ──
+                // Most YouTube/Reddit/etc. links from external sites open in a new tab
+                // (TARGET_WINDOW_NEW → onNewSession). These were missed by the same-window
+                // check in onLoadRequest, so we handle them here.
+                //
+                // Conditions: global toggle on, no pending dialog, URL is http(s), the host
+                // is not an auth host, the site permission is not "block", and a non-browser
+                // native app on the device can handle the URL. If "allow" was previously
+                // chosen for this site, launch the app directly — no prompt.
+                val isSearchEngine = host.contains("google.") || host.contains("bing.") || host.contains("duckduckgo.") || host.contains("yahoo.") || host.contains("yandex.") || host.contains("brave.") || host.contains("ecosia.") || host.contains("startpage.") || host.contains("qwant.")
+                if (isOpenExternalAppAllowed &&
+                    pendingExternalAppRequest == null &&
+                    !isAuthUri &&
+                    !isSearchEngine &&
+                    (lowerUri.startsWith("http://") || lowerUri.startsWith("https://"))
+                ) {
+                    val externalSitePerm = getSitePermissionValue(host, "externalApp")
+                    if (externalSitePerm != "block") {
+                        val handler = getNativeAppHandlers(context, uri).firstOrNull()
+                        val handlerPkg = handler?.activityInfo?.packageName
+                        if (handlerPkg != null) {
+                            if (externalSitePerm == "allow") {
+                                Log.i(TAG, "✅ onNewSession: https app-link auto-allowed for $host: $uri")
+                                viewModelScope.launch(Dispatchers.Main) {
+                                    try {
+                                        val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+                                            addCategory(Intent.CATEGORY_BROWSABLE)
+                                            setPackage(handlerPkg)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(appIntent)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "onNewSession: https app-link launch failed — loading in browser instead", e)
+                                        // Create a new tab as fallback
+                                        viewModelScope.launch(Dispatchers.Main) {
+                                            createNewTab(context, uri)
+                                        }
+                                    }
+                                }
+                                return null
+                            } else {
+                                Log.i(TAG, "❓ onNewSession: https app-link queued for user decision ($host): $uri")
+                                viewModelScope.launch(Dispatchers.Main) {
+                                    pendingExternalAppRequest = BrowserViewModel.PendingExternalAppRequest(
+                                        uri = uri,
+                                        packageName = handlerPkg,
+                                        fallbackUrl = null,
+                                        blockedAutomatically = false,
+                                        sourceHost = host,
+                                        webUrlFallback = true,
+                                        isNewWindow = true
+                                    )
+                                }
+                                return null
+                            }
+                        }
+                    }
+                }
+
                 Log.i(TAG, "onNewSession: opening new tab for popup URI $uri (opener tabId=${tab.id})")
                 val isJsAllowed = isAuthUri || getSitePermissionValue(uri, "javascript") == "allow"
                 val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -1322,12 +1462,16 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 // GeckoSession instance. GeckoView opens and attaches it internally to the parent window.
                 // Calling newSession.open() here causes:
                 // "java.lang.AssertionError: Must use an unopened GeckoSession instance" and crashes the app.
+                val isBlankPopup = uri.isBlank() || uri == "about:blank"
+                val shouldSelectImmediately = isAuthUri
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    selectTab(newTab.id)
+                    if (shouldSelectImmediately) {
+                        selectTab(newTab.id)
+                    }
                     saveTabs()
                 }
 
-                Log.i(TAG, "AUTH_POPUP: created new tab $tabId with parentId ${tab.id} for uri $uri")
+                Log.i(TAG, "AUTH_POPUP: created new tab $tabId with parentId ${tab.id} for uri $uri (selectImmediately=$shouldSelectImmediately)")
                 return GeckoResult.fromValue(newSession)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onNewSession popup", e)
@@ -1418,6 +1562,13 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
             val idx = tabs.indexOfFirst { it.id == tab.id }
             if (idx != -1) {
+                // Do not capture or persist session state for about:blank / home screen
+                if (tabs[idx].url == "about:blank" || tabs[idx].url.isEmpty()) {
+                    tabs[idx] = tabs[idx].copy(savedSessionState = null)
+                    sessionStatePersistence?.removeDurableState(tab.id)
+                    return
+                }
+
                 tabs[idx] = tabs[idx].copy(savedSessionState = sessionState)
                 // Debounced durable persistence (incognito tabs are skipped inside the persistence layer).
                 sessionStatePersistence?.requestPersist(

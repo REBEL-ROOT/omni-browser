@@ -253,8 +253,39 @@ class MediaInterceptor {
                lower.endsWith(".jpeg") || lower.contains(".jpeg?") ||
                lower.endsWith(".svg") || lower.contains(".svg?") ||
                lower.endsWith(".webp") || lower.contains(".webp?") ||
+               lower.endsWith(".ico") || lower.contains(".ico?") ||
+               lower.contains(".vtt") || lower.contains(".srt") ||
+               lower.contains(".ass") || lower.contains(".ssa") ||
                lower.contains("analytics") || lower.contains("telemetry") ||
                lower.contains("pixel") || lower.contains("/ping")
+    }
+
+    fun isSegmentOrChunkUrl(url: String): Boolean {
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+            return true
+        }
+        val lower = url.lowercase()
+        if (lower.contains(".vtt") || lower.contains(".srt") || lower.contains(".ass") || lower.contains(".ssa") ||
+            lower.contains(".webvtt") || lower.contains("/subtitles/") || lower.contains("/caption")
+        ) {
+            return true
+        }
+        if (lower.contains(".ts") || lower.contains(".m4s")) {
+            val path = try { android.net.Uri.parse(url).path?.lowercase() ?: "" } catch (_: Exception) { lower }
+            if (path.endsWith(".ts") || path.endsWith(".m4s") ||
+                lower.contains(".ts?") || lower.contains(".m4s?") ||
+                lower.contains(".ts#") || lower.contains(".m4s#")
+            ) {
+                return true
+            }
+        }
+        if (lower.contains("/segment") || lower.contains("/fragment") ||
+            lower.contains("seg-") || lower.contains("frag-") ||
+            lower.contains("/chunks/") || lower.contains("/chunk-")
+        ) {
+            return true
+        }
+        return false
     }
 
     private fun isAdVideo(url: String): Boolean {
@@ -303,8 +334,12 @@ class MediaInterceptor {
     /** Called when the network interceptor detects a media asset request. */
     fun onMediaRequestDetected(url: String, headers: Map<String, String>? = null) {
         if (!isMediaDetectionEnabled) return
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) return
         if (isDomainBlocked(url)) return
         if (isTrackingOrStaticResource(url)) return
+        if (isSegmentOrChunkUrl(url)) return
+        val contentTypeHeader = headers?.get("Content-Type") ?: headers?.get("content-type")
+        if (contentTypeHeader?.lowercase()?.contains("video/mp2t") == true) return
         if (isAdVideo(url)) {
             Log.i("MediaInterceptor", "Skipped ad video: $url")
             return
@@ -357,10 +392,13 @@ class MediaInterceptor {
     }
 
     /** Aggressive capturing callback for MSE (Media Source Extensions) or Blob links. */
-    fun onAggressiveMediaGrabbed(url: String, mimeType: String, cookies: String? = null) {
+    fun onAggressiveMediaGrabbed(url: String, mimeType: String, cookies: String? = null, sizeBytes: Long? = null) {
         if (!isMediaDetectionEnabled) return
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) return
         if (isDomainBlocked(url)) return
         if (isTrackingOrStaticResource(url)) return
+        if (isSegmentOrChunkUrl(url)) return
+        if (mimeType.contains("video/mp2t")) return
         if (isAdVideo(url)) {
             Log.i("MediaInterceptor", "Skipped ad video (aggressive): $url")
             return
@@ -391,12 +429,13 @@ class MediaInterceptor {
                 quality = "Source HD",
                 isDrmProtected = false,
                 protectionStatus = MediaProtectionStatus.UNPROTECTED,
+                sizeBytes = sizeBytes,
                 cookies = cookies,
                 validationStatus = initialValidation,
                 pageId = _activePageId.value
             )
             addMedia(media)
-            Log.i("MediaInterceptor", "Aggressively captured media: ${media.type} | url: $url")
+            Log.i("MediaInterceptor", "Aggressively captured media: ${media.type} | size: $sizeBytes | url: $url")
             maybeValidate(media)
         }
     }
@@ -450,9 +489,9 @@ class MediaInterceptor {
                     parsedVariants.forEach { variant ->
                         addMedia(
                             DetectedMedia(
-                                url = variant.first,
+                                url = variant.url,
                                 type = MediaType.HLS,
-                                quality = variant.second,
+                                quality = variant.quality,
                                 isDrmProtected = protection == MediaProtectionStatus.LIKELY_PROTECTED,
                                 protectionStatus = protection,
                                 cookies = cookies,
@@ -467,13 +506,44 @@ class MediaInterceptor {
                         )
                     }
                 } else {
+                    val lines = manifestContent.lines()
+                    val baseUri = urlStr.substring(0, urlStr.lastIndexOf("/") + 1)
+                    val segmentUrls = lines.filter { it.isNotBlank() && !it.startsWith("#") }
+                    var estimatedTotalSize: Long? = null
+                    var qualityLabel = "Auto / Source"
+
+                    when {
+                        urlStr.contains("1080", ignoreCase = true) -> qualityLabel = "1080p"
+                        urlStr.contains("720", ignoreCase = true) -> qualityLabel = "720p"
+                        urlStr.contains("480", ignoreCase = true) -> qualityLabel = "480p"
+                        urlStr.contains("360", ignoreCase = true) -> qualityLabel = "360p"
+                    }
+
+                    if (segmentUrls.isNotEmpty()) {
+                        val firstSeg = segmentUrls.first()
+                        val firstSegUrl = if (firstSeg.startsWith("http")) firstSeg else "$baseUri$firstSeg"
+                        val dummySegMedia = DetectedMedia(
+                            url = firstSegUrl,
+                            type = MediaType.HLS,
+                            cookies = cookies,
+                            referrer = referrer,
+                            origin = origin,
+                            headers = headers
+                        )
+                        val (_, firstSegSize) = validateDirectMedia(dummySegMedia)
+                        if (firstSegSize != null && firstSegSize > 0) {
+                            estimatedTotalSize = firstSegSize * segmentUrls.size
+                        }
+                    }
+
                     addMedia(
                         DetectedMedia(
                             url = urlStr,
                             type = MediaType.HLS,
-                            quality = "Auto / Source",
+                            quality = qualityLabel,
                             isDrmProtected = protection == MediaProtectionStatus.LIKELY_PROTECTED,
                             protectionStatus = protection,
+                            sizeBytes = estimatedTotalSize,
                             cookies = cookies,
                             referrer = referrer,
                             origin = origin,
@@ -506,10 +576,17 @@ class MediaInterceptor {
         }
     }
 
-    private fun parseM3U8MasterPlaylist(baseUrl: String, content: String): List<Pair<String, String>> {
-        val variants = mutableListOf<Pair<String, String>>()
+    data class HlsVariant(
+        val url: String,
+        val quality: String,
+        val bandwidth: Long? = null
+    )
+
+    private fun parseM3U8MasterPlaylist(baseUrl: String, content: String): List<HlsVariant> {
+        val variants = mutableListOf<HlsVariant>()
         val lines = content.lines()
         var currentQuality = ""
+        var currentBandwidth: Long? = null
 
         val baseUri = baseUrl.substring(0, baseUrl.lastIndexOf("/") + 1)
 
@@ -521,24 +598,28 @@ class MediaInterceptor {
                     val res = resMatch.groupValues[1]
                     val height = res.substringAfter("x").toIntOrNull() ?: 0
                     currentQuality = "${height}p"
-                } else {
-                    val bwMatch = Regex("BANDWIDTH=(\\d+)").find(trimmed)
-                    if (bwMatch != null) {
-                        val kbps = (bwMatch.groupValues[1].toIntOrNull() ?: 0) / 1000
-                        currentQuality = "${kbps}kbps"
-                    } else {
-                        currentQuality = "Unknown Quality"
+                }
+                val bwMatch = Regex("BANDWIDTH=(\\d+)").find(trimmed)
+                if (bwMatch != null) {
+                    val bw = bwMatch.groupValues[1].toLongOrNull()
+                    currentBandwidth = bw
+                    if (currentQuality.isEmpty() && bw != null) {
+                        currentQuality = "${bw / 1000}kbps"
                     }
+                }
+                if (currentQuality.isEmpty()) {
+                    currentQuality = "Unknown Quality"
                 }
             } else if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && currentQuality.isNotEmpty()) {
                 val fullUrl = if (trimmed.startsWith("http")) trimmed else "$baseUri$trimmed"
-                variants.add(fullUrl to currentQuality)
+                variants.add(HlsVariant(fullUrl, currentQuality, currentBandwidth))
                 currentQuality = ""
+                currentBandwidth = null
             }
         }
 
-        return variants.distinctBy { it.second }.sortedByDescending {
-            it.second.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+        return variants.distinctBy { it.quality }.sortedByDescending {
+            it.quality.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
         }
     }
 
@@ -554,7 +635,7 @@ class MediaInterceptor {
      */
     private fun maybeValidate(media: DetectedMedia) {
         if (!isMediaValidationEnabled) return
-        if (media.validationStatus != ValidationStatus.PENDING) return
+        if (media.validationStatus != ValidationStatus.PENDING && media.sizeBytes != null) return
         val key = canonicalKey(media.url)
         synchronized(inFlightValidation) {
             if (inFlightValidation.contains(key)) return
@@ -562,13 +643,16 @@ class MediaInterceptor {
         }
         scope.launch {
             try {
-                val result = validateDirectMedia(media)
+                val (result, probedSize) = validateDirectMedia(media)
                 validationCache[key] = result
-                // Apply the result to the matching item(s) in the current list.
+                // Apply the result and discovered size to the matching item(s) in the current list.
                 _detectedMedia.update { list ->
                     list.map {
                         if (canonicalKey(it.url) == key && it.type == media.type) {
-                            it.copy(validationStatus = result)
+                            it.copy(
+                                validationStatus = result,
+                                sizeBytes = it.sizeBytes ?: probedSize
+                            )
                         } else it
                     }
                 }
@@ -584,7 +668,7 @@ class MediaInterceptor {
      * signal only: a non-2xx response from a host that requires auth is reported as
      * UNKNOWN rather than INVALID so we never hide potentially-playable streams.
      */
-    private suspend fun validateDirectMedia(media: DetectedMedia): ValidationStatus =
+    private suspend fun validateDirectMedia(media: DetectedMedia): Pair<ValidationStatus, Long?> =
         withContext(Dispatchers.IO) {
             try {
                 val connection = URL(media.url).openConnection() as HttpURLConnection
@@ -606,7 +690,23 @@ class MediaInterceptor {
                 val code = connection.responseCode
                 val contentType = connection.contentType?.lowercase() ?: ""
 
-                when {
+                var probedSize: Long? = null
+                val contentRange = connection.getHeaderField("Content-Range")
+                if (contentRange != null) {
+                    val totalStr = contentRange.substringAfterLast("/", "")
+                    val parsed = totalStr.toLongOrNull()
+                    if (parsed != null && parsed > 0) {
+                        probedSize = parsed
+                    }
+                }
+                if (probedSize == null) {
+                    val cl = connection.getHeaderField("Content-Length")?.toLongOrNull()
+                    if (cl != null && cl > 1) {
+                        probedSize = cl
+                    }
+                }
+
+                val status = when {
                     code == HttpURLConnection.HTTP_OK || code == HttpURLConnection.HTTP_PARTIAL -> {
                         if (contentType.contains("video/") || contentType.contains("audio/") ||
                             contentType.contains("application/octet-stream") || contentType.isEmpty()
@@ -617,8 +717,9 @@ class MediaInterceptor {
                         code == 403 || code == 410 -> ValidationStatus.INVALID
                     else -> ValidationStatus.UNKNOWN
                 }
+                Pair(status, probedSize)
             } catch (_: Exception) {
-                ValidationStatus.UNKNOWN
+                Pair(ValidationStatus.UNKNOWN, null)
             }
         }
 
@@ -680,13 +781,29 @@ class MediaInterceptor {
 
     private fun addMedia(media: DetectedMedia) {
         _detectedMedia.update { current ->
-            // Raw-URL + type dedupe so repeated identical detections don't accumulate.
-            if (current.any { it.url == media.url && it.type == media.type }) current
-            else current + media
+            val existingIndex = current.indexOfFirst { it.url == media.url && it.type == media.type }
+            if (existingIndex >= 0) {
+                val existing = current[existingIndex]
+                if (existing.sizeBytes == null && media.sizeBytes != null) {
+                    current.toMutableList().apply {
+                        this[existingIndex] = existing.copy(sizeBytes = media.sizeBytes)
+                    }
+                } else {
+                    current
+                }
+            } else {
+                current + media
+            }
         }
     }
 
     private fun classifyUrl(url: String): MediaType? {
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+            return null
+        }
+        if (isSegmentOrChunkUrl(url)) {
+            return null
+        }
         val lower = url.lowercase()
 
         val mimeFromQuery = try {

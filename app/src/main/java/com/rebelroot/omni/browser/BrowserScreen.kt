@@ -220,6 +220,7 @@ fun BrowserScreen(
     onOpenUserAgentSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val hostActivity = androidx.activity.compose.LocalActivity.current
     val keyguardManager = remember(context) { context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager }
     val unlockLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -754,7 +755,9 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(viewModel.currentUrl) {
-        inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
+        if (!isInputFocused) {
+            inputUrl = androidx.compose.ui.text.input.TextFieldValue(viewModel.currentUrl)
+        }
     }
 
     LaunchedEffect(viewModel.qrScanResults) {
@@ -1244,7 +1247,7 @@ fun BrowserScreen(
                                     canGoForward = viewModel.canGoForward,
                                     onBack = { viewModel.goBack() },
                                     onForward = { viewModel.goForward() },
-                                    onHome = { viewModel.loadUrl("about:blank") },
+                                    onHome = { viewModel.navigateHomeDirectly() },
                                     onCommitUrl = { viewModel.loadUrl(it) },
                                     onClearInput = { inputUrl = androidx.compose.ui.text.input.TextFieldValue("") },
                                     currentUrl = viewModel.currentUrl,
@@ -1796,28 +1799,13 @@ fun BrowserScreen(
                 .clip(androidx.compose.ui.graphics.RectangleShape)
                 .background(if (viewModel.isFullscreen || isLandscape) Color.Black else MaterialTheme.colorScheme.background)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(if (!viewModel.isFullscreen) Modifier.statusBarsPadding() else Modifier)
             ) {
-                AnimatedVisibility(
-                    visible = showAlohaBanner && viewModel.addressBarPosition == "Bottom",
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    MediaSnifferBanner(
-                        viewModel = viewModel,
-                        nonDrmMedia = nonDrmMedia,
-                        onDismiss = { isAlohaBannerDismissed = true },
-                        onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
-                        onDownloadClick = { showDownloadSheet = true },
-                        onOpenSettings = { showSnifferSettingsDialogState.value = true }
-                    )
-                }
-
                 Box(
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     AnimatedContent(
                         targetState = Pair(viewModel.activeTabId, showHomeScreen),
@@ -1888,9 +1876,9 @@ fun BrowserScreen(
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
                                 val topBarMeasuredDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))
 
-                                // Banner is inside Scaffold's topBar but measured separately; add its height
-                                // so GeckoView padding is correct when the banner is visible.
-                                val bannerHeight = if (showAlohaBanner && viewModel.addressBarPosition != "Bottom") 48.dp else 0.dp
+                                // Do NOT add bannerHeight to GeckoView's padding! The sniffer banner is an overlay
+                                // and resizing GeckoView causes Android SurfaceView destruction, dropping active MediaCodec decoders.
+                                val bannerHeight = 0.dp
 
                                 val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) {
                                     (topBarMeasuredDp * (1f - topBarFraction)) + bannerHeight
@@ -1905,14 +1893,18 @@ fun BrowserScreen(
                                         // keyboard whenever the IME is visible. With
                                         // edge-to-edge (decorFitsSystemWindows=false) the window
                                         // itself never resizes under adjustResize, so Gecko never
-                                        // learns the visible area shrank and leaves focused inputs
-                                        // hidden behind the keyboard — most visibly on immovable
-                                        // single-page layouts like duck.ai. Padding the engine host
-                                        // with the IME inset resizes the viewport, and Gecko then
-                                        // scrolls the focused text field into view automatically,
-                                        // the same mechanism Firefox/Chromium use. Applies for all
-                                        // toolbar positions and input locations.
-                                        .imePadding()
+                                        // Issue #115: shrink the web viewport above the soft
+                                        // keyboard only when the IME is open for WEB content
+                                        // (!isInputFocused). Never shrink when the user is typing
+                                        // in Omni's own address bar or home search, preventing
+                                        // viewport collapse and SurfaceView buffer rejection.
+                                        .then(
+                                            if (isKeyboardVisible && !isInputFocused && !isEditMode) {
+                                                Modifier.imePadding()
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
                                 ) {
                                     DisposableEffect(Unit) {
                                         onDispose {
@@ -1926,7 +1918,7 @@ fun BrowserScreen(
                                     AndroidView(
                                         modifier = Modifier.fillMaxSize(),
                                         factory = { ctx ->
-                                            val activityCtx = if (ctx is android.app.Activity) ctx else {
+                                            val activityCtx = hostActivity ?: if (ctx is android.app.Activity) ctx else {
                                                 var cur: android.content.Context? = ctx
                                                 var act: android.app.Activity? = null
                                                 while (cur is android.content.ContextWrapper) {
@@ -2140,6 +2132,7 @@ fun BrowserScreen(
                                                     viewModel.resumeTab(activeTab.id, ctx)
                                                 }
                                                 val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session ?: activeTab.session
+                                                viewModel.syncActiveSession(currentSession)
                                                 try {
                                                     setSession(currentSession)
                                                     currentSession.setActive(true)
@@ -2169,6 +2162,7 @@ fun BrowserScreen(
                                                 viewModel.resumeTab(activeTab.id, geckoView.context)
                                             }
                                             val currentSession = viewModel.tabs.find { it.id == activeTab.id }?.session ?: activeTab.session
+                                            viewModel.syncActiveSession(currentSession)
                                             if (geckoView.session != currentSession) {
                                                 try {
                                                     geckoView.setSession(currentSession)
@@ -2391,6 +2385,7 @@ fun BrowserScreen(
                                                     // If we skip setSession here, the surface stays blank because
                                                     // Gecko's compositor lost its native window reference.
                                                     currentSession?.let { session ->
+                                                        viewModel.syncActiveSession(session)
                                                         val geckoView = viewModel.activeGeckoViewRef?.get()
                                                         if (geckoView != null && geckoView.session != session) {
                                                             try {
@@ -2630,6 +2625,31 @@ fun BrowserScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                // Floating Media Sniffer Banner for Bottom address bar mode (pinned below status bar without resizing web content)
+                AnimatedVisibility(
+                    visible = showAlohaBanner && viewModel.addressBarPosition == "Bottom",
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .zIndex(10f)
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                        shadowElevation = 4.dp
+                    ) {
+                        MediaSnifferBanner(
+                            viewModel = viewModel,
+                            nonDrmMedia = nonDrmMedia,
+                            onDismiss = { isAlohaBannerDismissed = true },
+                            onPlay = { url -> onPlayOnlineStream(url, viewModel.currentUrl) },
+                            onDownloadClick = { showDownloadSheet = true },
+                            onOpenSettings = { showSnifferSettingsDialogState.value = true }
+                        )
                     }
                 }
             }
@@ -3606,6 +3626,21 @@ fun BrowserScreen(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                if (pending.sizeBytes != null && pending.sizeBytes > 0L) {
+                                    Text(
+                                        text = formatFileSize(pending.sizeBytes),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Calculating size...",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
                             }
                         }
 
@@ -3723,33 +3758,43 @@ fun BrowserScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            ) {
                                                 Icon(
                                                     imageVector = if (item.type == com.rebelroot.omni.media.MediaInterceptor.MediaType.AUDIO) Icons.Rounded.AudioFile else Icons.Rounded.VideoFile,
                                                     contentDescription = null,
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = stringResource(R.string.download_quality_label, when (item.quality) {
-                                                        "Source HD" -> stringResource(R.string.download_quality_source_hd)
-                                                        "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
-                                                        "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
-                                                        null -> stringResource(R.string.download_quality_auto_source_fallback)
-                                                        else -> item.quality
-                                                    }),
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 15.sp
-                                                )
-                                            // Show file size when available (issue #111)
-                                            if (item.sizeBytes != null && item.sizeBytes > 0L) {
-                                                Text(
-                                                    text = formatFileSize(item.sizeBytes),
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(top = 2.dp)
-                                                )
-                                            }
+                                                Column {
+                                                    Text(
+                                                        text = stringResource(R.string.download_quality_label, when (item.quality) {
+                                                            "Source HD" -> stringResource(R.string.download_quality_source_hd)
+                                                            "Auto / Source" -> stringResource(R.string.download_quality_auto_source)
+                                                            "Unknown Quality" -> stringResource(R.string.download_quality_unknown)
+                                                            null -> stringResource(R.string.download_quality_auto_source_fallback)
+                                                            else -> item.quality
+                                                        }),
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 15.sp
+                                                    )
+                                                    if (item.sizeBytes != null && item.sizeBytes > 0L) {
+                                                        Text(
+                                                            text = formatFileSize(item.sizeBytes),
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    } else if (item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.HLS && item.type != com.rebelroot.omni.media.MediaInterceptor.MediaType.DASH) {
+                                                        Text(
+                                                            text = "Calculating size...",
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                                        )
+                                                    }
+                                                }
                                             }
                                             Text(
                                                 text = item.type.name,
@@ -4047,6 +4092,14 @@ fun BrowserScreen(
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
+                                        if (info.sizeBytes != null && info.sizeBytes > 0L) {
+                                            Text(
+                                                text = formatFileSize(info.sizeBytes),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
                                     Icon(
                                         Icons.Rounded.Download,
@@ -7291,7 +7344,7 @@ fun BrowserScreen(
                             ) {
                                 AndroidView(
                                     factory = { ctx ->
-                                        val activityCtx = if (context is android.app.Activity) context else {
+                                        val activityCtx = hostActivity ?: if (context is android.app.Activity) context else {
                                             var cur: android.content.Context? = context
                                             var act: android.app.Activity? = null
                                             while (cur is android.content.ContextWrapper) {
@@ -7949,8 +8002,7 @@ fun BrowserScreen(
                             end = 16.dp
                         )
                     ) {
-                if (saveCred != null) {
-                    val isDark = viewModel.isDarkThemeEnabled
+                        val isDark = viewModel.isDarkThemeEnabled
                     val bgColor = if (viewModel.isAmoledMode) Color(0xFF101012) else if (isDark) Color(0xFF1C1C1E) else Color(0xFFFAFAFC)
                     val textColor = if (isDark) Color.White else Color(0xFF1C1C1E)
                     val subTextColor = if (isDark) Color(0x99FFFFFF) else Color(0x99000000)
@@ -8086,20 +8138,29 @@ fun BrowserScreen(
                     }
                 }
             }
+        }
 
             // "Switch account" chip — shown after autofill when multiple passwords exist.
             // Lets the user switch to a different saved credential without reloading.
             val showSwitchChip = viewModel.autofillWasPerformed
                 && viewModel.autofillMatches.size > 1
                 && saveCred == null
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showSwitchChip,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 90.dp, start = 12.dp, end = 12.dp)
-            ) {
+            if (showSwitchChip) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .zIndex(1000f),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = true,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit = slideOutVertically { it } + fadeOut(),
+                        modifier = Modifier
+                            .padding(bottom = 90.dp, start = 12.dp, end = 12.dp)
+                    ) {
                 val lastUsed = viewModel.autofillLastUsed
                 if (lastUsed != null) {
                     Surface(
@@ -8159,6 +8220,8 @@ fun BrowserScreen(
                     }
                 }
             }
+        }
+    }
 
             // QR Overview Dialog
             if (showQrOverviewDialog) {
@@ -8331,8 +8394,6 @@ fun BrowserScreen(
                 )
             }
 
-            }
-
 
         // Lock Screen Overlay
         if (viewModel.isIncognitoMode && viewModel.lockIncognito && !viewModel.isIncognitoUnlocked) {
@@ -8382,8 +8443,6 @@ fun BrowserScreen(
             }
         }
 
-
-}
     }
             } // close AdaptiveBrowserShell content
         ) // close AdaptiveBrowserShell call

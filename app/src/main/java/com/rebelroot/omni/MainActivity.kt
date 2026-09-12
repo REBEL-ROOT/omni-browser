@@ -257,7 +257,11 @@ class MainActivity : FragmentActivity() {
                 config.setLayoutDirection(locale)
                 @Suppress("DEPRECATION")
                 context.resources.updateConfiguration(config, context.resources.displayMetrics)
-                context.createConfigurationContext(config)
+                val configContext = context.createConfigurationContext(config)
+                object : android.content.ContextWrapper(this@MainActivity) {
+                    override fun getResources(): android.content.res.Resources = configContext.resources
+                    override fun getAssets(): android.content.res.AssetManager = configContext.assets
+                }
             }
 
             val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
@@ -274,6 +278,7 @@ class MainActivity : FragmentActivity() {
             CompositionLocalProvider(
                 LocalContext provides localizedContext,
                 LocalConfiguration provides localizedContext.resources.configuration,
+                androidx.activity.compose.LocalActivity provides this@MainActivity,
                 androidx.activity.compose.LocalActivityResultRegistryOwner provides this@MainActivity,
                 androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides this@MainActivity
             ) {
@@ -880,6 +885,17 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onLowMemory() {
+        super.onLowMemory()
+        try {
+            browserViewModel.onCriticalMemory()
+            coil.Coil.imageLoader(this).memoryCache?.clear()
+            android.util.Log.i("MainActivity", "🧹 onLowMemory: all background tabs suspended, caches cleared")
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "onLowMemory failed: $e")
+        }
+    }
+
     override fun onPictureInPictureModeChanged(
         isInPictureInPictureMode: Boolean,
         newConfig: android.content.res.Configuration
@@ -949,12 +965,18 @@ class MainActivity : FragmentActivity() {
                                 isSuspended = false,
                                 sessionGenerationId = newGen
                             )
+                            if (browserViewModel.activeTabId == activeTab.id) {
+                                browserViewModel.geckoSession = newSession
+                            }
                             browserViewModel.setupTabSessionListeners(browserViewModel.tabs[idx], context)
                         }
                     },
                     onComplete = { success, method ->
                         browserViewModel.isRecoveringActiveTab = false
                         if (success && recoveredSession != null) {
+                            if (browserViewModel.activeTabId == activeTab.id) {
+                                browserViewModel.geckoSession = recoveredSession!!
+                            }
                             val gv = browserViewModel.activeGeckoViewRef?.get()
                             if (gv != null) {
                                 gv.setSession(recoveredSession!!)

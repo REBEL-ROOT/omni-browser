@@ -13,6 +13,6 @@
     <color name="app_icon_gold_bg">#FFB800</color>
     <!-- Launcher icon plate colors (adaptive-icon background layers). Sampled
          from the source artworks so the mask crop blends with the ring. -->
-    <color name="app_icon_aura_light_bg">#EEF0F3</color>
+    <color name="app_icon_aura_light_bg">#F5F7FA</color>
     <color name="app_icon_aura_dark_bg">#0D1117</color>
 </resources>

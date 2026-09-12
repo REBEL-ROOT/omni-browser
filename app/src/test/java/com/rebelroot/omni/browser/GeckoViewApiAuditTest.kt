@@ -60,6 +60,75 @@ class GeckoViewApiAuditTest {
         println("=== WebExtensionController.PromptDelegate methods ===")
         val promptDelCls = Class.forName("org.mozilla.geckoview.WebExtensionController\$PromptDelegate")
         promptDelCls.declaredMethods.forEach { println("  PromptDelegate method: $it") }
+
+        println("=== GeckoSession WebExtension methods ===")
+        org.mozilla.geckoview.GeckoSession::class.java.methods.forEach {
+            if (it.name.contains("extension", ignoreCase = true) || 
+                it.name.contains("webExtension", ignoreCase = true) ||
+                it.returnType.name.contains("Extension", ignoreCase = true)) {
+                println("  GeckoSession method: $it")
+            }
+        }
+
+        println("=== WebExtensionController all methods ===")
+        WebExtensionController::class.java.methods.forEach {
+            println("  WebExtensionController method: $it")
+        }
+
+        println("=== WebExtension.SessionController methods ===")
+        val sessCtrlCls = Class.forName("org.mozilla.geckoview.WebExtension\$SessionController")
+        sessCtrlCls.declaredMethods.forEach { println("  SessionController method: $it") }
+
+        println("=== WebExtension.SessionTabDelegate methods ===")
+        try {
+            val sessTabDelCls = Class.forName("org.mozilla.geckoview.WebExtension\$SessionTabDelegate")
+            sessTabDelCls.declaredMethods.forEach { println("  SessionTabDelegate method: $it") }
+
+            println("=== WebExtension.UpdateTabDetails fields & methods ===")
+            val updTabCls = Class.forName("org.mozilla.geckoview.WebExtension\$UpdateTabDetails")
+            updTabCls.declaredFields.forEach { println("  UpdateTabDetails field: $it") }
+            updTabCls.declaredMethods.forEach { println("  UpdateTabDetails method: $it") }
+        } catch (e: Exception) {
+            println("  SessionTabDelegate error: $e")
+        }
+
+        println("=== GeckoRuntimeSettings methods ===")
+        org.mozilla.geckoview.GeckoRuntimeSettings::class.java.declaredMethods.forEach {
+            println("  GeckoRuntimeSettings method: $it")
+        }
+        println("=== GeckoRuntimeSettings.Builder methods ===")
+        org.mozilla.geckoview.GeckoRuntimeSettings.Builder::class.java.declaredMethods.forEach {
+            println("  GeckoRuntimeSettings.Builder method: $it")
+        }
+        println("=== GeckoSessionSettings methods ===")
+        org.mozilla.geckoview.GeckoSessionSettings::class.java.declaredMethods.forEach {
+            println("  GeckoSessionSettings method: $it")
+        }
+        println("=== GeckoSessionSettings.Builder methods ===")
+        org.mozilla.geckoview.GeckoSessionSettings.Builder::class.java.declaredMethods.forEach {
+            println("  GeckoSessionSettings.Builder method: $it")
+        }
+    }
+
+    @Test
+    fun testDefaultSettings() {
+        val settings = org.mozilla.geckoview.GeckoRuntimeSettings.Builder()
+            .extensionsProcessEnabled(true)
+            .extensionsWebAPIEnabled(true)
+            .build()
+        println("extensionsProcessEnabled: ${settings.extensionsProcessEnabled}")
+        println("extensionsWebAPIEnabled: ${settings.extensionsWebAPIEnabled}")
+        println("fissionEnabled: ${settings.fissionEnabled}")
+        println("isolatedProcessEnabled: ${settings.isolatedProcessEnabled}")
+
+        val superCls = org.mozilla.geckoview.GeckoRuntimeSettings::class.java.superclass
+        val getPrefsMapMethod = superCls.getDeclaredMethod("getPrefsMap")
+        getPrefsMapMethod.isAccessible = true
+        val prefsMap = getPrefsMapMethod.invoke(settings) as? Map<*, *> ?: emptyMap<Any, Any>()
+        println("Prefs count: ${prefsMap.size}")
+        for (entry in prefsMap.entries) {
+            println("  pref: ${entry.key} = ${entry.value}")
+        }
     }
 
     @Test

@@ -85,8 +85,9 @@ fun BrowserViewModel.registerExtensionAction(id: String, session: GeckoSession?,
     if (session != null) {
         val tab = tabs.find { it.session == session }
         if (tab != null) {
-            val extMap = sessionExtensionActions.getOrPut(tab.id) { mutableMapOf() }
-            extMap[id] = action
+            val currentMap = sessionExtensionActions[tab.id]?.toMutableMap() ?: mutableMapOf()
+            currentMap[id] = action
+            sessionExtensionActions[tab.id] = currentMap
         }
     } else {
         defaultExtensionActions[id] = action
@@ -385,8 +386,13 @@ internal fun BrowserViewModel.setupNativeAppMessageDelegate(extension: WebExtens
                     } else {
                         (message as? Map<*, *>)?.get("cookies") as? String
                     }
+                    val sizeBytes = if (message is org.json.JSONObject) {
+                        if (message.has("sizeBytes") && !message.isNull("sizeBytes")) message.optLong("sizeBytes", -1L).takeIf { it > 0 } else null
+                    } else {
+                        ((message as? Map<*, *>)?.get("sizeBytes") as? Number)?.toLong()?.takeIf { it > 0 }
+                    }
                     if (url != null) {
-                        mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies)
+                        mediaInterceptor.onAggressiveMediaGrabbed(url, mime ?: "video/mp4", cookies, sizeBytes)
                     }
                 } else if (type == "REQUEST_HANDOFF") {
                     handleRequestHandoff(message, sender)
@@ -1004,7 +1010,13 @@ private fun BrowserViewModel.handleSiteDownloadRequest(message: Any, sender: Web
         (message as? Map<*, *>)?.get("cookies") as? String
     }
 
-    Log.i(TAG, "📥 SITE_DOWNLOAD_REQUEST: url=$rawUrl, type=$mediaType, title=$title")
+    val sizeBytes = if (message is org.json.JSONObject) {
+        if (message.has("sizeBytes")) message.getLong("sizeBytes").takeIf { it > 0 } else null
+    } else {
+        ((message as? Map<*, *>)?.get("sizeBytes") as? Number)?.toLong()?.takeIf { it > 0 }
+    }
+
+    Log.i(TAG, "📥 SITE_DOWNLOAD_REQUEST: url=$rawUrl, type=$mediaType, title=$title, size=$sizeBytes")
 
     // Set the pending site download state so the UI can show a quality selector dialog
     this@handleSiteDownloadRequest.pendingSiteDownloadUrl = rawUrl
@@ -1013,8 +1025,51 @@ private fun BrowserViewModel.handleSiteDownloadRequest(message: Any, sender: Web
         title = title,
         mimeType = mimeType,
         pageUrl = pageUrl,
-        cookies = cookies
+        cookies = cookies,
+        sizeBytes = sizeBytes
     )
+
+    if (sizeBytes == null || sizeBytes <= 0) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val conn = java.net.URL(rawUrl).openConnection() as? java.net.HttpURLConnection ?: return@launch
+                conn.instanceFollowRedirects = true
+                conn.requestMethod = "HEAD"
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                cookies?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Cookie", it) }
+                pageUrl.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Referer", it) }
+                conn.setRequestProperty("User-Agent", BrowserViewModel.CHROME_UA)
+                conn.connect()
+                val len = conn.contentLengthLong.takeIf { it > 0 }
+                conn.disconnect()
+                var finalSize: Long? = len
+                if (finalSize == null) {
+                    val getConn = java.net.URL(rawUrl).openConnection() as java.net.HttpURLConnection
+                    getConn.instanceFollowRedirects = true
+                    getConn.requestMethod = "GET"
+                    getConn.setRequestProperty("Range", "bytes=0-1")
+                    getConn.connectTimeout = 4000
+                    getConn.readTimeout = 4000
+                    cookies?.takeIf { it.isNotBlank() }?.let { getConn.setRequestProperty("Cookie", it) }
+                    pageUrl.takeIf { it.isNotBlank() }?.let { getConn.setRequestProperty("Referer", it) }
+                    getConn.setRequestProperty("User-Agent", BrowserViewModel.CHROME_UA)
+                    getConn.connect()
+                    val contentRange = getConn.getHeaderField("Content-Range")
+                    finalSize = contentRange?.substringAfterLast("/", "")?.trim()?.toLongOrNull()?.takeIf { it > 0 }
+                    getConn.disconnect()
+                }
+                if (finalSize != null && finalSize > 0) {
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        if (this@handleSiteDownloadRequest.pendingSiteDownloadUrl == rawUrl) {
+                            this@handleSiteDownloadRequest.pendingSiteDownloadInfo =
+                                this@handleSiteDownloadRequest.pendingSiteDownloadInfo?.copy(sizeBytes = finalSize)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     // Also feed the media into the interceptor so the media sniffer banner appears
     // as a fallback — the user can always download from there.
@@ -1427,3 +1482,146 @@ private fun BrowserViewModel.attachDownloadDelegate(
         Log.w(TAG, "Could not attach WebExtension.Download.Delegate via reflection", e)
     }
 }
+
+/**
+ * Creates a WebExtension.SessionTabDelegate that handles extension requests to close or update tabs
+ * (e.g. uBlock Origin closing ad popup windows via browser.tabs.remove).
+ */
+internal fun BrowserViewModel.createSessionTabDelegate(context: Context): WebExtension.SessionTabDelegate {
+    return object : WebExtension.SessionTabDelegate {
+        override fun onCloseTab(
+            extension: WebExtension?,
+            session: GeckoSession
+        ): GeckoResult<AllowOrDeny> {
+            val currentId = extension.safeId ?: "unknown"
+            Log.d(TAG, "WebExtension $currentId requested onCloseTab")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                try {
+                    val tabToClose = tabs.find { it.session == session }
+                    if (tabToClose != null) {
+                        Log.i(TAG, "Closing tab ${tabToClose.id} requested by extension $currentId")
+                        closeTab(tabToClose.id, context)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error closing tab on extension request", e)
+                }
+            }
+            return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+        }
+
+        override fun onUpdateTab(
+            extension: WebExtension,
+            session: GeckoSession,
+            details: WebExtension.UpdateTabDetails
+        ): GeckoResult<AllowOrDeny> {
+            val currentId = extension.safeId ?: "unknown"
+            Log.d(TAG, "WebExtension $currentId requested onUpdateTab: url=${details.url}, active=${details.active}")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                try {
+                    val targetTab = tabs.find { it.session == session }
+                    if (targetTab != null) {
+                        details.url?.let { url ->
+                            if (url.isNotBlank()) {
+                                loadUrlInTab(targetTab, url)
+                            }
+                        }
+                        if (details.active == true) {
+                            selectTab(targetTab.id)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error updating tab on extension request", e)
+                }
+            }
+            return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+        }
+    }
+}
+
+/**
+ * Creates a WebExtension.ActionDelegate for GeckoSession (SessionController)
+ * to receive tab-specific browser action and page action events, badge updates, and popup triggers.
+ */
+internal fun BrowserViewModel.createSessionActionDelegate(session: GeckoSession? = null): WebExtension.ActionDelegate {
+    return object : WebExtension.ActionDelegate {
+        override fun onBrowserAction(
+            extension: WebExtension,
+            eventSession: GeckoSession?,
+            action: WebExtension.Action
+        ) {
+            try {
+                val id = extension.safeId ?: return
+                registerExtensionAction(id, eventSession ?: session, action)
+            } catch (e: Exception) {
+                Log.e(TAG, "Session ActionDelegate: onBrowserAction failed for ${extension.safeId}", e)
+            }
+        }
+
+        override fun onPageAction(
+            extension: WebExtension,
+            eventSession: GeckoSession?,
+            action: WebExtension.Action
+        ) {
+            try {
+                val id = extension.safeId ?: return
+                registerExtensionAction(id, eventSession ?: session, action)
+            } catch (e: Exception) {
+                Log.e(TAG, "Session ActionDelegate: onPageAction failed for ${extension.safeId}", e)
+            }
+        }
+
+        override fun onOpenPopup(
+            extension: WebExtension,
+            action: WebExtension.Action
+        ): GeckoResult<GeckoSession>? {
+            return try {
+                handleExtensionOpenPopup(extension, action)
+            } catch (e: Exception) {
+                Log.e(TAG, "Session ActionDelegate: onOpenPopup failed for ${extension.safeId}", e)
+                null
+            }
+        }
+
+        override fun onTogglePopup(
+            extension: WebExtension,
+            action: WebExtension.Action
+        ): GeckoResult<GeckoSession>? {
+            return try {
+                handleExtensionOpenPopup(extension, action)
+            } catch (e: Exception) {
+                Log.e(TAG, "Session ActionDelegate: onTogglePopup failed for ${extension.safeId}", e)
+                null
+            }
+        }
+    }
+}
+
+/**
+ * Attaches both SessionTabDelegate and ActionDelegate for the specified extension across all live tabs.
+ */
+internal fun BrowserViewModel.attachSessionDelegates(extension: WebExtension, context: Context) {
+    val tabDelegate = createSessionTabDelegate(context)
+    tabs.forEach { tab ->
+        if (!tab.session.isOpen || tab.isSuspended) return@forEach
+        try {
+            tab.session.webExtensionController.setTabDelegate(extension, tabDelegate)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set SessionTabDelegate for ${extension.safeId} on tab ${tab.id}", e)
+        }
+        try {
+            val actionDelegate = createSessionActionDelegate(tab.session)
+            tab.session.webExtensionController.setActionDelegate(extension, actionDelegate)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to set ActionDelegate for ${extension.safeId} on tab ${tab.id}", e)
+        }
+    }
+}
+
+/**
+ * Backward compatibility alias for attachSessionDelegates.
+ */
+internal fun BrowserViewModel.attachSessionTabDelegate(extension: WebExtension, context: Context) {
+    attachSessionDelegates(extension, context)
+}
+
+
