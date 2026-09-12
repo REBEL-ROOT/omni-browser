@@ -125,6 +125,11 @@ fun ThemeScreen(
                                         when (index) {
                                             0 -> {
                                                 viewModel.saveFollowSystemTheme(context, true)
+                                                // Reset AMOLED flag when switching to System theme —
+                                                // System theme has no AMOLED variant, and leaving the
+                                                // flag set causes AMOLED colors to leak into the UI
+                                                // (e.g. address bar, cards) even in light mode.
+                                                viewModel.saveAmoledMode(context, false)
                                             }
                                             1 -> {
                                                 viewModel.saveFollowSystemTheme(context, false)

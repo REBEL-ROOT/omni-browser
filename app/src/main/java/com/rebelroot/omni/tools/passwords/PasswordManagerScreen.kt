@@ -827,7 +827,7 @@ private suspend fun exportPasswordsCsv(context: Context, vaultManager: PasswordV
         val pm = context.packageManager
         val resolvers = pm.queryIntentActivities(
             shareIntent,
-            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+            android.content.pm.PackageManager.MATCH_ALL
         )
         for (info in resolvers) {
             try {

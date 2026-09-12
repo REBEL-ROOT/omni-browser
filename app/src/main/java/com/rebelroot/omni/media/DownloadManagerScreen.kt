@@ -741,7 +741,7 @@ private fun openDownloadedFile(
             }
 
             val pm = context.packageManager
-            val resInfoList = pm.queryIntentActivities(targetIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            val resInfoList = pm.queryIntentActivities(targetIntent, android.content.pm.PackageManager.MATCH_ALL)
             for (resolveInfo in resInfoList) {
                 val packageName = resolveInfo.activityInfo.packageName
                 try {
@@ -822,7 +822,7 @@ private fun shareDownloadedFile(context: Context, file: File, openUri: Uri?) {
         }
 
         val pm = context.packageManager
-        val resInfoList = pm.queryIntentActivities(shareIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        val resInfoList = pm.queryIntentActivities(shareIntent, android.content.pm.PackageManager.MATCH_ALL)
         for (resolveInfo in resInfoList) {
             val packageName = resolveInfo.activityInfo.packageName
             try {
