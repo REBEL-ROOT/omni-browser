@@ -1816,4 +1816,13 @@
     <string name="sync_tabs_empty_title">Brak zsynchronizowanych kart</string>
     <string name="sync_tabs_empty_desc">Karty z innych urządzeń pojawią się tutaj po synchronizacji</string>
     <string name="sync_connected_fxa_toast">Połączono z kontem Firefox!</string>
+    <string name="theme_system">Domyślny systemu</string>
+    <string name="ctx_open_background_tab">Otwórz w karcie w tle</string>
+    <string name="ctx_background_tab_opened">Karta otwarta w tle</string>
+    <string name="address_bar_paste_go">Wklej i przejdź</string>
+    <string name="address_bar_copy">Kopiuj</string>
+    <string name="address_bar_share">Udostępnij</string>
+    <string name="address_bar_clear">Wyczyść</string>
+    <string name="confirm_exit_title">Potwierdź przed wyjściem</string>
+    <string name="confirm_exit_desc">Pokaż okno zamykania po naciśnięciu Wstecz na ekranie głównym</string>
 </resources>

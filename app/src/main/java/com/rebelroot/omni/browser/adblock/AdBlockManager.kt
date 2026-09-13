@@ -580,16 +580,17 @@ class AdBlockManager(private val context: Context) {
 
                 /* 3. OffsetHeight & ClientHeight Proxy Spoofing for Bait Elements */
                 try {
+                    var adPattern = /(?:^|[\s_-])(?:ads?|banner|sponsor|adsbygoogle)(?:[\s_-]|$)/i;
                     var origOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
                     if (origOffsetHeight && origOffsetHeight.get) {
+                        var rawGet = origOffsetHeight.get;
                         Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
                             get: function() {
-                                var h = origOffsetHeight.get.call(this);
-                                if (h === 0 && (this.className || this.id)) {
-                                    var cls = (this.className || '').toString().toLowerCase();
-                                    var id = (this.id || '').toString().toLowerCase();
-                                    if (cls.indexOf('ad') !== -1 || cls.indexOf('banner') !== -1 || cls.indexOf('sponsor') !== -1 ||
-                                        id.indexOf('ad') !== -1 || id.indexOf('banner') !== -1 || id.indexOf('sponsor') !== -1) {
+                                var h = rawGet.call(this);
+                                if (h === 0) {
+                                    var c = this.className;
+                                    var i = this.id;
+                                    if ((typeof c === 'string' && adPattern.test(c)) || (typeof i === 'string' && adPattern.test(i))) {
                                         return 250;
                                     }
                                 }
@@ -601,41 +602,48 @@ class AdBlockManager(private val context: Context) {
                     }
                 } catch(e) {}
 
-                /* 4. MutationObserver Anti-Adblock Overlay Defuser */
+                /* 4. MutationObserver Anti-Adblock Overlay Defuser (Debounced) */
                 try {
+                    var selectors = [
+                        '.fc-ab-root', '.tp-backdrop', '.tp-modal', '#ab-overlay',
+                        '.adblock-overlay', '.adblock-modal', '[class*="anti-adblock"]',
+                        '[id*="anti-adblock"]', '[class*="adblock-warning"]',
+                        '#adblock-notice', '.adblock-notice'
+                    ];
                     var removeAntiAdblockOverlays = function() {
-                        var selectors = [
-                            '.fc-ab-root', '.tp-backdrop', '.tp-modal', '#ab-overlay',
-                            '.adblock-overlay', '.adblock-modal', '[class*="anti-adblock"]',
-                            '[id*="anti-adblock"]', '[class*="adblock-warning"]',
-                            '#adblock-notice', '.adblock-notice'
-                        ];
-                        selectors.forEach(function(sel) {
-                            var elems = document.querySelectorAll(sel);
-                            for (var i = 0; i < elems.length; i++) {
-                                var el = elems[i];
-                                if (el) {
-                                    el.style.setProperty('display', 'none', 'important');
-                                    el.style.setProperty('visibility', 'hidden', 'important');
+                        try {
+                            for (var s = 0; s < selectors.length; s++) {
+                                var elems = document.querySelectorAll(selectors[s]);
+                                for (var i = 0; i < elems.length; i++) {
+                                    var el = elems[i];
+                                    if (el) {
+                                        el.style.setProperty('display', 'none', 'important');
+                                        el.style.setProperty('visibility', 'hidden', 'important');
+                                    }
                                 }
                             }
-                        });
-                        if (document.body) {
-                            document.body.style.setProperty('overflow', 'auto', 'important');
-                        }
-                        if (document.documentElement) {
-                            document.documentElement.style.setProperty('overflow', 'auto', 'important');
-                        }
+                            if (document.body) {
+                                document.body.style.setProperty('overflow', 'auto', 'important');
+                            }
+                            if (document.documentElement) {
+                                document.documentElement.style.setProperty('overflow', 'auto', 'important');
+                            }
+                        } catch(e) {}
                     };
 
                     if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', removeAntiAdblockOverlays);
+                        document.addEventListener('DOMContentLoaded', removeAntiAdblockOverlays, { once: true });
                     } else {
                         removeAntiAdblockOverlays();
                     }
 
+                    var overlayDebounceTimer = null;
                     var observer = new MutationObserver(function() {
-                        removeAntiAdblockOverlays();
+                        if (overlayDebounceTimer) return;
+                        overlayDebounceTimer = setTimeout(function() {
+                            overlayDebounceTimer = null;
+                            removeAntiAdblockOverlays();
+                        }, 250);
                     });
                     if (document.documentElement) {
                         observer.observe(document.documentElement, { childList: true, subtree: true });

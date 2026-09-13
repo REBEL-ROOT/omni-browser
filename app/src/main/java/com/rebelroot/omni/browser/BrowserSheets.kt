@@ -4468,7 +4468,7 @@ fun AllInOneMenuSheet(
     onOpenSettings: () -> Unit,
     onShowThemeSheet: () -> Unit = {},
     onShowFeedbackDialog: () -> Unit = {},
-    onShowCustomizationSheet: () -> Unit,
+    onShowCustomizationSheet: () -> Unit = {},
     onShowExtensions: () -> Unit,
     onShowPlayerSettings: () -> Unit,
     onShowSiteInfo: () -> Unit,
@@ -4729,41 +4729,187 @@ fun AllInOneMenuSheet(
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
                     } // end !showHomeScreen
 
-                    // Extensions
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onDismissRequest()
-                                onShowExtensions()
+                    // Extensions (Firefox Mobile inspired: inline active extensions with 1-tap launch)
+                    val enabledUserExtensions = remember(viewModel.userExtensions.toList()) {
+                        viewModel.userExtensions.filter { !it.safeId.isNullOrEmpty() && it.safeMetaData?.enabled == true }
+                    }
+                    var isExtensionsExpanded by remember { mutableStateOf(true) }
+
+                    if (enabledUserExtensions.isEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onDismissRequest()
+                                    onShowExtensions()
+                                }
+                                .padding(horizontal = 14.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Extension,
+                                contentDescription = stringResource(id = R.string.ext_menu_cd),
+                                tint = textColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(stringResource(id = R.string.menu_extensions), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                                Text(stringResource(id = R.string.menu_extensions_subtext), fontSize = 11.sp, color = secondaryText)
                             }
-                            .padding(horizontal = 14.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Extension,
-                            contentDescription = stringResource(id = R.string.ext_menu_cd),
-                            tint = textColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(stringResource(id = R.string.menu_extensions), fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
-                            Text(stringResource(id = R.string.menu_extensions_subtext), fontSize = 11.sp, color = secondaryText)
+
+                            // Badge for Extensions Count
+                            if (hasActiveUserExtensions) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(dividerColor, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 6.dp, vertical = 6.dp)
+                                ) {
+                                    Box(modifier = Modifier.size(7.dp).background(Color(0xFF8B5CF6), CircleShape))
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null, tint = secondaryText, modifier = Modifier.size(18.dp))
                         }
-                        
-                        // Badge for Extensions Count
-                        if (hasActiveUserExtensions) {
+                    } else {
+                        // Header row with active count, manage button, and expand/collapse chevron
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isExtensionsExpanded = !isExtensionsExpanded }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Extension,
+                                contentDescription = stringResource(id = R.string.ext_menu_cd),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(id = R.string.menu_extensions),
+                                    fontSize = 14.sp,
+                                    color = textColor,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "${enabledUserExtensions.size}",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // "Manage" shortcut to full extensions dashboard
                             Box(
                                 modifier = Modifier
-                                    .background(dividerColor, RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 6.dp, vertical = 6.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        onDismissRequest()
+                                        onShowExtensions()
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Box(modifier = Modifier.size(7.dp).background(Color(0xFF8B5CF6), androidx.compose.foundation.shape.CircleShape))
+                                Text(
+                                    text = "Manage",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
-                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                imageVector = if (isExtensionsExpanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = if (isExtensionsExpanded) "Collapse" else "Expand",
+                                tint = secondaryText,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null, tint = secondaryText, modifier = Modifier.size(18.dp))
+
+                        // Extended list of enabled extensions
+                        if (isExtensionsExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 14.dp, end = 14.dp, bottom = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                enabledUserExtensions.forEach { ext ->
+                                    val extId = ext.safeId.orEmpty()
+                                    val meta = ext.safeMetaData
+                                    val extName = meta?.name ?: extId
+                                    val iconBitmap = viewModel.extensionIcons[extId]
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                onDismissRequest()
+                                                viewModel.openUserExtension(ext, context)
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (iconBitmap != null) {
+                                            Image(
+                                                bitmap = iconBitmap.asImageBitmap(),
+                                                contentDescription = extName,
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(4.dp)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Extension,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(10.dp))
+
+                                        Text(
+                                            text = extName,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = textColor,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        Icon(
+                                            imageVector = Icons.Rounded.KeyboardArrowRight,
+                                            contentDescription = "Open",
+                                            tint = secondaryText.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -4808,7 +4954,7 @@ fun AllInOneMenuSheet(
                 }
             }
 
-            // --- Card 3: Theme & Settings ---
+            // --- Card 3: Help, Theme, Media Player & Settings (Help on left, Settings on right) ---
             Surface(
                 color = cardBg,
                 shape = RoundedCornerShape(12.dp)
@@ -4819,10 +4965,10 @@ fun AllInOneMenuSheet(
                 ) {
                     AllInOneGridItem(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Rounded.PlayCircle,
-                        label = stringResource(id = R.string.menu_player),
+                        icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                        label = stringResource(id = R.string.menu_help),
                         tint = textColor,
-                        onClick = { onDismissRequest(); onShowPlayerSettings() }
+                        onClick = { onDismissRequest(); onShowFeedbackDialog() }
                     )
                     AllInOneGridItem(
                         modifier = Modifier.weight(1f),
@@ -4833,19 +4979,47 @@ fun AllInOneMenuSheet(
                     )
                     AllInOneGridItem(
                         modifier = Modifier.weight(1f),
+                        icon = Icons.Rounded.PlayCircle,
+                        label = stringResource(id = R.string.menu_player),
+                        tint = textColor,
+                        onClick = { onDismissRequest(); onShowPlayerSettings() }
+                    )
+                    AllInOneGridItem(
+                        modifier = Modifier.weight(1f),
                         icon = Icons.Rounded.Settings,
                         label = stringResource(id = R.string.settings_title),
                         tint = textColor,
                         onClick = { onDismissRequest(); onOpenSettings() }
                     )
-                    AllInOneGridItem(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.AutoMirrored.Rounded.HelpOutline,
-                        label = stringResource(id = R.string.menu_help),
-                        tint = textColor,
-                        onClick = { onDismissRequest(); onShowFeedbackDialog() }
-                    )
                 }
+            }
+
+            // --- Quick Customize Action ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        onDismissRequest()
+                        onShowCustomizationSheet()
+                    }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Tune,
+                    contentDescription = null,
+                    tint = secondaryText,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = stringResource(id = R.string.customize_home_cd),
+                    fontSize = 12.sp,
+                    color = secondaryText,
+                    fontWeight = FontWeight.Medium
+                )
             }
 
             // --- Bottom Navigation Row (Back, Forward, Share, Refresh) ---
@@ -5039,21 +5213,25 @@ fun ThemeSheet(
                                     onClick = {
                                         when (index) {
                                             0 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
                                                 viewModel.saveCreamyMode(context, false)
                                             }
                                             1 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, false)
                                                 viewModel.saveAmoledMode(context, false)
                                                 viewModel.saveCreamyMode(context, true)
                                             }
                                             2 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, true)
                                                 viewModel.saveAmoledMode(context, false)
                                                 viewModel.saveCreamyMode(context, false)
                                             }
                                             3 -> {
+                                                viewModel.saveFollowSystemTheme(context, false)
                                                 viewModel.saveDarkTheme(context, true)
                                                 viewModel.saveAmoledMode(context, true)
                                                 viewModel.saveCreamyMode(context, false)

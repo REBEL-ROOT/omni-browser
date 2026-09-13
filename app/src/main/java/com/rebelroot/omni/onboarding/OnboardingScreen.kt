@@ -211,6 +211,8 @@ fun OnboardingScreen(
                         cardColor = cardColor,
                         onThemeChange = { dark, creamy ->
                             isDarkTheme = dark; isCreamyTheme = creamy
+                            viewModel.saveFollowSystemTheme(context, false)
+                            viewModel.saveAmoledMode(context, false)
                             viewModel.saveDarkTheme(context, dark)
                             viewModel.saveCreamyMode(context, creamy)
                         },

@@ -99,6 +99,11 @@ import androidx.core.graphics.drawable.IconCompat
 import android.speech.tts.TextToSpeech
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import com.rebelroot.omni.browser.flags.OmniEngineFlag
+import com.rebelroot.omni.browser.flags.OmniFlagsRegistry
+import com.rebelroot.omni.browser.flags.OmniFlagsManager
+import com.rebelroot.omni.browser.flags.CustomPref
+import com.rebelroot.omni.browser.flags.PrefType
 
 sealed class BackupImportResult {
     data class Success(val restored: Int, val skipped: Int) : BackupImportResult()
@@ -114,15 +119,14 @@ class BrowserViewModel : ViewModel() {
         internal const val TAG = "BrowserViewModel"
 
         /** Default maximum number of background tabs with live GeckoSessions. */
-        internal const val DEFAULT_MAX_LIVE_TABS = 12
+        internal const val DEFAULT_MAX_LIVE_TABS = 24
 
         /**
          * Maximum number of background tabs that may be soft-suspended (session open
-         * but inactive). Once this is exceeded, the oldest soft-suspended tabs are
-         * hard-suspended (session closed). Keeping sessions open preserves JS/DOM state
-         * for dynamic sites (YouTube, Instagram, etc.) so switching never shows a blank page.
+         * but inactive). Keeping sessions open preserves JS/DOM state for all dynamic sites
+         * (Spotify, YouTube, Instagram, forms) so switching never reloads or shows a blank page.
          */
-        internal const val MAX_SOFT_SUSPENDED_TABS = 2
+        internal const val MAX_SOFT_SUSPENDED_TABS = 24
 
         internal const val GRABBER_ID = "omni-media-grabber@omnibrowser.app"
         internal const val AI_BLOCKER_ID = "omni-ai-blocker@omnibrowser.app"
@@ -282,11 +286,17 @@ class BrowserViewModel : ViewModel() {
         val DEFAULT_JAVASCRIPT_KEY = booleanPreferencesKey("default_javascript")
         val DEFAULT_AUTOPLAY_KEY = booleanPreferencesKey("default_autoplay")
         val SITE_PERMISSIONS_FILE = "browser_site_permissions.json"
+        val OMNI_ENGINE_FLAGS_STATE_KEY = stringPreferencesKey("omni_engine_flags_state")
+        val OMNI_CUSTOM_PREFS_KEY = stringPreferencesKey("omni_custom_prefs")
 
         @Volatile
         @Keep
         internal var geckoRuntime: GeckoRuntime? = null
     }
+
+    // Engine Flags & Custom Preferences
+    val engineFlagsState = mutableStateMapOf<String, Boolean>()
+    val customEnginePrefs = mutableStateListOf<CustomPref>()
 
     /** Exposed to the UI so a native-library load failure renders GeckoErrorScreen
      *  instead of a silent blank/black screen. Set to a non-null message when
@@ -2576,6 +2586,7 @@ class BrowserViewModel : ViewModel() {
         // After activating a tab, evict least-recently-used background tabs
         // beyond the live limit to keep session count bounded.
         enforceSuspendLimit()
+        sessionRebindCounter++
     }
 
     fun closeTab(tabId: String, context: Context) {
@@ -2703,12 +2714,23 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun isOmniConfigUrl(url: String): Boolean {
+        val clean = url.trim().lowercase()
+        return clean in setOf(
+            "omni:config", "omni://config",
+            "about:config", "about:flags",
+            "chrome://flags", "chrome:flags",
+            "brave://flags", "brave:flags",
+            "omni:flags", "omni://flags"
+        )
+    }
+
     internal fun loadUrlInTab(tab: TabState, url: String) {
         var formattedUrl = url.trim()
         if (formattedUrl.isEmpty()) return
 
         val lowerInTab = formattedUrl.lowercase()
-        if (lowerInTab == "omni:config" || lowerInTab == "omni://config" || lowerInTab == "about:config") {
+        if (isOmniConfigUrl(lowerInTab)) {
             formattedUrl = "omni:config"
         }
 
@@ -2987,6 +3009,9 @@ class BrowserViewModel : ViewModel() {
             isFingerprintProtection = prefs[FINGERPRINT_PROTECTION_KEY] ?: false
             isClearCookiesOnShutdown = prefs[CLEAR_COOKIES_ON_SHUTDOWN_KEY] ?: false
             isAutoRotateIdentity = prefs[AUTO_ROTATE_IDENTITY_KEY] ?: false
+            val webRender = prefs[WEBRENDER_ALL_KEY] ?: true
+            val layersAccel = prefs[LAYERS_ACCELERATION_KEY] ?: true
+            val highRefresh = prefs[FORCE_HIGH_REFRESH_RATE_KEY] ?: true
 
             val cbSettings = org.mozilla.geckoview.ContentBlocking.Settings.Builder()
                 .antiTracking(
@@ -3000,128 +3025,23 @@ class BrowserViewModel : ViewModel() {
                 .safeBrowsing(if (sbLevel > 0) org.mozilla.geckoview.ContentBlocking.SafeBrowsing.DEFAULT else 0)
                 .build()
 
+            val flagsJson = prefs[OMNI_ENGINE_FLAGS_STATE_KEY]
+            val loadedFlags = OmniFlagsManager.decodeFlagsState(flagsJson)
+            engineFlagsState.clear()
+            engineFlagsState.putAll(loadedFlags)
+
+            val customJson = prefs[OMNI_CUSTOM_PREFS_KEY]
+            val loadedCustom = OmniFlagsManager.decodeCustomPrefs(customJson)
+            customEnginePrefs.clear()
+            customEnginePrefs.addAll(loadedCustom)
+
+            maxLiveTabs = computeDefaultMaxLiveTabs()
+
             val configFile = File(appCtx.filesDir, "geckoview-config.yaml")
             try {
-                val sb = java.lang.StringBuilder()
-                sb.append("prefs:\n")
-                sb.append("  intl.accept_languages: \"${targetLocales.joinToString(", ")}\"\n")
-                // Mobile GeckoView multi-process configuration:
-                // Fission (out-of-process iframes) is kept false on Android to prevent process
-                // explosion and LMK kills when loading sites with multiple cross-origin iframes.
-                // Content process count scales with device RAM (Chrome/Firefox Mobile parity).
-                val processCount = computeProcessCount()
-                val webIsolatedCount = processCount
-                sb.append("  fission.autostart: false\n")
-                sb.append("  dom.ipc.processCount: $processCount\n")
-                sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
-                // Also initialize maxLiveTabs based on device RAM
-                maxLiveTabs = computeDefaultMaxLiveTabs()
-                sb.append("  privacy.donottrackheader.enabled: ${dnt}\n")
-                sb.append("  dom.security.https_only_mode: ${hom || sbLevel == 2}\n")
-                sb.append("  dom.security.https_first: true\n")
-                sb.append("  security.fileuri.strict_origin_policy: true\n")
-                sb.append("  privacy.partition.network_state: true\n")
-                // Total Cookie Protection (dFPI): isolate cookies per top-level site
-                sb.append("  network.cookie.cookieBehavior: 5\n")
-                sb.append("  ui.useAccessibilityTheme: ${if (hc) 1 else 0}\n")
-                sb.append("  signon.autofillForms: true\n")
-                sb.append("  dom.forms.autocomplete.formautofill: true\n")
-                sb.append("  extensions.formautofill.available: true\n")
-                if (pl == 0) {
-                    sb.append("  network.dns.disablePrefetch: true\n")
-                    sb.append("  network.prefetch-next: false\n")
-                } else {
-                    sb.append("  network.dns.disablePrefetch: false\n")
-                    sb.append("  network.prefetch-next: true\n")
-                }
-                // Proxy routing via network.proxy.* prefs. On stock GeckoView the
-                // WebExtension `proxy` API is NOT available (WebLibre uses a custom-
-                // patched GeckoView for that). The prefs ARE honored: when type=1
-                // and only SOCKS is set, Gecko uses SOCKS as the universal fallback
-                // for all protocols (http/https/ftp). failover_direct=false ensures
-                // that if the SOCKS port is unreachable (Tor still bootstrapping),
-                // requests ERROR instead of silently leaking the real IP.
-                if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin") {
-                    val torPort = when {
-                        proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
-                        isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT
-                        else -> TorManager.DEFAULT_SOCKS_PORT
-                    }
-                    val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
-                    val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
-                    sb.append("  network.proxy.type: 1\n")
-                    sb.append("  network.proxy.socks: $targetHost\n")
-                    sb.append("  network.proxy.socks_port: $targetPort\n")
-                    sb.append("  network.proxy.socks_remote_dns: true\n")
-                    sb.append("  network.proxy.failover_direct: false\n")
-                } else {
-                    sb.append("  network.proxy.type: 0\n")
-                }
-                val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
-                if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
-                    sb.append("  network.trr.uri: $dohUri\n")
-                    // mode 2 = TRR-first with native-DNS fallback. We deliberately
-                    // avoid mode 3 (TRR-only): without a guaranteed bootstrap IP a
-                    // misconfigured/unreachable TRR endpoint would black-hole ALL
-                    // DNS and break browsing entirely. mode 2 still encrypts
-                    // lookups whenever TRR works and degrades gracefully otherwise.
-                    sb.append("  network.trr.mode: 2\n")
-                } else {
-                    sb.append("  network.trr.mode: 0\n")
-                }
-                val isTorSession = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin"
-                if (isTorSession) {
-                    // Tor Security Hardening: Disable WebRTC to prevent STUN/TURN IP leaks over non-proxied interfaces
-                    sb.append("  media.peerconnection.enabled: false\n")
-                    sb.append("  media.peerconnection.ice.no_host: true\n")
-                    // Disable UDP QUIC/HTTP3 to prevent UDP bypass leaks outside SOCKS5 TCP proxying
-                    sb.append("  network.quic.enabled: false\n")
-                    sb.append("  network.http.http3.enabled: false\n")
-                    // Tor Browser anti-fingerprinting & cross-tab circuit isolation
-                    sb.append("  privacy.resistFingerprinting: true\n")
-                    sb.append("  privacy.firstparty.isolate: true\n")
-                } else {
-                    sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
-                    sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
-                    sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
-                }
-                if (isRandomizeUa) {
-                    val uas = listOf(
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
-                    )
-                    val chosen = uas[(System.currentTimeMillis() / 86400000L).toInt() % uas.size]
-                    sb.append("  general.useragent.override: $chosen\n")
-                }
-                sb.append("  privacy.clearOnShutdown.cache: ${isClearCookiesOnShutdown}\n")
-                sb.append("  privacy.clearOnShutdown.cookies: ${isClearCookiesOnShutdown}\n")
-                // Disable automatic GeckoView handoff of HTTP/HTTPS URLs to external Android apps
-                // (e.g. YouTube app), guaranteeing all web browsing loads cleanly inside Omni Browser tabs.
-                sb.append("  network.protocol-handler.external.http: false\n")
-                sb.append("  network.protocol-handler.external.https: false\n")
-                sb.append("  network.protocol-handler.external-default: false\n")
-                sb.append("  geckoview.external_app_handler.enabled: false\n")
-                sb.append("  geckoview.intent_dispatched_in_app: false\n")
-                if (isFingerprintProtection) {
-                    sb.append("  webgl.disabled: true\n")
-                    sb.append("  dom.enable_resource_timing: false\n")
-                    sb.append("  dom.enable_user_timing: false\n")
-                    sb.append("  beacon.enabled: false\n")
-                    sb.append("  dom.battery.enabled: false\n")
-                    sb.append("  canvas.captureStream.enabled: false\n")
-                    sb.append("  dom.webaudio.enabled: false\n")
-                }
-                // WebExtension reliability & performance preferences
-                sb.append("  dom.ipc.keepProcessesAlive.extension: 1\n")
-                sb.append("  extensions.webextensions.early_background_wakeup_on_request: true\n")
-                sb.append("  extensions.webextOptionalPermissionPrompts: true\n")
-                configFile.writeText(sb.toString())
-                // DIAGNOSTIC: dump the config file content at startup so we can
-                // verify the proxy prefs are actually present on disk (and not
-                // being clobbered by writeGeckoConfigFile or any other writer).
-                Log.i(TAG, "=== geckoview-config.yaml written at startup (proxyProvider=$proxyProvider) ===\n${sb}")
+                val yaml = buildGeckoConfigYaml(targetLocales)
+                configFile.writeText(yaml)
+                Log.i(TAG, "=== geckoview-config.yaml written at startup (proxyProvider=$proxyProvider) ===\n$yaml")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to write geckoview-config.yaml", e)
             }
@@ -3171,7 +3091,6 @@ class BrowserViewModel : ViewModel() {
                     throw fallbackError
                 }
             }
-            pruneTemporaryStorage(appCtx)
 
             // Register the autocomplete storage delegate so Gecko can query our saved passwords
             // for autofill and notify us when new credentials are submitted.
@@ -3332,8 +3251,6 @@ class BrowserViewModel : ViewModel() {
             loadHistory(appCtx)
             loadBookmarks(appCtx)
             loadShortcuts(appCtx)
-            initTts(appCtx)
-            fetchNews()
 
             // Initialize dependency engines
             ffmpegLoader = FFmpegLoader(appCtx)
@@ -3543,6 +3460,16 @@ class BrowserViewModel : ViewModel() {
                 defaultNotifications = prefs[DEFAULT_NOTIFICATIONS_KEY] ?: "ask"
                 defaultJavascriptAllowed = prefs[DEFAULT_JAVASCRIPT_KEY] ?: true
                 defaultAutoplayAllowed = prefs[DEFAULT_AUTOPLAY_KEY] ?: true
+
+                val flagsJson = prefs[OMNI_ENGINE_FLAGS_STATE_KEY]
+                val loadedFlags = OmniFlagsManager.decodeFlagsState(flagsJson)
+                engineFlagsState.clear()
+                engineFlagsState.putAll(loadedFlags)
+
+                val customJson = prefs[OMNI_CUSTOM_PREFS_KEY]
+                val loadedCustom = OmniFlagsManager.decodeCustomPrefs(customJson)
+                customEnginePrefs.clear()
+                customEnginePrefs.addAll(loadedCustom)
             }
 
             loadSitePermissions(appCtx)
@@ -4313,9 +4240,18 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
                 preferences[FOLLOW_SYSTEM_THEME_KEY] = enabled
+                if (enabled) {
+                    preferences[AMOLED_MODE_KEY] = false
+                    preferences[CREAMY_MODE_KEY] = false
+                }
             }
             followSystemTheme = enabled
             ThemeStateHolder.followSystemTheme = enabled
+            if (enabled) {
+                isAmoledMode = false
+                ThemeStateHolder.amoledMode = false
+                isCreamyMode = false
+            }
             updateGeckoColorScheme()
         }
     }
@@ -6159,9 +6095,163 @@ class BrowserViewModel : ViewModel() {
         regenerateGeckoConfig()
     }
 
+    fun buildGeckoConfigYaml(locales: Array<String>? = null): String {
+        val ctx = appContext ?: return ""
+        val targetLocales = locales ?: run {
+            val lang = try {
+                val sp = ctx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+                sp.getString("selected_language", "en") ?: "en"
+            } catch (e: Exception) {
+                "en"
+            }
+            if (lang.startsWith("en", ignoreCase = true)) {
+                arrayOf("en-US", "en")
+            } else {
+                arrayOf(lang, "en-US", "en")
+            }
+        }
+
+        val sb = StringBuilder()
+        sb.append("prefs:\n")
+        sb.append("  intl.accept_languages: \"${targetLocales.joinToString(", ")}\"\n")
+        sb.append("  fission.autostart: false\n")
+        val processCount = computeProcessCount()
+        val webIsolatedCount = processCount
+        sb.append("  dom.ipc.processCount: $processCount\n")
+        sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
+        if (isWebRenderEnabled) {
+            sb.append("  gfx.webrender.all: true\n")
+        }
+        if (isGpuAccelerationEnabled) {
+            sb.append("  layers.acceleration.force-enabled: true\n")
+        }
+        if (isForceHighRefreshRate) {
+            sb.append("  layout.frame_rate: 0\n")
+        }
+        sb.append("  browser.cache.memory.capacity: 32768\n")
+        sb.append("  image.mem.decodeondraw: true\n")
+        sb.append("  privacy.donottrackheader.enabled: $doNotTrack\n")
+        sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2 || httpsOnlyMode}\n")
+        sb.append("  dom.security.https_first: true\n")
+        sb.append("  security.fileuri.strict_origin_policy: true\n")
+        sb.append("  privacy.partition.network_state: true\n")
+        sb.append("  network.cookie.cookieBehavior: 5\n")
+        sb.append("  ui.useAccessibilityTheme: ${if (accessibilityHighContrast) 1 else 0}\n")
+        sb.append("  signon.autofillForms: true\n")
+        sb.append("  dom.forms.autocomplete.formautofill: true\n")
+        sb.append("  extensions.formautofill.available: true\n")
+        if (preloadPages == 0) {
+            sb.append("  network.dns.disablePrefetch: true\n")
+            sb.append("  network.prefetch-next: false\n")
+        } else {
+            sb.append("  network.dns.disablePrefetch: false\n")
+            sb.append("  network.prefetch-next: true\n")
+        }
+
+        if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin") {
+            val torPort = when {
+                proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
+                isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT
+                else -> TorManager.DEFAULT_SOCKS_PORT
+            }
+            val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
+            val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
+            sb.append("  network.proxy.type: 1\n")
+            sb.append("  network.proxy.socks: $targetHost\n")
+            sb.append("  network.proxy.socks_port: $targetPort\n")
+            sb.append("  network.proxy.socks_remote_dns: true\n")
+            sb.append("  network.proxy.failover_direct: false\n")
+        } else {
+            sb.append("  network.proxy.type: 0\n")
+        }
+
+        val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
+        if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
+            sb.append("  network.trr.uri: $dohUri\n")
+            sb.append("  network.trr.mode: 2\n")
+        } else {
+            sb.append("  network.trr.mode: 0\n")
+        }
+
+        val isTorSession = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin"
+        val isAnyProxy = isTorSession || proxyProvider == "custom_proxy"
+        if (isAnyProxy) {
+            sb.append("  media.peerconnection.enabled: false\n")
+            sb.append("  media.peerconnection.ice.no_host: true\n")
+            sb.append("  network.quic.enabled: false\n")
+            sb.append("  network.http.http3.enabled: false\n")
+        } else {
+            sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
+            sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
+            sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
+        }
+
+        if (isTorSession) {
+            sb.append("  privacy.resistFingerprinting: true\n")
+            sb.append("  privacy.firstparty.isolate: true\n")
+        }
+
+        if (isRandomizeUa) {
+            val uas = listOf(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+            )
+            val idx = (System.currentTimeMillis() / 3600000L).toInt() % uas.size
+            sb.append("  general.useragent.override: ${uas[idx]}\n")
+        }
+
+        sb.append("  privacy.clearOnShutdown.cache: $isClearCookiesOnShutdown\n")
+        sb.append("  privacy.clearOnShutdown.cookies: $isClearCookiesOnShutdown\n")
+        sb.append("  network.protocol-handler.external.http: false\n")
+        sb.append("  network.protocol-handler.external.https: false\n")
+        sb.append("  network.protocol-handler.external-default: false\n")
+        sb.append("  geckoview.external_app_handler.enabled: false\n")
+        sb.append("  geckoview.intent_dispatched_in_app: false\n")
+
+        if (isFingerprintProtection) {
+            sb.append("  webgl.disabled: true\n")
+            sb.append("  dom.enable_resource_timing: false\n")
+            sb.append("  dom.enable_user_timing: false\n")
+            sb.append("  beacon.enabled: false\n")
+            sb.append("  dom.battery.enabled: false\n")
+            sb.append("  canvas.captureStream.enabled: false\n")
+            sb.append("  dom.webaudio.enabled: false\n")
+        }
+
+        // Telemetry Kill — 0% data collection
+        sb.append("  datareporting.policy.dataSubmissionEnabled: false\n")
+        sb.append("  toolkit.telemetry.enabled: false\n")
+        sb.append("  toolkit.telemetry.unified: false\n")
+        sb.append("  datareporting.healthreport.uploadEnabled: false\n")
+        sb.append("  toolkit.telemetry.archive.enabled: false\n")
+        sb.append("  toolkit.telemetry.bhrPing.enabled: false\n")
+        sb.append("  toolkit.telemetry.firstShutdownPing.enabled: false\n")
+        sb.append("  toolkit.telemetry.newProfilePing.enabled: false\n")
+        sb.append("  toolkit.telemetry.shutdownPingSender.enabled: false\n")
+        sb.append("  toolkit.telemetry.updatePing.enabled: false\n")
+        sb.append("  app.normandy.enabled: false\n")
+        sb.append("  app.shield.optoutstudies.enabled: false\n")
+        sb.append("  identity.fxaccounts.enabled: true\n")
+
+        // WebExtension reliability & performance preferences
+        sb.append("  dom.ipc.keepProcessesAlive.extension: 1\n")
+        sb.append("  extensions.webextensions.early_background_wakeup_on_request: true\n")
+        sb.append("  extensions.webextOptionalPermissionPrompts: true\n")
+
+        // Curated Chrome, Brave & Firefox Engine Flags + Custom User Preferences
+        val computedFlags = OmniFlagsManager.getComputedPrefs(engineFlagsState.toMap(), customEnginePrefs.toList())
+        if (computedFlags.isNotEmpty()) {
+            sb.append(OmniFlagsManager.formatPrefsToYaml(computedFlags))
+        }
+
+        return sb.toString()
+    }
+
     /**
      * Regenerates the full geckoview-config.yaml from current state variables.
-     * Called after any privacy setting change so the next app launch picks up
+     * Called after any privacy or flag setting change so the next app launch picks up
      * the new values. Also sets [privacyRestartNeeded] so the UI can prompt
      * the user to restart for changes to take effect in the current session.
      */
@@ -6169,137 +6259,58 @@ class BrowserViewModel : ViewModel() {
         val ctx = appContext ?: return
         val configFile = File(ctx.filesDir, "geckoview-config.yaml")
         try {
-            val sb = StringBuilder()
-            sb.append("prefs:\n")
-            sb.append("  fission.autostart: false\n")
-            val processCount = computeProcessCount()
-            val webIsolatedCount = processCount
-            sb.append("  dom.ipc.processCount: $processCount\n")
-            sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
-            if (isForceHighRefreshRate) {
-                sb.append("  layout.frame_rate: 120\n")
-            }
-            sb.append("  privacy.donottrackheader.enabled: ${doNotTrack}\n")
-            sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2}\n")
-            sb.append("  dom.security.https_first: true\n")
-            sb.append("  security.fileuri.strict_origin_policy: true\n")
-            sb.append("  privacy.partition.network_state: true\n")
-            sb.append("  network.cookie.cookieBehavior: 5\n")
-            sb.append("  signon.autofillForms: true\n")
-            sb.append("  dom.forms.autocomplete.formautofill: true\n")
-            sb.append("  extensions.formautofill.available: true\n")
-            if (preloadPages == 0) {
-                sb.append("  network.dns.disablePrefetch: true\n")
-                sb.append("  network.prefetch-next: false\n")
-            } else {
-                sb.append("  network.dns.disablePrefetch: false\n")
-                sb.append("  network.prefetch-next: true\n")
-            }
-            // Proxy routing via network.proxy.* prefs (see getGeckoRuntime for
-            // the full explanation of why the WebExtension proxy API is not used
-            // on stock GeckoView).
-            if (proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin") {
-                val torPort = when {
-                    proxyProvider == "tor_builtin" -> EmbeddedTorManager.EMBEDDED_SOCKS_PORT
-                    isTorUseBridges -> TorManager.BRIDGE_SOCKS_PORT
-                    else -> TorManager.DEFAULT_SOCKS_PORT
-                }
-                val targetHost = customSocksHost.ifBlank { "127.0.0.1" }
-                val targetPort = if (customSocksHost.isNotBlank()) customSocksPort else torPort
-                sb.append("  network.proxy.type: 1\n")
-                sb.append("  network.proxy.socks: $targetHost\n")
-                sb.append("  network.proxy.socks_port: $targetPort\n")
-                sb.append("  network.proxy.socks_remote_dns: true\n")
-                sb.append("  network.proxy.failover_direct: false\n")
-            } else {
-                sb.append("  network.proxy.type: 0\n")
-            }
-            // DoH - Disabled when using Tor or Custom SOCKS proxy to prevent DNS leak bypassing the proxy resolver.
-            val isProxyActive = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "custom_proxy" || proxyProvider == "tor_builtin"
-            if (isDohEnabled && dohUri.isNotBlank() && !isProxyActive) {
-                sb.append("  network.trr.uri: $dohUri\n")
-                // mode 2 = TRR-first with native-DNS fallback (see the inline
-                // writer in getGeckoRuntime for why we avoid mode 3 here).
-                sb.append("  network.trr.mode: 2\n")
-            } else {
-                sb.append("  network.trr.mode: 0\n")
-            }
-            val isTorSession = proxyProvider == "tor" || proxyProvider == "tor_over_vpn" || proxyProvider == "tor_builtin"
-            val isAnyProxy = isTorSession || proxyProvider == "custom_proxy"
-            if (isAnyProxy) {
-                // WebRTC (STUN/TURN) and QUIC/HTTP3 use UDP, which SOCKS5 cannot
-                // proxy. Disable them for ALL proxy types to prevent real-IP leaks.
-                sb.append("  media.peerconnection.enabled: false\n")
-                sb.append("  media.peerconnection.ice.no_host: true\n")
-                sb.append("  network.quic.enabled: false\n")
-                sb.append("  network.http.http3.enabled: false\n")
-            } else {
-                sb.append("  media.peerconnection.enabled: ${!isDisableWebrtc}\n")
-                sb.append("  network.quic.enabled: ${!isBlockQuic}\n")
-                sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
-            }
-            if (isTorSession) {
-                sb.append("  privacy.resistFingerprinting: true\n")
-                sb.append("  privacy.firstparty.isolate: true\n")
-            }
-            // UA randomization
-            if (isRandomizeUa) {
-                val uas = listOf(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
-                )
-                // Use a random index seeded by hour-of-day for more variation
-                val idx = (System.currentTimeMillis() / 3600000L).toInt() % uas.size
-                sb.append("  general.useragent.override: ${uas[idx]}\n")
-            }
-            // Clear on shutdown
-            sb.append("  privacy.clearOnShutdown.cache: ${isClearCookiesOnShutdown}\n")
-            sb.append("  privacy.clearOnShutdown.cookies: ${isClearCookiesOnShutdown}\n")
-            // Disable automatic GeckoView handoff of HTTP/HTTPS URLs to external Android apps
-            sb.append("  network.protocol-handler.external.http: false\n")
-            sb.append("  network.protocol-handler.external.https: false\n")
-            sb.append("  network.protocol-handler.external-default: false\n")
-            sb.append("  geckoview.external_app_handler.enabled: false\n")
-            sb.append("  geckoview.intent_dispatched_in_app: false\n")
-            // Fingerprint protection
-            if (isFingerprintProtection) {
-                sb.append("  webgl.disabled: true\n")
-                sb.append("  dom.enable_resource_timing: false\n")
-                sb.append("  dom.enable_user_timing: false\n")
-                sb.append("  beacon.enabled: false\n")
-                sb.append("  dom.battery.enabled: false\n")
-                sb.append("  canvas.captureStream.enabled: false\n")
-                sb.append("  dom.webaudio.enabled: false\n")
-            }
-            // === Telemetry Kill — 0% data collection ===
-            sb.append("  datareporting.policy.dataSubmissionEnabled: false\n")
-            sb.append("  toolkit.telemetry.enabled: false\n")
-            sb.append("  toolkit.telemetry.unified: false\n")
-            sb.append("  datareporting.healthreport.uploadEnabled: false\n")
-            sb.append("  toolkit.telemetry.archive.enabled: false\n")
-            sb.append("  toolkit.telemetry.bhrPing.enabled: false\n")
-            sb.append("  toolkit.telemetry.firstShutdownPing.enabled: false\n")
-            sb.append("  toolkit.telemetry.newProfilePing.enabled: false\n")
-            sb.append("  toolkit.telemetry.shutdownPingSender.enabled: false\n")
-            sb.append("  toolkit.telemetry.updatePing.enabled: false\n")
-            sb.append("  app.normandy.enabled: false\n")
-            sb.append("  app.shield.optoutstudies.enabled: false\n")
-            // === Firefox Accounts — enable FxA identity services for sync ===
-            sb.append("  identity.fxaccounts.enabled: true\n")
-            // === WebExtension reliability & performance preferences ===
-            sb.append("  dom.ipc.keepProcessesAlive.extension: 1\n")
-            sb.append("  extensions.webextensions.early_background_wakeup_on_request: true\n")
-            sb.append("  extensions.webextOptionalPermissionPrompts: true\n")
+            val yamlContent = buildGeckoConfigYaml()
             val tmpFile = File(ctx.filesDir, "geckoview-config.tmp")
-            tmpFile.writeText(sb.toString())
+            tmpFile.writeText(yamlContent)
             if (tmpFile.exists() && tmpFile.length() > 0) {
                 tmpFile.renameTo(configFile)
             }
             privacyRestartNeeded = true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to regenerate geckoview-config.yaml", e)
+        }
+    }
+
+    fun setEngineFlag(context: Context, flagId: String, enabled: Boolean) {
+        engineFlagsState[flagId] = enabled
+        viewModelScope.launch {
+            val json = OmniFlagsManager.encodeFlagsState(engineFlagsState.toMap())
+            context.applicationContext.dataStore.edit { it[OMNI_ENGINE_FLAGS_STATE_KEY] = json }
+            regenerateGeckoConfig()
+            privacyRestartNeeded = true
+        }
+    }
+
+    fun resetAllEngineFlags(context: Context) {
+        val defaults = OmniFlagsRegistry.getDefaultStateMap()
+        engineFlagsState.clear()
+        engineFlagsState.putAll(defaults)
+        viewModelScope.launch {
+            val json = OmniFlagsManager.encodeFlagsState(defaults)
+            context.applicationContext.dataStore.edit { it[OMNI_ENGINE_FLAGS_STATE_KEY] = json }
+            regenerateGeckoConfig()
+            privacyRestartNeeded = true
+        }
+    }
+
+    fun addCustomEnginePref(context: Context, pref: CustomPref) {
+        customEnginePrefs.removeAll { it.key == pref.key }
+        customEnginePrefs.add(pref)
+        viewModelScope.launch {
+            val json = OmniFlagsManager.encodeCustomPrefs(customEnginePrefs.toList())
+            context.applicationContext.dataStore.edit { it[OMNI_CUSTOM_PREFS_KEY] = json }
+            regenerateGeckoConfig()
+            privacyRestartNeeded = true
+        }
+    }
+
+    fun removeCustomEnginePref(context: Context, key: String) {
+        customEnginePrefs.removeAll { it.key == key }
+        viewModelScope.launch {
+            val json = OmniFlagsManager.encodeCustomPrefs(customEnginePrefs.toList())
+            context.applicationContext.dataStore.edit { it[OMNI_CUSTOM_PREFS_KEY] = json }
+            regenerateGeckoConfig()
+            privacyRestartNeeded = true
         }
     }
 
@@ -6507,7 +6518,7 @@ class BrowserViewModel : ViewModel() {
             return
         }
 
-        if (lower == "omni:config" || lower == "omni://config" || lower == "about:config") {
+        if (isOmniConfigUrl(lower)) {
             formattedUrl = "omni:config"
         }
 
@@ -7672,6 +7683,7 @@ class BrowserViewModel : ViewModel() {
                 "ja" -> Triple("ja", "JP", "JP:ja")
                 "ru" -> Triple("ru", "RU", "RU:ru")
                 "pt" -> Triple("pt-BR", "BR", "BR:pt")
+                "id" -> Triple("id", "ID", "ID:id")
                 else -> Triple("en-US", "US", "US:en")
             }
 
@@ -8118,17 +8130,29 @@ class BrowserViewModel : ViewModel() {
     var isTtsPlaying by mutableStateOf(false)
     var ttsRate by mutableStateOf(1.0f)
     
-    fun initTts(context: Context) {
+    fun initTts(context: Context, onReady: (() -> Unit)? = null) {
         if (tts == null) {
             tts = TextToSpeech(context.applicationContext) { status ->
                 if (status == TextToSpeech.SUCCESS) {
                     Log.i(TAG, "TTS Engine successfully initialized.")
+                    onReady?.invoke()
                 }
             }
+        } else {
+            onReady?.invoke()
         }
     }
 
     fun speakText(text: String) {
+        if (tts == null) {
+            val ctx = appContext ?: return
+            initTts(ctx) {
+                tts?.setSpeechRate(ttsRate)
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "omni_tts")
+                isTtsPlaying = true
+            }
+            return
+        }
         val engine = tts ?: return
         engine.setSpeechRate(ttsRate)
         engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "omni_tts")
@@ -8146,6 +8170,7 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun readCurrentPageAloud() {
+        appContext?.let { initTts(it) }
         val activeTab = tabs.find { it.id == activeTabId } ?: return
         val session = activeTab.session
         val js = "javascript:(function(){" +
@@ -10033,14 +10058,15 @@ class BrowserViewModel : ViewModel() {
 
     /**
      * Computes a sensible default for [maxLiveTabs] based on device total RAM.
-     * Chrome uses up to 8 renderer processes on high-RAM devices and scales down
-     * on low-RAM ones. We mirror that strategy for live tab session count.
+     * Chrome/Brave keep 12–24+ live tab sessions in RAM and share renderer processes.
+     * We retain tabs in memory so switching between them is instant and never reloads.
      *
      * | Device RAM | maxLiveTabs |
      * |------------|-------------|
      * | ≤ 2 GB     | 6           |
      * | 3–4 GB     | 12          |
-     * | ≥ 6 GB     | 24          |
+     * | 5–6 GB     | 18          |
+     * | ≥ 8 GB     | 24          |
      */
     fun computeDefaultMaxLiveTabs(): Int {
         val ctx = appContext ?: return DEFAULT_MAX_LIVE_TABS
@@ -10050,10 +10076,10 @@ class BrowserViewModel : ViewModel() {
         am.getMemoryInfo(mi)
         val totalGb = mi.totalMem / (1024L * 1024L * 1024L)
         return when {
-            totalGb <= 2 -> 2
-            totalGb <= 4 -> 4
-            totalGb <= 6 -> 8
-            else -> DEFAULT_MAX_LIVE_TABS  // 12
+            totalGb <= 2 -> 6
+            totalGb <= 4 -> 12
+            totalGb <= 6 -> 18
+            else -> 24
         }
     }
 
@@ -10085,28 +10111,25 @@ class BrowserViewModel : ViewModel() {
     }
 
     /**
-     * Enforces the live-tab cap using soft suspension first.
-     * Background tabs beyond [maxLiveTabs] are soft-suspended (session open,
-     * renderer paused). When soft-suspended tabs exceed [MAX_SOFT_SUSPENDED_TABS],
-     * the oldest ones are hard-suspended (session closed) to free RAM.
-     * The active tab is never touched.
+     * Enforces the live-tab cap using soft suspension.
+     * Background tabs beyond [maxLiveTabs] have their renderer paused (session stays open).
+     * JS/DOM/media state is fully preserved — tab switches are instant with no blank page or reload.
+     *
+     * Note: We NEVER call hardSuspendTab() here. Destroying sessions during normal browsing
+     * breaks SPAs (Spotify, YouTube, Instagram) and loses form inputs. Hard suspension is
+     * strictly reserved for [onCriticalMemory] when the Android OS triggers critical memory pressure.
      */
     fun enforceSuspendLimit() {
         try {
             val currentActiveId = activeTabId ?: return
 
-            // Soft-suspend background tabs that exceed the live cap
+            // Soft-suspend background tabs that exceed the live cap (pausing renderer)
+            // but keep the GeckoSession OPEN in RAM.
             val liveBackground = tabs
                 .filter { !it.isSuspended && it.id != currentActiveId }
                 .sortedByDescending { it.lastActiveTime }
             val allowedLive = (maxLiveTabs - 1).coerceAtLeast(0)
             liveBackground.drop(allowedLive).forEach { softSuspendTab(it.id) }
-
-            // Hard-suspend the oldest soft-suspended tabs if they exceed the cap
-            val softSuspended = tabs
-                .filter { it.isSuspended && it.session.isOpen }
-                .sortedBy { it.lastActiveTime }  // oldest first
-            softSuspended.drop(MAX_SOFT_SUSPENDED_TABS).forEach { hardSuspendTab(it.id) }
         } catch (e: Exception) {
             Log.w(TAG, "enforceSuspendLimit: ${e.message}")
         }

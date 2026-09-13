@@ -39,7 +39,7 @@ android {
 
         // Restrict bundled translations to only the languages the app actively supports
         localeFilters += listOf(
-            "en", "hi", "es", "fr", "de", "pt", "pl", "ru", "ja", "zh", "ar"
+            "en", "hi", "es", "fr", "de", "pt", "pl", "ru", "ja", "zh", "ar", "id", "in"
         )
     }
 
@@ -145,6 +145,7 @@ android {
             excludes.addAll(listOf(
                 "**/libminidump_analyzer.so",
                 "**/libcrashhelper.so",
+                "**/libcrashtools.so",
                 // Strip emulator-only ABIs from the universal bundle. Play Store already
                 // delivers only the device's own ABI to each user, so these x86/x86_64
                 // slices (incl. GeckoView's ~160 MB libxul.so) only bloat the uploaded

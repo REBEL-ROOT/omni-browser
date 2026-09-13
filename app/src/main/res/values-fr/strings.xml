@@ -1816,4 +1816,13 @@
     <string name="sync_tabs_empty_title">Aucun onglet synchronisé disponible</string>
     <string name="sync_tabs_empty_desc">Les onglets des autres appareils apparaîtront ici après la synchronisation</string>
     <string name="sync_connected_fxa_toast">Connecté au compte Firefox !</string>
+    <string name="theme_system">Système</string>
+    <string name="ctx_open_background_tab">Ouvrir dans un onglet en arrière-plan</string>
+    <string name="ctx_background_tab_opened">Onglet ouvert en arrière-plan</string>
+    <string name="address_bar_paste_go">Coller et accéder</string>
+    <string name="address_bar_copy">Copier</string>
+    <string name="address_bar_share">Partager</string>
+    <string name="address_bar_clear">Effacer</string>
+    <string name="confirm_exit_title">Confirmer avant de quitter</string>
+    <string name="confirm_exit_desc">Afficher la boîte de dialogue de sortie en appuyant sur Retour sur l\'écran d\'accueil</string>
 </resources>

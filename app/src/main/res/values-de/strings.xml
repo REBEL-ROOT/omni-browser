@@ -1814,4 +1814,13 @@ tellungen &amp; Layout</string>
     <string name="sync_tabs_empty_title">Keine synchronisierten Tabs verfügbar</string>
     <string name="sync_tabs_empty_desc">Tabs von anderen Geräten erscheinen hier nach dem Sync</string>
     <string name="sync_connected_fxa_toast">Mit Firefox-Konto verbunden!</string>
+    <string name="theme_system">System</string>
+    <string name="ctx_open_background_tab">Im Hintergrund-Tab öffnen</string>
+    <string name="ctx_background_tab_opened">Tab im Hintergrund geöffnet</string>
+    <string name="address_bar_paste_go">Einfügen &amp; Los</string>
+    <string name="address_bar_copy">Kopieren</string>
+    <string name="address_bar_share">Teilen</string>
+    <string name="address_bar_clear">Löschen</string>
+    <string name="confirm_exit_title">Vor dem Beenden bestätigen</string>
+    <string name="confirm_exit_desc">Beenden-Dialog anzeigen, wenn auf dem Startbildschirm Zurück gedrückt wird</string>
 </resources>

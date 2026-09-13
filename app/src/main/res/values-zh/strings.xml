@@ -1815,4 +1815,13 @@
     <string name="sync_tabs_empty_title">暂无已同步的标签页</string>
     <string name="sync_tabs_empty_desc">同步完成后，其他设备的标签页将显示在此处</string>
     <string name="sync_connected_fxa_toast">已连接到 Firefox 账号！</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="ctx_open_background_tab">在后台标签页中打开</string>
+    <string name="ctx_background_tab_opened">已在后台打开标签页</string>
+    <string name="address_bar_paste_go">粘贴并前往</string>
+    <string name="address_bar_copy">复制</string>
+    <string name="address_bar_share">分享</string>
+    <string name="address_bar_clear">清除</string>
+    <string name="confirm_exit_title">退出前确认</string>
+    <string name="confirm_exit_desc">在主屏幕按返回键时显示退出对话框</string>
 </resources>

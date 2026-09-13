@@ -105,6 +105,17 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
             .build()
 
         return coil.ImageLoader.Builder(this)
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizePercent(0.12)
+                    .build()
+            }
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(50L * 1024 * 1024)
+                    .build()
+            }
             .okHttpClient(okHttpClient)
             .components {
                 add(coil.decode.SvgDecoder.Factory())
@@ -208,8 +219,9 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
                 // Defaults already applied above; nothing else to do.
             }
 
-            // Start global Omni Sync LAN server so desktop extensions can connect & sync anytime
+            // Start global Omni Sync LAN server after a short delay so cold startup finishes without socket/thread contention
             try {
+                kotlinx.coroutines.delay(6000L)
                 val baseDir = filesDir
                 val collection = com.rebelroot.omni.bookmarks.storage.loadBookmarks(this@OmniApplication)
                 val coord = SyncCoordinatorHolder.getOrCreate(baseDir, collection)

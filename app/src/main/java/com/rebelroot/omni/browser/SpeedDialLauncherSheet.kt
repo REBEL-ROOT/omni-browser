@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +60,10 @@ fun SpeedDialLauncherSheet(
     val cardColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
     val textPrimary = MaterialTheme.colorScheme.onSurface
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
+
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val gridColumns = if (screenWidthDp >= 600) GridCells.Adaptive(76.dp) else GridCells.Fixed(5)
 
     val allItems = remember(viewModel.shortcutsList.toList(), viewModel.bookmarksList.toList()) {
         val shortcutsMapped = viewModel.shortcutsList
@@ -242,7 +247,7 @@ fun SpeedDialLauncherSheet(
                 }
             }
 
-            // Grid View of Shortcuts & Bookmarks (4 columns matching App Launcher)
+            // Grid View of Shortcuts & Bookmarks (5 columns matching Home Launcher)
             if (filteredItems.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -269,9 +274,9 @@ fun SpeedDialLauncherSheet(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(88.dp),
+                    columns = gridColumns,
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -444,18 +449,18 @@ fun SpeedDialGridTile(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(4.dp)
+            .padding(vertical = 4.dp, horizontal = 2.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(
                     androidx.compose.ui.graphics.Brush.linearGradient(brandStyle.bgGradient)
@@ -477,7 +482,7 @@ fun SpeedDialGridTile(
                         model = faviconUrl,
                         contentDescription = item.title,
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(30.dp)
                             .clip(CircleShape),
                         onError = { imageLoadFailed = true }
                     )
@@ -485,7 +490,7 @@ fun SpeedDialGridTile(
                 else -> {
                     Text(
                         text = brandStyle.badgeText,
-                        fontSize = if (brandStyle.badgeText.length > 2) 12.sp else 16.sp,
+                        fontSize = if (brandStyle.badgeText.length > 2) 11.sp else 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         maxLines = 1,

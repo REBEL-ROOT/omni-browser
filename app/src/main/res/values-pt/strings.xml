@@ -1815,4 +1815,13 @@
     <string name="sync_tabs_empty_title">Nenhuma aba sincronizada disponível</string>
     <string name="sync_tabs_empty_desc">As abas de outros dispositivos aparecerão aqui após a sincronização</string>
     <string name="sync_connected_fxa_toast">Conectado à Conta Firefox!</string>
+    <string name="theme_system">Padrão do sistema</string>
+    <string name="ctx_open_background_tab">Abrir em guia em segundo plano</string>
+    <string name="ctx_background_tab_opened">Guia aberta em segundo plano</string>
+    <string name="address_bar_paste_go">Colar e ir</string>
+    <string name="address_bar_copy">Copiar</string>
+    <string name="address_bar_share">Compartilhar</string>
+    <string name="address_bar_clear">Limpar</string>
+    <string name="confirm_exit_title">Confirmar antes de sair</string>
+    <string name="confirm_exit_desc">Mostrar diálogo de saída ao pressionar Voltar na tela inicial</string>
 </resources>

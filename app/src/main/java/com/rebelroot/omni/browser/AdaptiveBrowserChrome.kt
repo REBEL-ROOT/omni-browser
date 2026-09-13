@@ -389,7 +389,7 @@ fun AdaptiveTabletToolbar(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Home,
-                            contentDescription = "Home",
+                            contentDescription = "New Tab",
                             tint = colors.content,
                             modifier = Modifier.size(metrics.toolbarIconSize)
                         )

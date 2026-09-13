@@ -1815,4 +1815,13 @@
     <string name="sync_tabs_empty_title">لا توجد علامات تبويب متزامنة</string>
     <string name="sync_tabs_empty_desc">ستظهر علامات التبويب من الأجهزة الأخرى هنا بعد المزامنة</string>
     <string name="sync_connected_fxa_toast">تم الاتصال بحساب Firefox!</string>
+    <string name="theme_system">النظام</string>
+    <string name="ctx_open_background_tab">فتح في علامة تبويب في الخلفية</string>
+    <string name="ctx_background_tab_opened">تم فتح علامة التبويب في الخلفية</string>
+    <string name="address_bar_paste_go">لصق وانتقال</string>
+    <string name="address_bar_copy">نسخ</string>
+    <string name="address_bar_share">مشاركة</string>
+    <string name="address_bar_clear">مسح</string>
+    <string name="confirm_exit_title">التأكيد قبل الخروج</string>
+    <string name="confirm_exit_desc">إظهار مربع حوار الخروج عند الضغط على رجوع في الشاشة الرئيسية</string>
 </resources>

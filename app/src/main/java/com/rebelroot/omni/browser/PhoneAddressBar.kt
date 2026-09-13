@@ -216,12 +216,12 @@ fun PhoneAddressBar(
     ) {
         AnimatedVisibility(visible = !isInputFocused) {
             IconButton(
-                onClick = { viewModel.navigateHomeDirectly() },
+                onClick = { viewModel.createNewTab(context, "about:blank") },
                 modifier = Modifier.size(config.barIconSize)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Home,
-                    contentDescription = "Go Home",
+                    contentDescription = "New Tab",
                     modifier = Modifier.size(config.innerIconSize),
                     tint = MaterialTheme.colorScheme.onBackground
                 )

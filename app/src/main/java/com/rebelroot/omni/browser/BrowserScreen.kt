@@ -302,7 +302,7 @@ fun BrowserScreen(
     val haptic = LocalHapticFeedback.current
 
     val currentUrlLower = viewModel.currentUrl.lowercase()
-    val isConfig = currentUrlLower == "omni:config" || currentUrlLower == "omni://config" || currentUrlLower == "about:config"
+    val isConfig = viewModel.isOmniConfigUrl(currentUrlLower)
     val showHomeScreen = (viewModel.currentUrl == "about:blank" || viewModel.currentUrl.isEmpty()) && !isConfig
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
 
@@ -826,9 +826,6 @@ fun BrowserScreen(
         session.scrollDelegate = object : org.mozilla.geckoview.GeckoSession.ScrollDelegate {
             override fun onScrollChanged(sess: org.mozilla.geckoview.GeckoSession, scrollX: Int, scrollY: Int) {
                 scrollChannel.trySend(scrollY)  // non-blocking; drops stale values automatically
-                viewModel.triggerScrollPillVisibility()
-                // Force-refresh scroll metrics via the GeckoView subclass lambda
-                viewModel.refreshScrollMetrics?.invoke()
             }
         }
     }
@@ -839,6 +836,8 @@ fun BrowserScreen(
         var accumulated = 0
         for (scrollY in scrollChannel) {          // suspends until next value arrives
             currentScrollPos = scrollY
+            viewModel.triggerScrollPillVisibility()
+            viewModel.refreshScrollMetrics?.invoke()
             // Always show on home screen or when nav-hide is disabled
             if (currentShowHomeScreen || !isNavHideEnabled) {
                 if (!isScrollNavBarVisible) isScrollNavBarVisible = true
@@ -1247,7 +1246,7 @@ fun BrowserScreen(
                                     canGoForward = viewModel.canGoForward,
                                     onBack = { viewModel.goBack() },
                                     onForward = { viewModel.goForward() },
-                                    onHome = { viewModel.navigateHomeDirectly() },
+                                    onHome = { viewModel.createNewTab(context, "about:blank") },
                                     onCommitUrl = { viewModel.loadUrl(it) },
                                     onClearInput = { inputUrl = androidx.compose.ui.text.input.TextFieldValue("") },
                                     currentUrl = viewModel.currentUrl,
@@ -2502,7 +2501,7 @@ fun BrowserScreen(
                                     }
 
                                     val scrollTimestamp = viewModel.scrollPillVisibleTimestamp
-                                    LaunchedEffect(scrollTimestamp, currentScrollPos, viewModel.currentScrollOffset, viewModel.isFastScrollingPill) {
+                                    LaunchedEffect(scrollTimestamp, viewModel.isFastScrollingPill) {
                                         if (viewModel.isFastScrollingPill) {
                                             viewModel.scrollPillState = ScrollPillState.DRAGGING
                                         } else if (geometry.isScrollable) {
@@ -4340,7 +4339,8 @@ fun BrowserScreen(
                     "Italian" to "it",
                     "Turkish" to "tr",
                     "Korean" to "ko",
-                    "Vietnamese" to "vi"
+                    "Vietnamese" to "vi",
+                    "Indonesian" to "id"
                 )
                 val defaultLang = languages.find { it.second == viewModel.selectedLanguageCode } ?: ("English" to "en")
                 LaunchedEffect(showTranslationDialog) {

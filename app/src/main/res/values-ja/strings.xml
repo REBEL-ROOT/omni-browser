@@ -1815,4 +1815,13 @@
     <string name="sync_tabs_empty_title">同期されたタブはありません</string>
     <string name="sync_tabs_empty_desc">他の端末のタブは同期後にここに表示されます</string>
     <string name="sync_connected_fxa_toast">Firefoxアカウントに接続しました！</string>
+    <string name="theme_system">システム</string>
+    <string name="ctx_open_background_tab">バックグラウンドタブで開く</string>
+    <string name="ctx_background_tab_opened">バックグラウンドでタブを開きました</string>
+    <string name="address_bar_paste_go">貼り付けて移動</string>
+    <string name="address_bar_copy">コピー</string>
+    <string name="address_bar_share">共有</string>
+    <string name="address_bar_clear">クリア</string>
+    <string name="confirm_exit_title">終了前に確認</string>
+    <string name="confirm_exit_desc">ホーム画面で戻るを押したときに終了確認ダイアログを表示</string>
 </resources>

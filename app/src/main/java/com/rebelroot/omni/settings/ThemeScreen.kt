@@ -125,6 +125,8 @@ fun ThemeScreen(
                                         when (index) {
                                             0 -> {
                                                 viewModel.saveFollowSystemTheme(context, true)
+                                                viewModel.saveAmoledMode(context, false)
+                                                viewModel.saveCreamyMode(context, false)
                                             }
                                             1 -> {
                                                 viewModel.saveFollowSystemTheme(context, false)

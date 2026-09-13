@@ -1816,4 +1816,13 @@
     <string name="sync_tabs_empty_title">कोई सिंक किया गया टैब उपलब्ध नहीं है</string>
     <string name="sync_tabs_empty_desc">सिंक के बाद अन्य डिवाइस के टैब यहां दिखाई देंगे</string>
     <string name="sync_connected_fxa_toast">Firefox खाते से कनेक्ट हो गया!</string>
+    <string name="theme_system">सिस्टम</string>
+    <string name="ctx_open_background_tab">बैकग्राउंड टैब में खोलें</string>
+    <string name="ctx_background_tab_opened">टैब बैकग्राउंड में खोला गया</string>
+    <string name="address_bar_paste_go">पेस्ट करें और जाएं</string>
+    <string name="address_bar_copy">कॉपी करें</string>
+    <string name="address_bar_share">शेयर करें</string>
+    <string name="address_bar_clear">साफ़ करें</string>
+    <string name="confirm_exit_title">बाहर निकलने से पहले पुष्टि करें</string>
+    <string name="confirm_exit_desc">होम स्क्रीन पर बैक दबाने पर बाहर निकलने का संवाद दिखाएं</string>
 </resources>

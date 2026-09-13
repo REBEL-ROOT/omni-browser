@@ -1819,4 +1819,13 @@
     <string name="sync_tabs_empty_title">No hay pestañas sincronizadas disponibles</string>
     <string name="sync_tabs_empty_desc">Las pestañas de otros dispositivos aparecerán aquí tras la sincronización</string>
     <string name="sync_connected_fxa_toast">¡Conectado a la cuenta de Firefox!</string>
+    <string name="theme_system">Sistema</string>
+    <string name="ctx_open_background_tab">Abrir en pestaña en segundo plano</string>
+    <string name="ctx_background_tab_opened">Pestaña abierta en segundo plano</string>
+    <string name="address_bar_paste_go">Pegar e ir</string>
+    <string name="address_bar_copy">Copiar</string>
+    <string name="address_bar_share">Compartir</string>
+    <string name="address_bar_clear">Borrar</string>
+    <string name="confirm_exit_title">Confirmar antes de salir</string>
+    <string name="confirm_exit_desc">Mostrar cuadro de diálogo de salida al presionar Atrás en la pantalla de inicio</string>
 </resources>
