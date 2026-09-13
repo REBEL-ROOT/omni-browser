@@ -422,49 +422,7 @@
         } catch(e) {}
     }, true);
 
-    // =========================================================
-    // MutationObserver & Lifecycle Management
-    // =========================================================
 
-    const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-            if (mutation.type === 'childList') {
-                for (const node of mutation.addedNodes) {
-                    if (node.tagName === 'VIDEO') {
-                        registerVideo(node);
-                    } else if (node.querySelectorAll) {
-                        node.querySelectorAll('video').forEach(registerVideo);
-                    }
-                }
-                for (const node of mutation.removedNodes) {
-                    if (node.tagName === 'VIDEO' && node._omniVideoId) {
-                        trackedVideos.delete(node._omniVideoId);
-                    } else if (node.querySelectorAll) {
-                        node.querySelectorAll('video').forEach(v => {
-                            if (v._omniVideoId) trackedVideos.delete(v._omniVideoId);
-                        });
-                    }
-                }
-            }
-        }
-    });
-
-    function scanAndRegisterVideos() {
-        document.querySelectorAll('video').forEach(registerVideo);
-    }
-
-    if (document.body) {
-        observer.observe(document.body, { childList: true, subtree: true });
-    } else {
-        document.addEventListener('DOMContentLoaded', () => {
-            if (document.body) {
-                observer.observe(document.body, { childList: true, subtree: true });
-            }
-        });
-    }
-
-    scanAndRegisterVideos();
-    window.addEventListener('DOMContentLoaded', scanAndRegisterVideos);
 
     // Reset dedup on SPA navigation
     let lastHref = window.location.href;
@@ -623,17 +581,35 @@
         video._omniOverlayHost = null;
     }
 
+    // =========================================================
+    // MutationObserver & Lifecycle Management (Optimized)
+    // =========================================================
+
+    let overlayUpdateTimer = null;
+    function scheduleOverlayUpdate() {
+        if (overlayUpdateTimer) return;
+        overlayUpdateTimer = setTimeout(() => {
+            overlayUpdateTimer = null;
+            scanAndAttachSiteOverlays();
+        }, 200);
+    }
+
     function isOverlayCandidate(video) {
         if (!video || video.tagName !== 'VIDEO') return false;
-        const rect = video.getBoundingClientRect();
-        if (rect.width < 200 || rect.height < 120) return false;
-        if (video.muted && video.controls === false && video.getAttribute('autoplay') !== null && rect.width < 400) {
+        // Fast-path: videoWidth/videoHeight do not force DOM layout reflow
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+            if (video.videoWidth < 200 || video.videoHeight < 120) return false;
+        } else {
+            const rect = video.getBoundingClientRect();
+            if (rect.width < 200 || rect.height < 120) return false;
+        }
+        if (video.muted && video.controls === false && video.getAttribute('autoplay') !== null) {
             return false;
         }
         return true;
     }
 
-    const siteOverlayObserver = new MutationObserver(() => {
+    function scanAndAttachSiteOverlays() {
         document.querySelectorAll('video').forEach(v => {
             if (isOverlayCandidate(v) && !v._omniOverlay) {
                 registerVideo(v);
@@ -642,47 +618,63 @@
                 detachOverlayFromVideo(v);
             }
         });
-    });
-
-    function scanAndAttachSiteOverlays() {
-        document.querySelectorAll('video').forEach(v => {
-            if (isOverlayCandidate(v) && !v._omniOverlay) {
-                registerVideo(v);
-                attachOverlayToVideo(v);
-            }
-        });
     }
 
-    if (document.body) {
-        siteOverlayObserver.observe(document.body, { childList: true, subtree: true });
-    } else {
-        document.addEventListener('DOMContentLoaded', () => {
-            if (document.body) {
-                siteOverlayObserver.observe(document.body, { childList: true, subtree: true });
-            }
-        });
+    function scanAndRegisterVideos() {
+        document.querySelectorAll('video').forEach(registerVideo);
     }
 
-    scanAndAttachSiteOverlays();
-    window.addEventListener('DOMContentLoaded', scanAndAttachSiteOverlays);
-    window.addEventListener('resize', scanAndAttachSiteOverlays);
-
-    const removalObserver = new MutationObserver((mutations) => {
+    const unifiedObserver = new MutationObserver((mutations) => {
+        let hasVideoMutation = false;
         for (const mutation of mutations) {
             if (mutation.type === 'childList') {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType === 1) {
+                        if (node.tagName === 'VIDEO') {
+                            registerVideo(node);
+                            hasVideoMutation = true;
+                        } else if (node.firstElementChild && node.querySelector('video')) {
+                            node.querySelectorAll('video').forEach(registerVideo);
+                            hasVideoMutation = true;
+                        }
+                    }
+                }
                 for (const node of mutation.removedNodes) {
-                    if (node.tagName === 'VIDEO' && node._omniOverlay) {
-                        detachOverlayFromVideo(node);
-                    } else if (node.querySelectorAll) {
-                        node.querySelectorAll('video').forEach(v => {
-                            if (v._omniOverlay) detachOverlayFromVideo(v);
-                        });
+                    if (node.nodeType === 1) {
+                        if (node.tagName === 'VIDEO') {
+                            if (node._omniVideoId) trackedVideos.delete(node._omniVideoId);
+                            if (node._omniOverlay) detachOverlayFromVideo(node);
+                            hasVideoMutation = true;
+                        } else if (node.firstElementChild && node.querySelector('video')) {
+                            node.querySelectorAll('video').forEach(v => {
+                                if (v._omniVideoId) trackedVideos.delete(v._omniVideoId);
+                                if (v._omniOverlay) detachOverlayFromVideo(v);
+                            });
+                            hasVideoMutation = true;
+                        }
                     }
                 }
             }
         }
+        if (hasVideoMutation) {
+            scheduleOverlayUpdate();
+        }
     });
-    if (document.body) {
-        removalObserver.observe(document.body, { childList: true, subtree: true });
+
+    function initObserver() {
+        const target = document.body || document.documentElement;
+        if (target) {
+            unifiedObserver.observe(target, { childList: true, subtree: true });
+            scanAndRegisterVideos();
+            scheduleOverlayUpdate();
+        }
     }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initObserver, { once: true });
+    } else {
+        initObserver();
+    }
+
+    window.addEventListener('resize', scheduleOverlayUpdate, { passive: true });
 })();

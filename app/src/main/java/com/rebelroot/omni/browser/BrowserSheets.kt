@@ -98,6 +98,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import org.mozilla.geckoview.GeckoView
 import com.rebelroot.omni.R
 import com.rebelroot.omni.media.MediaInterceptor
@@ -4645,6 +4646,55 @@ fun AllInOneMenuSheet(
                     }
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
+
+                    // Open in native app (if an installed app handles this URL, e.g. YouTube, Twitter, Reddit)
+                    val activePageUrl = viewModel.currentUrl.ifBlank { viewModel.activeTab?.url.orEmpty() }
+                    val nativeHandler = remember(activePageUrl) {
+                        if (activePageUrl.isNotBlank() && activePageUrl != "about:blank") {
+                            getNativeAppHandlers(context, activePageUrl).firstOrNull()
+                        } else null
+                    }
+                    if (nativeHandler != null) {
+                        val appName = remember(nativeHandler) {
+                            try {
+                                context.packageManager.getApplicationLabel(nativeHandler.activityInfo.applicationInfo).toString()
+                            } catch (_: Exception) { "App" }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onDismissRequest()
+                                    try {
+                                        val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(activePageUrl)).apply {
+                                            addCategory(Intent.CATEGORY_BROWSABLE)
+                                            setPackage(nativeHandler.activityInfo.packageName)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(appIntent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Could not open $appName", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = "Open in $appName",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Open in $appName",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(start = 46.dp))
+                    }
 
                     // Desktop Site
                     Row(
