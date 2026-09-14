@@ -2575,9 +2575,9 @@ fun BrowserScreen(
 
                             if (isConfig) {
                                 val density = androidx.compose.ui.platform.LocalDensity.current
+                                val statusBarTop = with(density) { androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(this).toDp() }
                                 val hasTopBar = !(viewModel.addressBarPosition == "Bottom" && !isTablet)
-                                val topBarHeightDp = (if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else if (isTablet) 113.dp else (config.searchBoxHeight + (config.paddingVertical * 2))) + 8.dp
-                                val configTopPad = if (hasTopBar && !viewModel.isFullscreen) topBarHeightDp else 0.dp
+                                val configTopPad = if (!hasTopBar && !viewModel.isFullscreen) statusBarTop else 0.dp
                                 val configBottomPad = if (!hasTopBar && !viewModel.isFullscreen) (config.searchBoxHeight + (config.paddingVertical * 2) + config.bottomNavBarHeight + 16.dp) else 16.dp
 
                                 OmniConfigContent(

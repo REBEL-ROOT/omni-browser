@@ -115,7 +115,7 @@ class MainActivity : FragmentActivity() {
             "en"
         }
         
-        val locale = if (lang == "id" || lang == "in") java.util.Locale.forLanguageTag("in-ID") else java.util.Locale.forLanguageTag(lang)
+        val locale = java.util.Locale.forLanguageTag(lang)
         java.util.Locale.setDefault(locale)
         val config = android.content.res.Configuration(newBase.resources.configuration)
         config.setLocale(locale)
@@ -250,7 +250,7 @@ class MainActivity : FragmentActivity() {
             val context = LocalContext.current
             val currentLanguage = browserViewModel.selectedLanguageCode
             val localizedContext = remember(currentLanguage, context) {
-                val locale = if (currentLanguage == "id" || currentLanguage == "in") java.util.Locale.forLanguageTag("in-ID") else java.util.Locale.forLanguageTag(currentLanguage)
+                val locale = java.util.Locale.forLanguageTag(currentLanguage)
                 java.util.Locale.setDefault(locale)
                 val config = android.content.res.Configuration(context.resources.configuration)
                 config.setLocale(locale)

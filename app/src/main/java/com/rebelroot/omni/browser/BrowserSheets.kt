@@ -4994,34 +4994,6 @@ fun AllInOneMenuSheet(
                 }
             }
 
-            // --- Quick Customize Action ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable {
-                        onDismissRequest()
-                        onShowCustomizationSheet()
-                    }
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Tune,
-                    contentDescription = null,
-                    tint = secondaryText,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(id = R.string.customize_home_cd),
-                    fontSize = 12.sp,
-                    color = secondaryText,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
             // --- Bottom Navigation Row (Back, Forward, Share, Refresh) ---
             Row(
                 modifier = Modifier

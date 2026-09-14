@@ -4877,14 +4877,25 @@ class BrowserViewModel : ViewModel() {
     }
 
     suspend fun saveLanguagePreference(context: Context, langCode: String) {
-        context.dataStore.edit { preferences ->
+        val appCtx = context.applicationContext
+        appCtx.dataStore.edit { preferences ->
             preferences[SELECTED_LANGUAGE_KEY] = langCode
         }
         try {
-            val sp = context.applicationContext.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
-            sp.edit().putString("selected_language", langCode).apply()
+            val sp = appCtx.getSharedPreferences("omni_prefs", Context.MODE_PRIVATE)
+            sp.edit().putString("selected_language", langCode).commit()
         } catch (e: Exception) { /* ignore */ }
-        selectedLanguageCode = langCode
+        try {
+            val acceptLangs = if (langCode.startsWith("en", ignoreCase = true)) "en-US, en" else "$langCode, en-US, en"
+            GeckoPreferenceController.setGeckoPref("intl.accept_languages", acceptLangs, GeckoPreferenceController.PREF_BRANCH_USER)
+        } catch (_: Exception) {}
+        withContext(Dispatchers.Main) {
+            try {
+                val appLocales = androidx.core.os.LocaleListCompat.forLanguageTags(langCode)
+                androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocales)
+            } catch (_: Exception) {}
+            selectedLanguageCode = langCode
+        }
     }
 
     fun getLanguageSelectionDone(context: Context): Flow<Boolean> {

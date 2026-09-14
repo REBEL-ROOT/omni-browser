@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -64,12 +65,20 @@ fun OmniConfigContent(
     val textPrimary = MaterialTheme.colorScheme.onSurface
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
 
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+
     // Count modified flags
     val modifiedFlagsCount = remember(viewModel.engineFlagsState.toMap()) {
         OmniFlagsRegistry.ALL_FLAGS.count { flag ->
             val current = viewModel.engineFlagsState[flag.id] ?: flag.defaultEnabled
             current != flag.defaultEnabled
         }
+    }
+
+    // Filter counts per category
+    val flagsByCategory = remember(viewModel.engineFlagsState.toMap()) {
+        OmniFlagsRegistry.ALL_FLAGS.groupBy { it.category }
     }
 
     Box(
@@ -88,22 +97,108 @@ fun OmniConfigContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    if (isWideScreen) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(accentColor.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Tune,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "omni:config",
+                                            fontSize = 17.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = accentColor
+                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = accentColor.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = "Gecko Engine Flags",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentColor,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Chrome & Brave style flags for the Firefox engine",
+                                        fontSize = 11.sp,
+                                        color = textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showResetAllDialog = true },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(13.dp), tint = textSecondary)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Reset All", fontSize = 11.5.sp, color = textSecondary)
+                                }
+                                FilledTonalButton(
+                                    onClick = { showAddCustomDialog = true },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(14.dp), tint = accentColor)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Add Pref", fontSize = 11.5.sp, color = accentColor, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    } else {
+                        // Phone layout: Top row with icon, title, badge and subtitle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(accentColor.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -111,17 +206,17 @@ fun OmniConfigContent(
                                     imageVector = Icons.Rounded.Tune,
                                     contentDescription = null,
                                     tint = accentColor,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
                                         text = "omni:config",
-                                        fontSize = 18.sp,
+                                        fontSize = 17.sp,
                                         fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace,
                                         color = accentColor
@@ -132,44 +227,55 @@ fun OmniConfigContent(
                                     ) {
                                         Text(
                                             text = "Gecko Engine Flags",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = accentColor,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
                                 Text(
                                     text = "Chrome & Brave style flags for the Firefox engine",
                                     fontSize = 11.sp,
-                                    color = textSecondary
+                                    color = textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        // Action Buttons: Reset All & Add Custom Pref
+                        // Dedicated Action Buttons row for phones (balanced 50/50 split)
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
                                 onClick = { showResetAllDialog = true },
                                 shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
                             ) {
                                 Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(13.dp), tint = textSecondary)
-                                Spacer(Modifier.width(3.dp))
-                                Text("Reset All", fontSize = 11.sp, color = textSecondary)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Reset All", fontSize = 11.5.sp, color = textSecondary)
                             }
                             FilledTonalButton(
                                 onClick = { showAddCustomDialog = true },
                                 shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(34.dp)
                             ) {
                                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(14.dp), tint = accentColor)
-                                Spacer(Modifier.width(3.dp))
-                                Text("Add Pref", fontSize = 11.sp, color = accentColor, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Add Custom Pref", fontSize = 11.5.sp, color = accentColor, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -178,7 +284,14 @@ fun OmniConfigContent(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search flags by name, tag (e.g. #parallel), or pref...", fontSize = 12.sp) },
+                        placeholder = {
+                            Text(
+                                text = "Search flags by name, tag, or pref...",
+                                fontSize = 12.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = textSecondary, modifier = Modifier.size(18.dp)) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
@@ -188,14 +301,12 @@ fun OmniConfigContent(
                             }
                         },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = bgColor,
                             unfocusedContainerColor = bgColor
                         ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     // Category Filter Chips
@@ -232,8 +343,8 @@ fun OmniConfigContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = listBottomPad),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = listBottomPad),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Filter curated flags
                 val filteredFlags = remember(searchQuery, selectedCategory, viewModel.engineFlagsState.toMap()) {
