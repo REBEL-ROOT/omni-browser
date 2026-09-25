@@ -1390,8 +1390,7 @@ fun SiteStyleCustomizerSheetContent(
 
                     HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                    // Row 4: Scroll Buttons
-                    var showScrollButtons by remember { mutableStateOf(viewModel.showScrollButtons) }
+                    // Row 4: Side Scroll Bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1414,9 +1413,8 @@ fun SiteStyleCustomizerSheetContent(
                             }
                         }
                         Switch(
-                            checked = showScrollButtons,
+                            checked = viewModel.showScrollButtons,
                             onCheckedChange = {
-                                showScrollButtons = it
                                 viewModel.saveShowScrollButtons(context, it)
                             },
                             modifier = Modifier.scale(0.85f)

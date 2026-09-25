@@ -866,8 +866,8 @@
     <string name="site_style_grayscale_desc">Desaturate colors for comfortable reading</string>
     <string name="site_style_night_light">Night Light</string>
     <string name="site_style_night_light_desc">Apply warm amber tint for eye care</string>
-    <string name="site_style_scroll_buttons">Scroll Buttons</string>
-    <string name="site_style_scroll_buttons_desc">Show buttons to scroll quickly to top or bottom</string>
+    <string name="site_style_scroll_buttons">Side Scroll Bar</string>
+    <string name="site_style_scroll_buttons_desc">Show vertical fast scroll bar to navigate long pages quickly</string>
     <string name="site_style_apply_all">Apply to all sites</string>
     <string name="site_style_apply_all_desc">Automatically load styles on every site.</string>
     <string name="img_grab_title">Image Grabber</string>

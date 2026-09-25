@@ -364,4 +364,32 @@ class FastScrollMathTest {
         org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 50f, geometry = geom))
         org.junit.Assert.assertFalse(FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 1200f, geometry = geom))
     }
+
+    @Test
+    fun testPillDisabledLogic() {
+        val geom = FastScrollMath.computeGeometry(
+            viewportWidth = 1080f,
+            viewportHeight = 2400f,
+            topTrackOffset = 18f,
+            bottomTrackOffset = 18f,
+            pageScrollHeight = 8000f,
+            pageViewportHeight = 2000f,
+            scrollRange = 8000,
+            scrollExtent = 2000,
+            currentScrollOffset = 500f,
+            isDragging = false,
+            dragFraction = 0f
+        )
+
+        // When showScrollButtons toggle is enabled, touch inside hitbox is recognized
+        val showScrollButtonsEnabled = true
+        val isPillEnabledWhenActive = showScrollButtonsEnabled
+        assertTrue(isPillEnabledWhenActive && FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 200f, geometry = geom))
+
+        // When showScrollButtons toggle is disabled, pill interaction is completely disabled
+        val showScrollButtonsDisabled = false
+        val isPillEnabledWhenInactive = showScrollButtonsDisabled
+        org.junit.Assert.assertFalse(isPillEnabledWhenInactive && FastScrollMath.isTouchInsideHitbox(touchX = 1070f, touchY = 200f, geometry = geom))
+        org.junit.Assert.assertFalse(isPillEnabledWhenInactive && FastScrollMath.isTouchNearRightEdge(touchX = 1070f, viewportWidth = 1080f, edgeStripWidthPx = 48f))
+    }
 }

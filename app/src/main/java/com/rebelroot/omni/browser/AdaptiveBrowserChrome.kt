@@ -312,6 +312,7 @@ fun AdaptiveTabletToolbar(
     isIncognito: Boolean,
     isHomeScreen: Boolean,
     modifier: Modifier = Modifier,
+    menuDropdown: @Composable (() -> Unit)? = null,
 ) {
     val colors = tabletChromeColors(isDarkTheme, isAmoled, isIncognito)
     val focusManager = LocalFocusManager.current
@@ -622,16 +623,19 @@ fun AdaptiveTabletToolbar(
                 }
 
                 // Menu — P0, always visible.
-                IconButton(
-                    onClick = onShowMenu,
-                    modifier = Modifier.size(touch)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "Menu",
-                        tint = colors.content,
-                        modifier = Modifier.size(metrics.toolbarIconSize)
-                    )
+                Box {
+                    IconButton(
+                        onClick = onShowMenu,
+                        modifier = Modifier.size(touch)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "Menu",
+                            tint = colors.content,
+                            modifier = Modifier.size(metrics.toolbarIconSize)
+                        )
+                    }
+                    menuDropdown?.invoke()
                 }
             }
 

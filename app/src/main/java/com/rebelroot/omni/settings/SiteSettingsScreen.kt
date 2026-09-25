@@ -278,8 +278,8 @@ fun SiteSettingsScreen(
                                         Icon(Icons.Rounded.SwapVert, null, tint = accentColor, modifier = Modifier.size(18.dp))
                                     }
                                     Column {
-                                        Text("Scroll Buttons", color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("Show buttons to scroll quickly to top or bottom", color = textSecondaryColor, fontSize = 11.sp)
+                                        Text(stringResource(id = R.string.site_style_scroll_buttons), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(stringResource(id = R.string.site_style_scroll_buttons_desc), color = textSecondaryColor, fontSize = 11.sp)
                                     }
                                 }
                                 Switch(

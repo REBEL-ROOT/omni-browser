@@ -761,7 +761,9 @@ class BrowserViewModel : ViewModel() {
     var scrollPillState by mutableStateOf(ScrollPillState.FADED)
     var scrollPillVisibleTimestamp by mutableStateOf(0L)
     fun triggerScrollPillVisibility() {
-        scrollPillVisibleTimestamp = System.currentTimeMillis()
+        if (showScrollButtons) {
+            scrollPillVisibleTimestamp = System.currentTimeMillis()
+        }
     }
     var fastScrollGeometry by mutableStateOf<ScrollGeometry?>(null)
     val fastScrollController = FastScrollController(viewModelScope)
@@ -4435,12 +4437,17 @@ class BrowserViewModel : ViewModel() {
         viewModelScope.launch {
             context.dataStore.edit { it[SHOW_SCROLL_BUTTONS_KEY] = enabled }
             showScrollButtons = enabled
-            val session = getActiveSession()
-            if (session.isOpen) {
-                if (enabled) {
-                    session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
-                } else {
-                    session.loadUri("javascript:(function(){var s=document.getElementById('omni-hide-scrollbars');if(s)s.remove();})();")
+            if (!enabled) {
+                isFastScrollingPill = false
+                scrollPillState = ScrollPillState.FADED
+            }
+            tabs.forEach { tab ->
+                if (tab.session.isOpen) {
+                    if (enabled) {
+                        tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
+                    } else {
+                        tab.session.loadUri("javascript:(function(){var s=document.getElementById('omni-hide-scrollbars');if(s)s.remove();})();")
+                    }
                 }
             }
         }

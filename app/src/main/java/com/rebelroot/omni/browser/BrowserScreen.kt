@@ -1279,6 +1279,46 @@ fun BrowserScreen(
                                     onShowExtensions = { showExtensionsSheet = true },
                                     onShowTools = { showQuickToolsSheet = true },
                                     onShowMenu = { showMenu = true },
+                                    menuDropdown = {
+                                        omnimenuDropdown(
+                                            expanded = showMenu,
+                                            onDismissRequest = { showMenu = false },
+                                            viewModel = viewModel,
+                                            onNewTab = {
+                                                showMenu = false
+                                                viewModel.createNewTab(context, "about:blank")
+                                            },
+                                            onNewIncognitoTab = {
+                                                showMenu = false
+                                                if (!viewModel.isIncognitoMode) {
+                                                    viewModel.toggleIncognitoMode(context)
+                                                }
+                                                viewModel.createNewTab(context, "about:blank")
+                                            },
+                                            onOpenHistory = { showMenu = false; onOpenHistory() },
+                                            onBurnData = {
+                                                showMenu = false
+                                                coroutineScope.launch {
+                                                    val runtime = viewModel.getGeckoRuntime(context)
+                                                    FireButton(runtime, context).burn()
+                                                    viewModel.burnAllData(context)
+                                                    Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            onOpenDownloads = { showMenu = false; onOpenDownloads() },
+                                            onOpenBookmarks = { showMenu = false; onOpenBookmarks() },
+                                            onOpenSettings = { showMenu = false; onOpenSettings() },
+                                            onOpenPasswordManager = { showMenu = false; onOpenPasswordManager() },
+                                            onShowThemeSheet = { showMenu = false; showThemeSheet = true },
+                                            onShowQuickTools = { showMenu = false; showQuickToolsSheet = true },
+                                            onShowFeedbackDialog = { showMenu = false; showFeedbackDialog = true },
+                                            onShowCustomizationSheet = { showMenu = false; showCustomizationSheet = true },
+                                            onShowExtensions = { showMenu = false; showExtensionsSheet = true },
+                                            onShowPlayerSettings = { showMenu = false; showPlayerSettingsDialog = true },
+                                            onShowSiteInfo = { showMenu = false; showSiteInfoSheet = true },
+                                            onFindInPage = { showMenu = false; viewModel.openFindInPage() }
+                                        )
+                                    },
                                     onShowSiteInfo = { showSiteInfoSheet = true },
                                     onShowSpeedDial = { showSpeedDialSheet = true },
                                     showSpeedDialButton = viewModel.chromeNavBarEnabled || viewModel.addressBarPosition == "Split",
@@ -1332,7 +1372,15 @@ fun BrowserScreen(
                                         onShowTabGroups = { showTabGroupsSheet = true },
                                         onShowSiteInfo = { showSiteInfoSheet = true },
                                         onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true },
-                            onOpenMediaSheet = { showDownloadSheet = true },
+                                        onOpenMediaSheet = { showDownloadSheet = true },
+                                        onBurnData = {
+                                            coroutineScope.launch {
+                                                val runtime = viewModel.getGeckoRuntime(context)
+                                                FireButton(runtime, context).burn()
+                                                viewModel.burnAllData(context)
+                                                Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
                                     )
                                 }
                             }
@@ -1527,7 +1575,15 @@ fun BrowserScreen(
                             onShowTabGroups = { showTabGroupsSheet = true },
                             onShowSiteInfo = { showSiteInfoSheet = true },
                             onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true },
-                            onOpenMediaSheet = { showDownloadSheet = true }
+                            onOpenMediaSheet = { showDownloadSheet = true },
+                            onBurnData = {
+                                coroutineScope.launch {
+                                    val runtime = viewModel.getGeckoRuntime(context)
+                                    FireButton(runtime, context).burn()
+                                    viewModel.burnAllData(context)
+                                    Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         )
                     }
                     }
@@ -1976,7 +2032,7 @@ fun BrowserScreen(
 
                                                  override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
                                                       val scrollY = currentScrollPos
-                                                      val isPillEnabled = !showHomeScreen && !viewModel.isFullscreen
+                                                      val isPillEnabled = viewModel.showScrollButtons && !showHomeScreen && !viewModel.isFullscreen
                                                       val density = ctx.resources.displayMetrics.density
                                                       val stripPx = 48f * density
                                                       val minThumbPx = 36f * density
@@ -2015,7 +2071,9 @@ fun BrowserScreen(
                                                               startY = ev.y
                                                               isPulling = false
                                                               isFastScrolling = false
-                                                              viewModel.triggerScrollPillVisibility()
+                                                              if (isPillEnabled) {
+                                                                  viewModel.triggerScrollPillVisibility()
+                                                              }
 
                                                               val isInsideThumb = isPillEnabled && FastScrollMath.isTouchInsideHitbox(ev.x, ev.y, geometry)
                                                               val isNearRightEdge = isPillEnabled && FastScrollMath.isTouchNearRightEdge(ev.x, width.toFloat(), stripPx)
@@ -2537,7 +2595,12 @@ fun BrowserScreen(
                                     }
 
                                     val scrollTimestamp = viewModel.scrollPillVisibleTimestamp
-                                    LaunchedEffect(scrollTimestamp, viewModel.isFastScrollingPill) {
+                                    LaunchedEffect(scrollTimestamp, viewModel.isFastScrollingPill, viewModel.showScrollButtons) {
+                                        if (!viewModel.showScrollButtons) {
+                                            viewModel.isFastScrollingPill = false
+                                            viewModel.scrollPillState = ScrollPillState.FADED
+                                            return@LaunchedEffect
+                                        }
                                         if (viewModel.isFastScrollingPill) {
                                             viewModel.scrollPillState = ScrollPillState.DRAGGING
                                         } else if (geometry.isScrollable) {
@@ -2551,7 +2614,7 @@ fun BrowserScreen(
                                         }
                                     }
 
-                                    val isPillVisible = !viewModel.isFullscreen &&
+                                    val isPillVisible = viewModel.showScrollButtons && !viewModel.isFullscreen &&
                                         (viewModel.scrollPillState == ScrollPillState.VISIBLE_IDLE || viewModel.scrollPillState == ScrollPillState.DRAGGING || viewModel.isFastScrollingPill)
 
                                     val alphaAnim by animateFloatAsState(
@@ -2568,7 +2631,7 @@ fun BrowserScreen(
                                         label = "capsuleWidth"
                                     )
 
-                                    if (effectiveAlpha > 0.005f) {
+                                    if (viewModel.showScrollButtons && effectiveAlpha > 0.005f) {
                                         val thumbYDp = with(density) { geometry.thumbY.toDp() }
                                         val thumbHDp = with(density) { geometry.thumbHeight.coerceIn(48.dp.toPx(), 120.dp.toPx()).toDp() }
                                         val isDark = viewModel.isDarkThemeEnabled || viewModel.isAmoledMode
@@ -6581,80 +6644,6 @@ fun BrowserScreen(
                 if (showMenu && viewModel.addressBarPosition == "Bottom") {
                     showMenu = false
                     showAllInOneMenuSheet = true
-                }
-            }
-
-            // Render top dropdown as an in-canvas overlay on web pages to keep GeckoView window focused
-            if (showMenu && viewModel.addressBarPosition != "Bottom") {
-                val density = androidx.compose.ui.platform.LocalDensity.current
-                val configurationForMenu = androidx.compose.ui.platform.LocalConfiguration.current
-                val screenWidthDp = configurationForMenu.screenWidthDp.dp
-                val screenHeightDp = configurationForMenu.screenHeightDp.dp
-                val statusBarPx = WindowInsets.statusBars.getTop(density)
-                val statusBarDp = with(density) { statusBarPx.toDp() }
-                val topBarHeightDp = if (measuredTopBarHeightPx > 0) with(density) { measuredTopBarHeightPx.toDp() } else 56.dp
-                val menuTopOffset = statusBarDp + topBarHeightDp + 4.dp
-                val menuEndPadding = if (screenWidthDp < 360.dp) 4.dp else 8.dp
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(100f)
-                ) {
-                    // Transparent clickable scrim to dismiss menu on outer tap
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { showMenu = false }
-                            )
-                    )
-                    // Positioned dropdown menu card floating below top address bar
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = menuTopOffset, end = menuEndPadding)
-                    ) {
-                        omnimenuDropdownCard(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                            availableHeight = screenHeightDp - menuTopOffset - 16.dp,
-                            viewModel = viewModel,
-                            onNewTab = {
-                                showMenu = false
-                                viewModel.createNewTab(context, "about:blank")
-                            },
-                            onNewIncognitoTab = {
-                                showMenu = false
-                                if (!viewModel.isIncognitoMode) {
-                                    viewModel.toggleIncognitoMode(context)
-                                }
-                                viewModel.createNewTab(context, "about:blank")
-                            },
-                            onOpenHistory = { showMenu = false; onOpenHistory() },
-                            onBurnData = {
-                                showMenu = false
-                                coroutineScope.launch {
-                                    val runtime = viewModel.getGeckoRuntime(context)
-                                    FireButton(runtime, context).burn()
-                                    viewModel.burnAllData(context)
-                                    Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            onOpenDownloads = { showMenu = false; onOpenDownloads() },
-                            onOpenBookmarks = { showMenu = false; onOpenBookmarks() },
-                            onOpenSettings = { showMenu = false; onOpenSettings() },
-                            onOpenPasswordManager = { showMenu = false; onOpenPasswordManager() },
-                            onShowThemeSheet = { showMenu = false; showThemeSheet = true },
-                            onShowFeedbackDialog = { showMenu = false; showFeedbackDialog = true },
-                            onShowCustomizationSheet = { showMenu = false; showCustomizationSheet = true },
-                            onShowExtensions = { showMenu = false; showExtensionsSheet = true },
-                            onShowPlayerSettings = { showMenu = false; showPlayerSettingsDialog = true },
-                            onShowSiteInfo = { showMenu = false; showSiteInfoSheet = true },
-                            onFindInPage = { showMenu = false; viewModel.openFindInPage() }
-                        )
-                    }
                 }
             }
 

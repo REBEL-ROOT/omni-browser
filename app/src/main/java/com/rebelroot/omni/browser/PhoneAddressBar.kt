@@ -159,7 +159,8 @@ fun PhoneAddressBar(
     onShowSiteInfo: () -> Unit = {},
     onShowAllInOneMenuSheet: () -> Unit = {},
     onOpenMediaSheet: () -> Unit = {},
-    onShowSpeedDialSheet: () -> Unit = {}
+    onShowSpeedDialSheet: () -> Unit = {},
+    onBurnData: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -597,22 +598,6 @@ fun PhoneAddressBar(
             }
         }
 
-        // 3-dot menu visible while searching in Top address bar layout —
-        // opens the same omnimenuDropdown used on the home page.
-        AnimatedVisibility(visible = isInputFocused && viewModel.addressBarPosition == "Top") {
-            IconButton(
-                onClick = { onShowMenuChange(true) },
-                modifier = Modifier.size(config.barIconSize)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Menu",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(config.innerIconSize)
-                )
-            }
-        }
-
         AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Split" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             IconButton(
                 onClick = onShowExtensionsSheet,
@@ -675,19 +660,68 @@ fun PhoneAddressBar(
             }
         }
 
-        AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
+        val isTopBar = viewModel.addressBarPosition == "Top"
+        val isMenuVisible = isTopBar || (!isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled))
+
+        AnimatedVisibility(visible = isMenuVisible) {
             Box(
                 modifier = Modifier.size(config.barIconSize)
             ) {
                 IconButton(
-                    onClick = { onShowAllInOneMenuSheet() },
+                    onClick = {
+                        if (isTopBar) {
+                            if (isInputFocused) {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                            onShowMenuChange(!showMenu)
+                        } else {
+                            onShowAllInOneMenuSheet()
+                        }
+                    },
                     modifier = Modifier.matchParentSize()
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Menu,
+                        imageVector = if (isTopBar) Icons.Rounded.MoreVert else Icons.Rounded.Menu,
                         contentDescription = "Menu",
                         tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(config.innerIconSize)
+                    )
+                }
+
+                if (isTopBar) {
+                    omnimenuDropdown(
+                        expanded = showMenu,
+                        onDismissRequest = { onShowMenuChange(false) },
+                        viewModel = viewModel,
+                        onNewTab = {
+                            onShowMenuChange(false)
+                            viewModel.createNewTab(context, "about:blank")
+                        },
+                        onNewIncognitoTab = {
+                            onShowMenuChange(false)
+                            if (!viewModel.isIncognitoMode) {
+                                viewModel.toggleIncognitoMode(context)
+                            }
+                            viewModel.createNewTab(context, "about:blank")
+                        },
+                        onOpenHistory = { onShowMenuChange(false); onOpenHistory() },
+                        onBurnData = {
+                            onShowMenuChange(false)
+                            onBurnData()
+                        },
+                        onOpenDownloads = { onShowMenuChange(false); onOpenDownloads() },
+                        onOpenBookmarks = { onShowMenuChange(false); onOpenBookmarks() },
+                        onOpenSettings = { onShowMenuChange(false); onOpenSettings() },
+                        onOpenPasswordManager = { onShowMenuChange(false); onOpenPasswordManager() },
+                        onShowThemeSheet = { onShowMenuChange(false); onShowThemeSheet() },
+                        onShowQuickTools = { onShowMenuChange(false); onShowQuickTools() },
+                        onShowFeedbackDialog = { onShowMenuChange(false); onShowFeedbackDialog() },
+                        onShowCustomizationSheet = { onShowMenuChange(false); onShowCustomizationSheet() },
+                        onShowExtensions = { onShowMenuChange(false); onShowExtensionsSheet() },
+                        onShowPlayerSettings = { onShowMenuChange(false); onShowPlayerSettings() },
+                        onShowSiteInfo = { onShowMenuChange(false); onShowSiteInfo() },
+                        onFindInPage = { onShowMenuChange(false); viewModel.openFindInPage() }
                     )
                 }
             }
