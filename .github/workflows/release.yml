@@ -82,7 +82,7 @@ jobs:
       - name: Rename APKs
         run: |
           export VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ]; then export VERSION="v1.2.6.3"; fi
+          if [ -z "$VERSION" ]; then export VERSION="v1.3.3.3-beta"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -109,13 +109,13 @@ jobs:
           name: "Omni Browser ${{ github.ref_name }}"
           tag_name: ${{ github.ref_name }}
           draft: true
-          make_latest: "true"
+          make_latest: ${{ (contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc')) && 'false' || 'true' }}
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
           generate_release_notes: false
           files: |
             app/build/outputs/apk/omni-browser-*.apk
           body: |
-            ## Omni Browser ${{ github.ref_name }}
+            ## Omni Browser ${{ github.ref_name }} (Pre-release)
 
             ⚡ **Optimized R8 Minification Version with Highly Compressed Libraries**
             This build is optimized utilizing aggressive R8 compiler shrinking, optimization, and resource minification alongside highly compressed runtime libraries, delivering maximum performance, enhanced security, and the smallest possible installation footprint.
@@ -124,37 +124,21 @@ jobs:
 
             ## 🚀 What's New in ${{ github.ref_name }}
 
-            ### 🛠️ Critical Bug Fixes
-            - **OAuth Popup & New Window Navigation**: Fixed a bug where sites like Deezer trying to open third-party logins (Facebook, Google, Spotify, etc.) were blocked. Expanded the authentication host bypass to handle all major OAuth, SSO, and OIDC endpoints.
-            - **Keyboard Layout & Resize Stability**: Added `adjustResize` support and fixed dynamic bar-hiding to prevent soft keyboard interactions from breaking fixed/sticky web page elements, overlapping layouts, or forms.
-            - **Google Sign-In Black Screen Fix**: Resolved an issue where closing a Google OAuth popup tab left the parent browser session in a blank/black screen state by implementing a secure GeckoView session-rebind counter.
-            - **Firefox Account OAuth Flow**: Fully repaired the Firefox Sync OAuth login loop ("Something went wrong. Please close this tab and try again") by enabling third-party cookies, correcting authorization scopes, and bypassing bot protection using a dedicated Firefox Mobile User-Agent.
-            - **WebExtension Click Crash**: Fixed a native browser crash/restart that triggered when clicking on certain extension actions.
-            - **Responsive 3-Dot Menu**: Improved UI responsiveness by dynamically adapting the three-dot dropdown width on smaller screen form factors.
+            ### 🧭 Navigation & Session History
+            - **Long-Press Session History Menu**: Long-pressing the Back or Forward navigation buttons now opens an interactive session history bottom sheet to jump directly to any previous or forward page in the tab's navigation stack (including the New Tab / Home Screen root).
+            - **Improved Back/Forward Navigation Stack**: Refined tab navigation stack tracking and state restoration across web pages and home screen transitions.
 
-            ---
+            ### 🎛️ Address Bar & Scroll Controls
+            - **Side Scroll Bar Toggle Fix**: Properly disables the vertical fast-scroll side bar when the *Side Scroll Bar* toggle is turned off in Site Settings, and updated setting labels/descriptions for clarity.
+            - **Top Address Bar & Tablet Menu Enhancements**: Restored the 3-dot dropdown menu (`MoreVert`) in Top Address Bar and Adaptive Tablet Chrome modes with full quick-action wiring (New Tab, Incognito, Burn Data, Find in Page, Extensions, and Settings), and kept the menu accessible while the address bar input is focused.
 
-            ## 🔑 Password Managers & WebExtensions (v1.2.9.4)
-            - **Bitwarden & Password Manager WebExtension Support**: Updated GeckoView prompt delegates (`onOptionalPrompt` and `onUpdatePrompt`) to allow dynamic host and clipboard permissions (`browser.permissions.request()`). Bitwarden, Proton Pass, 1Password, and KeePassXC can now dynamically inspect web forms, search vaults, and autofill credentials across all websites.
-            - **Curated Extensions Store Expansion**: Added official entries for Bitwarden, Proton Pass, and KeePassXC-Browser to the built-in curated extension repository for 1-tap installation. Enhanced options page navigation with private browsing support.
-            - **Omni Password Manager Master Toggle**: Added a master toggle switch in the Password Manager vault screen and Settings. When turned OFF, it completely silences login save prompts and autocomplete sheets.
+            ### 🛡️ Privacy & Content Blocking Refinements
+            - **Total Cookie Protection (dFPI) & Cookie Behavior**: Corrected GeckoView cookie behavior mappings and added *Isolate third-party cookies (Total Cookie Protection)* alongside tracker-blocking and strict cookie controls.
+            - **Stricter Social Tracker Filtering**: Removed social media root domains from the filter-list immunity set so third-party social tracking subdomains (e.g., `connect.facebook.net`, `platform.twitter.com`) are never exempted from filter rules.
 
-            ## 📥 Download Notifications & Deep-Link Navigation (v1.2.9.4)
-            - **In-Progress Download Tap**: Tapping the system notification of an ongoing download brings Omni Browser to the foreground and opens the Downloads section directly.
-            - **Completed Download Tap & Direct File Opening**: Tapping a completed download notification opens the file directly with the default viewer via FileProvider. Added dual action buttons on the notification: "Open" and "Downloads".
-            - **Deep Link Handlers**: Integrated robust event handlers in MainActivity to handle both cold starts and background resumes.
-
-            ## 🔔 In-App OTA Update Notification System (v1.2.9.4)
-            - **Automated GitHub Update Notifications**: Added a background check on app startup (throttled to at most once per 12 hours) to check the GitHub Releases API. Issues a high-priority system status bar notification when a new version is available.
-
-            ## 🔄 Omni Sync & Firefox Account Cloud Integration (v1.2.9.4)
-            - **Firefox Account Cloud Sync**: End-to-end encrypted cloud sync for bookmarks, history, tabs, and settings via Firefox Account infrastructure.
-            - **P2P / Local Mesh Device Pairing**: Secure QR-code pairing and LAN transport sync across devices without third-party servers.
-            - **Localization**: Translated and synchronized all sync UI strings across 11 supported languages (English, Hindi, Spanish, French, German, Portuguese, Polish, Russian, Japanese, Chinese, Arabic).
-
-            ## 🎨 UI, Engine & Performance Stability (v1.2.9.4)
-            - **Blank Screen on Startup Resolved**: Fixed proxy initialization, removed premature JavaScript injections, and resolved EGL crash flags on incompatible GPUs.
-            - **OLED Dark Mode Improvements**: Eliminated mutation observer infinite feedback loops with 200ms debouncing, and scoped force-dark CSS variables to eliminate white text on light pages.
+            ### ⚙️ Recent 1.3.3.x Improvements Included
+            - **`omni:config` Engine Flags & Small-Screen Layout**: Added curated Gecko engine flags and fixed responsive layout and status bar padding on compact devices.
+            - **AMOLED Theme & Speed Dial**: Fixed AMOLED theme leak (#118), updated Speed Dial to a 5-column layout, and added *"Open in [App]"* to the Omni menu sheet.
 
             ---
 
