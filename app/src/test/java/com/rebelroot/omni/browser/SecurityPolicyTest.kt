@@ -378,4 +378,54 @@ class SecurityPolicyTest {
         assertTrue(OriginVerifier.isExactOriginMatch("https://www.youtube.com/watch", "www.youtube.com"))
         assertFalse(OriginVerifier.isExactOriginMatch("https://youtube.com.attacker.com", "youtube.com"))
     }
+
+    // ── Redirect handling (issue #132) ──────────────────────────────────────
+
+    @Test
+    fun redirectToBlockedHost_isNeverDenied() {
+        // onLoadRequest fires for server redirects with isDirectNavigation = false;
+        // denying them stranded the user on the "Page has moved" response.
+        assertFalse(
+            SecurityPolicy.shouldDenyBlockedSubNavigation(
+                isRedirect = true,
+                isDirectNavigation = false,
+                isAuthHost = false,
+                host = "tracker.example",
+                hostIsBlocked = true
+            )
+        )
+    }
+
+    @Test
+    fun blockedAutomaticSubNavigation_isDenied() {
+        assertTrue(
+            SecurityPolicy.shouldDenyBlockedSubNavigation(
+                isRedirect = false,
+                isDirectNavigation = false,
+                isAuthHost = false,
+                host = "tracker.example",
+                hostIsBlocked = true
+            )
+        )
+    }
+
+    @Test
+    fun directOrAuthOrUnblockedNavigation_isAllowed() {
+        // User-initiated navigation.
+        assertFalse(
+            SecurityPolicy.shouldDenyBlockedSubNavigation(true, true, false, "tracker.example", true)
+        )
+        // Auth hosts are always allowed.
+        assertFalse(
+            SecurityPolicy.shouldDenyBlockedSubNavigation(false, false, true, "accounts.google.com", true)
+        )
+        // Host not on the blocklist.
+        assertFalse(
+            SecurityPolicy.shouldDenyBlockedSubNavigation(false, false, false, "example.com", false)
+        )
+        // Unparseable / empty host.
+        assertFalse(
+            SecurityPolicy.shouldDenyBlockedSubNavigation(false, false, false, "", true)
+        )
+    }
 }

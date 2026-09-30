@@ -203,6 +203,23 @@ object SecurityPolicy {
      * @param uri Full URI string or bare hostname
      * @return Normalized lowercase hostname, or empty string if unparseable
      */
+    /**
+     * Whether a load request should be denied as an ad/tracker sub-navigation.
+     *
+     * Server redirects are never denied: NavigationDelegate.onLoadRequest fires
+     * for them too, with `isDirectNavigation = false`, so denying one strands the
+     * user on the "Page has moved" response (GitHub issue #132). Only genuinely
+     * automatic, non-user-initiated, non-redirect sub-navigations to a blocked
+     * host are denied.
+     */
+    fun shouldDenyBlockedSubNavigation(
+        isRedirect: Boolean,
+        isDirectNavigation: Boolean,
+        isAuthHost: Boolean,
+        host: String,
+        hostIsBlocked: Boolean
+    ): Boolean = host.isNotEmpty() && !isRedirect && !isDirectNavigation && !isAuthHost && hostIsBlocked
+
     fun extractEffectiveHost(uri: String?): String {
         if (uri.isNullOrBlank()) return ""
 

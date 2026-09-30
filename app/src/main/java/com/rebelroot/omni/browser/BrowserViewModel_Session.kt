@@ -1052,8 +1052,26 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 // No built-in popup blocker — all new-window navigations fall through to tab creation below.
             }
 
+            // A server redirect (301/302/303/307/308) must be followed by Gecko,
+            // never intercepted or denied. onLoadRequest fires for these too, with
+            // isDirectNavigation = false, so the ad-block check below used to deny
+            // them and strand the user on the "Page has moved" response; the
+            // file/video interception further down hijacked others into a download
+            // (issue #132). Anything non-renderable behind the redirect still goes
+            // through GeckoView's own onExternalResponse download path.
+            if (request.isRedirect) {
+                return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+            }
+
             val host = SecurityPolicy.extractEffectiveHost(uri)
-            if (host.isNotEmpty() && !request.isDirectNavigation && !isAuthHost && adBlockManager.isHostBlocked(host)) {
+            if (SecurityPolicy.shouldDenyBlockedSubNavigation(
+                    isRedirect = request.isRedirect,
+                    isDirectNavigation = request.isDirectNavigation,
+                    isAuthHost = isAuthHost,
+                    host = host,
+                    hostIsBlocked = adBlockManager.isHostBlocked(host)
+                )
+            ) {
                 Log.w(TAG, "🚫 onLoadRequest: Blocked ad/tracker sub-navigation: $uri")
                 incrementTrackersBlocked(context, 1)
                 try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
