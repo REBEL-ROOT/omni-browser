@@ -74,7 +74,7 @@
     <string name="temp_containers_desc">Isolated session for each site</string>
     <string name="temp_containers_restart">Requires restart</string>
     <string name="fingerprint_protection">Fingerprint Protection</string>
-    <string name="fingerprint_protection_desc">Disable WebGL, canvas, timing APIs</string>
+    <string name="fingerprint_protection_desc">Disable WebGL, canvas, timing APIs and hide your time zone</string>
     <string name="tor_bootstrap">Bootstrapping Tor circuit… %1$d%%</string>
     <string name="search_engine_section">SEARCH ENGINE</string>
     <string name="search_engine_title">Default Search Engine</string>

@@ -6075,18 +6075,23 @@ class BrowserViewModel : ViewModel() {
                 .accept({ Log.d(TAG, "  set network.trr.mode = 0 (DoH off)") }, { e -> Log.e(TAG, "  FAILED network.trr.mode=0", e) })
         }
 
-        // Tor-only hardening (matches Tor Browser behaviour).
-        if (isTorSession) {
-            GeckoPreferenceController.setGeckoPref("privacy.resistFingerprinting", true, branch)
-                .accept({ Log.d(TAG, "  set privacy.resistFingerprinting = true") }, { e -> Log.e(TAG, "  FAILED privacy.resistFingerprinting", e) })
-            GeckoPreferenceController.setGeckoPref("privacy.firstparty.isolate", true, branch)
-                .accept({ Log.d(TAG, "  set privacy.firstparty.isolate = true") }, { e -> Log.e(TAG, "  FAILED privacy.firstparty.isolate", e) })
-        } else {
-            GeckoPreferenceController.setGeckoPref("privacy.resistFingerprinting", false, branch)
-                .accept({ Log.d(TAG, "  set privacy.resistFingerprinting = false") }, { e -> Log.e(TAG, "  FAILED privacy.resistFingerprinting=false", e) })
-            GeckoPreferenceController.setGeckoPref("privacy.firstparty.isolate", false, branch)
-                .accept({ Log.d(TAG, "  set privacy.firstparty.isolate = false") }, { e -> Log.e(TAG, "  FAILED privacy.firstparty.isolate=false", e) })
-        }
+        // Resist Fingerprinting is what spoofs the timezone to UTC, so it must be
+        // on for Tor sessions AND whenever the user enabled Fingerprint Protection.
+        // Otherwise a VPN hides the IP while the real timezone still reveals the
+        // user's region to every site (issue #137).
+        val resistFingerprinting = isTorSession || isFingerprintProtection
+        GeckoPreferenceController.setGeckoPref("privacy.resistFingerprinting", resistFingerprinting, branch)
+            .accept(
+                { Log.d(TAG, "  set privacy.resistFingerprinting = $resistFingerprinting") },
+                { e -> Log.e(TAG, "  FAILED privacy.resistFingerprinting=$resistFingerprinting", e) }
+            )
+
+        // First-party isolation stays Tor-only: it is stricter and breaks logins.
+        GeckoPreferenceController.setGeckoPref("privacy.firstparty.isolate", isTorSession, branch)
+            .accept(
+                { Log.d(TAG, "  set privacy.firstparty.isolate = $isTorSession") },
+                { e -> Log.e(TAG, "  FAILED privacy.firstparty.isolate=$isTorSession", e) }
+            )
 
         // PROOF: read back what necko actually received. This turns "does it work?"
         // from a guess into a log fact. If these show type=1/socks=127.0.0.1/9150
@@ -6255,8 +6260,14 @@ class BrowserViewModel : ViewModel() {
             sb.append("  network.http.http3.enabled: ${!isBlockQuic}\n")
         }
 
-        if (isTorSession) {
+        // Resist Fingerprinting spoofs the timezone to UTC. Without it, a VPN hides
+        // the IP but the real timezone still reveals the user's region (issue #137),
+        // so it is enabled for Tor sessions and for Fingerprint Protection.
+        if (isTorSession || isFingerprintProtection) {
             sb.append("  privacy.resistFingerprinting: true\n")
+        }
+
+        if (isTorSession) {
             sb.append("  privacy.firstparty.isolate: true\n")
         }
 
