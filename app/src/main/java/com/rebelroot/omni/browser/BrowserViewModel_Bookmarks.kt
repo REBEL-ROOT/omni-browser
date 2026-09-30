@@ -4,12 +4,12 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.rebelroot.omni.bookmarks.model.BookmarkCollection
+import com.rebelroot.omni.bookmarks.model.BookmarkNode
 import com.rebelroot.omni.bookmarks.model.ROOT_FOLDER_ID
 import com.rebelroot.omni.bookmarks.storage.loadBookmarks as loadCanonicalBookmarks
 import com.rebelroot.omni.bookmarks.storage.saveBookmarks as saveCanonicalBookmarks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -19,9 +19,10 @@ import com.rebelroot.omni.browser.BrowserViewModel.Companion.TAG
 /**
  * Serializes writes to the bookmark store so two rapid add/remove operations
  * cannot lose each other's changes (both would otherwise load the same
- * snapshot before either saves).
+ * snapshot before either saves). Shared with the sync writers via
+ * [com.rebelroot.omni.bookmarks.storage.BookmarkStoreLock].
  */
-private val bookmarkStoreMutex = Mutex()
+private val bookmarkStoreMutex = com.rebelroot.omni.bookmarks.storage.BookmarkStoreLock.mutex
 
 /** Canonical v2 store file name (must match BookmarkStorage). */
 private const val LEGACY_BOOKMARK_FILE = "browser_bookmarks.json"
@@ -37,11 +38,12 @@ private fun BookmarkCollection.toUiEntries(): List<BookmarkEntry> =
         .sortedByDescending { it.createdAt }
         .map { BookmarkEntry(title = it.title, url = it.url, timestamp = it.createdAt) }
 
-/** Replaces the flat UI list from the canonical collection. Call on the main thread. */
+/** Replaces the flat UI list and folder tree from the canonical collection. Call on the main thread. */
 private fun BrowserViewModel.applyCollectionToUi(collection: BookmarkCollection) {
     val entries = collection.toUiEntries()
     bookmarksList.clear()
     bookmarksList.addAll(entries)
+    bookmarksTree = collection.buildTree()
 }
 
 /**
@@ -131,8 +133,12 @@ fun BrowserViewModel.addToBookmarks(title: String, url: String) {
         bookmarkStoreMutex.withLock {
             try {
                 val collection = loadCanonicalBookmarks(context)
+                collection.allBookmarks().filter { it.url == url }.forEach {
+                    BookmarkSyncEmitter.emitDelete(it.id, isFolder = false)
+                }
                 collection.deleteByUrl(url)
-                collection.addBookmark(title = title, url = url, parentId = ROOT_FOLDER_ID)
+                val created = collection.addBookmark(title = title, url = url, parentId = ROOT_FOLDER_ID)
+                BookmarkSyncEmitter.emitCreate(collection, created.id)
                 saveCanonicalBookmarks(context, collection)
                 withContext(Dispatchers.Main) { applyCollectionToUi(collection) }
             } catch (e: Exception) {
@@ -151,6 +157,9 @@ fun BrowserViewModel.removeBookmark(url: String) {
         bookmarkStoreMutex.withLock {
             try {
                 val collection = loadCanonicalBookmarks(context)
+                collection.allBookmarks().filter { it.url == url }.forEach {
+                    BookmarkSyncEmitter.emitDelete(it.id, isFolder = false)
+                }
                 collection.deleteByUrl(url)
                 saveCanonicalBookmarks(context, collection)
                 withContext(Dispatchers.Main) { applyCollectionToUi(collection) }
@@ -163,10 +172,15 @@ fun BrowserViewModel.removeBookmark(url: String) {
 
 fun BrowserViewModel.clearAllBookmarks() {
     val context = appContext ?: return
-    bookmarksList.clear()
+    // Republish both projections so the manager (which renders the folder tree)
+    // and the flat list (speed dial / star) reflect the clear immediately.
+    applyCollectionToUi(BookmarkCollection())
     viewModelScope.launch(Dispatchers.IO) {
         bookmarkStoreMutex.withLock {
             try {
+                val current = loadCanonicalBookmarks(context)
+                current.allFolders().forEach { BookmarkSyncEmitter.emitDelete(it.id, isFolder = true) }
+                current.allBookmarks().forEach { BookmarkSyncEmitter.emitDelete(it.id, isFolder = false) }
                 saveCanonicalBookmarks(context, BookmarkCollection())
                 // Drop any leftover legacy file so its entries are not reconciled back.
                 File(context.filesDir, LEGACY_BOOKMARK_FILE).delete()
@@ -179,4 +193,87 @@ fun BrowserViewModel.clearAllBookmarks() {
 
 fun BrowserViewModel.isBookmarked(url: String): Boolean {
     return bookmarksList.any { it.url == url }
+}
+
+// ── Bookmark manager operations (folder tree, rename, move, delete) ──────────
+
+/**
+ * Loads the canonical store, applies [transform], saves it, then republishes
+ * the UI list and tree. Serialized through [bookmarkStoreMutex] so it cannot
+ * race a concurrent add/remove.
+ */
+private fun BrowserViewModel.persistBookmarks(
+    context: Context,
+    transform: (BookmarkCollection) -> Unit
+) {
+    viewModelScope.launch(Dispatchers.IO) {
+        bookmarkStoreMutex.withLock {
+            try {
+                val collection = loadCanonicalBookmarks(context)
+                transform(collection)
+                saveCanonicalBookmarks(context, collection)
+                withContext(Dispatchers.Main) { applyCollectionToUi(collection) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error persisting bookmark change", e)
+            }
+        }
+    }
+}
+
+/** Creates a folder inside [parentId]; a blank name falls back to a default. */
+fun BrowserViewModel.createBookmarkFolder(title: String, parentId: String = ROOT_FOLDER_ID) {
+    val context = appContext ?: return
+    val name = title.trim().ifBlank { "New folder" }
+    persistBookmarks(context) { collection ->
+        val folder = collection.addFolder(name, parentId = parentId)
+        BookmarkSyncEmitter.emitCreate(collection, folder.id)
+    }
+}
+
+/** Adds a bookmark to [parentId] (used by the manager's "new bookmark" action). */
+fun BrowserViewModel.addBookmarkToFolder(title: String, url: String, parentId: String = ROOT_FOLDER_ID) {
+    val context = appContext ?: return
+    val cleanUrl = url.trim()
+    if (cleanUrl.isEmpty() || cleanUrl == "about:blank") return
+    val name = title.trim().ifBlank { cleanUrl }
+    persistBookmarks(context) { collection ->
+        val bookmark = collection.addBookmark(name, cleanUrl, parentId = parentId)
+        BookmarkSyncEmitter.emitCreate(collection, bookmark.id)
+    }
+}
+
+/** Renames a bookmark or folder. */
+fun BrowserViewModel.renameBookmarkItem(id: String, title: String) {
+    val context = appContext ?: return
+    persistBookmarks(context) { collection ->
+        if (collection.rename(id, title.trim())) BookmarkSyncEmitter.emitUpdate(collection, id)
+    }
+}
+
+/** Updates a bookmark's URL. */
+fun BrowserViewModel.updateBookmarkUrl(id: String, url: String) {
+    val context = appContext ?: return
+    val cleanUrl = url.trim()
+    if (cleanUrl.isEmpty()) return
+    persistBookmarks(context) { collection ->
+        if (collection.setUrl(id, cleanUrl)) BookmarkSyncEmitter.emitUpdate(collection, id)
+    }
+}
+
+/** Deletes a bookmark, or a folder together with everything inside it. */
+fun BrowserViewModel.deleteBookmarkItem(id: String) {
+    val context = appContext ?: return
+    persistBookmarks(context) { collection ->
+        val isFolder = collection.folder(id) != null
+        if (collection.deleteItem(id)) BookmarkSyncEmitter.emitDelete(id, isFolder)
+    }
+}
+
+/** Moves a bookmark or folder into [newParentId], appended after its siblings. */
+fun BrowserViewModel.moveBookmarkItem(id: String, newParentId: String) {
+    val context = appContext ?: return
+    persistBookmarks(context) { collection ->
+        val target = collection.childCount(newParentId)
+        if (collection.moveItem(id, newParentId, target)) BookmarkSyncEmitter.emitMove(collection, id)
+    }
 }

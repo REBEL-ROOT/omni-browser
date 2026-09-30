@@ -74,6 +74,18 @@ class SyncStorage(
     @Synchronized
     fun pendingOutboxOperations(): List<SyncOperation> = outbox.toList()
 
+    /**
+     * Drops operations once a peer has actually received them. Without this the
+     * outbox grows unbounded and every sync re-sends the whole history.
+     */
+    @Synchronized
+    fun acknowledgeOutbox(opIds: Collection<String>) {
+        if (opIds.isEmpty()) return
+        val ids = opIds.toHashSet()
+        outbox.removeAll { it.opId in ids }
+        persistToDisk()
+    }
+
     @Synchronized
     fun outboxCount(): Int = outbox.size
 

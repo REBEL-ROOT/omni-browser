@@ -219,9 +219,6 @@ configurations.all {
     exclude(group = "io.opencensus", module = "opencensus-api")
     exclude(group = "io.opencensus", module = "opencensus-proto")
     exclude(group = "io.opencensus", module = "opencensus-contrib-grpc-metrics")
-    exclude(group = "org.mozilla.telemetry", module = "glean")
-    exclude(group = "org.mozilla.telemetry", module = "glean-native")
-    exclude(group = "org.mozilla.components", module = "service-glean")
 }
 
 dependencies {
@@ -238,7 +235,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
-    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.activity:activity-compose:1.10.1")
 
     // === Mozilla GeckoView Engine (Architecture-specific) ===
     val geckoviewVersion = "154.0.20260824154132"
@@ -250,16 +247,10 @@ dependencies {
     "armImplementation"("org.mozilla.geckoview:geckoview-armeabi-v7a:$geckoviewVersion")
     "aarch64Implementation"("org.mozilla.geckoview:geckoview-arm64-v8a:$geckoviewVersion")
 
-    // === Mozilla Firefox Sync (Application Services) ===
-    val mozillaComponentsVersion = "152.0.5"
-    implementation("org.mozilla.components:service-firefox-accounts:$mozillaComponentsVersion")
-    implementation("org.mozilla.components:browser-storage-sync:$mozillaComponentsVersion")
-    implementation("org.mozilla.components:concept-storage:$mozillaComponentsVersion")
-    implementation("org.mozilla.components:concept-sync:$mozillaComponentsVersion")
-    implementation("org.mozilla.components:lib-dataprotect:$mozillaComponentsVersion")
-    implementation("org.mozilla.components:service-sync-logins:$mozillaComponentsVersion")
-    // implementation("org.mozilla.components:support-rusthttp:$mozillaComponentsVersion")
-    // implementation("org.mozilla.components:support-rustlog:$mozillaComponentsVersion")
+    // Mozilla Application Services (Firefox Accounts / Firefox Sync) is
+    // intentionally NOT bundled: Mozilla grants FxA OAuth + Sync access only on
+    // request and not to third-party browsers, so the stack could never work and
+    // only added ~100MB of unused Rust artifacts. See sync/ and README.
 
     // === In-app BitTorrent engine (jlibtorrent) for magnet/torrent downloading ===
     implementation("com.frostwire:jlibtorrent:1.2.0.18")

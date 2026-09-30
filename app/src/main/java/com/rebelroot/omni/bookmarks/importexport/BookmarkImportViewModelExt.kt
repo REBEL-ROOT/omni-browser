@@ -105,6 +105,8 @@ fun BrowserViewModel.confirmImport(
                 policy = policy
             )
             saveBookmarks(context, liveCollection)
+            // Queue the imported items for Omni Sync so a paired desktop sees them.
+            com.rebelroot.omni.browser.BookmarkSyncEmitter.emitSnapshot(liveCollection)
 
             withContext(Dispatchers.Main) {
                 this@confirmImport.importPreview = null

@@ -578,8 +578,23 @@ class MainActivity : FragmentActivity() {
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
                                 onRestored = {
-                                    // Recreate so restored settings/theme take effect.
-                                    this@MainActivity.recreate()
+                                    // Many settings (layout, addresses bar, wallpaper…)
+                                    // are loaded once into the retained ViewModel, so a
+                                    // recreate() would not apply them. Persist the tab
+                                    // session, then relaunch the process so every restored
+                                    // value is read fresh.
+                                    browserViewModel.saveTabs()
+                                    browserViewModel.saveTabGroups()
+                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                        val relaunch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                                            addFlags(
+                                                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                            )
+                                        }
+                                        if (relaunch != null) startActivity(relaunch)
+                                        Runtime.getRuntime().exit(0)
+                                    }, 400)
                                 }
                             )
                         }

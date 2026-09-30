@@ -39,11 +39,6 @@ import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.sync.coordinator.SyncCoordinator
 import com.rebelroot.omni.sync.coordinator.SyncStatus
 import com.rebelroot.omni.sync.crypto.PairingResult
-import com.rebelroot.omni.sync.mozilla.FxAccountManager
-import com.rebelroot.omni.sync.mozilla.FxaState
-import com.rebelroot.omni.sync.mozilla.MozillaSyncManager
-import com.rebelroot.omni.sync.mozilla.MozSyncState
-import com.rebelroot.omni.sync.ui.FxAuthDialog
 import com.rebelroot.omni.sync.ui.QrCameraScanner
 import com.rebelroot.omni.sync.ui.SyncedTabsSheet
 import com.rebelroot.omni.tools.qrcode.BarcodeGenerator
@@ -61,20 +56,24 @@ fun OmniSyncShowcaseScreen(
             collection = loadBookmarks(context)
         )
     }
-    val fxAccountManager = remember {
-        FxAccountManager.getInstance().apply { initialize(context) }
+    val tabBridge = remember {
+        com.rebelroot.omni.sync.core.SyncBridge.getInstance().tabBridge
+            ?: com.rebelroot.omni.sync.tab.RemoteTabsBridge().also {
+                com.rebelroot.omni.sync.core.SyncBridge.getInstance().tabBridge = it
+            }
     }
-    val mozillaSyncManager = remember { MozillaSyncManager.getInstance() }
 
-    val fxaState by fxAccountManager.accountState.collectAsState()
-    val mozSyncState by mozillaSyncManager.syncState.collectAsState()
-    val remoteTabs by mozillaSyncManager.tabBridge.remoteTabsFlow.collectAsState()
+    val remoteTabs by tabBridge.remoteTabsFlow.collectAsState()
+
+    // Out-of-band code for password import/export over Wi-Fi (see PasswordTransferCode).
+    val passwordTransferCode = remember {
+        com.rebelroot.omni.tools.passwords.PasswordTransferCode.getOrCreate(context)
+    }
     val uiState by coordinator.uiState.collectAsState()
 
     var showPairDialog by remember { mutableStateOf(false) }
     var showCameraScanner by remember { mutableStateOf(false) }
     var showSasDialog by remember { mutableStateOf<String?>(null) }
-    var showFxAuthDialog by remember { mutableStateOf(false) }
     var showSyncedTabsSheet by remember { mutableStateOf(false) }
 
     var myInvitationJson by remember { mutableStateOf("") }
@@ -95,11 +94,8 @@ fun OmniSyncShowcaseScreen(
     val toastExportedP2P = stringResource(R.string.sync_toast_exported_p2p)
     val toastExportedHtml = stringResource(R.string.sync_toast_exported_html)
     val toastImportSelectFile = stringResource(R.string.sync_toast_import_select_file)
-    val toastFxaComplete = stringResource(R.string.sync_fxa_complete_toast)
-    val toastFxaSignedOut = stringResource(R.string.sync_fxa_signed_out_toast)
     val toastCopiedCode = stringResource(R.string.sync_toast_copied_code)
     val toastPastedCode = stringResource(R.string.sync_toast_pasted_code)
-    val toastConnectedFxa = stringResource(R.string.sync_connected_fxa_toast)
 
     BackHandler { onNavigateBack() }
 
@@ -129,21 +125,7 @@ fun OmniSyncShowcaseScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        if (fxaState is FxaState.SignedIn) {
-                            mozillaSyncManager.syncNow(
-                                context = context,
-                                collection = coordinator.collection,
-                                tabs = viewModel.tabs.toList()
-                            ) { success ->
-                                if (success) {
-                                    Toast.makeText(context, toastFxaComplete, Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } else {
-                            coordinator.syncNow()
-                        }
-                    }) {
+                    IconButton(onClick = { coordinator.syncNow() }) {
                         Icon(
                             Icons.Rounded.Sync,
                             contentDescription = stringResource(R.string.sync_now),
@@ -170,211 +152,124 @@ fun OmniSyncShowcaseScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── 1. FIREFOX ACCOUNT CLOUD SYNC CARD ────────────────────────────
+            // ── 1. REMOTE TABS (open tabs from paired desktop devices) ────────
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                 )
             ) {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .padding(18.dp)
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f, fill = false)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.CloudSync,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        stringResource(R.string.sync_fxa_title),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 17.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        stringResource(R.string.sync_fxa_subtitle),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = if (fxaState is FxaState.SignedIn) Color(0xFF2E7D32) else MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Text(
-                                    text = if (fxaState is FxaState.SignedIn) stringResource(R.string.sync_fxa_connected) else stringResource(R.string.sync_fxa_not_connected),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (fxaState is FxaState.SignedIn) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
+                            Icon(
+                                Icons.Rounded.Devices,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
+                            )
                         }
-
-                        if (fxaState is FxaState.SignedIn) {
-                            val signedIn = fxaState as FxaState.SignedIn
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.AccountCircle,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Column {
-                                            Text(signedIn.email, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Text(
-                                                when (mozSyncState) {
-                                                    is MozSyncState.Syncing -> (mozSyncState as MozSyncState.Syncing).message
-                                                    is MozSyncState.Done -> stringResource(R.string.sync_fxa_synced_recently)
-                                                    is MozSyncState.Error -> (mozSyncState as MozSyncState.Error).message
-                                                    else -> stringResource(R.string.sync_fxa_ready)
-                                                },
-                                                fontSize = 11.sp,
-                                                color = if (mozSyncState is MozSyncState.Error) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        mozillaSyncManager.syncNow(
-                                            context = context,
-                                            collection = coordinator.collection,
-                                            tabs = viewModel.tabs.toList()
-                                        ) { success ->
-                                            if (success) {
-                                                Toast.makeText(context, toastFxaComplete, Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(stringResource(R.string.sync_now), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-
-                                OutlinedButton(
-                                    onClick = { showSyncedTabsSheet = true },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Rounded.Devices, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        if (remoteTabs.isNotEmpty()) "${stringResource(R.string.sync_remote_tabs)} (${remoteTabs.sumOf { it.tabs.size }})" else stringResource(R.string.sync_remote_tabs),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-
-                                OutlinedButton(
-                                    onClick = {
-                                        fxAccountManager.logout()
-                                        Toast.makeText(context, toastFxaSignedOut, Toast.LENGTH_SHORT).show()
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text(stringResource(R.string.sync_sign_out), fontSize = 12.sp)
-                                }
-                            }
-                        } else {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
                             Text(
-                                stringResource(R.string.sync_fxa_desc),
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
+                                stringResource(R.string.sync_remote_tabs),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                stringResource(R.string.sync_remote_tabs_desc),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { showCameraScanner = true },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                ) {
-                                    Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Scan Desktop QR", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
+                    if (remoteTabs.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { showSyncedTabsSheet = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Devices, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "${stringResource(R.string.sync_remote_tabs)} (${remoteTabs.sumOf { it.tabs.size }})",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else {
+                        Text(
+                            stringResource(R.string.sync_remote_tabs_empty),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
-                                OutlinedButton(
-                                    onClick = { showFxAuthDialog = true },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Rounded.AccountCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Sign In", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                }
-                            }
+            // ── 1b. PASSWORD TRANSFER CODE (import / export over Wi-Fi) ────────
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.sync_pw_transfer_title),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        stringResource(R.string.sync_pw_transfer_desc),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = passwordTransferCode.ifBlank { "—" },
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(passwordTransferCode))
+                                Toast.makeText(context, toastCopiedCode, Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(stringResource(R.string.sync_pw_transfer_copy), fontSize = 12.sp)
                         }
                     }
                 }
@@ -915,29 +810,12 @@ fun OmniSyncShowcaseScreen(
             QrCameraScanner(
                 onQrDetected = { scannedText ->
                     showCameraScanner = false
-                    if (fxAccountManager.isFirefoxPairingUrl(scannedText)) {
-                        fxAccountManager.pairWithDesktopQr(
-                            pairingUrl = scannedText,
-                            onSuccess = { email ->
-                                Toast.makeText(context, "Paired with Desktop Firefox ($email)!", Toast.LENGTH_LONG).show()
-                                mozillaSyncManager.syncNow(
-                                    context = context,
-                                    collection = coordinator.collection,
-                                    tabs = viewModel.tabs.toList()
-                                )
-                            },
-                            onError = { err ->
-                                Toast.makeText(context, "Firefox pairing failed: $err", Toast.LENGTH_LONG).show()
-                            }
-                        )
-                    } else {
-                        val res = coordinator.processPairingInvitation(scannedText)
-                        if (res is PairingResult.Success) {
-                            showSasDialog = res.sasCode
-                            Toast.makeText(context, "QR Code scanned! Verifying security code...", Toast.LENGTH_SHORT).show()
-                        } else if (res is PairingResult.Failed) {
-                            Toast.makeText(context, "Pairing failed: " + res.reason, Toast.LENGTH_LONG).show()
-                        }
+                    val res = coordinator.processPairingInvitation(scannedText)
+                    if (res is PairingResult.Success) {
+                        showSasDialog = res.sasCode
+                        Toast.makeText(context, "QR Code scanned! Verifying security code...", Toast.LENGTH_SHORT).show()
+                    } else if (res is PairingResult.Failed) {
+                        Toast.makeText(context, "Pairing failed: " + res.reason, Toast.LENGTH_LONG).show()
                     }
                 },
                 onClose = { showCameraScanner = false }
@@ -1095,23 +973,6 @@ fun OmniSyncShowcaseScreen(
             },
             confirmButton = {
                 Button(onClick = { showSasDialog = null }) { Text(stringResource(R.string.sync_sas_confirm)) }
-            }
-        )
-    }
-
-    // ── FIREFOX AUTH DIALOG ──────────────────────────────────────────────────
-    if (showFxAuthDialog) {
-        FxAuthDialog(
-            accountManager = fxAccountManager,
-            onDismiss = { showFxAuthDialog = false },
-            onSuccess = {
-                showFxAuthDialog = false
-                Toast.makeText(context, toastConnectedFxa, Toast.LENGTH_SHORT).show()
-                mozillaSyncManager.syncNow(
-                    context = context,
-                    collection = coordinator.collection,
-                    tabs = viewModel.tabs.toList()
-                )
             }
         )
     }

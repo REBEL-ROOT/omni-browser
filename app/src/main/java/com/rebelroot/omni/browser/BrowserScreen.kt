@@ -1894,7 +1894,15 @@ fun BrowserScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (!viewModel.isFullscreen) Modifier.statusBarsPadding() else Modifier)
+                    // The home screen must bleed behind the status bar/notch so its
+                    // wallpaper (or theme background) fills the display cutout instead of
+                    // leaving a black strip above it. HomeScreenContent re-applies the
+                    // status-bar inset to its foreground content so the icons/search
+                    // still clear the notch. Non-home content stays fully inset.
+                    .then(
+                        if (!viewModel.isFullscreen && !showHomeScreen) Modifier.statusBarsPadding()
+                        else Modifier
+                    )
             ) {
                 Box(
                     modifier = Modifier.fillMaxSize()

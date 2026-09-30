@@ -120,6 +120,44 @@
     <string name="bookmarks_empty">No bookmarks found</string>
     <string name="bookmarks_clear_confirm">Are you sure you want to clear all bookmarks?</string>
 
+    <!-- Bookmark manager (folders, editing, moving) -->
+    <string name="bookmarks_new_folder">New folder</string>
+    <string name="bookmarks_new_folder_hint">Folder name</string>
+    <string name="bookmarks_new_bookmark">New bookmark</string>
+    <string name="bookmarks_folder_empty">This folder is empty</string>
+    <string name="bookmarks_root_label">Bookmarks</string>
+    <string name="bookmarks_menu_open">Open</string>
+    <string name="bookmarks_menu_edit">Edit</string>
+    <string name="bookmarks_menu_rename">Rename</string>
+    <string name="bookmarks_menu_copy_link">Copy link</string>
+    <string name="bookmarks_menu_move">Move to folder</string>
+    <string name="bookmarks_menu_delete">Delete</string>
+    <string name="bookmarks_link_copied">Link copied</string>
+    <string name="bookmarks_edit_title">Edit bookmark</string>
+    <string name="bookmarks_name_label">Name</string>
+    <string name="bookmarks_url_label">URL</string>
+    <string name="bookmarks_save">Save</string>
+    <string name="bookmarks_cancel">Cancel</string>
+    <string name="bookmarks_create">Create</string>
+    <string name="bookmarks_rename_folder_title">Rename folder</string>
+    <string name="bookmarks_move_title">Move to folder</string>
+    <string name="bookmarks_move_current">Current folder</string>
+    <string name="bookmarks_move_untitled">Untitled folder</string>
+    <string name="bookmarks_delete_bookmark_title">Delete bookmark</string>
+    <string name="bookmarks_delete_bookmark_message">Delete “%1$s”?</string>
+    <string name="bookmarks_delete_folder_title">Delete folder</string>
+    <string name="bookmarks_delete_folder_message">Delete “%1$s” and everything inside it? This can’t be undone.</string>
+    <string name="bookmarks_delete">Delete</string>
+    <string name="bookmarks_cd_new_folder">Create folder</string>
+    <string name="bookmarks_cd_more">More options</string>
+    <string name="bookmarks_cd_item_menu">Item options</string>
+    <string name="bookmarks_cd_breadcrumb">Go up to %1$s</string>
+
+    <plurals name="bookmarks_item_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+
     <!-- Import / Export -->
     <string name="import_preview_title">Import Preview</string>
     <string name="import_bookmarks_label">Bookmarks</string>
@@ -754,6 +792,8 @@
     <string name="backup_section_settings_desc">Appearance, search, privacy, ad-block, user-agent, shortcuts…</string>
     <string name="backup_section_bookmarks">Bookmarks</string>
     <string name="backup_section_history">Browsing history</string>
+    <string name="backup_section_tabs">Open tabs &amp; groups</string>
+    <string name="backup_section_tabs_desc">Tab session and tab groups (applied on next start)</string>
     <string name="backup_section_passwords">Saved passwords</string>
     <string name="backup_section_passwords_desc">Saved unencrypted — keep the file safe</string>
     <string name="backup_section_notes">Dev notes</string>
@@ -1841,13 +1881,19 @@
     <string name="sync_title">Omni Sync</string>
     <string name="sync_subtitle">Cloud &amp; P2P Multi-Device Sync</string>
     <string name="sync_fxa_title">Firefox Account Sync</string>
-    <string name="sync_fxa_subtitle">Mozilla Cloud Sync</string>
+    <string name="sync_fxa_subtitle">Not available</string>
+    <string name="sync_fxa_unavailable">Omni can\'t sign in to a Firefox Account. Mozilla doesn\'t grant Firefox Sync access to third-party browsers, so bookmarks and tabs can\'t sync through Mozilla\'s cloud. Use Omni Sync below to sync with desktop Firefox over your local network instead.</string>
     <string name="sync_fxa_connected">CONNECTED</string>
     <string name="sync_fxa_not_connected">NOT CONNECTED</string>
     <string name="sync_fxa_synced_recently">Cloud synced recently</string>
     <string name="sync_fxa_ready">Ready to sync with Firefox</string>
     <string name="sync_now">Sync Now</string>
     <string name="sync_remote_tabs">Remote Tabs</string>
+    <string name="sync_remote_tabs_desc">Open tabs from your paired desktop devices</string>
+    <string name="sync_remote_tabs_empty">No desktop devices paired yet. Pair one below to see its open tabs here.</string>
+    <string name="sync_pw_transfer_title">Password transfer code</string>
+    <string name="sync_pw_transfer_desc">Type this code into the desktop extension to send or fetch passwords over Wi-Fi. Keep it private — anyone with it can read your saved passwords.</string>
+    <string name="sync_pw_transfer_copy">Copy</string>
     <string name="sync_sign_out">Sign Out</string>
     <string name="sync_sign_in_fxa">Sign in with Firefox Account</string>
     <string name="sync_fxa_desc">Sign in with your Firefox Account to automatically sync bookmarks, open tabs from your PC/Mac, browsing history, and passwords seamlessly via Mozilla Cloud.</string>

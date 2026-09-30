@@ -19,6 +19,7 @@ enum class BackupSection(val key: String, val defaultEnabled: Boolean, val sensi
     SETTINGS("settings", defaultEnabled = true, sensitive = false),
     BOOKMARKS("bookmarks", defaultEnabled = true, sensitive = false),
     HISTORY("history", defaultEnabled = true, sensitive = false),
+    TABS("tabs", defaultEnabled = true, sensitive = false),
     PASSWORDS("passwords", defaultEnabled = false, sensitive = true),
     NOTES("notes", defaultEnabled = true, sensitive = false);
 

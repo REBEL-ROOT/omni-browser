@@ -482,6 +482,7 @@ private fun sectionLabel(section: BackupSection): String = when (section) {
     BackupSection.SETTINGS -> stringResource(id = R.string.backup_section_settings)
     BackupSection.BOOKMARKS -> stringResource(id = R.string.backup_section_bookmarks)
     BackupSection.HISTORY -> stringResource(id = R.string.backup_section_history)
+    BackupSection.TABS -> stringResource(id = R.string.backup_section_tabs)
     BackupSection.PASSWORDS -> stringResource(id = R.string.backup_section_passwords)
     BackupSection.NOTES -> stringResource(id = R.string.backup_section_notes)
 }
@@ -489,6 +490,7 @@ private fun sectionLabel(section: BackupSection): String = when (section) {
 @Composable
 private fun sectionDescription(section: BackupSection): String? = when (section) {
     BackupSection.SETTINGS -> stringResource(id = R.string.backup_section_settings_desc)
+    BackupSection.TABS -> stringResource(id = R.string.backup_section_tabs_desc)
     BackupSection.PASSWORDS -> stringResource(id = R.string.backup_section_passwords_desc)
     else -> null
 }

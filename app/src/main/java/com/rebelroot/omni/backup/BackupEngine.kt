@@ -49,6 +49,8 @@ object BackupEngine {
 
     private const val HISTORY_FILE = "browser_history.json"
     private const val DEV_NOTES_FILE = "dev_notes.json"
+    private const val TABS_FILE = "browser_tabs.json"
+    private const val TAB_GROUPS_FILE = "browser_tab_groups.json"
 
     /** SharedPreferences files holding user-facing settings (never secrets). */
     private val SETTINGS_PREF_FILES = listOf(
@@ -88,6 +90,7 @@ object BackupEngine {
             if (BackupSection.SETTINGS in sections) root.put("settings", buildSettings(context))
             if (BackupSection.BOOKMARKS in sections) root.put("bookmarks", buildBookmarks(context))
             if (BackupSection.HISTORY in sections) root.put("history", buildHistory(historySnapshot))
+            if (BackupSection.TABS in sections) root.put("tabs", buildTabs(context))
             if (BackupSection.PASSWORDS in sections) root.put("passwords", buildPasswords(vault, savedPasswordsSnapshot))
             if (BackupSection.NOTES in sections) root.put("notes", buildNotes(notesSnapshot))
 
@@ -234,6 +237,14 @@ object BackupEngine {
         return arr
     }
 
+    /** Serializes the on-disk open-tab session and tab-group files. */
+    private fun buildTabs(context: Context): JSONObject {
+        val obj = JSONObject()
+        File(context.filesDir, TABS_FILE).takeIf { it.exists() }?.let { obj.put(TABS_FILE, it.readText()) }
+        File(context.filesDir, TAB_GROUPS_FILE).takeIf { it.exists() }?.let { obj.put(TAB_GROUPS_FILE, it.readText()) }
+        return obj
+    }
+
     // ── Inspect ───────────────────────────────────────────────────────────────
 
     /** Parses [jsonText] and reports which sections it contains. Null if invalid. */
@@ -262,6 +273,10 @@ object BackupEngine {
         root.optJSONArray("history")?.let {
             available += BackupSection.HISTORY
             counts[BackupSection.HISTORY] = it.length()
+        }
+        root.optJSONObject("tabs")?.let {
+            available += BackupSection.TABS
+            counts[BackupSection.TABS] = it.keys().asSequence().count()
         }
         root.optJSONArray("passwords")?.let {
             available += BackupSection.PASSWORDS
@@ -310,6 +325,10 @@ object BackupEngine {
 
             if (BackupSection.HISTORY in sections) {
                 restored += restoreHistory(context, viewModel, root.optJSONArray("history"))
+            }
+
+            if (BackupSection.TABS in sections) {
+                restored += restoreTabs(context, viewModel, root.optJSONObject("tabs"))
             }
 
             if (BackupSection.PASSWORDS in sections) {
@@ -460,6 +479,32 @@ object BackupEngine {
         File(context.filesDir, HISTORY_FILE).writeText(arr.toString())
         viewModel.loadHistory(context)
         return arr.length()
+    }
+
+    /**
+     * Writes the session tab and tab-group files, then reloads. `initTabs` only
+     * populates an empty session, so restored tabs appear on the next cold start
+     * rather than over the current live session.
+     */
+    private suspend fun restoreTabs(
+        context: Context,
+        viewModel: BrowserViewModel,
+        tabsObj: JSONObject?
+    ): Int {
+        if (tabsObj == null) return 0
+        var n = 0
+        for (name in listOf(TABS_FILE, TAB_GROUPS_FILE)) {
+            val content = tabsObj.optString(name, "")
+            if (content.isNotBlank()) {
+                File(context.filesDir, name).writeText(content)
+                n++
+            }
+        }
+        if (n > 0) {
+            viewModel.initTabs(context)
+            viewModel.loadTabGroups(context)
+        }
+        return n
     }
 
     private suspend fun restorePasswords(viewModel: BrowserViewModel, arr: JSONArray?): Pair<Int, Int> {

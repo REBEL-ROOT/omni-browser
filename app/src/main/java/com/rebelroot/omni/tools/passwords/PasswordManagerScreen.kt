@@ -90,7 +90,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 
 // ─── Root screen ─────────────────────────────────────────────────────────────
 
@@ -642,92 +641,19 @@ private suspend fun parseCsvImport(
     uri: Uri,
     vaultManager: PasswordVaultManager
 ): ImportPreviewState {
-    val existing = vaultManager.exportAll()
-    val existingKeys = existing.map {
+    val existingKeys = vaultManager.exportAll().map {
         it.domain.lowercase().trim() to it.username.lowercase().trim()
     }.toSet()
 
-    val lines = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readLines()
+    val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         ?: return ImportPreviewState(0, 0, emptyList())
 
-    val parsed = mutableListOf<PasswordEntry>()
-    var duplicates = 0
-
-    // Detect header row — Google: "name,url,username,password"
-    // Chrome uses same columns. Skip any row where username column looks like "username".
-    for ((index, line) in lines.withIndex()) {
-        if (line.isBlank()) continue
-        val cols = parseCsvLine(line)
-        if (cols.size < 4) continue
-
-        // Skip header
-        if (index == 0 && cols[2].lowercase() in listOf("username", "user name", "login")) continue
-
-        val name = cols.getOrElse(0) { "" }.trim()
-        val url = cols.getOrElse(1) { "" }.trim()
-        val username = cols.getOrElse(2) { "" }.trim()
-        val password = cols.getOrElse(3) { "" }.trim()
-
-        if (username.isBlank() || password.isBlank()) continue
-
-        // Derive domain from URL
-        val domain = runCatching {
-            val host = java.net.URI(url).host ?: url
-            host.removePrefix("www.")
-        }.getOrElse { url.removePrefix("https://").removePrefix("http://").substringBefore("/") }
-            .ifBlank { name }
-
-        val key = domain.lowercase() to username.lowercase()
-        if (key in existingKeys) {
-            duplicates++
-            continue
-        }
-
-        val now = System.currentTimeMillis()
-        parsed.add(
-            PasswordEntry(
-                id = UUID.randomUUID().toString(),
-                label = name,
-                domain = domain,
-                username = username,
-                password = password,
-                notes = "",
-                createdAt = now,
-                updatedAt = now
-            )
-        )
-    }
-
+    val result = PasswordCsv.parse(text, existingKeys)
     return ImportPreviewState(
-        total = parsed.size + duplicates,
-        duplicates = duplicates,
-        toImport = parsed
+        total = result.total,
+        duplicates = result.duplicates,
+        toImport = result.entries
     )
-}
-
-/**
- * Minimal RFC 4180-compliant CSV line parser that handles quoted fields with commas inside.
- */
-private fun parseCsvLine(line: String): List<String> {
-    val result = mutableListOf<String>()
-    var inQuotes = false
-    val current = StringBuilder()
-    var i = 0
-    while (i < line.length) {
-        val c = line[i]
-        when {
-            c == '"' && !inQuotes -> inQuotes = true
-            c == '"' && inQuotes && i + 1 < line.length && line[i + 1] == '"' -> {
-                current.append('"'); i++ // escaped quote
-            }
-            c == '"' && inQuotes -> inQuotes = false
-            c == ',' && !inQuotes -> { result.add(current.toString()); current.clear() }
-            else -> current.append(c)
-        }
-        i++
-    }
-    result.add(current.toString())
-    return result
 }
 
 @Composable
@@ -795,15 +721,7 @@ private suspend fun exportPasswordsCsv(context: Context, vaultManager: PasswordV
         val file = File(exportDir, "passwords_export_$timestamp.csv")
 
         file.bufferedWriter().use { writer ->
-            writer.write("name,url,username,password\n")
-            for (entry in entries) {
-                writer.write(
-                    "${csvEscape(entry.label.ifBlank { entry.domain })}," +
-                        "${csvEscape(entry.domain)}," +
-                        "${csvEscape(entry.username)}," +
-                        "${csvEscape(entry.password)}\n"
-                )
-            }
+            writer.write(PasswordCsv.build(entries))
         }
 
         val uri = FileProvider.getUriForFile(
@@ -851,10 +769,4 @@ private suspend fun exportPasswordsCsv(context: Context, vaultManager: PasswordV
     }
 }
 
-private fun csvEscape(value: String): String {
-    return if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-        "\"${value.replace("\"", "\"\"")}\""
-    } else {
-        value
-    }
-}
+// CSV escaping now lives in PasswordCsv so the LAN endpoint shares it.

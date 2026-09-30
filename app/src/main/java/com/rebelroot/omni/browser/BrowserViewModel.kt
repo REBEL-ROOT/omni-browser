@@ -3280,6 +3280,23 @@ class BrowserViewModel : ViewModel() {
             loadBookmarks(appCtx)
             loadShortcuts(appCtx)
 
+            // A sync backend (e.g. Firefox Sync) can rewrite the bookmark store
+            // out of band; republish the derived list/tree when that happens.
+            viewModelScope.launch {
+                com.rebelroot.omni.sync.core.SyncBridge.getInstance()
+                    .bookmarkStoreChanges
+                    .collect { appContext?.let { ctx -> refreshBookmarks(ctx) } }
+            }
+
+            // Keep the sync bridge's tab snapshot current so paired desktops can
+            // see this device's open tabs in Remote Tabs.
+            viewModelScope.launch {
+                androidx.compose.runtime.snapshotFlow { tabs.toList() }
+                    .collect { list ->
+                        com.rebelroot.omni.sync.core.SyncBridge.getInstance().recordTabsChanged(list)
+                    }
+            }
+
             // Initialize dependency engines
             ffmpegLoader = FFmpegLoader(appCtx)
             viewModelScope.launch(Dispatchers.IO) {
@@ -7613,6 +7630,13 @@ class BrowserViewModel : ViewModel() {
 
     val bookmarksList = mutableStateListOf<BookmarkEntry>()
 
+    /**
+     * Derived folder tree of the canonical bookmark store, used by the bookmark
+     * manager. [bookmarksList] stays the flat projection that speed dial and the
+     * star toggle rely on; this is the hierarchy-aware view. Null until loaded.
+     */
+    var bookmarksTree by mutableStateOf<com.rebelroot.omni.bookmarks.model.BookmarkNode.Folder?>(null)
+
     // ── Bookmark Import State (Phase 05) ───────────────────────────────────
     var importPreview by mutableStateOf<com.rebelroot.omni.bookmarks.importexport.ImportPreviewState?>(null)
     var isImporting by mutableStateOf(false)
@@ -10265,6 +10289,24 @@ class BrowserViewModel : ViewModel() {
         siteStyleHideImages = sp.getBoolean("site_style_hide_images", false)
         siteStyleGrayscale = sp.getBoolean("site_style_grayscale", false)
         siteStyleWarmFilter = sp.getBoolean("site_style_warm_filter", false)
+
+        // Appearance / theme: these are loaded once at startup into fields and
+        // ThemeStateHolder, so a restore must refresh them or recreate() keeps
+        // showing the pre-import theme.
+        val darkThemePref = prefs[DARK_THEME_ENABLED_KEY] ?: true
+        isDarkThemeEnabled = darkThemePref
+        ThemeStateHolder.darkThemeEnabled = darkThemePref
+        followSystemTheme = prefs[FOLLOW_SYSTEM_THEME_KEY] ?: false
+        ThemeStateHolder.followSystemTheme = followSystemTheme
+        val accentPref = prefs[ACCENT_THEME_KEY] ?: "Ocean Blue"
+        selectedAccentTheme = accentPref
+        ThemeStateHolder.accentTheme = accentPref
+        isAmoledMode = prefs[AMOLED_MODE_KEY] ?: false
+        ThemeStateHolder.amoledMode = isAmoledMode
+        isDynamicColorEnabled = prefs[DYNAMIC_COLOR_KEY] ?: false
+        ThemeStateHolder.dynamicColorEnabled = isDynamicColorEnabled
+        isCreamyMode = prefs[CREAMY_MODE_KEY] ?: false
+        updateGeckoColorScheme()
     }
 
     // -------------------------------------------------------------------------

@@ -134,9 +134,8 @@ Powered by **Mozilla GeckoView** (the same engine behind Firefox), Omni delivers
 ### 🔄 Omni Sync
 | Feature | Details |
 |---|---|
-| **Firefox Cloud Sync** | 1-Click login with Firefox Account to sync bookmarks, remote tabs, history, and passwords via Mozilla Cloud |
-| **Remote Tabs Viewer** | View and switch active open tabs from your desktop PC or Mac directly in Omni |
-| **Omni Sync Mesh (Upcoming)** | Zero-cloud 100% E2EE local Wi-Fi sync (Testing phase · requires desktop Omni Sync Extension) |
+| **Firefox Cloud Sync** | Not available. Mozilla grants Firefox Accounts OAuth and Sync access only on request and does not grant it to third-party browsers, so Omni cannot join Mozilla's cloud. |
+| **Omni Sync Mesh** | Zero-cloud 100% E2EE local Wi-Fi sync between Omni and desktop Firefox (requires the desktop Omni Sync Extension) |
 | **CRDT Conflict Resolution** | Base-62 fractional indexing ensures tree invariant preservation and zero collisions |
 | **Privacy Isolation** | Incognito tabs and private sessions are strictly excluded from all sync engines |
 

@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.rebelroot.omni.R
-import com.rebelroot.omni.sync.mozilla.RemoteDeviceTabs
-import com.rebelroot.omni.sync.mozilla.TabInfo
+import com.rebelroot.omni.sync.tab.RemoteDeviceTabs
+import com.rebelroot.omni.sync.tab.TabInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

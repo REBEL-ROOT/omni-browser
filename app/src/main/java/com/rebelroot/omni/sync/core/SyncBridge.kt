@@ -39,6 +39,20 @@ class SyncBridge private constructor(
     private val _mutationEvents = MutableSharedFlow<SyncOperation>(extraBufferCapacity = 64)
     val mutationEvents: SharedFlow<SyncOperation> = _mutationEvents.asSharedFlow()
 
+    private val _bookmarkStoreChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+
+    /**
+     * Emitted when a sync backend rewrites the canonical bookmark store out of
+     * band (for example Firefox Sync pulling remote bookmarks). The UI observes
+     * this to republish its derived bookmark list and folder tree, which would
+     * otherwise stay stale until the next manual refresh.
+     */
+    val bookmarkStoreChanges: SharedFlow<Unit> = _bookmarkStoreChanges.asSharedFlow()
+
+    fun notifyBookmarkStoreChanged() {
+        scope.launch { _bookmarkStoreChanges.emit(Unit) }
+    }
+
     private val observers = mutableListOf<SyncDataObserver>()
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -68,10 +82,10 @@ class SyncBridge private constructor(
         }
     }
 
-    var tabBridge: com.rebelroot.omni.sync.mozilla.MozillaTabBridge? = null
+    var tabBridge: com.rebelroot.omni.sync.tab.RemoteTabsBridge? = null
     var localTabs: List<TabState> = emptyList()
 
-    fun updateRemoteDeviceTabs(deviceId: String, deviceName: String, tabs: List<com.rebelroot.omni.sync.mozilla.TabInfo>) {
+    fun updateRemoteDeviceTabs(deviceId: String, deviceName: String, tabs: List<com.rebelroot.omni.sync.tab.TabInfo>) {
         tabBridge?.updateDirectRemoteTabs(deviceId, deviceName, tabs)
     }
 

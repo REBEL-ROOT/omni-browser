@@ -12,9 +12,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import android.util.Log
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 import java.io.File
 import java.net.Socket
+
+private const val TAG = "SyncCoordinator"
 
 enum class SyncStatus {
     IDLE,
@@ -67,7 +72,8 @@ class SyncCoordinator(
         storage = storage,
         conflictEngine = conflictEngine,
         collection = collection,
-        syncBridge = com.rebelroot.omni.sync.core.SyncBridge.getInstance()
+        syncBridge = com.rebelroot.omni.sync.core.SyncBridge.getInstance(),
+        onAppliedOperations = { ops -> persistSyncedBookmarks(ops) }
     )
     val lanDiscovery = LanDiscoveryService(
         deviceId = keyManager.deviceId,
@@ -140,6 +146,7 @@ class SyncCoordinator(
                     if (receivedEnv != null) {
                         val decrypted = session.decryptEnvelope(receivedEnv)
                         if (decrypted != null) {
+                            persistSyncedBookmarks(parseTransportOperations(decrypted))
                             _uiState.value = _uiState.value.copy(
                                 lastSyncTimestamp = System.currentTimeMillis(),
                                 syncStatus = SyncStatus.CONNECTED,
@@ -162,6 +169,7 @@ class SyncCoordinator(
                 if (envelope != null) {
                     val bytes = session.decryptEnvelope(envelope)
                     if (bytes != null) {
+                        persistSyncedBookmarks(parseTransportOperations(bytes))
                         _uiState.value = _uiState.value.copy(
                             lastSyncTimestamp = System.currentTimeMillis(),
                             syncStatus = SyncStatus.CONNECTED,
@@ -172,6 +180,62 @@ class SyncCoordinator(
                 val pending = storage.pendingOutboxOperations()
                 session.sendSyncOperations(pending)
             } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Persists bookmark operations received from a peer into the canonical store
+     * and asks the UI to republish. The operations are applied onto a freshly
+     * loaded store (under the shared store lock) so a concurrent in-app edit is
+     * not clobbered by this coordinator's long-lived in-memory copy.
+     */
+    private fun persistSyncedBookmarks(ops: List<SyncOperation>) {
+        if (ops.isEmpty()) return
+        scope.launch {
+            com.rebelroot.omni.bookmarks.storage.BookmarkStoreLock.mutex.withLock {
+                try {
+                    val fresh = com.rebelroot.omni.bookmarks.storage.loadBookmarksFromDir(baseDir)
+                    ops.forEach { adapter.applyRemoteOperation(fresh, it) }
+                    com.rebelroot.omni.bookmarks.storage.saveBookmarksToDir(baseDir, fresh)
+                    com.rebelroot.omni.sync.core.SyncBridge.getInstance().notifyBookmarkStoreChanged()
+                    updateState()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to persist synced bookmarks: ${e.message}", e)
+                }
+            }
+        }
+    }
+
+    /** Parses the raw-TCP transport payload (a JSON array of operations). */
+    private fun parseTransportOperations(bytes: ByteArray): List<SyncOperation> {
+        return try {
+            val arr = JSONArray(String(bytes, Charsets.UTF_8))
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.getJSONObject(i)
+                val bookmark = o.optJSONObject("bookmark")
+                SyncOperation(
+                    opId = o.getString("opId"),
+                    opType = SyncOpType.valueOf(o.getString("opType")),
+                    entityType = SyncEntityType.valueOf(o.getString("entityType")),
+                    entityId = o.getString("entityId"),
+                    hlc = Hlc.parse(o.getString("hlc")),
+                    bookmarkPayload = bookmark?.let {
+                        BookmarkPayload(
+                            parentId = it.optString("parentId", "root"),
+                            position = it.optString("position", "a0"),
+                            title = it.optString("title", ""),
+                            url = it.optString("url", ""),
+                            createdAt = System.currentTimeMillis(),
+                            modifiedAt = System.currentTimeMillis(),
+                            isDeleted = false
+                        )
+                    },
+                    isLocalOrigin = false
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse transport operations: ${e.message}", e)
+            emptyList()
         }
     }
 

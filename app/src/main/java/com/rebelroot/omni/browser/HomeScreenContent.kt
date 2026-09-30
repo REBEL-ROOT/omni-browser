@@ -324,6 +324,10 @@ fun HomeScreenContent(
             modifier = Modifier
                 .widthIn(max = if (isTablet) 720.dp else Int.MAX_VALUE.dp)
                 .fillMaxHeight()
+                // Foreground content clears the notch; the wallpaper itself is drawn
+                // by the fillMaxSize background above (BrowserScreen no longer insets
+                // the home screen), so the cutout area shows the wallpaper.
+                .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
                 // Extra bottom clearance when the transparent home bottom bar is
                 // visible, so the last rows can scroll clear of it on small

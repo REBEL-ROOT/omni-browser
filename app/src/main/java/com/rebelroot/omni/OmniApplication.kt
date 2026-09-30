@@ -225,7 +225,13 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
                 val baseDir = filesDir
                 val collection = com.rebelroot.omni.bookmarks.storage.loadBookmarks(this@OmniApplication)
                 val coord = SyncCoordinatorHolder.getOrCreate(baseDir, collection)
-                com.rebelroot.omni.sync.core.SyncBridge.getInstance().tabBridge = com.rebelroot.omni.sync.mozilla.MozillaSyncManager.getInstance().tabBridge
+                // Remote Tabs store, filled by the LAN sync server when a paired
+                // desktop device reports its open tabs.
+                com.rebelroot.omni.sync.core.SyncBridge.getInstance().let { bridge ->
+                    if (bridge.tabBridge == null) {
+                        bridge.tabBridge = com.rebelroot.omni.sync.tab.RemoteTabsBridge()
+                    }
+                }
             } catch (e: Exception) {
                 android.util.Log.e("OmniApplication", "Failed to initialize global SyncCoordinator", e)
             }

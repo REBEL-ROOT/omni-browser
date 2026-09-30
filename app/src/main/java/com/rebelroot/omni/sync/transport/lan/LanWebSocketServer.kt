@@ -35,7 +35,13 @@ class LanWebSocketServer(
     private val storage: SyncStorage,
     private val conflictEngine: ConflictEngine,
     private val collection: BookmarkCollection,
-    private val syncBridge: SyncBridge = SyncBridge.getInstance()
+    private val syncBridge: SyncBridge = SyncBridge.getInstance(),
+    /**
+     * Invoked with the operations that were applied to [collection], so the owner
+     * can persist them to the canonical store and refresh the UI. Without this the
+     * received changes would live only in memory and vanish on restart.
+     */
+    private val onAppliedOperations: ((List<com.rebelroot.omni.sync.model.SyncOperation>) -> Unit)? = null
 ) {
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
@@ -152,9 +158,12 @@ class LanWebSocketServer(
                     readTotal += r
                 }
                 val body = String(bodyChars, 0, readTotal)
-                val responseJson = processSyncExchangePayload(body)
+                var exchangedOpIds: List<String> = emptyList()
+                val responseJson = processSyncExchangePayload(body) { exchangedOpIds = it }
                 val responseBytes = responseJson.toByteArray(StandardCharsets.UTF_8)
                 sendHttpResponse(socket, output, "200 OK", "application/json; charset=UTF-8", responseBytes)
+                // Peer received the payload; the queued operations can be dropped.
+                storage.acknowledgeOutbox(exchangedOpIds)
             } else if (firstLine.startsWith("POST /api/sync/pair")) {
                 val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
                 val bodyChars = CharArray(contentLength)
@@ -198,6 +207,23 @@ class LanWebSocketServer(
                     put("status", "success")
                     put("messages", messagesArray)
                 }.toString()
+                val responseBytes = responseJson.toByteArray(StandardCharsets.UTF_8)
+                sendHttpResponse(socket, output, "200 OK", "application/json; charset=UTF-8", responseBytes)
+            } else if (firstLine.startsWith("POST /api/passwords/import")) {
+                val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+                val bodyChars = CharArray(contentLength)
+                var readTotal = 0
+                while (readTotal < contentLength) {
+                    val r = reader.read(bodyChars, readTotal, contentLength - readTotal)
+                    if (r == -1) break
+                    readTotal += r
+                }
+                val body = String(bodyChars, 0, readTotal)
+                val responseJson = processPasswordImport(body, headers["x-omni-password-code"])
+                val responseBytes = responseJson.toByteArray(StandardCharsets.UTF_8)
+                sendHttpResponse(socket, output, "200 OK", "application/json; charset=UTF-8", responseBytes)
+            } else if (firstLine.startsWith("GET /api/passwords/export")) {
+                val responseJson = processPasswordExport(headers["x-omni-password-code"])
                 val responseBytes = responseJson.toByteArray(StandardCharsets.UTF_8)
                 sendHttpResponse(socket, output, "200 OK", "application/json; charset=UTF-8", responseBytes)
             } else if (firstLine.startsWith("OPTIONS ")) {
@@ -286,9 +312,12 @@ class LanWebSocketServer(
 
                 if (opcode == 1 || opcode == 2) { // Text or Binary message
                     val messageText = String(payload, StandardCharsets.UTF_8)
-                    val responseJson = processSyncExchangePayload(messageText)
+                    var exchangedOpIds: List<String> = emptyList()
+                    val responseJson = processSyncExchangePayload(messageText) { exchangedOpIds = it }
 
                     sendWebSocketTextMessage(output, responseJson)
+                    // Peer received the payload; the queued operations can be dropped.
+                    storage.acknowledgeOutbox(exchangedOpIds)
                 }
             }
         } catch (_: Exception) {
@@ -319,7 +348,14 @@ class LanWebSocketServer(
         output.flush()
     }
 
-    fun processSyncExchangePayload(jsonString: String): String {
+    /**
+     * @param onOutboxSerialized invoked with the op ids included in the response,
+     * so the caller can drop them once the payload has actually been delivered.
+     */
+    fun processSyncExchangePayload(
+        jsonString: String,
+        onOutboxSerialized: ((List<String>) -> Unit)? = null
+    ): String {
         return try {
             val json = JSONObject(jsonString)
             val action = json.optString("action", "SYNC_EXCHANGE")
@@ -327,6 +363,7 @@ class LanWebSocketServer(
             val operationsArray = json.optJSONArray("operations")
 
             var appliedCount = 0
+            val appliedOps = mutableListOf<com.rebelroot.omni.sync.model.SyncOperation>()
             if (operationsArray != null) {
                 for (i in 0 until operationsArray.length()) {
                     val opObj = operationsArray.getJSONObject(i)
@@ -379,21 +416,26 @@ class LanWebSocketServer(
                     val result = conflictEngine.processIncomingOperation(collection, op)
                     if (result.applied) {
                         appliedCount++
+                        appliedOps.add(op)
                         syncBridge.recordBookmarkMutation(op)
                     }
                 }
             }
 
+            if (appliedOps.isNotEmpty()) {
+                onAppliedOperations?.invoke(appliedOps)
+            }
+
             // Ingest incoming open tabs from desktop peer
             val tabsArray = json.optJSONArray("openTabs")
             if (tabsArray != null) {
-                val tabList = mutableListOf<com.rebelroot.omni.sync.mozilla.TabInfo>()
+                val tabList = mutableListOf<com.rebelroot.omni.sync.tab.TabInfo>()
                 for (j in 0 until tabsArray.length()) {
                     val tObj = tabsArray.getJSONObject(j)
                     val url = tObj.optString("url", "")
                     if (url.isNotBlank() && url != "about:blank") {
                         tabList.add(
-                            com.rebelroot.omni.sync.mozilla.TabInfo(
+                            com.rebelroot.omni.sync.tab.TabInfo(
                                 title = tObj.optString("title", url),
                                 url = url,
                                 iconUrl = if (tObj.has("favicon") && !tObj.isNull("favicon")) tObj.getString("favicon") else null,
@@ -451,6 +493,8 @@ class LanWebSocketServer(
                     }
                 })
             }
+
+            onOutboxSerialized?.invoke(pendingOutbox.map { it.opId })
 
             val appCtx = com.rebelroot.omni.OmniApplication.appContext
             if (appCtx != null) {
@@ -523,6 +567,84 @@ class LanWebSocketServer(
                 put("status", "error")
                 put("message", e.message ?: "Failed to process pairing")
             }.toString()
+        }
+    }
+
+    // ── Password import / export over LAN ───────────────────────────────────
+    // Gated by a user-visible transfer code: `/api/sync/pair` is unauthenticated,
+    // so a code handed out there could be obtained by any LAN peer. The user
+    // instead reads the code on the phone (PasswordManager) and enters it on the
+    // desktop, which proves physical access to the device holding the vault.
+
+    private fun isPasswordTransferAuthorised(providedCode: String?): Boolean {
+        val ctx = com.rebelroot.omni.OmniApplication.appContext ?: return false
+        val expected = com.rebelroot.omni.tools.passwords.PasswordTransferCode.getOrCreate(ctx)
+        return expected.isNotBlank() && providedCode != null && providedCode == expected
+    }
+
+    private fun openPasswordVault(): com.rebelroot.omni.tools.passwords.PasswordVaultManager? {
+        val ctx = com.rebelroot.omni.OmniApplication.appContext ?: return null
+        val key = com.rebelroot.omni.tools.passwords.MasterPasswordManager(ctx).getStoredKeyBytes()
+            ?: return null
+        return com.rebelroot.omni.tools.passwords.PasswordVaultManager(ctx, key)
+    }
+
+    private fun passwordError(code: String, message: String): String = JSONObject().apply {
+        put("status", "error")
+        put("code", code)
+        put("message", message)
+    }.toString()
+
+    private fun processPasswordImport(csvText: String, providedCode: String?): String {
+        if (!isPasswordTransferAuthorised(providedCode)) {
+            return passwordError("unauthorized", "Invalid or missing password transfer code.")
+        }
+        val vault = openPasswordVault()
+            ?: return passwordError("vault_unavailable", "Password vault is not set up on this device.")
+        return try {
+            kotlinx.coroutines.runBlocking {
+                val existing = vault.exportAll().map {
+                    it.domain.lowercase().trim() to it.username.lowercase().trim()
+                }.toSet()
+                val parsed = com.rebelroot.omni.tools.passwords.PasswordCsv.parse(csvText, existing)
+                vault.importAll(parsed.entries)
+                // The Password Manager screen observes the Room flow, so it
+                // refreshes by itself once the rows are inserted.
+                JSONObject().apply {
+                    put("status", "success")
+                    put("imported", parsed.entries.size)
+                    put("duplicates", parsed.duplicates)
+                    put("skipped", parsed.skipped)
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Password import failed: ${e.message}", e)
+            passwordError("failed", e.message ?: "Password import failed")
+        } finally {
+            try { vault.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun processPasswordExport(providedCode: String?): String {
+        if (!isPasswordTransferAuthorised(providedCode)) {
+            return passwordError("unauthorized", "Invalid or missing password transfer code.")
+        }
+        val vault = openPasswordVault()
+            ?: return passwordError("vault_unavailable", "Password vault is not set up on this device.")
+        return try {
+            kotlinx.coroutines.runBlocking {
+                val entries = vault.exportAll()
+                JSONObject().apply {
+                    put("status", "success")
+                    put("count", entries.size)
+                    put("csv", com.rebelroot.omni.tools.passwords.PasswordCsv.build(entries))
+                }.toString()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Password export failed: ${e.message}", e)
+            passwordError("failed", e.message ?: "Password export failed")
+        } finally {
+            try { vault.close() } catch (_: Exception) {}
         }
     }
 
