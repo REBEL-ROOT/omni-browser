@@ -563,7 +563,22 @@ class MainActivity : FragmentActivity() {
                                 onOpenSync = {
                                     navController.navigate("omni_sync_showcase")
                                 },
+                                onOpenBackup = {
+                                    navController.navigate("backup")
+                                },
                                 onSettingsImported = {
+                                    this@MainActivity.recreate()
+                                }
+                            )
+                        }
+
+                        // Backup & Restore (user-selectable export/import)
+                        composable("backup") {
+                            com.rebelroot.omni.settings.BackupScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onRestored = {
+                                    // Recreate so restored settings/theme take effect.
                                     this@MainActivity.recreate()
                                 }
                             )

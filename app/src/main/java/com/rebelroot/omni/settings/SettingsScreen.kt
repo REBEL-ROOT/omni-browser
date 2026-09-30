@@ -91,6 +91,7 @@ fun SettingsScreen(
     onOpenDownloadSettings: () -> Unit = {},
     onOpenOfflineAi: () -> Unit = {},
     onOpenSync: () -> Unit = {},
+    onOpenBackup: () -> Unit = {},
     onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
@@ -561,8 +562,7 @@ fun SettingsScreen(
                         SettingSearchResult(context.getString(R.string.native_player_title), "Custom floating video player with gesture controls", "MEDIA", Icons.Rounded.PlayCircle, { viewModel.toggleNativePlayer(context) }),
                         SettingSearchResult(context.getString(R.string.ai_blocker_title), "Filter AI generated search results and web bloat", "MEDIA", Icons.Rounded.Block, { viewModel.toggleAiBlocker(context) }),
                         SettingSearchResult(context.getString(R.string.search_engine_title), "Select default search provider (Google, DuckDuckGo, Bing, Brave, Custom)", "SEARCH", Icons.Rounded.Search, {}),
-                        SettingSearchResult(context.getString(R.string.settings_backup_export_title), context.getString(R.string.settings_backup_export_desc), "DATA & BACKUP", Icons.Rounded.UploadFile, { exportLauncher.launch("omni-browser-settings.json") }),
-                        SettingSearchResult(context.getString(R.string.settings_backup_import_title_row), context.getString(R.string.settings_backup_import_desc), "DATA & BACKUP", Icons.Rounded.DownloadForOffline, { importLauncher.launch(arrayOf("application/json","text/*","*/*")) })
+                        SettingSearchResult(context.getString(R.string.backup_menu_row_title), context.getString(R.string.backup_menu_row_desc), "DATA & BACKUP", Icons.Rounded.UploadFile, { onOpenBackup() })
                     )
                 }
 
@@ -1193,16 +1193,9 @@ fun SettingsScreen(
             SettingsCard {
                 NavRow(
                     Icons.Rounded.UploadFile,
-                    stringResource(R.string.settings_backup_export_title),
-                    stringResource(R.string.settings_backup_export_desc),
-                    onClick = { exportLauncher.launch("omni-browser-settings-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())}.json") }
-                )
-                HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                NavRow(
-                    Icons.Rounded.DownloadForOffline,
-                    stringResource(R.string.settings_backup_import_title_row),
-                    stringResource(R.string.settings_backup_import_desc),
-                    onClick = { importLauncher.launch(arrayOf("application/json", "text/*", "*/*")) }
+                    stringResource(R.string.backup_menu_row_title),
+                    stringResource(R.string.backup_menu_row_desc),
+                    onClick = { onOpenBackup() }
                 )
             }
             }

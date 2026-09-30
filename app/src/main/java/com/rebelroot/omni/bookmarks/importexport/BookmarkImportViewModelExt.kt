@@ -17,6 +17,7 @@ import com.rebelroot.omni.bookmarks.parser.parseNetscapeBookmarkHtml
 import com.rebelroot.omni.bookmarks.storage.loadBookmarks
 import com.rebelroot.omni.bookmarks.storage.saveBookmarks
 import com.rebelroot.omni.browser.BrowserViewModel
+import com.rebelroot.omni.browser.refreshBookmarks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -108,6 +109,9 @@ fun BrowserViewModel.confirmImport(
             withContext(Dispatchers.Main) {
                 this@confirmImport.importPreview = null
                 this@confirmImport.isImporting = false
+                // The canonical store changed, so refresh the flat UI list to
+                // make the imported bookmarks visible immediately.
+                this@confirmImport.refreshBookmarks(context)
                 onResult(
                     ImportConfirmationResult(
                         success = true,
@@ -161,9 +165,22 @@ fun flattenTreeForPreview(node: BookmarkNode, depth: Int = 0): List<Pair<Int, Bo
 
 // ── Export ─────────────────────────────────────────────────────────────────
 
+/** Default file name suggested when saving an export to device storage. */
+fun bookmarkExportFileName(): String {
+    val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        .format(java.util.Date())
+    return "omni-bookmarks-$date.html"
+}
+
+/** Builds the Netscape Bookmark HTML for the live collection. */
+private fun buildBookmarkExportHtml(context: Context): String {
+    val collection = loadBookmarks(context)
+    return exportNetscapeBookmarkHtml(collection, title = "Omni Bookmarks")
+}
+
 /**
- * Exports the live bookmark collection to a Netscape Bookmark HTML file
- * in the app's cache directory, then invokes [onResult] with the file URI.
+ * Exports the live bookmark collection to the app's cache directory and
+ * returns a shareable content URI (used for the "share" export option).
  *
  * @param context Android context
  * @param onResult callback with the exported file URI or an error
@@ -174,8 +191,7 @@ fun BrowserViewModel.exportBookmarksToFile(
 ) {
     viewModelScope.launch(Dispatchers.IO) {
         try {
-            val collection = loadBookmarks(context)
-            val html = exportNetscapeBookmarkHtml(collection, title = "Omni Bookmarks")
+            val html = buildBookmarkExportHtml(context)
 
             val file = File(context.cacheDir, "omni_bookmarks_export.html")
             file.writeText(html, Charsets.UTF_8)
@@ -188,6 +204,41 @@ fun BrowserViewModel.exportBookmarksToFile(
 
             withContext(Dispatchers.Main) {
                 onResult(Result.success(uri))
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                onResult(Result.failure(e))
+            }
+        }
+    }
+}
+
+/**
+ * Exports the live bookmark collection directly to a user-chosen [targetUri]
+ * obtained from the Storage Access Framework (ACTION_CREATE_DOCUMENT), so the
+ * file is saved permanently in the location the user picked.
+ *
+ * @param context Android context
+ * @param targetUri the destination document URI chosen by the user
+ * @param onResult callback with the destination URI or an error
+ */
+fun BrowserViewModel.exportBookmarksToUri(
+    context: Context,
+    targetUri: Uri,
+    onResult: (Result<Uri>) -> Unit
+) {
+    viewModelScope.launch(Dispatchers.IO) {
+        try {
+            val html = buildBookmarkExportHtml(context)
+
+            // "wt" = write + truncate, so re-saving over an existing file does
+            // not leave trailing bytes from a previous, longer export.
+            val stream = context.contentResolver.openOutputStream(targetUri, "wt")
+                ?: throw IllegalStateException("Cannot open destination file for writing")
+            stream.use { it.write(html.toByteArray(Charsets.UTF_8)) }
+
+            withContext(Dispatchers.Main) {
+                onResult(Result.success(targetUri))
             }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {

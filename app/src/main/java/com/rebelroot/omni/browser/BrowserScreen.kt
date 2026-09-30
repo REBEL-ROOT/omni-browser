@@ -40,6 +40,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7235,22 +7236,94 @@ fun BrowserScreen(
             // so users can interact with it fully: zoom in/out, pinch gesture, etc.
             if (viewModel.activeExtensionPopupSession != null) {
 
-                // Zoom state — reset each time a new extension popup is opened
+                // Zoom & height state — reset each time a new extension popup is opened
                 key(viewModel.activeExtensionPopupSession) {
                     var popupScale by remember { mutableStateOf(1f) }
+                    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val screenHeightDp = configuration.screenHeightDp.dp
+                    val minSheetHeight = 200.dp
+                    val maxSheetHeight = (screenHeightDp * 0.92f).coerceAtLeast(320.dp)
+                    val headerHeight = 56.dp
+
+                    // null = Firefox Mobile-style auto-fit to extension UI content height;
+                    // non-null = user manually dragged header or toggled custom height
+                    var userCustomHeightDp by remember { mutableStateOf<androidx.compose.ui.unit.Dp?>(null) }
+                    var isDraggingHeader by remember { mutableStateOf(false) }
+
+                    val measuredContentDp = viewModel.activeExtensionPopupContentHeightDp
+                    val autoFitHeightDp = if (measuredContentDp != null) {
+                        (measuredContentDp.dp + headerHeight).coerceIn(minSheetHeight, maxSheetHeight)
+                    } else {
+                        (screenHeightDp * 0.55f).coerceIn(300.dp, maxSheetHeight)
+                    }
+                    val targetSheetHeight = (userCustomHeightDp ?: autoFitHeightDp).coerceIn(minSheetHeight, maxSheetHeight)
+                    val currentHeightState by rememberUpdatedState(targetSheetHeight)
+
+                    val blockSheetDragNestedScroll = remember {
+                        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                            override fun onPostScroll(
+                                consumed: androidx.compose.ui.geometry.Offset,
+                                available: androidx.compose.ui.geometry.Offset,
+                                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource
+                            ): androidx.compose.ui.geometry.Offset = available
+
+                            override suspend fun onPostFling(
+                                consumed: androidx.compose.ui.unit.Velocity,
+                                available: androidx.compose.ui.unit.Velocity
+                            ): androidx.compose.ui.unit.Velocity = available
+                        }
+                    }
+
+                    LaunchedEffect(popupScale, viewModel.activeExtensionPopupSession, viewModel.activeExtensionPopupLoading) {
+                        val session = viewModel.activeExtensionPopupSession ?: return@LaunchedEffect
+                        if (!viewModel.activeExtensionPopupLoading) {
+                            runCatching {
+                                session.loadUri("javascript:(function(){try{document.documentElement.style.zoom='${popupScale}';if(window.__omniMeasurePopupHeight){setTimeout(window.__omniMeasurePopupHeight,50);}}catch(e){}})();")
+                            }
+                        }
+                    }
 
                     val popupContent: @Composable () -> Unit = {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight(0.65f)
+                                .height(targetSheetHeight)
                                 .navigationBarsPadding()
+                                .imePadding()
                         ) {
-                            // ── Header ──────────────────────────────────────────────
+                            // ── Header (Drag vertically up/down to resize popup height, or drag all the way down to close) ──
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                                    .pointerInput(minSheetHeight, maxSheetHeight) {
+                                        var dragHeightPx = 0f
+                                        detectVerticalDragGestures(
+                                            onDragStart = {
+                                                isDraggingHeader = true
+                                                dragHeightPx = with(density) { currentHeightState.toPx() }
+                                            },
+                                            onDragEnd = {
+                                                isDraggingHeader = false
+                                            },
+                                            onDragCancel = {
+                                                isDraggingHeader = false
+                                            },
+                                            onVerticalDrag = { change, dragAmount ->
+                                                change.consume()
+                                                // Dragging up (negative dragAmount) increases sheet height
+                                                dragHeightPx -= dragAmount
+                                                val newHeightDp = with(density) { dragHeightPx.toDp() }
+                                                if (newHeightDp < 130.dp) {
+                                                    isDraggingHeader = false
+                                                    viewModel.dismissExtensionPopup()
+                                                } else {
+                                                    userCustomHeightDp = newHeightDp.coerceIn(minSheetHeight, maxSheetHeight)
+                                                }
+                                            }
+                                        )
+                                    }
+                                    .padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -7286,12 +7359,14 @@ fun BrowserScreen(
                                         Text(
                                             text = stringResource(R.string.ext_popup_subtitle),
                                             fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
 
-                                // ── Zoom controls ───────────────────────────────────
+                                // ── Zoom & Height controls ──────────────────────────
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -7301,7 +7376,7 @@ fun BrowserScreen(
                                         onClick = {
                                             popupScale = (popupScale - 0.15f).coerceAtLeast(0.4f)
                                         },
-                                        modifier = Modifier.size(34.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.ZoomOut,
@@ -7311,12 +7386,15 @@ fun BrowserScreen(
                                         )
                                     }
 
-                                    // Zoom percentage chip — tap to reset
+                                    // Zoom percentage chip — tap to reset zoom & auto-fit height
                                     Surface(
-                                        onClick = { popupScale = 1f },
+                                        onClick = {
+                                            popupScale = 1f
+                                            userCustomHeightDp = null
+                                        },
                                         shape = RoundedCornerShape(8.dp),
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                                        modifier = Modifier.widthIn(min = 42.dp)
+                                        modifier = Modifier.widthIn(min = 40.dp)
                                     ) {
                                         Text(
                                             text = "${(popupScale * 100).toInt()}%",
@@ -7331,7 +7409,7 @@ fun BrowserScreen(
                                     // Zoom In
                                     IconButton(
                                         onClick = { popupScale = (popupScale + 0.15f).coerceAtMost(4f) },
-                                        modifier = Modifier.size(34.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.ZoomIn,
@@ -7341,10 +7419,31 @@ fun BrowserScreen(
                                         )
                                     }
 
+                                    // Toggle Auto-Fit vs Full Height (or reset custom drag height back to Auto-Fit)
+                                    IconButton(
+                                        onClick = {
+                                            userCustomHeightDp = if (userCustomHeightDp != null) {
+                                                null
+                                            } else if (autoFitHeightDp >= maxSheetHeight - 24.dp) {
+                                                (screenHeightDp * 0.55f).coerceAtLeast(minSheetHeight)
+                                            } else {
+                                                maxSheetHeight
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (userCustomHeightDp != null) Icons.Rounded.CloseFullscreen else Icons.Rounded.OpenInFull,
+                                            contentDescription = "Resize popup",
+                                            tint = if (userCustomHeightDp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
                                     // Close
                                     IconButton(
                                         onClick = { viewModel.dismissExtensionPopup() },
-                                        modifier = Modifier.size(34.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Rounded.Close,
@@ -7360,12 +7459,13 @@ fun BrowserScreen(
                                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                             )
 
-                            // ── Extension WebView with pinch-to-zoom ────────────────────
+                            // ── Extension WebView with full vertical scroll & zoom ──
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
                                     .clipToBounds()
+                                    .nestedScroll(blockSheetDragNestedScroll)
                             ) {
                                 AndroidView(
                                     factory = { ctx ->
@@ -7386,6 +7486,19 @@ fun BrowserScreen(
                                             isClickable = true
                                             isFocusable = true
                                             isFocusableInTouchMode = true
+                                            setOnTouchListener { v, event ->
+                                                when (event.actionMasked) {
+                                                    android.view.MotionEvent.ACTION_DOWN,
+                                                    android.view.MotionEvent.ACTION_MOVE -> {
+                                                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                                                    }
+                                                    android.view.MotionEvent.ACTION_UP,
+                                                    android.view.MotionEvent.ACTION_CANCEL -> {
+                                                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                                                    }
+                                                }
+                                                false
+                                            }
                                         }
                                     },
                                     update = { geckoView ->
@@ -7396,8 +7509,6 @@ fun BrowserScreen(
                                         try {
                                             session?.setActive(true)
                                         } catch (_: Exception) {}
-                                        geckoView.scaleX = popupScale
-                                        geckoView.scaleY = popupScale
                                     },
                                     onRelease = { geckoView ->
                                         try {
@@ -7422,12 +7533,13 @@ fun BrowserScreen(
                         }
                     }
 
-                    // Bottom sheet for all extensions
+                    // Bottom sheet for all extensions (dragHandle = null removes the top _ indicator bar)
                     ModalBottomSheet(
                         onDismissRequest = { viewModel.dismissExtensionPopup() },
                         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                        dragHandle = null,
                         containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
-                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxWidth().widthIn(max = adaptiveMetrics.sheetMaxWidth)) {
                             popupContent()

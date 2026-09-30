@@ -148,6 +148,12 @@
     <string name="export_share_subject">Omni Bookmarks Export</string>
     <string name="export_share_title">Share bookmarks</string>
     <string name="export_error_toast">Export failed: %1$s</string>
+    <string name="export_options_title">Export bookmarks</string>
+    <string name="export_save_to_device">Save to device</string>
+    <string name="export_save_to_device_desc">Choose a folder to save an HTML file</string>
+    <string name="export_share">Share</string>
+    <string name="export_share_desc">Send the HTML file to another app</string>
+    <string name="export_saved_toast">Bookmarks saved</string>
 
     <string name="history_title">History</string>
     <string name="history_clear_all">Clear all</string>
@@ -737,6 +743,38 @@
     <string name="settings_backup_import_invalid">Invalid backup file: %1$s</string>
     <string name="settings_backup_import_bad_version">This backup was made by a newer version and cannot be imported.</string>
     <string name="settings_backup_skipped">%1$d unsupported skipped</string>
+
+    <!-- Backup & Restore (user-selectable) -->
+    <string name="backup_title">Backup &amp; Restore</string>
+    <string name="backup_export_section">EXPORT</string>
+    <string name="backup_export_desc">Choose what to include, then save or share a JSON file.</string>
+    <string name="backup_import_section">IMPORT</string>
+    <string name="backup_import_desc">Restore from a backup file. You can pick which parts to restore.</string>
+    <string name="backup_section_settings">Settings &amp; preferences</string>
+    <string name="backup_section_settings_desc">Appearance, search, privacy, ad-block, user-agent, shortcuts…</string>
+    <string name="backup_section_bookmarks">Bookmarks</string>
+    <string name="backup_section_history">Browsing history</string>
+    <string name="backup_section_passwords">Saved passwords</string>
+    <string name="backup_section_passwords_desc">Saved unencrypted — keep the file safe</string>
+    <string name="backup_section_notes">Dev notes</string>
+    <string name="backup_export_button">Export selected</string>
+    <string name="backup_import_button">Choose backup file</string>
+    <string name="backup_save_to_device_desc">Choose a folder for the .json file</string>
+    <string name="backup_share_desc">Send the file to another app</string>
+    <string name="backup_share_subject">Omni Browser backup</string>
+    <string name="backup_import_preview_title">Restore from backup</string>
+    <string name="backup_import_contains">This file contains:</string>
+    <string name="backup_item_count">%1$d item(s)</string>
+    <string name="backup_restore_button">Restore selected</string>
+    <string name="backup_export_success">Backup saved</string>
+    <string name="backup_export_failed">Backup failed: %1$s</string>
+    <string name="backup_restore_success">Restored %1$d item(s)%2$s</string>
+    <string name="backup_restore_failed">Restore failed</string>
+    <string name="backup_none_selected">Select at least one item</string>
+    <string name="backup_empty_file">No restorable data found in this file</string>
+    <string name="backup_passwords_warning">Passwords are written without encryption. Keep the file somewhere safe.</string>
+    <string name="backup_menu_row_title">Backup &amp; Restore</string>
+    <string name="backup_menu_row_desc">Export or restore settings, bookmarks, history, passwords and notes</string>
     <string name="theme_settings_title">Theme</string>
     <string name="theme_settings_desc">Light &amp; dark mode, accent colors, app icons</string>
     <string name="preferences_layout_title">Preferences &amp; Layout</string>

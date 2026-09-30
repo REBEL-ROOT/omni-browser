@@ -320,6 +320,7 @@ class BrowserViewModel : ViewModel() {
     var activeExtensionPopupName by mutableStateOf("")
     var activeExtensionPopupId by mutableStateOf("")
     var activeExtensionPopupLoading by mutableStateOf(true)
+    var activeExtensionPopupContentHeightDp by mutableStateOf<Int?>(null)
 
     var pendingIntentUrl: String? = null
     var isVideoPlayerScreenActive by mutableStateOf(false)
@@ -2392,8 +2393,9 @@ class BrowserViewModel : ViewModel() {
         url: String,
         groupId: String? = null,
         isIncognito: Boolean = isIncognitoMode,
-        inBackground: Boolean? = null
-    ) {
+        inBackground: Boolean? = null,
+        openSession: Boolean = true
+    ): TabState {
         val runtime = getGeckoRuntime(context)
         val isJsAllowed = getSitePermissionValue(url, "javascript") == "allow"
         val settings = org.mozilla.geckoview.GeckoSessionSettings.Builder()
@@ -2411,6 +2413,7 @@ class BrowserViewModel : ViewModel() {
             title = "New Tab",
             url = url,
             isIncognito = isIncognito,
+            isUriLoaded = true,
             settingsVersion = currentSettingsVersion,
             sessionGenerationId = gen
         )
@@ -2421,23 +2424,26 @@ class BrowserViewModel : ViewModel() {
         if (groupId != null) {
             addTabToGroup(tabId, groupId)
         }
-        session.open(runtime)
-        val shouldOpenInBackground = inBackground ?: (openTabsInBackground && tabs.size > 1 && groupId == null)
-        if (!shouldOpenInBackground || tabs.size == 1) {
-            selectTab(newTab.id)
-        } else {
-            val isIncog = newTab.isIncognito
-            if (isIncog && activeIncognitoTabId == null) {
-                activeIncognitoTabId = newTab.id
-            } else if (!isIncog && activeNormalTabId == null) {
-                activeNormalTabId = newTab.id
+        if (openSession) {
+            session.open(runtime)
+            val shouldOpenInBackground = inBackground ?: (openTabsInBackground && tabs.size > 1 && groupId == null)
+            if (!shouldOpenInBackground || tabs.size == 1) {
+                selectTab(newTab.id)
+            } else {
+                val isIncog = newTab.isIncognito
+                if (isIncog && activeIncognitoTabId == null) {
+                    activeIncognitoTabId = newTab.id
+                } else if (!isIncog && activeNormalTabId == null) {
+                    activeNormalTabId = newTab.id
+                }
+                triggerBackgroundTabNotification(newTab)
             }
-            triggerBackgroundTabNotification(newTab)
+            loadUrlInTab(newTab, url)
+            saveTabs()
+            // Enforce the live-session cap after adding the new tab.
+            enforceSuspendLimit()
         }
-        loadUrlInTab(newTab, url)
-        saveTabs()
-        // Enforce the live-session cap after adding the new tab.
-        enforceSuspendLimit()
+        return newTab
     }
 
     fun dismissContextMenu() {
@@ -3075,6 +3081,12 @@ class BrowserViewModel : ViewModel() {
                 .configFilePath(configFile.absolutePath)
 
             val settings = builder.build()
+
+            try {
+                patchInstalledUserExtensionsForMobile(appCtx)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed patching installed user extensions prior to runtime init", e)
+            }
 
             try {
                 geckoRuntime = GeckoRuntime.create(appCtx, settings)
@@ -6151,11 +6163,18 @@ class BrowserViewModel : ViewModel() {
         val webIsolatedCount = processCount
         sb.append("  dom.ipc.processCount: $processCount\n")
         sb.append("  dom.ipc.processCount.webIsolated: $webIsolatedCount\n")
-        if (isWebRenderEnabled) {
-            sb.append("  gfx.webrender.all: true\n")
-        }
-        if (isGpuAccelerationEnabled) {
-            sb.append("  layers.acceleration.force-enabled: true\n")
+        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.P) {
+            // Android 9 (API 28) emulators and older GLES drivers have buggy OpenGL ES 3.x state queries
+            // (eglCodecCommon: glUtilsParamSize: unknow param 0x8919 / 0x85b5 / 0x8caa) that can crash the
+            // GPU/compositor process when multiple GeckoView surfaces (main tab + extension popup) render concurrently.
+            sb.append("  gfx.webrender.software: true\n")
+        } else {
+            if (isWebRenderEnabled) {
+                sb.append("  gfx.webrender.all: true\n")
+            }
+            if (isGpuAccelerationEnabled) {
+                sb.append("  layers.acceleration.force-enabled: true\n")
+            }
         }
         if (isForceHighRefreshRate) {
             sb.append("  layout.frame_rate: 0\n")
@@ -6172,6 +6191,7 @@ class BrowserViewModel : ViewModel() {
         sb.append("  signon.autofillForms: true\n")
         sb.append("  dom.forms.autocomplete.formautofill: true\n")
         sb.append("  extensions.formautofill.available: true\n")
+        sb.append("  xpinstall.signatures.required: false\n")
         if (preloadPages == 0) {
             sb.append("  network.dns.disablePrefetch: true\n")
             sb.append("  network.prefetch-next: false\n")
@@ -7197,25 +7217,34 @@ class BrowserViewModel : ViewModel() {
             return
         }
         Log.d(TAG, "Installing external extension from URL: $url")
+        val appContext = context.applicationContext
 
-        // Run the install on the main thread. GeckoView's WebExtensionController callbacks
-        // fire on the calling thread, and an exception escaping an extension callback
-        // (e.g. a heavy/unsupported extension like uBlock Origin) can crash the whole
-        // app process. Containing it here keeps a bad extension from taking the app down.
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            Toast.makeText(context, "Installing extension...", Toast.LENGTH_SHORT).show()
-            try {
-                runtime.webExtensionController.install(url)
-                    .accept(
-                        { ext ->
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Installing extension...", Toast.LENGTH_SHORT).show()
+            }
+            val installUrl = preparePatchedExtensionInstallUrl(url, appContext)
+            withContext(Dispatchers.Main) {
+                try {
+                    runtime.webExtensionController.install(installUrl)
+                        .accept(
+                            { ext ->
                             try {
                                 Log.i(TAG, "Successfully installed extension: ${ext?.id}")
                                 if (ext != null) {
-                                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    setupWebExtensionDelegates(ext)
+                                    if (ext.safeMetaData?.allowedInPrivateBrowsing != true) {
+                                        runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    }
                                     runtime.webExtensionController.enable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
                                         .accept(
                                             { enabledExt ->
                                                 Log.i(TAG, "Extension ${enabledExt?.id ?: ext.id} enabled successfully")
+                                                if (enabledExt != null) {
+                                                    ensureExtensionAutofillReady(enabledExt)
+                                                } else {
+                                                    ensureExtensionAutofillReady(ext)
+                                                }
                                                 syncUserExtensions()
                                                 // Reload active tab so newly installed extension (e.g. ad blocker) takes immediate effect
                                                 if (currentUrl != "about:blank" && currentUrl.isNotEmpty()) {
@@ -7244,12 +7273,13 @@ class BrowserViewModel : ViewModel() {
                             }
                         }
                     )
-            } catch (e: Exception) {
-                // Synchronous failure (malformed URL, unsupported package, etc.) must
-                // never propagate and crash the app.
-                Log.e(TAG, "Synchronous failure installing extension from: $url", e)
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    Toast.makeText(context, "❌ Installation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    // Synchronous failure (malformed URL, unsupported package, etc.) must
+                    // never propagate and crash the app.
+                    Log.e(TAG, "Synchronous failure installing extension from: $url", e)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(context, "❌ Installation failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
@@ -7323,7 +7353,9 @@ class BrowserViewModel : ViewModel() {
                                 val extId = ext.safeId ?: return@forEach
                                 try {
                                     setupWebExtensionDelegates(ext)
-                                    runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    if (ext.safeMetaData?.allowedInPrivateBrowsing != true) {
+                                        runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    }
                                     val isCurrentlyEnabled = ext.safeMetaData?.enabled == true
                                     if (extId == FORCE_DARK_EXTENSION_ID) {
                                         if (isCurrentlyEnabled != forceDarkWebsites) {
@@ -7342,6 +7374,9 @@ class BrowserViewModel : ViewModel() {
                                                 runtime.webExtensionController.disable(ext, org.mozilla.geckoview.WebExtensionController.EnableSource.USER)
                                             }
                                         }
+                                        if (shouldBeEnabled) {
+                                            ensureExtensionAutofillReady(ext)
+                                        }
                                     }
                                     ext.setTabDelegate(object : WebExtension.TabDelegate {
                                         override fun onNewTab(
@@ -7357,13 +7392,35 @@ class BrowserViewModel : ViewModel() {
                                                 try {
                                                     val ctx = appContext
                                                     if (ctx != null) {
-                                                        createNewTab(ctx, url, inBackground = inBackground)
-                                                        val createdSession = if (!inBackground) {
-                                                            tabs.find { it.id == activeTabId }?.session ?: tabs.lastOrNull()?.session
-                                                        } else {
-                                                            tabs.lastOrNull()?.session
+                                                        // GeckoView's WebExtensionController requires an UNOPENED GeckoSession
+                                                        // in onNewTab and calls session.open(runtime, newSessionId) itself.
+                                                        val createdTab = createNewTab(
+                                                            context = ctx,
+                                                            url = url,
+                                                            inBackground = inBackground,
+                                                            openSession = false
+                                                        )
+                                                        result.complete(createdTab.session)
+                                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                            try {
+                                                                if (!createdTab.session.isOpen) {
+                                                                    createdTab.session.open(getGeckoRuntime(ctx))
+                                                                }
+                                                                val shouldOpenInBg = inBackground || (openTabsInBackground && tabs.size > 1 && createDetails.active != true)
+                                                                if (!shouldOpenInBg || tabs.size == 1) {
+                                                                    selectTab(createdTab.id)
+                                                                } else {
+                                                                    triggerBackgroundTabNotification(createdTab)
+                                                                }
+                                                                if (url.isNotBlank() && url != "about:blank") {
+                                                                    loadUrlInTab(createdTab, url)
+                                                                }
+                                                                saveTabs()
+                                                                enforceSuspendLimit()
+                                                            } catch (innerErr: Exception) {
+                                                                Log.e(TAG, "Error finalizing extension new tab for $currentId", innerErr)
+                                                            }
                                                         }
-                                                        result.complete(createdSession)
                                                     } else {
                                                         result.completeExceptionally(IllegalStateException("Context is null"))
                                                     }
@@ -7562,7 +7619,7 @@ class BrowserViewModel : ViewModel() {
 
     val shortcutsList = mutableStateListOf<HomeShortcut>()
     
-    private fun loadShortcuts(context: Context) {
+    fun loadShortcuts(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val torrentShortcuts = listOf(
                 HomeShortcut("1337x", "1337x", "https://1337x.to"),

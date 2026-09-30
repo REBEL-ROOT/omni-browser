@@ -49,7 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rebelroot.omni.R
+import com.rebelroot.omni.bookmarks.importexport.bookmarkExportFileName
 import com.rebelroot.omni.bookmarks.importexport.exportBookmarksToFile
+import com.rebelroot.omni.bookmarks.importexport.exportBookmarksToUri
 import com.rebelroot.omni.bookmarks.importexport.prepareImportPreview
 import com.rebelroot.omni.browser.*
 
@@ -63,8 +65,9 @@ fun BookmarksScreen(
 ) {
     val context = LocalContext.current
 
-    // File picker for importing bookmarks (Netscape HTML)
-    // File picker for importing bookmarks (Netscape HTML from any browser)
+    // File picker for importing bookmarks (Netscape HTML from any browser).
+    // A broad MIME set is used because file providers label browser export
+    // files as text/html, text/plain or application/octet-stream.
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -84,6 +87,64 @@ fun BookmarksScreen(
                     }
                 }
             )
+        }
+    }
+
+    var showExportSheet by remember { mutableStateOf(false) }
+
+    // Save-to-device export via the Storage Access Framework, so the user
+    // picks a permanent location instead of only being able to share.
+    val exportCreateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/html")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.exportBookmarksToUri(context, uri) { result ->
+                result.onSuccess {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.export_saved_toast),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }.onFailure { e ->
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
+    // Share export: writes the file to cache and offers it to other apps.
+    val shareExport: () -> Unit = {
+        viewModel.exportBookmarksToFile(context) { result ->
+            result.onSuccess { uri ->
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/html"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, context.getString(R.string.export_share_subject))
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val chooser = android.content.Intent.createChooser(shareIntent, context.getString(R.string.export_share_title))
+                // Always add NEW_TASK flag so the chooser can launch from any context
+                chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                try {
+                    context.startActivity(chooser)
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -126,37 +187,8 @@ fun BookmarksScreen(
                     }
                 },
                 actions = {
-                    // Export button
-                    IconButton(onClick = {
-                        viewModel.exportBookmarksToFile(context) { result ->
-                            result.onSuccess { uri ->
-                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                    type = "text/html"
-                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                    putExtra(android.content.Intent.EXTRA_SUBJECT, context.getString(R.string.export_share_subject))
-                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                val chooser = android.content.Intent.createChooser(shareIntent, context.getString(R.string.export_share_title))
-                                // Always add NEW_TASK flag so the chooser can launch from any context
-                                chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                try {
-                                    context.startActivity(chooser)
-                                } catch (e: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
-                            }.onFailure { e ->
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.export_error_toast, e.message ?: "Unknown error"),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }) {
+                    // Export button — opens a sheet to save locally or share
+                    IconButton(onClick = { showExportSheet = true }) {
                         Icon(
                             imageVector = Icons.Rounded.FileDownload,
                             contentDescription = stringResource(id = R.string.bookmarks_export),
@@ -164,7 +196,11 @@ fun BookmarksScreen(
                         )
                     }
                     // Import button
-                    IconButton(onClick = { importLauncher.launch(arrayOf("text/html", "text/plain")) }) {
+                    IconButton(onClick = {
+                        importLauncher.launch(
+                            arrayOf("text/html", "text/plain", "application/octet-stream")
+                        )
+                    }) {
                         Icon(
                             imageVector = Icons.Rounded.FileUpload,
                             contentDescription = stringResource(id = R.string.bookmarks_import),
@@ -322,6 +358,105 @@ fun BookmarksScreen(
             }
         }
         } // close adaptive centered container
+    }
+
+    if (showExportSheet) {
+        ExportOptionsSheet(
+            onDismiss = { showExportSheet = false },
+            onSaveToDevice = {
+                showExportSheet = false
+                exportCreateLauncher.launch(bookmarkExportFileName())
+            },
+            onShare = {
+                showExportSheet = false
+                shareExport()
+            }
+        )
+    }
+}
+
+/**
+ * Bottom sheet offering the two export destinations: save a permanent copy to
+ * the device via the Storage Access Framework, or send the file to another app.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportOptionsSheet(
+    onDismiss: () -> Unit,
+    onSaveToDevice: () -> Unit,
+    onShare: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = stringResource(id = R.string.export_options_title),
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            ExportOptionRow(
+                icon = Icons.Rounded.FileDownload,
+                title = stringResource(id = R.string.export_save_to_device),
+                subtitle = stringResource(id = R.string.export_save_to_device_desc),
+                onClick = onSaveToDevice
+            )
+            ExportOptionRow(
+                icon = Icons.Rounded.Share,
+                title = stringResource(id = R.string.export_share),
+                subtitle = stringResource(id = R.string.export_share_desc),
+                onClick = onShare
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExportOptionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

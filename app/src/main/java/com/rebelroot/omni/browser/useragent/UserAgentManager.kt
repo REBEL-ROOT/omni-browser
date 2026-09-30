@@ -61,6 +61,13 @@ class UserAgentManager(context: Context) {
     private val _siteRules = MutableStateFlow<List<UserAgentSiteRule>>(loadSiteRules())
     val siteRules: StateFlow<List<UserAgentSiteRule>> = _siteRules.asStateFlow()
 
+    /** Re-reads the global UA and per-site rules from prefs (used after a backup restore). */
+    fun reload() {
+        _globalPreset.value = loadGlobalPreset()
+        _globalCustomUa.value = loadGlobalCustomUa()
+        _siteRules.value = loadSiteRules()
+    }
+
     private fun loadGlobalPreset(): UserAgentPreset {
         val id = prefs.getString("global_preset_id", UserAgentPreset.DEFAULT.id) ?: UserAgentPreset.DEFAULT.id
         return UserAgentPreset.fromId(id)

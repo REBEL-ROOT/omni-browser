@@ -87,7 +87,17 @@ private fun isAuthRelatedUrl(uri: String): Boolean {
 }
 
 internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: Context) {
-    applyUserAgentForTab(tab)
+    fun liveTab(): TabState = tabs.find { it.id == tab.id } ?: tab
+    fun liveTabUrl(): String {
+        val current = liveTab().url
+        return when {
+            current.isNotBlank() && current != "about:blank" -> current
+            tab.id == activeTabId && currentUrl.isNotBlank() && currentUrl != "about:blank" -> currentUrl
+            else -> current
+        }
+    }
+
+    applyUserAgentForTab(liveTab())
 
     // Attach SessionTabDelegate and ActionDelegate for active WebExtensions
     if (userExtensions.isNotEmpty()) {
@@ -348,7 +358,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
          * Rejects messages from about:blank, data:, javascript:, blob: origins.
          */
         private fun isTrustedOmniOrigin(): Boolean {
-            val url = tab.url
+            val url = liveTabUrl()
             if (url.isNullOrBlank()) return false
             // Always trust our own built-in extensions
             if (url.startsWith("moz-extension://")) return true
@@ -373,7 +383,12 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             // All OMNI_* prefixed messages are privileged native-app channels.
             // Reject them from untrusted origins to prevent privilege escalation.
             if (message.startsWith("OMNI_") && !isTrustedOmniOrigin()) {
-                Log.w(TAG, "🛡️ Blocked OMNI_* alert from untrusted origin: ${tab.url}, messagePrefix=${message.take(30)}")
+                Log.w(TAG, "🛡️ Blocked OMNI_* alert from untrusted origin: ${liveTabUrl()}, messagePrefix=${message.take(30)}")
+                if (message.startsWith("OMNI_IMAGES:")) {
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isExtractingImages = false
+                    }
+                }
                 return GeckoResult.fromValue(prompt.dismiss())
             }
 
@@ -385,7 +400,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     val preview = obj.optString("preview", "")
                     val payloadDomain = obj.optString("domain", "").lowercase().removePrefix("www.")
                     val rawDomain = if (payloadDomain.isNotBlank() && payloadDomain != "about:blank") payloadDomain else {
-                        try { android.net.Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.") ?: "*" } catch(_: Exception) { "*" }
+                        try { android.net.Uri.parse(liveTabUrl()).host?.lowercase()?.removePrefix("www.") ?: "*" } catch(_: Exception) { "*" }
                     }
                     val cleanDomain = if (rawDomain.isBlank() || rawDomain == "about:blank") "*" else rawDomain
                     if (selector.isNotBlank()) {
@@ -432,6 +447,9 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing extracted images", e)
+                    viewModelScope.launch(Dispatchers.Main) {
+                        isExtractingImages = false
+                    }
                 }
                 return GeckoResult.fromValue(prompt.dismiss())
             }
@@ -613,7 +631,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             val options = prompt.options
             Log.d(TAG, "🔑 [Autofill] onLoginSelect received with ${options.size} option(s)")
 
-            val host = try { java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: "" } catch(_: Exception) { "" }
+            val host = try { java.net.URI(liveTabUrl()).host?.removePrefix("www.")?.lowercase() ?: "" } catch(_: Exception) { "" }
             val vaultMatches = if (host.isNotEmpty()) getPasswordsForDomain(host) else emptyList()
 
             val matches = if (vaultMatches.isNotEmpty()) {
@@ -652,10 +670,10 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 if (!originHost.isNullOrBlank()) {
                     originHost.removePrefix("www.").lowercase()
                 } else {
-                    java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: ""
+                    java.net.URI(liveTabUrl()).host?.removePrefix("www.")?.lowercase() ?: ""
                 }
             } catch (e: Exception) {
-                try { java.net.URI(tab.url).host?.removePrefix("www.")?.lowercase() ?: "" } catch (ex: Exception) { "" }
+                try { java.net.URI(liveTabUrl()).host?.removePrefix("www.")?.lowercase() ?: "" } catch (ex: Exception) { "" }
             }
             if (!isOmniPasswordManagerEnabled) {
                 Log.d(TAG, "Omni password manager is disabled — ignoring onLoginSave")
@@ -1066,7 +1084,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 viewModelScope.launch(Dispatchers.Main) {
                     val callback = onPlayVideoRequestReceived
                     if (callback != null) {
-                        callback.invoke(uri, tab.url)
+                        callback.invoke(uri, liveTabUrl())
                     } else {
                         pendingVideoUrl = uri
                     }
@@ -1135,7 +1153,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 !lowerUri.startsWith("data:")
             ) {
                 val sourceHost = try { 
-                    val h = Uri.parse(tab.url).host?.lowercase()?.removePrefix("www.")
+                    val h = Uri.parse(liveTabUrl()).host?.lowercase()?.removePrefix("www.")
                     if (!h.isNullOrBlank() && h != "blank") h else Uri.parse(uri).host?.lowercase()?.removePrefix("www.") ?: ""
                 } catch (_: Exception) { "" }
                 val sitePerm = getSitePermissionValue(sourceHost, "externalApp")
@@ -1274,7 +1292,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             // consent dialog. Nothing ever opens natively without an explicit user
             // confirmation; dismissing simply loads the page in the browser.
             val isSearchEngine = host.contains("google.") || host.contains("bing.") || host.contains("duckduckgo.") || host.contains("yahoo.") || host.contains("yandex.") || host.contains("brave.") || host.contains("ecosia.") || host.contains("startpage.") || host.contains("qwant.")
-            val currentTabHost = try { Uri.parse(tab.url).host?.lowercase() ?: "" } catch (_: Exception) { "" }
+            val currentTabHost = try { Uri.parse(liveTabUrl()).host?.lowercase() ?: "" } catch (_: Exception) { "" }
             val isSameSiteNavigation = currentTabHost.isNotEmpty() && (host == currentTabHost || host.endsWith(".$currentTabHost") || currentTabHost.endsWith(".$host"))
 
             if ((request.hasUserGesture || request.isDirectNavigation) &&
@@ -1424,7 +1442,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 // Block ad/tracker popup popups before creating sessions
                 val host = SecurityPolicy.extractEffectiveHost(uri)
                 val isAuthUri = isAuthRelatedUrl(uri) ||
-                                isAuthRelatedUrl(tab.url) || // parent tab is on an auth page
+                                isAuthRelatedUrl(liveTabUrl()) || // parent tab is on an auth page
                                 OriginVerifier.isExactOriginMatch(uri, "accounts.google.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "accounts.youtube.com") ||
                                 OriginVerifier.isExactOriginMatch(uri, "appleid.apple.com") ||
@@ -1557,36 +1575,38 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             if (idx != -1) {
                 tabs[idx] = tabs[idx].copy(loadError = null)
             }
-            applyUserAgentForTab(tab, url)
+            applyUserAgentForTab(liveTab(), url)
         }
 
         override fun onPageStop(session: GeckoSession, success: Boolean) {
+            val currentLiveTab = liveTab()
+            val currentLiveUrl = liveTabUrl()
             if (tab.id == activeTabId) {
                 loadingProgress = 1f
-                checkAutofillForUrl(tab.url)
+                checkAutofillForUrl(currentLiveUrl)
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     if (loadingProgress >= 1f) isLoading = false
                 }, 300)
             }
             if (success) {
-                applySiteStyleToTab(tab)
+                applySiteStyleToTab(currentLiveTab)
                 if (forceDarkWebsites || isDarkThemeEnabled) {
-                    injectForceDarkCssIfNeeded(tab)
+                    injectForceDarkCssIfNeeded(currentLiveTab)
                 }
-                injectExtensionOverlayMobileFix(tab)
-                if (tab.url.startsWith("moz-extension://")) {
-                    injectExtensionPopupResponsiveFix(tab)
+                injectExtensionOverlayMobileFix(currentLiveTab)
+                if (currentLiveUrl.startsWith("moz-extension://")) {
+                    injectExtensionPopupResponsiveFix(currentLiveTab)
                 }
                 if (tab.id == activeTabId) {
-                    injectStealthDefuserScriptlet(tab)
+                    injectStealthDefuserScriptlet(currentLiveTab)
                     if (accessibilityForceZoom) {
                         injectZoomEnabler()
                     }
-                    val isAuthPage = OriginVerifier.isExactOriginMatch(tab.url, "accounts.google.com") ||
-                                     OriginVerifier.isExactOriginMatch(tab.url, "accounts.youtube.com") ||
-                                     OriginVerifier.isExactOriginMatch(tab.url, "appleid.apple.com") ||
-                                     OriginVerifier.isExactOriginMatch(tab.url, "login.microsoftonline.com") ||
-                                     OriginVerifier.isExactOriginMatch(tab.url, "apis.google.com")
+                    val isAuthPage = OriginVerifier.isExactOriginMatch(currentLiveUrl, "accounts.google.com") ||
+                                     OriginVerifier.isExactOriginMatch(currentLiveUrl, "accounts.youtube.com") ||
+                                     OriginVerifier.isExactOriginMatch(currentLiveUrl, "appleid.apple.com") ||
+                                     OriginVerifier.isExactOriginMatch(currentLiveUrl, "login.microsoftonline.com") ||
+                                     OriginVerifier.isExactOriginMatch(currentLiveUrl, "apis.google.com")
                     if (!isAuthPage) {
                         val cosmeticCss = try { adBlockManager.getCosmeticAdBlockCss() } catch(_: Exception) { "" }
                         if (cosmeticCss.isNotEmpty()) {
@@ -1594,14 +1614,14 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                             tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.innerHTML='$cleanCss';document.head.appendChild(s);}catch(e){}})();")
                         }
                     }
-                    if (tab.url.contains(".translate.goog")) {
+                    if (currentLiveUrl.contains(".translate.goog")) {
                         injectTranslateBadgeSuppressor()
                     }
                     if (showScrollButtons) {
                         tab.session.loadUri("javascript:(function(){try{var s=document.createElement('style');s.id='omni-hide-scrollbars';s.innerHTML='*::-webkit-scrollbar { display: none !important; } html, body { scrollbar-width: none !important; -ms-overflow-style: none !important; }';document.head.appendChild(s);}catch(e){}})();")
                         tab.session.loadUri("javascript:(function(){try{var se=document.scrollingElement||document.documentElement||document.body;var sh=Math.max(document.documentElement?document.documentElement.scrollHeight:0,document.body?document.body.scrollHeight:0,se?se.scrollHeight:0);var vh=window.innerHeight||(document.documentElement?document.documentElement.clientHeight:0);if(sh&&vh){var ot=document.title;document.title='__omni__:'+sh+':'+vh;setTimeout(function(){if(document.title.indexOf('__omni__:')===0)document.title=ot;},10);}}catch(e){}})();")
                     }
-                    applyVisualBlockRulesToTab(tab)
+                    applyVisualBlockRulesToTab(currentLiveTab)
                 }
             }
         }
@@ -1657,7 +1677,12 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
 
 internal fun BrowserViewModel.injectStealthDefuserScriptlet(tab: TabState) {
     try {
-        val url = tab.url
+        val liveTab = tabs.find { it.id == tab.id } ?: tab
+        val url = when {
+            liveTab.url.isNotBlank() && liveTab.url != "about:blank" -> liveTab.url
+            tab.id == activeTabId && currentUrl.isNotBlank() && currentUrl != "about:blank" -> currentUrl
+            else -> liveTab.url
+        }
         val isAuthOrigin = OriginVerifier.isExactOriginMatch(url, "accounts.google.com") ||
                            OriginVerifier.isExactOriginMatch(url, "accounts.youtube.com") ||
                            OriginVerifier.isExactOriginMatch(url, "appleid.apple.com") ||
@@ -1770,47 +1795,21 @@ fun BrowserViewModel.injectExtensionOverlayMobileFix(tab: TabState) {
                 if (window.__omni_ext_compat_installed) return;
                 window.__omni_ext_compat_installed = true;
 
-                // ── 1. Static CSS: constrain ALL extension iframes universally ──
+                // Constrain full-width top notification bars injected by password managers
+                // (e.g. Bitwarden's notification/bar.html save-password banner) to the mobile
+                // viewport width, while NEVER touching [popover] hosts or inline field autofill
+                // menus (overlay/menu-button.html, overlay/menu-list.html) whose position/size
+                // and MutationObservers are managed by the extension's content script.
                 var style = document.createElement('style');
                 style.id = 'omni-ext-compat-css';
                 style.innerHTML = [
-                    /* Any iframe served from a browser extension URL */
-                    'iframe[src*="moz-extension://"],',
-                    'iframe[src*="chrome-extension://"] {',
-                    '  max-width: 100vw !important;',
-                    '  width: 100% !important;',
-                    '  left: 0 !important;',
-                    '  right: 0 !important;',
-                    '  margin: 0 auto !important;',
-                    '  background: transparent !important;',
-                    '  background-color: transparent !important;',
-                    '  border: none !important;',
-                    '  box-sizing: border-box !important;',
-                    '  color-scheme: light dark !important;',
-                    '}',
-
-                    /* Generic fixed/absolute banners injected by any extension */
-                    /* (catches LastPass, 1Password, Dashlane, uBlock popups, etc.) */
+                    'iframe[src*="notification/bar.html"],',
+                    '#bit-notification-bar-iframe,',
+                    'bit-notification-bar-root,',
+                    '[id*="bit-notification-bar"],',
                     '[data-lastpass-root],',
                     '[data-onepassword-notification],',
-                    '[id^="dashlane-"],',
-                    '[class^="dashlane-"],',
-                    '[id*="extension-notification"],',
-                    '[id*="ext-notification"],',
-                    '[class*="extension-notification"],',
-                    '[class*="ext-bar"],',
-                    '[class*="ext-popup"],',
-                    '[class*="extension-bar"],',
-                    '[class*="extension-popup"],',
-                    '[id*="bitwarden"],',
-                    '[class*="bitwarden"],',
-                    '[id*="keeper-"],',
-                    '[id*="nordpass"],',
-                    '[class*="nordpass"],',
-                    '[id*="roboform"],',
-                    '[class*="roboform"],',
-                    '[id*="keypass"],',
-                    '[class*="keypass"],',
+                    '[id^="dashlane-notification"],',
                     '#password-notification-bar,',
                     '#credential-notification-bar {',
                     '  max-width: 100vw !important;',
@@ -1818,94 +1817,14 @@ fun BrowserViewModel.injectExtensionOverlayMobileFix(tab: TabState) {
                     '  left: 0 !important;',
                     '  right: 0 !important;',
                     '  margin: 0 auto !important;',
+                    '  border: none !important;',
                     '  box-sizing: border-box !important;',
+                    '}',
+                    '[popover] {',
+                    '  max-width: 100vw !important;',
                     '}'
                 ].join(' ');
                 (document.head || document.documentElement).appendChild(style);
-
-                var vw = window.innerWidth || document.documentElement.clientWidth || 360;
-
-                // ── 2 & 3. Fix one element: extension iframes + overflow clamping ──
-                function fixElement(el) {
-                    if (!el || el.nodeType !== 1) return;
-                    var tag = el.tagName.toLowerCase();
-                    var src  = el.getAttribute ? (el.getAttribute('src') || '') : '';
-                    var isExtIframe = tag === 'iframe' &&
-                                      (src.indexOf('moz-extension://') !== -1 ||
-                                       src.indexOf('chrome-extension://') !== -1);
-
-                    if (isExtIframe) {
-                        el.setAttribute('allowtransparency', 'true');
-                        el.style.setProperty('max-width',        '100vw',        'important');
-                        el.style.setProperty('width',            '100%',         'important');
-                        el.style.setProperty('left',             '0',            'important');
-                        el.style.setProperty('right',            '0',            'important');
-                        el.style.setProperty('background',       'transparent',  'important');
-                        el.style.setProperty('background-color', 'transparent',  'important');
-                        el.style.setProperty('box-sizing',       'border-box',   'important');
-                        el.style.setProperty('border',           'none',         'important');
-                        return;
-                    }
-
-                    // ── 3. Overflow clamp: catch fixed/absolute banners wider than viewport ──
-                    // Only clamp elements that are clearly "chrome injected at top of page":
-                    // position fixed or absolute, near the top (top < 120px), and wider than vw.
-                    try {
-                        var cs = window.getComputedStyle(el);
-                        var pos = cs.position;
-                        if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') {
-                            var rect = el.getBoundingClientRect();
-                            if (rect.top < 120 && rect.width > vw + 4) {
-                                el.style.setProperty('max-width',    '100vw',      'important');
-                                el.style.setProperty('width',        '100vw',      'important');
-                                el.style.setProperty('left',         '0',          'important');
-                                el.style.setProperty('right',        '0',          'important');
-                                el.style.setProperty('box-sizing',   'border-box', 'important');
-                                el.style.setProperty('overflow-x',  'hidden',     'important');
-                            }
-                        }
-                    } catch (styleErr) {}
-                }
-
-                // ── 2. Scan DOM immediately ──
-                var allEls = document.querySelectorAll(
-                    'iframe[src*="moz-extension://"],' +
-                    'iframe[src*="chrome-extension://"]'
-                );
-                for (var i = 0; i < allEls.length; i++) { fixElement(allEls[i]); }
-
-                // Also scan fixed/absolute elements already in page at load time
-                var fixedEls = document.querySelectorAll('*');
-                for (var j = 0; j < Math.min(fixedEls.length, 500); j++) {
-                    fixElement(fixedEls[j]);
-                }
-
-                // ── 4. MutationObserver: catch dynamically injected elements ──
-                var observer = new MutationObserver(function(mutations) {
-                    for (var m = 0; m < mutations.length; m++) {
-                        var nodes = mutations[m].addedNodes;
-                        for (var n = 0; n < nodes.length; n++) {
-                            var node = nodes[n];
-                            if (!node || node.nodeType !== 1) continue;
-                            fixElement(node);
-                            if (node.querySelectorAll) {
-                                var children = node.querySelectorAll(
-                                    'iframe[src*="moz-extension://"],' +
-                                    'iframe[src*="chrome-extension://"]'
-                                );
-                                for (var k = 0; k < children.length; k++) {
-                                    fixElement(children[k]);
-                                }
-                            }
-                        }
-                    }
-                });
-
-                var root = document.documentElement || document.body;
-                if (root) {
-                    observer.observe(root, { childList: true, subtree: true });
-                }
-
             } catch (e) {}
         })();
     """.trimIndent().replace("\n", " ")
@@ -1921,7 +1840,6 @@ fun BrowserViewModel.injectExtensionPopupResponsiveFix(tab: TabState) {
     val js = """
         (function() {
             try {
-                // Inject or update the viewport meta tag
                 var existing = document.querySelector('meta[name="viewport"]');
                 if (!existing) {
                     var meta = document.createElement('meta');
@@ -1932,59 +1850,52 @@ fun BrowserViewModel.injectExtensionPopupResponsiveFix(tab: TabState) {
                     existing.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
                 }
 
-                if (document.getElementById('omni-ext-popup-responsive')) return;
+                if (!document.getElementById('omni-ext-popup-responsive')) {
+                    var style = document.createElement('style');
+                    style.id = 'omni-ext-popup-responsive';
+                    style.innerHTML = [
+                        'html { max-width: 100vw !important; width: 100% !important; min-width: 0 !important; height: 100% !important; overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }',
+                        'body { max-width: 100vw !important; width: 100% !important; min-width: 0 !important; min-height: 100% !important; height: auto !important; max-height: none !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-y: contain !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-x pan-y pinch-zoom !important; padding-bottom: 28px !important; box-sizing: border-box !important; }',
+                        '*, *::before, *::after { box-sizing: border-box !important; }',
+                        'body > *, app-root, anon-layout, user-layout, bit-layout, #app, #root, main, [role="main"], .tw-h-screen, .h-screen { height: auto !important; min-height: 0 !important; max-height: none !important; overflow-y: visible !important; max-width: 100vw !important; min-width: 0 !important; }',
+                        'anon-layout .tw-overflow-hidden, bit-layout .tw-overflow-hidden, app-root .tw-overflow-hidden, main.tw-overflow-hidden, body > .tw-overflow-hidden { overflow-y: auto !important; height: auto !important; max-height: none !important; }',
+                        '.container, .wrapper, .content, .inner, .card, .panel, .popup, .popup-container, .popup-inner, .app, .app-container, .main { max-width: 100vw !important; min-width: 0 !important; }',
+                        'button, input, select, textarea, a { max-width: 100% !important; word-break: break-word !important; }',
+                        '[style*="position: fixed"], [style*="position:fixed"] { max-width: 100vw !important; width: 100% !important; left: 0 !important; right: 0 !important; }'
+                    ].join(' ');
+                    (document.head || document.documentElement).appendChild(style);
+                }
 
-                var style = document.createElement('style');
-                style.id = 'omni-ext-popup-responsive';
-                style.innerHTML = [
-                    /* Root layout — prevent horizontal overflow */
-                    'html, body {',
-                    '  max-width: 100vw !important;',
-                    '  width: 100% !important;',
-                    '  min-width: unset !important;',
-                    '  overflow-x: hidden !important;',
-                    '  box-sizing: border-box !important;',
-                    '}',
-
-                    /* Universal box-model fix */
-                    '*, *::before, *::after {',
-                    '  box-sizing: border-box !important;',
-                    '}',
-
-                    /* Common container patterns used by extension popups */
-                    /* Bitwarden, LastPass, 1Password, Dashlane, uBlock, etc. */
-                    '.container, .wrapper, .content, .inner, .card, .panel,',
-                    '.notification, .notification-bar, .notification-card,',
-                    '.popup, .popup-container, .popup-inner,',
-                    '.app, .app-container, .main, main, [role="main"],',
-                    '[class*="container"], [class*="wrapper"], [class*="card"],',
-                    '[class*="notification"], [class*="popup"], [class*="panel"],',
-                    '[class*="dialog"], [class*="modal"], [id*="container"],',
-                    '[id*="wrapper"], [id*="notification"], [id*="popup"] {',
-                    '  max-width: calc(100vw - 8px) !important;',
-                    '  width: auto !important;',
-                    '  min-width: unset !important;',
-                    '  margin-left: auto !important;',
-                    '  margin-right: auto !important;',
-                    '  overflow-x: hidden !important;',
-                    '}',
-
-                    /* Ensure buttons and inputs never overflow */
-                    'button, input, select, textarea, a {',
-                    '  max-width: 100% !important;',
-                    '  word-break: break-word !important;',
-                    '}',
-
-                    /* Fixed position elements inside the popup page */
-                    '[style*="position: fixed"], [style*="position:fixed"] {',
-                    '  max-width: 100vw !important;',
-                    '  width: 100% !important;',
-                    '  left: 0 !important;',
-                    '  right: 0 !important;',
-                    '}'
-                ].join(' ');
-                (document.head || document.documentElement).appendChild(style);
-
+                function unlockScroll() {
+                    try {
+                        var candidates = document.querySelectorAll('body, body > *, app-root, anon-layout, user-layout, bit-layout, main, [role="main"], .tw-overflow-hidden, .overflow-hidden, .tw-h-full, .tw-h-screen');
+                        var vw = window.innerWidth || 360;
+                        for (var i = 0; i < candidates.length; i++) {
+                            var el = candidates[i];
+                            if (!el || !el.style) continue;
+                            var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+                            if (rect && rect.width >= vw * 0.7 && rect.height >= 120) {
+                                var cs = window.getComputedStyle(el);
+                                if (cs.overflowY === 'hidden' || el.scrollHeight > el.clientHeight + 2) {
+                                    el.style.setProperty('overflow-y', 'auto', 'important');
+                                    el.style.setProperty('height', 'auto', 'important');
+                                    el.style.setProperty('max-height', 'none', 'important');
+                                }
+                            }
+                        }
+                    } catch (_e) {}
+                }
+                unlockScroll();
+                setTimeout(unlockScroll, 150);
+                setTimeout(unlockScroll, 500);
+                if (!window.__omniPopupScrollObserver) {
+                    var timer = null;
+                    window.__omniPopupScrollObserver = new MutationObserver(function() {
+                        if (timer) clearTimeout(timer);
+                        timer = setTimeout(unlockScroll, 80);
+                    });
+                    window.__omniPopupScrollObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+                }
             } catch (e) {}
         })();
     """.trimIndent().replace("\n", " ")

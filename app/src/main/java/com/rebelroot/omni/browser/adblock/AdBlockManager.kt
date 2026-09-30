@@ -165,6 +165,12 @@ class AdBlockManager(private val context: Context) {
         prefs.edit().putLong(KEY_TOTAL_BLOCKED, 0L).apply()
     }
 
+    /** Re-reads providers and cached rules from prefs (used after a backup restore). */
+    fun reload() {
+        loadProviders()
+        reloadBlockedDomainsFromCache()
+    }
+
     private fun loadProviders() {
         val savedJson = prefs.getString(KEY_PROVIDERS_JSON, null)
         val list = mutableListOf<AdBlockProvider>()

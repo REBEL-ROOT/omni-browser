@@ -45,6 +45,11 @@ class VisualBlockManager(private val context: Context) {
         loadRules()
     }
 
+    /** Re-reads rules from prefs (used after a backup restore). */
+    fun reload() {
+        loadRules()
+    }
+
     private fun loadRules() {
         val savedJson = prefs.getString(KEY_RULES_JSON, null)
         val list = mutableListOf<VisualBlockRule>()

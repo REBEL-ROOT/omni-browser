@@ -156,8 +156,9 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
 
     val session = GeckoSession(settings)
 
-    // Show spinner while the popup page loads
+    // Show spinner while the popup page loads and reset measured height
     activeExtensionPopupLoading = true
+    activeExtensionPopupContentHeightDp = null
 
     // Content delegate — dismiss popup if the extension page closes itself
     session.contentDelegate = object : GeckoSession.ContentDelegate {
@@ -168,63 +169,52 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
         }
     }
 
-    // Prompt delegate — handle alerts/confirms in extension popups gracefully
+    // Prompt delegate — handle height measurements, alerts/confirms, and <select> choice prompts
     session.promptDelegate = object : GeckoSession.PromptDelegate {
         override fun onAlertPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.AlertPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            val msg = prompt.message ?: ""
+            if (msg.startsWith("OMNI_EXT_POPUP_HEIGHT:")) {
+                val rawHeight = msg.removePrefix("OMNI_EXT_POPUP_HEIGHT:").trim().toIntOrNull()
+                if (rawHeight != null && rawHeight > 0) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        activeExtensionPopupContentHeightDp = rawHeight.coerceIn(140, 2400)
+                    }
+                }
+            }
             return GeckoResult.fromValue(prompt.dismiss())
         }
         override fun onButtonPrompt(session: GeckoSession, prompt: GeckoSession.PromptDelegate.ButtonPrompt): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
             return GeckoResult.fromValue(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
         }
+        override fun onChoicePrompt(
+            session: GeckoSession,
+            prompt: GeckoSession.PromptDelegate.ChoicePrompt
+        ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? {
+            val choices = prompt.choices ?: return GeckoResult.fromValue(prompt.dismiss())
+            if (choices.isEmpty()) return GeckoResult.fromValue(prompt.dismiss())
+            cancelChoicePrompt()
+            val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+            pendingChoicePrompt = BrowserViewModel.PendingChoicePrompt(
+                geckoResult = result,
+                prompt = prompt
+            )
+            return result
+        }
     }
 
-    // Progress delegate — track loading state and apply universal responsive scaling
+    // Progress delegate — track loading state, apply universal responsive scaling, and measure UI height
     session.progressDelegate = object : GeckoSession.ProgressDelegate {
         override fun onPageStop(session: GeckoSession, success: Boolean) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 activeExtensionPopupLoading = false
             }
             if (success) {
-                // Inject universal mobile responsive fix into every extension popup page.
-                // Ensures viewport meta is set, box-model is correct, and containers are
-                // clamped to the device width — covers Bitwarden, LastPass, uBlock, etc.
-                val fixJs = """
-                    (function() {
-                        try {
-                            var existing = document.querySelector('meta[name="viewport"]');
-                            if (!existing) {
-                                var meta = document.createElement('meta');
-                                meta.name    = 'viewport';
-                                meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
-                                (document.head || document.documentElement).appendChild(meta);
-                            } else if (!existing.content || existing.content.indexOf('width=device-width') === -1) {
-                                existing.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
-                            }
-                            if (document.getElementById('omni-ext-popup-responsive')) return;
-                            var style = document.createElement('style');
-                            style.id = 'omni-ext-popup-responsive';
-                            style.innerHTML = [
-                                'html, body { max-width: 100vw !important; width: 100% !important; min-width: unset !important; overflow-x: hidden !important; box-sizing: border-box !important; }',
-                                '*, *::before, *::after { box-sizing: border-box !important; }',
-                                '.container, .wrapper, .content, .inner, .card, .panel,',
-                                '.notification, .notification-bar, .notification-card,',
-                                '.popup, .popup-container, .popup-inner,',
-                                '.app, .app-container, .main, main, [role="main"],',
-                                '[class*="container"], [class*="wrapper"], [class*="card"],',
-                                '[class*="notification"], [class*="popup"], [class*="panel"],',
-                                '[class*="dialog"], [class*="modal"], [id*="container"],',
-                                '[id*="wrapper"], [id*="notification"], [id*="popup"] {',
-                                '  max-width: calc(100vw - 8px) !important; width: auto !important;',
-                                '  min-width: unset !important; margin-left: auto !important; margin-right: auto !important;',
-                                '  overflow-x: hidden !important; }',
-                                'button, input, select, textarea, a { max-width: 100% !important; word-break: break-word !important; }',
-                                '[style*="position: fixed"], [style*="position:fixed"] { max-width: 100vw !important; width: 100% !important; left: 0 !important; right: 0 !important; }'
-                            ].join(' ');
-                            (document.head || document.documentElement).appendChild(style);
-                        } catch (e) {}
-                    })();
-                """.trimIndent().replace("\n", " ")
+                // Inject universal mobile responsive, scrollability, and dynamic height measurement
+                // into every extension popup page (Firefox Mobile style).
+                val fixJs = buildExtensionPopupUiJs()
                 session.loadUri("javascript:$fixJs")
+                val autofillBridgeJs = buildExtensionAutofillBridgeJs().replace("\n", " ")
+                session.loadUri("javascript:$autofillBridgeJs")
             }
         }
         override fun onSessionStateChange(session: GeckoSession, sessionState: GeckoSession.SessionState) {}
@@ -283,12 +273,843 @@ fun BrowserViewModel.dismissExtensionPopup() {
     activeExtensionPopupName = ""
     activeExtensionPopupId = ""
     activeExtensionPopupLoading = true
+    activeExtensionPopupContentHeightDp = null
+    // Re-assert the active browser tab so extensions (e.g. Bitwarden inline autofill)
+    // immediately see the web tab as the active tab after closing a popup.
+    val currentActiveTab = tabs.find { it.id == activeTabId }
+    if (currentActiveTab != null && currentActiveTab.session.isOpen) {
+        try {
+            runtime?.webExtensionController?.setTabActive(currentActiveTab.session, true)
+        } catch (_: Exception) {}
+    }
     if (sessionToClose != null) {
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             try {
                 sessionToClose.close()
             } catch (_: Exception) {}
         }, 400)
+    }
+}
+
+// Bump the version whenever the patch payload changes so `.xpi` archives patched by an earlier
+// build are detected as stale and re-patched instead of being skipped.
+private const val OMNI_EXT_PATCH_MARKER = "/* __OMNI_MOBILE_EXT_PATCH_V6__ */"
+
+/**
+ * Builds the JS polyfill & Bitwarden inline-autofill bootstrapper prepended directly to
+ * `background.js` (and background scripts) inside installed `.xpi` archives so it executes
+ * under `'self'` CSP at line 1 before `MainBackground` is constructed:
+ * 1. Polyfills `chrome.windows` / `browser.windows` (absent on GeckoView Android), allowing
+ *    `TabsBackground.init()` and `OverlayBackground.handleOverlayCiphersUpdate()` to succeed.
+ * 2. Polyfills `chrome.windows.create` to open extension popout flows ("Unlock account",
+ *    "New login", "View item") as browser tabs via `chrome.tabs.create`.
+ * 3. Wraps `chrome.runtime.onMessage.addListener` and `chrome.tabs.query` so `windowId: -2`
+ *    (`WINDOW_ID_CURRENT`) and `currentWindow: true` reliably resolve the active `http(s)` web tab.
+ * 4. Ensures Bitwarden's `inlineMenuVisibility` defaults to `OnFieldFocus (1)`, optimizes mobile
+ *    soft-keyboard `triggerOverlayReposition` debounce, and preloads inline autofill ciphers.
+ */
+internal fun buildExtensionAutofillBridgeJs(): String {
+    return """
+        $OMNI_EXT_PATCH_MARKER
+        (function() {
+            try {
+                var rootWin = typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : window);
+                function setupWindowsAndTabsPolyfill(win, bgRef) {
+                    if (!win) return;
+                    var c = win.chrome;
+                    var b = win.browser;
+                    if (!c) return;
+                    var extOrigin = (win.location && win.location.origin) ? win.location.origin : '';
+                    function resolveExtUrl(u) {
+                        if (!u || typeof u !== 'string') return u;
+                        if (u.indexOf('://') !== -1 || u.indexOf('about:') === 0 || u.indexOf('data:') === 0 || u.indexOf('blob:') === 0) return u;
+                        if (extOrigin) return extOrigin.replace(/\/$/, '') + '/' + u.replace(/^\//, '');
+                        return u;
+                    }
+                    var fakeWin = { id: -2, focused: true, type: 'normal', state: 'normal', incognito: false, alwaysOnTop: false, top: 0, left: 0, width: 380, height: 760 };
+                    var noopEvent = { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } };
+                    if (!c.windows) {
+                        var winPolyfill = {
+                            WINDOW_ID_NONE: -1,
+                            WINDOW_ID_CURRENT: -2,
+                            getCurrent: function(getInfo, cb) {
+                                var fn = typeof getInfo === 'function' ? getInfo : cb;
+                                if (typeof fn === 'function') { setTimeout(function(){ fn(fakeWin); }, 0); }
+                                return Promise.resolve(fakeWin);
+                            },
+                            get: function(windowId, getInfo, cb) {
+                                var fn = typeof getInfo === 'function' ? getInfo : cb;
+                                if (typeof fn === 'function') { setTimeout(function(){ fn(fakeWin); }, 0); }
+                                return Promise.resolve(fakeWin);
+                            },
+                            getLastFocused: function(getInfo, cb) {
+                                var fn = typeof getInfo === 'function' ? getInfo : cb;
+                                if (typeof fn === 'function') { setTimeout(function(){ fn(fakeWin); }, 0); }
+                                return Promise.resolve(fakeWin);
+                            },
+                            getAll: function(getInfo, cb) {
+                                var fn = typeof getInfo === 'function' ? getInfo : cb;
+                                if (typeof fn === 'function') { setTimeout(function(){ fn([fakeWin]); }, 0); }
+                                return Promise.resolve([fakeWin]);
+                            },
+                            create: function(createData, cb) {
+                                var rawUrl = createData && createData.url ? (Array.isArray(createData.url) ? createData.url[0] : createData.url) : 'about:blank';
+                                var fullUrl = resolveExtUrl(rawUrl);
+                                if (c.tabs && typeof c.tabs.create === 'function') {
+                                    return new Promise(function(resolve) {
+                                        try {
+                                            c.tabs.create({ url: fullUrl, active: true }, function(tab) {
+                                                var res = Object.assign({}, fakeWin, { tabs: tab ? [tab] : [] });
+                                                if (typeof cb === 'function') cb(res);
+                                                resolve(res);
+                                            });
+                                        } catch (_e) {
+                                            if (typeof cb === 'function') cb(fakeWin);
+                                            resolve(fakeWin);
+                                        }
+                                    });
+                                }
+                                if (typeof cb === 'function') setTimeout(function(){ cb(fakeWin); }, 0);
+                                return Promise.resolve(fakeWin);
+                            },
+                            remove: function(windowId, cb) {
+                                if (typeof cb === 'function') setTimeout(cb, 0);
+                                return Promise.resolve();
+                            },
+                            update: function(windowId, updateInfo, cb) {
+                                if (typeof cb === 'function') setTimeout(function(){ cb(fakeWin); }, 0);
+                                return Promise.resolve(fakeWin);
+                            },
+                            onFocusChanged: noopEvent,
+                            onCreated: noopEvent,
+                            onRemoved: noopEvent
+                        };
+                        try { c.windows = winPolyfill; } catch (_e) {}
+                        try { if (b && !b.windows) b.windows = winPolyfill; } catch (_e) {}
+                    }
+                    if (c.runtime && c.runtime.onMessage && typeof c.runtime.onMessage.addListener === 'function' && !c.runtime.onMessage.__omniMsgPatched) {
+                        var origAddListener = c.runtime.onMessage.addListener.bind(c.runtime.onMessage);
+                        c.runtime.onMessage.__omniMsgPatched = true;
+                        c.runtime.onMessage.addListener = function(fn) {
+                            if (typeof fn !== 'function') return origAddListener(fn);
+                            return origAddListener(function(message, sender, sendResponse) {
+                                try {
+                                    if (sender && sender.tab && sender.tab.url && (sender.tab.url.indexOf('http://') === 0 || sender.tab.url.indexOf('https://') === 0)) {
+                                        win.__omniLastSenderTab = sender.tab;
+                                        if (bgRef) bgRef.__omniLastSenderTab = sender.tab;
+                                    }
+                                } catch (_e) {}
+                                return fn.apply(this, arguments);
+                            });
+                        };
+                    }
+                    if (c.tabs && typeof c.tabs.query === 'function' && !c.tabs.__omniTabsQueryPatched) {
+                        var origQuery = c.tabs.query.bind(c.tabs);
+                        c.tabs.__omniTabsQueryPatched = true;
+                        c.tabs.query = function(queryInfo, callback) {
+                            var q = Object.assign({}, queryInfo || {});
+                            if (q.windowId === -2 || q.windowId === -1) {
+                                delete q.windowId;
+                                q.currentWindow = true;
+                            }
+                            function pickWebTabs(tabsList, allTabsList) {
+                                var pool = (tabsList && tabsList.length > 0) ? tabsList : (allTabsList || []);
+                                var httpTabs = pool.filter(function(t) {
+                                    return t && t.url && (t.url.indexOf('http://') === 0 || t.url.indexOf('https://') === 0);
+                                });
+                                if (httpTabs.length > 0) {
+                                    var activeHttp = httpTabs.filter(function(t) { return t.active; });
+                                    return activeHttp.length > 0 ? activeHttp : [httpTabs[httpTabs.length - 1]];
+                                }
+                                var senderFallback = (bgRef && bgRef.__omniLastSenderTab) || (win && win.__omniLastSenderTab);
+                                if (senderFallback && senderFallback.url) {
+                                    return [senderFallback];
+                                }
+                                return (tabsList && tabsList.length > 0) ? tabsList : (allTabsList || []);
+                            }
+                            if (typeof callback === 'function') {
+                                return origQuery(q, function(tabs) {
+                                    var hasHttp = tabs && tabs.some(function(t) { return t && t.url && t.url.indexOf('http') === 0; });
+                                    if (hasHttp || !(q.active || q.currentWindow)) {
+                                        callback(tabs || []);
+                                        return;
+                                    }
+                                    origQuery({}, function(allTabs) {
+                                        callback(pickWebTabs(tabs, allTabs));
+                                    });
+                                });
+                            }
+                            return new Promise(function(resolve) {
+                                origQuery(q, function(tabs) {
+                                    var hasHttp = tabs && tabs.some(function(t) { return t && t.url && t.url.indexOf('http') === 0; });
+                                    if (hasHttp || !(q.active || q.currentWindow)) {
+                                        resolve(tabs || []);
+                                        return;
+                                    }
+                                    origQuery({}, function(allTabs) {
+                                        resolve(pickWebTabs(tabs, allTabs));
+                                    });
+                                });
+                            });
+                        };
+                    }
+                }
+
+                var bgWin = null;
+                try {
+                    if (typeof chrome !== 'undefined' && chrome.extension && typeof chrome.extension.getBackgroundPage === 'function') {
+                        bgWin = chrome.extension.getBackgroundPage();
+                    }
+                } catch (_e) {}
+
+                setupWindowsAndTabsPolyfill(rootWin, bgWin || rootWin);
+                if (bgWin && bgWin !== rootWin) {
+                    setupWindowsAndTabsPolyfill(bgWin, bgWin);
+                }
+
+                function patchOverlayBackground(main, targetBg) {
+                    var ob = main ? main.overlayBackground : null;
+                    if (!ob || ob.__omniOverlayPatched) return Boolean(ob && ob.__omniOverlayPatched);
+                    ob.__omniOverlayPatched = true;
+                    if (typeof ob.handleOverlayCiphersUpdate === 'function') {
+                        ob.updateOverlayCiphers = async function(refocusField, updateAllCipherTypes) {
+                            try {
+                                await ob.handleOverlayCiphersUpdate({
+                                    updateAllCipherTypes: updateAllCipherTypes !== undefined ? updateAllCipherTypes : true,
+                                    refocusField: Boolean(refocusField)
+                                });
+                            } catch (_e) {}
+                        };
+                    }
+                    if (typeof ob.triggerOverlayReposition === 'function') {
+                        ob.triggerOverlayReposition = async function(sender) {
+                            try {
+                                if (!ob.checkShouldRepositionInlineMenu(sender)) return;
+                                ob.resetFocusedFieldSubFrameOffsets(sender);
+                                if (ob.__omniRepositionTimer) clearTimeout(ob.__omniRepositionTimer);
+                                ob.__omniRepositionTimer = setTimeout(function() {
+                                    try {
+                                        if (typeof ob.repositionInlineMenu === 'function') {
+                                            ob.repositionInlineMenu(sender);
+                                        }
+                                    } catch (_e) {}
+                                }, 140);
+                            } catch (_e) {}
+                        };
+                    }
+                    if (typeof ob.repositionInlineMenu === 'function') {
+                        var origReposition = ob.repositionInlineMenu.bind(ob);
+                        ob.repositionInlineMenu = async function(sender) {
+                            try {
+                                if (!sender || !sender.tab) return;
+                                if (ob.isFieldCurrentlyFocused && sender.tab.id != null) {
+                                    var frameId = ob.focusedFieldData ? ob.focusedFieldData.frameId : 0;
+                                    if (targetBg.chrome && targetBg.chrome.tabs && typeof targetBg.chrome.tabs.sendMessage === 'function') {
+                                        await new Promise(function(resolve) {
+                                            try {
+                                                targetBg.chrome.tabs.sendMessage(
+                                                    sender.tab.id,
+                                                    { command: 'checkIsMostRecentlyFocusedFieldWithinViewport' },
+                                                    { frameId: frameId || 0 },
+                                                    function() { resolve(); }
+                                                );
+                                            } catch (_e) { resolve(); }
+                                        });
+                                    }
+                                    if (frameId != null && frameId > 0 && ob.rebuildSubFrameOffsets$) {
+                                        ob.rebuildSubFrameOffsets$.next(sender);
+                                    }
+                                    if (ob.startUpdateInlineMenuPosition$) {
+                                        ob.startUpdateInlineMenuPosition$.next(sender);
+                                    }
+                                    return;
+                                }
+                            } catch (_e) {}
+                            return origReposition(sender);
+                        };
+                    }
+                    if (typeof ob.openInlineMenu === 'function') {
+                        var origOpenInlineMenu = ob.openInlineMenu.bind(ob);
+                        ob.openInlineMenu = async function(sender, isOpeningFullInlineMenu) {
+                            try {
+                                if (sender && sender.tab && sender.tab.url && sender.tab.url.indexOf('http') === 0) {
+                                    targetBg.__omniLastSenderTab = sender.tab;
+                                }
+                                if ((!ob.inlineMenuCiphers || ob.inlineMenuCiphers.size === 0) && typeof ob.handleOverlayCiphersUpdate === 'function') {
+                                    await ob.handleOverlayCiphersUpdate({ updateAllCipherTypes: true, refocusField: false });
+                                }
+                            } catch (_e) {}
+                            return origOpenInlineMenu(sender, isOpeningFullInlineMenu);
+                        };
+                    }
+                    try { ob.updateOverlayCiphers(false, true); } catch (_e) {}
+
+                    // Mobile viewport guard. Bitwarden's list iframe is force-closed when a
+                    // viewport boundary check fails; on GeckoView visualViewport.height shrinks
+                    // with the soft keyboard / bottom toolbars. The check itself lives in the
+                    // page-side content script (patched directly, see patchSingleExtensionXpi),
+                    // but drop any list-targeted force close that still reaches the background.
+                    if (typeof ob.closeInlineMenu === 'function' && !ob.__omniClosePatched) {
+                        ob.__omniClosePatched = true;
+                        var origCloseInlineMenu = ob.closeInlineMenu.bind(ob);
+                        ob.closeInlineMenu = function(sender, opts) {
+                            try {
+                                if (opts && opts.forceCloseInlineMenu && opts.overlayElement === 'autofill-inline-menu-list') {
+                                    return;
+                                }
+                            } catch (_e) {}
+                            return origCloseInlineMenu.apply(this, arguments);
+                        };
+                    }
+
+                    return true;
+                }
+
+                function tryBootstrapBitwarden(targetBg) {
+                    if (!targetBg || !targetBg.bitwardenMain) return false;
+                    var main = targetBg.bitwardenMain;
+                    if (!main.autofillSettingsService || !main.autofillService) return false;
+
+                    if (typeof main.initOverlayAndTabsBackground === 'function' && !main.__omniInitOverlayWrapped) {
+                        main.__omniInitOverlayWrapped = true;
+                        var origInitOverlay = main.initOverlayAndTabsBackground.bind(main);
+                        main.initOverlayAndTabsBackground = async function() {
+                            var res = await origInitOverlay.apply(this, arguments);
+                            try { patchOverlayBackground(main, targetBg); } catch (_e) {}
+                            return res;
+                        };
+                    }
+
+                    if (main.autofillService && !main.autofillService.__omniAutofillServicePatched) {
+                        main.autofillService.__omniAutofillServicePatched = true;
+                        if (typeof main.autofillService.getBootstrapAutofillContentScript === 'function') {
+                            var origGetScript = main.autofillService.getBootstrapAutofillContentScript.bind(main.autofillService);
+                            main.autofillService.getBootstrapAutofillContentScript = async function(activeAccount) {
+                                var scriptName = await origGetScript(activeAccount);
+                                if (activeAccount && scriptName === 'bootstrap-autofill-overlay-notifications.js') {
+                                    try {
+                                        var vis = await main.autofillService.getInlineMenuVisibility();
+                                        if (vis === 0 && !targetBg.__omniInlineVisCheckedOnce) {
+                                            targetBg.__omniInlineVisCheckedOnce = true;
+                                            await main.autofillSettingsService.setInlineMenuVisibility(1);
+                                            return 'bootstrap-autofill-overlay.js';
+                                        }
+                                    } catch (_e) {}
+                                }
+                                return scriptName;
+                            };
+                        }
+                    }
+
+                    var overlayReady = patchOverlayBackground(main, targetBg);
+
+                    if (!targetBg.__omniStorageInitChecked && targetBg.chrome && targetBg.chrome.storage && targetBg.chrome.storage.local) {
+                        targetBg.__omniStorageInitChecked = true;
+                        targetBg.chrome.storage.local.get(['global_autofillSettingsLocal_inlineMenuVisibility', '__omni_bw_inline_autofill_v4'], function(items) {
+                            try {
+                                var visKey = 'global_autofillSettingsLocal_inlineMenuVisibility';
+                                var curVis = items ? items[visKey] : undefined;
+                                var alreadySeeded = items && items['__omni_bw_inline_autofill_v4'];
+                                if (!alreadySeeded && (curVis === undefined || curVis === null || curVis === 0)) {
+                                    targetBg.chrome.storage.local.set({ '__omni_bw_inline_autofill_v4': true }, function() {});
+                                    if (main.autofillSettingsService && typeof main.autofillSettingsService.setInlineMenuVisibility === 'function') {
+                                        Promise.resolve(main.autofillSettingsService.setInlineMenuVisibility(1)).then(function() {
+                                            try {
+                                                if (main.autofillService && typeof main.autofillService.reloadAutofillScripts === 'function') {
+                                                    main.autofillService.reloadAutofillScripts();
+                                                }
+                                                if (main.overlayBackground && typeof main.overlayBackground.updateOverlayCiphers === 'function') {
+                                                    main.overlayBackground.updateOverlayCiphers(false, true);
+                                                }
+                                            } catch (_e) {}
+                                        });
+                                    }
+                                } else {
+                                    try {
+                                        if (main.autofillService && typeof main.autofillService.reloadAutofillScripts === 'function') {
+                                            main.autofillService.reloadAutofillScripts();
+                                        }
+                                        if (main.overlayBackground && typeof main.overlayBackground.updateOverlayCiphers === 'function') {
+                                            main.overlayBackground.updateOverlayCiphers(false, true);
+                                        }
+                                    } catch (_e) {}
+                                }
+                            } catch (_e) {}
+                        });
+                    }
+                    return overlayReady;
+                }
+
+                var targetBg = bgWin || rootWin;
+                if (!tryBootstrapBitwarden(targetBg)) {
+                    var attempts = 0;
+                    var pollId = setInterval(function() {
+                        attempts++;
+                        if (tryBootstrapBitwarden(bgWin || rootWin) || attempts >= 40) {
+                            clearInterval(pollId);
+                        }
+                    }, 350);
+                }
+            } catch (_err) {}
+        })();
+    """.trimIndent()
+}
+
+/**
+ * Builds the popup UI responsive + height measurement script without `MutationObserver(attributes: true)`
+ * or `ResizeObserver(document.body)` feedback loops (which previously caused a 60ms infinite
+ * layout/WebRender GL loop on Android 9 / API 28).
+ */
+internal fun buildExtensionPopupUiJs(): String {
+    return """
+        ;(function() {
+            try {
+                function applyPopupMobileResponsive() {
+                    try {
+                        var existing = document.querySelector('meta[name="viewport"]');
+                        if (!existing) {
+                            var meta = document.createElement('meta');
+                            meta.name = 'viewport';
+                            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
+                            (document.head || document.documentElement).appendChild(meta);
+                        } else if (!existing.content || existing.content.indexOf('width=device-width') === -1) {
+                            existing.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
+                        }
+                        if (!document.getElementById('omni-ext-popup-responsive')) {
+                            var style = document.createElement('style');
+                            style.id = 'omni-ext-popup-responsive';
+                            style.innerHTML = [
+                                'html { max-width: 100vw !important; width: 100% !important; min-width: 0 !important; height: 100% !important; display: flex !important; flex-direction: column !important; overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }',
+                                'body { max-width: 100vw !important; width: 100% !important; min-width: 0 !important; height: 100% !important; min-height: 100% !important; display: flex !important; flex-direction: column !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-y: contain !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-x pan-y pinch-zoom !important; box-sizing: border-box !important; }',
+                                '*, *::before, *::after { box-sizing: border-box !important; }',
+                                'app-root, #app, #root, bit-layout, anon-layout, user-layout { display: flex !important; flex-direction: column !important; width: 100% !important; height: 100% !important; flex: 1 1 0% !important; min-height: 0 !important; overflow: hidden !important; }',
+                                'app-root > *, #app > *, #root > * { flex-shrink: 0 !important; }',
+                                'main, [role="main"], .tw-flex-1, .flex-1 { flex: 1 1 0% !important; overflow-y: auto !important; min-height: 0 !important; max-width: 100vw !important; }',
+                                'anon-layout .tw-overflow-hidden, bit-layout .tw-overflow-hidden, app-root .tw-overflow-hidden, main.tw-overflow-hidden, body > .tw-overflow-hidden { overflow-y: auto !important; }',
+                                '.container, .wrapper, .content, .inner, .card, .panel, .popup, .popup-container, .popup-inner, .app, .app-container, .main { max-width: 100vw !important; min-width: 0 !important; }',
+                                'button, input, select, textarea, a { max-width: 100% !important; word-break: break-word !important; }',
+                                'nav, footer { position: sticky !important; bottom: 0 !important; top: auto !important; width: 100% !important; flex-shrink: 0 !important; z-index: 100 !important; }',
+                                '.tw-h-screen, .h-screen { height: 100% !important; }',
+                                '.tw-h-full, .h-full { height: 100% !important; }'
+                            ].join(' ');
+                            (document.head || document.documentElement).appendChild(style);
+                        }
+                    } catch (_e) {}
+                }
+                function measureAndReportHeight() {
+                    try {
+                        var body = document.body;
+                        var docEl = document.documentElement;
+                        if (!body || !docEl) return;
+                        var bodyBg = window.getComputedStyle(body).backgroundColor;
+                        if (bodyBg && bodyBg !== 'rgba(0, 0, 0, 0)' && bodyBg !== 'transparent' && docEl.style.backgroundColor !== bodyBg) {
+                            docEl.style.backgroundColor = bodyBg;
+                        }
+                        var zoom = parseFloat(docEl.style.zoom) || 1;
+                        var bodyRect = body.getBoundingClientRect();
+                        var maxBottom = 0;
+                        var fixedHeight = 0;
+                        var els = body.querySelectorAll('body > *, app-root, main, [role="main"], form, footer, nav, button, .card, .panel');
+                        if (!els || els.length === 0) {
+                            els = body.children;
+                        }
+                        var limit = Math.min(els.length, 120);
+                        for (var i = 0; i < limit; i++) {
+                            var el = els[i];
+                            var cs = window.getComputedStyle(el);
+                            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+                            var r = el.getBoundingClientRect();
+                            if (cs.position === 'fixed' || cs.position === 'sticky') {
+                                if (r.height > 0) fixedHeight += r.height;
+                                continue;
+                            }
+                            if (r.height > 0 && r.width > 0) {
+                                var relBottom = r.bottom - bodyRect.top + 16;
+                                if (relBottom > maxBottom) maxBottom = relBottom;
+                            }
+                            if (el.scrollHeight > maxBottom && el.clientHeight > 0) {
+                                maxBottom = Math.max(maxBottom, el.scrollHeight + 16);
+                            }
+                        }
+                        maxBottom += fixedHeight;
+                        if (maxBottom < 80) {
+                            maxBottom = body.scrollHeight || body.offsetHeight || 0;
+                        }
+                        var finalHeight = Math.ceil(maxBottom * zoom);
+                        if (finalHeight >= 120 && Math.abs(finalHeight - (window.__omniLastPopupHeight || 0)) >= 12) {
+                            window.__omniLastPopupHeight = finalHeight;
+                            window.alert('OMNI_EXT_POPUP_HEIGHT:' + finalHeight);
+                        }
+                    } catch (_e) {}
+                }
+                window.__omniMeasurePopupHeight = measureAndReportHeight;
+                function unlockScrollAndMeasure() {
+                    applyPopupMobileResponsive();
+                    try {
+                        var candidates = document.querySelectorAll('.tw-overflow-hidden, .overflow-hidden');
+                        for (var i = 0; i < candidates.length; i++) {
+                            var el = candidates[i];
+                            if (!el || !el.style || el.getAttribute('data-omni-unlocked') === '1') continue;
+                            var cs = window.getComputedStyle(el);
+                            if (cs.position === 'fixed' || cs.position === 'sticky') continue;
+                            if (cs.overflowY === 'hidden') {
+                                el.setAttribute('data-omni-unlocked', '1');
+                                el.style.setProperty('overflow-y', 'auto', 'important');
+                            }
+                        }
+                    } catch (_e) {}
+                    measureAndReportHeight();
+                }
+                function initPopupObservers() {
+                    unlockScrollAndMeasure();
+                    setTimeout(unlockScrollAndMeasure, 180);
+                    setTimeout(unlockScrollAndMeasure, 550);
+                    if (!window.__omniPopupScrollObserver && (document.documentElement || document.body)) {
+                        var timer = null;
+                        window.__omniPopupScrollObserver = new MutationObserver(function() {
+                            if (timer) clearTimeout(timer);
+                            timer = setTimeout(unlockScrollAndMeasure, 180);
+                        });
+                        // Observe childList ONLY (never attributes: true) so style adjustments never re-trigger the observer
+                        window.__omniPopupScrollObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
+                    }
+                }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initPopupObservers);
+                } else {
+                    initPopupObservers();
+                }
+            } catch (_e) {}
+        })();
+    """.trimIndent()
+}
+
+/**
+ * Builds the JS patch prepended to extension popup scripts (`popup/main.js`, etc.) inside `.xpi`
+ * bundles so that popup responsive layout, scroll unlocking, dynamic height measurement, and
+ * `chrome.windows` / `chrome.tabs.query` polyfills execute from `'self'` without being blocked
+ * by extension Content-Security-Policy (`script-src 'self'`).
+ */
+internal fun buildExtensionPopupPatchJs(): String {
+    val bridgeJs = buildExtensionAutofillBridgeJs()
+    val popupUiJs = buildExtensionPopupUiJs()
+    return "$bridgeJs\n$popupUiJs"
+}
+
+/**
+ * Patches installed `.xpi` files in the Gecko profile's `extensions/` directory BEFORE
+ * `GeckoRuntime.create` is called (so no `.xpi` is memory-mapped by Gecko while being rewritten).
+ *
+ * Returns `true` if one or more `.xpi` archives were patched.
+ */
+internal fun patchInstalledUserExtensionsForMobile(context: Context): Boolean {
+    val mozillaDir = java.io.File(context.applicationContext.filesDir, "mozilla")
+    if (!mozillaDir.exists() || !mozillaDir.isDirectory) return false
+    var anyPatched = false
+
+    val profileDirs = mozillaDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
+    for (profileDir in profileDirs) {
+        val extDir = java.io.File(profileDir, "extensions")
+        if (!extDir.exists() || !extDir.isDirectory) continue
+        val xpiFiles = extDir.listFiles { f -> f.isFile && f.name.endsWith(".xpi", ignoreCase = true) } ?: continue
+        var profilePatched = false
+        for (xpiFile in xpiFiles) {
+            try {
+                if (patchSingleExtensionXpi(xpiFile)) {
+                    profilePatched = true
+                    anyPatched = true
+                    Log.i(TAG, "Patched installed extension XPI for mobile autofill & popup compatibility: ${xpiFile.name}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to patch extension XPI ${xpiFile.name}", e)
+            }
+        }
+        if (profilePatched) {
+            // Clear Gecko's compiled script startupCache so patched background.js / popup scripts
+            // are re-read from the XPI rather than served from stale cached bytecode.
+            val startupCacheDir = java.io.File(profileDir, "startupCache")
+            if (startupCacheDir.exists() && startupCacheDir.isDirectory) {
+                startupCacheDir.listFiles()?.forEach { cacheFile ->
+                    runCatching { cacheFile.delete() }
+                }
+            }
+        }
+    }
+    return anyPatched
+}
+
+/**
+ * Downloads an extension `.xpi` from `url` to a temporary file in `cacheDir` and applies
+ * `patchSingleExtensionXpi` BEFORE GeckoView installs and memory-maps it. Falls back to the
+ * original `url` if downloading or patching fails.
+ */
+internal fun preparePatchedExtensionInstallUrl(url: String, context: Context): String {
+    return try {
+        val cacheDir = java.io.File(context.cacheDir, "omni_ext_install")
+        if (!cacheDir.exists()) cacheDir.mkdirs()
+        val tmpXpi = java.io.File(cacheDir, "ext_${System.currentTimeMillis()}.xpi")
+        when {
+            url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true) -> {
+                val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Android 14; Mobile; rv:138.0) Gecko/138.0 Firefox/138.0")
+                }
+                conn.inputStream.use { input ->
+                    java.io.FileOutputStream(tmpXpi).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+            url.startsWith("file://", ignoreCase = true) -> {
+                val srcPath = android.net.Uri.parse(url).path ?: return url
+                val srcFile = java.io.File(srcPath)
+                if (!srcFile.exists()) return url
+                srcFile.copyTo(tmpXpi, overwrite = true)
+            }
+            else -> return url
+        }
+        if (tmpXpi.exists() && tmpXpi.length() > 0L) {
+            patchSingleExtensionXpi(tmpXpi)
+            android.net.Uri.fromFile(tmpXpi).toString()
+        } else {
+            url
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "preparePatchedExtensionInstallUrl fallback to original URL ($url): ${e.message}")
+        url
+    }
+}
+
+private fun patchSingleExtensionXpi(xpiFile: java.io.File): Boolean {
+    if (!xpiFile.exists() || xpiFile.length() == 0L) return false
+    val origLastModified = xpiFile.lastModified()
+
+    val bgScripts = mutableSetOf("background.js")
+    val popupScripts = mutableSetOf("popup/main.js")
+    var alreadyPatched = false
+
+    java.util.zip.ZipFile(xpiFile).use { zip ->
+        val manifestEntry = zip.getEntry("manifest.json") ?: return false
+        val manifestText = zip.getInputStream(manifestEntry).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        runCatching {
+            val json = org.json.JSONObject(manifestText)
+            val bgObj = json.optJSONObject("background")
+            val scriptsArr = bgObj?.optJSONArray("scripts")
+            if (scriptsArr != null) {
+                for (i in 0 until scriptsArr.length()) {
+                    val s = scriptsArr.optString(i)?.removePrefix("/")?.trim()
+                    if (!s.isNullOrEmpty()) bgScripts.add(s)
+                }
+            }
+        }
+        val primaryBgEntry = bgScripts.firstNotNullOfOrNull { zip.getEntry(it) }
+        if (primaryBgEntry != null) {
+            val head = zip.getInputStream(primaryBgEntry).bufferedReader(Charsets.UTF_8).use { reader ->
+                val buf = CharArray(256)
+                val n = reader.read(buf)
+                if (n > 0) String(buf, 0, n) else ""
+            }
+            if (head.contains(OMNI_EXT_PATCH_MARKER)) {
+                alreadyPatched = true
+            }
+        }
+    }
+
+    if (alreadyPatched) return false
+
+    val bgPatchBytes = (buildExtensionAutofillBridgeJs() + "\n").toByteArray(Charsets.UTF_8)
+    val popupPatchBytes = (buildExtensionPopupPatchJs() + "\n").toByteArray(Charsets.UTF_8)
+    // Content-script patch for the Bitwarden inline-menu bundles
+    // (`bootstrap-autofill-overlay.js` and `bootstrap-autofill-overlay-menu.js`). These run
+    // in the page and drive the inline suggestion list. On GeckoView the viewport boundary
+    // check (`isElementCompletelyWithinViewport`) fails as soon as the soft keyboard or the
+    // bottom toolbars shrink `visualViewport.height`, so the service force-closes the menu it
+    // just opened. Neutralise both the check and the viewport-triggered close command at the
+    // source by wrapping the runtime port used to talk to the background overlay.
+    val overlayContentPatch = """
+        $OMNI_EXT_PATCH_MARKER
+        ;(function(){try{
+            if (!/Android|Mobile/i.test((typeof navigator !== 'undefined' && navigator.userAgent) || '')) return;
+            window.__omniInlineMenuContentPatched = true;
+            var LIST_PORT = 'autofill-inline-menu-list-port';
+            var LIST_ELEMENT = 'autofill-inline-menu-list';
+            var LIST_MAX_HEIGHT = 180;   // matches Bitwarden's own max-height for the list
+            var LIST_MIN_HEIGHT = 96;
+            function clampListStyles(styles) {
+                try {
+                    if (!styles) return styles;
+                    var vv = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+                    if (!vv) return styles;
+                    var top = parseInt(styles.top, 10);
+                    var h = parseInt(styles.height, 10);
+                    // Bitwarden sends only width/top/left for the list position; the real height
+                    // arrives in a later message (or never, on GeckoView). Without it the list
+                    // iframe keeps its initial 0px height and renders as a bordered "line".
+                    if (isNaN(h) || h <= 0) {
+                        h = Math.min(LIST_MAX_HEIGHT, Math.max(LIST_MIN_HEIGHT, vv - 8));
+                        styles.height = h + 'px';
+                    } else if (h > LIST_MAX_HEIGHT) {
+                        h = LIST_MAX_HEIGHT;
+                        styles.height = h + 'px';
+                    }
+                    // Keep the whole list inside the visible viewport (soft keyboard / toolbars).
+                    if (!isNaN(top) && top + h > vv - 4) {
+                        styles.top = Math.max(0, vv - h - 4) + 'px';
+                    }
+                } catch (_e) {}
+                return styles;
+            }
+            function patchPort(port) {
+                if (!port) return port;
+                // Drop viewport-triggered close commands so the suggestion list stays open.
+                if (typeof port.postMessage === 'function' && !port.__omniCloseDropPatched) {
+                    port.__omniCloseDropPatched = true;
+                    var origPost = port.postMessage.bind(port);
+                    port.postMessage = function(msg) {
+                        if (msg && msg.overlayElement === LIST_ELEMENT &&
+                            (msg.command === 'closeAutofillInlineMenu' || msg.command === 'updateAutofillInlineMenuPositionAndClose')) {
+                            return;
+                        }
+                        return origPost(msg);
+                    };
+                }
+                // Size the list iframe when the background hands out its position.
+                if (port.name === LIST_PORT && port.onMessage && typeof port.onMessage.addListener === 'function' && !port.__omniListClampPatched) {
+                    port.__omniListClampPatched = true;
+                    var origAddListener = port.onMessage.addListener.bind(port.onMessage);
+                    port.onMessage.addListener = function(fn) {
+                        if (typeof fn !== 'function') return origAddListener(fn);
+                        return origAddListener(function(msg) {
+                            try {
+                                if (msg && msg.command === 'updateAutofillInlineMenuPosition') {
+                                    msg.styles = clampListStyles(msg.styles || {});
+                                }
+                            } catch (_e) {}
+                            return fn.apply(this, arguments);
+                        });
+                    };
+                }
+                return port;
+            }
+            var api = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome
+                    : (typeof browser !== 'undefined' && browser.runtime) ? browser : null;
+            // Distinct flag from earlier patch versions so this wrapper still installs when an
+            // already-patched bundle is re-patched (stale prepended code stays ahead of it).
+            if (api && api.runtime && typeof api.runtime.connect === 'function' && !api.runtime.__omniConnectClampPatched) {
+                api.runtime.__omniConnectClampPatched = true;
+                var origConnect = api.runtime.connect.bind(api.runtime);
+                api.runtime.connect = function() { return patchPort(origConnect.apply(this, arguments)); };
+            }
+        }catch(_e){}})();
+    """.trimIndent()
+    val overlayContentPatchBytes = (overlayContentPatch + "\n").toByteArray(Charsets.UTF_8)
+    // Match by archive basename so the patch still applies if the bundle layout nests the
+    // content scripts in a different directory (e.g. `content/` vs a hashed chunk path).
+    val contentScriptNamesToPatch = setOf(
+        "bootstrap-autofill-overlay.js",
+        "bootstrap-autofill-overlay-menu.js"
+    )
+    val tmpFile = java.io.File(xpiFile.parentFile, "${'$'}{xpiFile.name}.omni_patch.tmp")
+    if (tmpFile.exists()) tmpFile.delete()
+
+    java.util.zip.ZipFile(xpiFile).use { zipIn ->
+        java.util.zip.ZipOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(tmpFile))).use { zipOut ->
+            val entries = zipIn.entries()
+            val buf = ByteArray(16384)
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                val name = entry.name
+                // Strip META-INF signatures so Gecko treats the patched archive as unsigned
+                // (allowed because MOZ_REQUIRE_SIGNING / xpinstall.signatures.required is false)
+                // rather than failing signature verification on modified script entries.
+                if (name.startsWith("META-INF/", ignoreCase = true)) {
+                    continue
+                }
+                val newEntry = java.util.zip.ZipEntry(name)
+                newEntry.time = entry.time
+                zipOut.putNextEntry(newEntry)
+                if (!entry.isDirectory) {
+                    val normalized = name.removePrefix("/")
+                    val isContentOverlay = normalized.substringAfterLast('/') in contentScriptNamesToPatch
+                    when {
+                        normalized in bgScripts -> {
+                            zipOut.write(bgPatchBytes)
+                        }
+                        normalized in popupScripts || (normalized.startsWith("popup/") && normalized.endsWith("main.js")) -> {
+                            zipOut.write(popupPatchBytes)
+                        }
+                        isContentOverlay -> {
+                            zipOut.write(overlayContentPatchBytes)
+                        }
+                    }
+                    if (isContentOverlay) {
+                        // The inline-menu viewport/focus logic lives inside these bundles and is
+                        // unreachable from a prepended script (private class methods), so rewrite
+                        // the two offending expressions in place before writing the entry.
+                        val original = zipIn.getInputStream(entry).bufferedReader(Charsets.UTF_8).use { it.readText() }
+                        zipOut.write(rewriteInlineMenuScript(original).toByteArray(Charsets.UTF_8))
+                    } else {
+                        zipIn.getInputStream(entry).use { input ->
+                            var read: Int
+                            while (input.read(buf).also { read = it } != -1) {
+                                zipOut.write(buf, 0, read)
+                            }
+                        }
+                    }
+                }
+                zipOut.closeEntry()
+            }
+        }
+    }
+
+    if (!tmpFile.renameTo(xpiFile)) {
+        tmpFile.copyTo(xpiFile, overwrite = true)
+        tmpFile.delete()
+    }
+    // Preserve original lastModified so XPIStates.scanForChanges keeps the existing XPIState entry active.
+    xpiFile.setLastModified(origLastModified)
+    return true
+}
+
+/**
+ * Applies the minimum source edits Bitwarden's inline autofill menu needs to work under
+ * GeckoView. Both replacements are guarded so an unrecognised (future) bundle is left untouched.
+ *
+ * 1. `AutofillInlineMenuIframeService.updateIframePosition` early-returns while
+ *    `globalThis.document.hasFocus()` is false. On GeckoView the page document loses focus as soon
+ *    as the user taps the inline-menu button (focus moves into the extension iframe), so the
+ *    position and height styles for the suggestion list are never applied and the list iframe
+ *    stays at its initial `height: 0px`. With its 1px solid border that renders as a horizontal
+ *    "line" instead of the cipher list.
+ * 2. `isElementCompletelyWithinViewport` force-closes the list whenever it is not fully inside
+ *    `visualViewport`. With the soft keyboard up that check almost always fails on mobile, so the
+ *    list is closed again immediately after it opens.
+ */
+internal fun rewriteInlineMenuScript(source: String): String {
+    var out = source
+    out = out.replace(
+        "if (!position || !globalThis.document.hasFocus()) {",
+        "if (!position) {"
+    )
+    out = out.replace(
+        "isElementCompletelyWithinViewport(elementPosition) {",
+        "isElementCompletelyWithinViewport(elementPosition) { return true;"
+    )
+    return out
+}
+
+/**
+ * Re-asserts the active tab on extension readiness without modifying live mmap'd `.xpi` files.
+ */
+internal fun BrowserViewModel.ensureExtensionAutofillReady(extension: WebExtension) {
+    val run = runtime ?: return
+    val currentActiveTab = tabs.find { it.id == activeTabId }
+    if (currentActiveTab != null && currentActiveTab.session.isOpen && !currentActiveTab.isSuspended) {
+        try {
+            run.webExtensionController.setTabActive(currentActiveTab.session, true)
+        } catch (_: Exception) {}
     }
 }
 
