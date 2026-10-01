@@ -1823,4 +1823,7 @@ tellungen &amp; Layout</string>
     <string name="address_bar_clear">Löschen</string>
     <string name="confirm_exit_title">Vor dem Beenden bestätigen</string>
     <string name="confirm_exit_desc">Beenden-Dialog anzeigen, wenn auf dem Startbildschirm Zurück gedrückt wird</string>
+    <string name="web_apps_title">Web-Apps &amp; PWAs</string>
+    <string name="web_apps_desc">Progressive Web-Apps verwalten, klonen und entdecken</string>
+    <string name="tool_web_apps">Web-Apps</string>
 </resources>

@@ -1825,4 +1825,7 @@
     <string name="address_bar_clear">Effacer</string>
     <string name="confirm_exit_title">Confirmer avant de quitter</string>
     <string name="confirm_exit_desc">Afficher la boîte de dialogue de sortie en appuyant sur Retour sur l\'écran d\'accueil</string>
+    <string name="web_apps_title">Applications Web &amp; PWA</string>
+    <string name="web_apps_desc">Gérer, cloner et découvrir les Progressive Web Apps</string>
+    <string name="tool_web_apps">Applications Web</string>
 </resources>

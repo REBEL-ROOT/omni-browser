@@ -1824,4 +1824,7 @@
     <string name="address_bar_clear">Очистить</string>
     <string name="confirm_exit_title">Подтверждение перед выходом</string>
     <string name="confirm_exit_desc">Показывать диалог выхода при нажатии «Назад» на главном экране</string>
+    <string name="web_apps_title">Веб-приложения и PWA</string>
+    <string name="web_apps_desc">Управление, клонирование и поиск прогрессивных веб-приложений</string>
+    <string name="tool_web_apps">Веб-приложения</string>
 </resources>

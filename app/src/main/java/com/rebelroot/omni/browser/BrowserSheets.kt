@@ -4464,6 +4464,7 @@ fun AllInOneMenuSheet(
     onOpenDownloads: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenWebApps: () -> Unit = {},
     onShowThemeSheet: () -> Unit = {},
     onShowFeedbackDialog: () -> Unit = {},
     onShowCustomizationSheet: () -> Unit = {},
@@ -4909,6 +4910,60 @@ fun AllInOneMenuSheet(
                             }
                         }
                     }
+                }
+            }
+
+            // --- Web Apps (PWA) Entry ---
+            Surface(
+                color = cardBg,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        onDismissRequest()
+                        onOpenWebApps()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(6.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Apps,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(id = R.string.web_apps_title),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = textColor
+                        )
+                        Text(
+                            text = stringResource(id = R.string.web_apps_desc),
+                            fontSize = 11.sp,
+                            color = secondaryText
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = secondaryText.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 

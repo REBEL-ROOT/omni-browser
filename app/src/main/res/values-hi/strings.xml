@@ -1825,4 +1825,7 @@
     <string name="address_bar_clear">साफ़ करें</string>
     <string name="confirm_exit_title">बाहर निकलने से पहले पुष्टि करें</string>
     <string name="confirm_exit_desc">होम स्क्रीन पर बैक दबाने पर बाहर निकलने का संवाद दिखाएं</string>
+    <string name="web_apps_title">वेब ऐप्स और PWA</string>
+    <string name="web_apps_desc">प्रोग्रेसिव वेब ऐप्स प्रबंधित करें, क्लोन करें और खोजें</string>
+    <string name="tool_web_apps">वेब ऐप्स</string>
 </resources>

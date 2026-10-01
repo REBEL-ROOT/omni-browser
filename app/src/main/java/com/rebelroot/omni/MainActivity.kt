@@ -65,6 +65,7 @@ import com.rebelroot.omni.browser.BrowserScreen
 import com.rebelroot.omni.browser.BrowserViewModel
 import com.rebelroot.omni.browser.setupTabSessionListeners
 import com.rebelroot.omni.browser.session.SessionRecoveryDiagnostics
+import com.rebelroot.omni.browser.IntentUrlParser
 import com.rebelroot.omni.media.DownloadManagerScreen
 import com.rebelroot.omni.media.player.VideoPlayerScreen
 import com.rebelroot.omni.settings.SettingsScreen
@@ -215,29 +216,27 @@ class MainActivity : FragmentActivity() {
         browserViewModel.followSystemTheme = themeState.followSystemTheme
 
         val intentAction = intent?.action
-        val rawIntentUrl = intent?.dataString
+        val intentUrl = IntentUrlParser.parseIntent(intent, this)
 
-        // Security: validate external intent URIs before accepting them
-        val intentUrl = if (!rawIntentUrl.isNullOrEmpty() &&
-            com.rebelroot.omni.browser.SecurityPolicy.validateIntentUri(rawIntentUrl)
-        ) {
-            rawIntentUrl
-        } else {
-            if (!rawIntentUrl.isNullOrEmpty()) {
-                android.util.Log.w("MainActivity", "🛡️ Blocked dangerous intent URI: $rawIntentUrl")
-            }
-            null
-        }
+        val isExternal = intentAction == android.content.Intent.ACTION_VIEW ||
+            intentAction == android.content.Intent.ACTION_SEND ||
+            intentAction == android.content.Intent.ACTION_WEB_SEARCH ||
+            intentAction == android.content.Intent.ACTION_PROCESS_TEXT ||
+            (!intentUrl.isNullOrEmpty() && intentAction != null)
 
-        if (intentAction == android.content.Intent.ACTION_VIEW || (!intentUrl.isNullOrEmpty() && intentAction != null)) {
-            android.util.Log.i("MainActivity", "🚀 External ACTION_VIEW intent launch detected: $intentUrl")
+        if (isExternal) {
+            android.util.Log.i("MainActivity", "🚀 External intent launch detected (action=$intentAction): $intentUrl")
             browserViewModel.isExternalIntentLaunch = true
         }
 
         val isDirectVideo = !intentUrl.isNullOrEmpty() && (intentUrl.contains("autoplay=native") || intentUrl.endsWith(".mp4"))
-        if (!intentUrl.isNullOrEmpty() && !isDirectVideo) {
-            android.util.Log.i("MainActivity", "🎬 onCreate intent URL detected: $intentUrl")
-            browserViewModel.pendingIntentUrl = intentUrl
+        if (!intentUrl.isNullOrEmpty()) {
+            if (isDirectVideo && browserViewModel.isNativePlayerEnabled) {
+                browserViewModel.pendingVideoUrl = intentUrl
+            } else {
+                android.util.Log.i("MainActivity", "🎬 onCreate intent URL detected: $intentUrl")
+                browserViewModel.pendingIntentUrl = intentUrl
+            }
         }
 
         val openDownloadsExtra = intent?.getBooleanExtra("extra_open_downloads", false) == true ||
@@ -415,6 +414,7 @@ class MainActivity : FragmentActivity() {
                                 onOpenWallpapers = { navController.navigate("wallpapers") },
                                 onOpenVisualBlockSettings = { navController.navigate("visual_block_settings") },
                                 onOpenUserAgentSettings = { navController.navigate("user_agent_settings") },
+                                onOpenWebApps = { navController.navigate("web_apps") },
                                 onPlayOnlineStream = { url, pageUrl ->
                                     android.util.Log.i("MainActivity", "🎬 onPlayOnlineStream triggered! url=$url, pageUrl=$pageUrl")
                                     val encodedPath = android.util.Base64.encodeToString(url.toByteArray(), android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
@@ -565,6 +565,9 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onOpenBackup = {
                                     navController.navigate("backup")
+                                },
+                                onOpenWebApps = {
+                                    navController.navigate("web_apps")
                                 },
                                 onSettingsImported = {
                                     this@MainActivity.recreate()
@@ -737,6 +740,24 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
+                        // Web Apps & PWAs Hub
+                        composable("web_apps") {
+                            com.rebelroot.omni.webapp.WebAppsScreen(
+                                browserViewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onOpenUrl = { url ->
+                                    browserViewModel.loadUrl(url)
+                                    if (navController.previousBackStackEntry != null) {
+                                        navController.popBackStack("browser", inclusive = false)
+                                    } else {
+                                        navController.navigate("browser") {
+                                            popUpTo("browser") { inclusive = true }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
                         // Browser Bookmarks Screen
                         composable("bookmarks") {
                             BookmarksScreen(
@@ -827,8 +848,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         val intentAction = intent.action
-        val rawIntentUrl = intent.dataString
 
         val openDownloadsExtra = intent.getBooleanExtra("extra_open_downloads", false) ||
             intentAction == "com.rebelroot.omni.ACTION_OPEN_DOWNLOADS"
@@ -836,20 +857,16 @@ class MainActivity : FragmentActivity() {
             browserViewModel.triggerOpenDownloadsScreen()
         }
 
-        // Security: validate external intent URIs before accepting them
-        val intentUrl = if (!rawIntentUrl.isNullOrEmpty() &&
-            com.rebelroot.omni.browser.SecurityPolicy.validateIntentUri(rawIntentUrl)
-        ) {
-            rawIntentUrl
-        } else {
-            if (!rawIntentUrl.isNullOrEmpty()) {
-                android.util.Log.w("MainActivity", "🛡️ Blocked dangerous onNewIntent URI: $rawIntentUrl")
-            }
-            null
-        }
+        val intentUrl = IntentUrlParser.parseIntent(intent, this)
 
-        if (intentAction == android.content.Intent.ACTION_VIEW || (!intentUrl.isNullOrEmpty() && intentAction != null)) {
-            android.util.Log.i("MainActivity", "🚀 onNewIntent external ACTION_VIEW intent detected: $intentUrl")
+        val isExternal = intentAction == android.content.Intent.ACTION_VIEW ||
+            intentAction == android.content.Intent.ACTION_SEND ||
+            intentAction == android.content.Intent.ACTION_WEB_SEARCH ||
+            intentAction == android.content.Intent.ACTION_PROCESS_TEXT ||
+            (!intentUrl.isNullOrEmpty() && intentAction != null)
+
+        if (isExternal) {
+            android.util.Log.i("MainActivity", "🚀 onNewIntent external intent detected (action=$intentAction): $intentUrl")
             browserViewModel.isExternalIntentLaunch = true
         }
         if (!intentUrl.isNullOrEmpty()) {
@@ -863,7 +880,13 @@ class MainActivity : FragmentActivity() {
                     browserViewModel.pendingVideoUrl = intentUrl
                 }
             } else {
-                browserViewModel.loadUrl(intentUrl)
+                val activeTab = browserViewModel.tabs.find { it.id == browserViewModel.activeTabId }
+                val isHomeOrEmpty = activeTab == null || activeTab.url == "about:blank" || activeTab.url.isEmpty() || activeTab.url.startsWith("file:///android_asset/home")
+                if (isHomeOrEmpty) {
+                    browserViewModel.loadUrl(intentUrl)
+                } else {
+                    browserViewModel.createNewTab(this, intentUrl)
+                }
                 // Trigger navigation back to browser screen (e.g. when default browser opens a link from Settings)
                 browserViewModel.triggerOpenBrowserScreen()
             }

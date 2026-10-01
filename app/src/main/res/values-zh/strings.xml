@@ -1824,4 +1824,7 @@
     <string name="address_bar_clear">清除</string>
     <string name="confirm_exit_title">退出前确认</string>
     <string name="confirm_exit_desc">在主屏幕按返回键时显示退出对话框</string>
+    <string name="web_apps_title">Web应用与PWA</string>
+    <string name="web_apps_desc">管理、克隆和发现渐进式Web应用</string>
+    <string name="tool_web_apps">Web应用</string>
 </resources>

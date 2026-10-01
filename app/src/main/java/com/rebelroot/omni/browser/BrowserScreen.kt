@@ -219,7 +219,8 @@ fun BrowserScreen(
     onPlayOnlineStream: (String, String) -> Unit,
     onExitBrowser: () -> Unit,
     onOpenVisualBlockSettings: () -> Unit = {},
-    onOpenUserAgentSettings: () -> Unit = {}
+    onOpenUserAgentSettings: () -> Unit = {},
+    onOpenWebApps: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val hostActivity = androidx.activity.compose.LocalActivity.current
@@ -1322,7 +1323,8 @@ fun BrowserScreen(
                                             onShowExtensions = { showMenu = false; showExtensionsSheet = true },
                                             onShowPlayerSettings = { showMenu = false; showPlayerSettingsDialog = true },
                                             onShowSiteInfo = { showMenu = false; showSiteInfoSheet = true },
-                                            onFindInPage = { showMenu = false; viewModel.openFindInPage() }
+                                            onFindInPage = { showMenu = false; viewModel.openFindInPage() },
+                                            onOpenWebApps = { showMenu = false; onOpenWebApps() }
                                         )
                                     },
                                     onShowSiteInfo = { showSiteInfoSheet = true },
@@ -1379,6 +1381,7 @@ fun BrowserScreen(
                                         onShowSiteInfo = { showSiteInfoSheet = true },
                                         onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true },
                                         onOpenMediaSheet = { showDownloadSheet = true },
+                                        onOpenWebApps = onOpenWebApps,
                                         onBurnData = {
                                             coroutineScope.launch {
                                                 val runtime = viewModel.getGeckoRuntime(context)
@@ -1582,6 +1585,7 @@ fun BrowserScreen(
                             onShowSiteInfo = { showSiteInfoSheet = true },
                             onShowAllInOneMenuSheet = { showAllInOneMenuSheet = true },
                             onOpenMediaSheet = { showDownloadSheet = true },
+                            onOpenWebApps = onOpenWebApps,
                             onBurnData = {
                                 coroutineScope.launch {
                                     val runtime = viewModel.getGeckoRuntime(context)
@@ -2694,6 +2698,7 @@ fun BrowserScreen(
                                     onOpenDownloads = onOpenDownloads,
                                     onOpenHistory = onOpenHistory,
                                     onOpenBookmarks = onOpenBookmarks,
+                                    onOpenWebApps = onOpenWebApps,
                                     onOpenLocker = onOpenLocker,
                                     onOpenQrTools = onOpenQrTools,
                                     onOpenExtensions = {
@@ -7578,6 +7583,7 @@ fun BrowserScreen(
                 onOpenDownloads = onOpenDownloads,
                 onOpenBookmarks = onOpenBookmarks,
                 onOpenSettings = onOpenSettings,
+                onOpenWebApps = onOpenWebApps,
                 onShowCustomizationSheet = {
                     showAllInOneMenuSheet = false
                     coroutineScope.launch {
@@ -7853,8 +7859,27 @@ fun BrowserScreen(
                                 else { showQuickToolsSheet = false; viewModel.printCurrentPage(context) }
                             })
                             "pin_web_app" -> ({
-                                if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()
-                                else { showQuickToolsSheet = false; viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url) }
+                                if (showHomeScreen || activeTab == null) {
+                                    showQuickToolsSheet = false
+                                    onOpenWebApps()
+                                } else {
+                                    showQuickToolsSheet = false
+                                    viewModel.installWebAppShortcut(context, activeTab.title, activeTab.url)
+                                    val repo = com.rebelroot.omni.webapp.WebAppRepository.getInstance(context)
+                                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        repo.installWebApp(
+                                            url = activeTab.url,
+                                            name = activeTab.title.ifBlank { activeTab.url },
+                                            category = "Productivity",
+                                            profileId = "default",
+                                            pinToHomeScreen = false
+                                        )
+                                    }
+                                }
+                            })
+                            "web_apps" -> ({
+                                showQuickToolsSheet = false
+                                onOpenWebApps()
                             })
                             "auto_scroll" -> ({
                                 if (showHomeScreen || activeTab == null) Toast.makeText(context, context.getString(R.string.toast_open_webpage_tool), Toast.LENGTH_SHORT).show()

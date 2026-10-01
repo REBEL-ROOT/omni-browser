@@ -169,6 +169,7 @@ fun PhoneAddressBar(
     onShowAllInOneMenuSheet: () -> Unit = {},
     onOpenMediaSheet: () -> Unit = {},
     onShowSpeedDialSheet: () -> Unit = {},
+    onOpenWebApps: () -> Unit = {},
     onBurnData: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -248,7 +249,8 @@ fun PhoneAddressBar(
                         onShowExtensions = { onShowMenuChange(false); onShowExtensionsSheet() },
                         onShowPlayerSettings = { onShowMenuChange(false); onShowPlayerSettings() },
                         onShowSiteInfo = { onShowMenuChange(false); onShowSiteInfo() },
-                        onFindInPage = { onShowMenuChange(false); viewModel.openFindInPage() }
+                        onFindInPage = { onShowMenuChange(false); viewModel.openFindInPage() },
+                        onOpenWebApps = { onShowMenuChange(false); onOpenWebApps() }
                     )
                 }
             }
@@ -926,7 +928,8 @@ if (viewModel.chromeNavBarEnabled) {
                         onShowExtensions = { onShowMenuChange(false); onShowExtensionsSheet() },
                         onShowPlayerSettings = { onShowMenuChange(false); onShowPlayerSettings() },
                         onShowSiteInfo = { onShowMenuChange(false); onShowSiteInfo() },
-                        onFindInPage = { onShowMenuChange(false); viewModel.openFindInPage() }
+                        onFindInPage = { onShowMenuChange(false); viewModel.openFindInPage() },
+                        onOpenWebApps = { onShowMenuChange(false); onOpenWebApps() }
                     )
                 }
             }
@@ -1186,7 +1189,8 @@ fun omnimenuDropdownCard(
     onShowExtensions: () -> Unit = {},
     onShowPlayerSettings: () -> Unit = {},
     onShowSiteInfo: () -> Unit = {},
-    onFindInPage: () -> Unit = {}
+    onFindInPage: () -> Unit = {},
+    onOpenWebApps: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isDark = viewModel.isDarkThemeEnabled
@@ -1462,6 +1466,14 @@ fun omnimenuDropdownCard(
             isCompact = isCompact,
             onClick = { onDismissRequest(); onShowExtensions() }
         )
+        MinimalMenuItem(
+            text = stringResource(R.string.web_apps_title),
+            icon = Icons.Rounded.Apps,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onOpenWebApps() }
+        )
 
         if (!isHome) {
             val nativeHandler = remember(viewModel.currentUrl) {
@@ -1635,7 +1647,8 @@ fun omnimenuDropdown(
     onShowExtensions: () -> Unit = {},
     onShowPlayerSettings: () -> Unit = {},
     onShowSiteInfo: () -> Unit = {},
-    onFindInPage: () -> Unit = {}
+    onFindInPage: () -> Unit = {},
+    onOpenWebApps: () -> Unit = {}
 ) {
     if (!expanded) return
 
@@ -1736,7 +1749,8 @@ fun omnimenuDropdown(
                 onShowExtensions = onShowExtensions,
                 onShowPlayerSettings = onShowPlayerSettings,
                 onShowSiteInfo = onShowSiteInfo,
-                onFindInPage = onFindInPage
+                onFindInPage = onFindInPage,
+                onOpenWebApps = onOpenWebApps
             )
         }
     }

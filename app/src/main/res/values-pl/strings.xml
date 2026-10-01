@@ -1825,4 +1825,7 @@
     <string name="address_bar_clear">Wyczyść</string>
     <string name="confirm_exit_title">Potwierdź przed wyjściem</string>
     <string name="confirm_exit_desc">Pokaż okno zamykania po naciśnięciu Wstecz na ekranie głównym</string>
+    <string name="web_apps_title">Aplikacje Web &amp; PWA</string>
+    <string name="web_apps_desc">Zarządzaj, klonuj i odkrywaj progresywne aplikacje webowe</string>
+    <string name="tool_web_apps">Aplikacje Web</string>
 </resources>

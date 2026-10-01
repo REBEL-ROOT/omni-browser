@@ -1824,4 +1824,7 @@
     <string name="address_bar_clear">مسح</string>
     <string name="confirm_exit_title">التأكيد قبل الخروج</string>
     <string name="confirm_exit_desc">إظهار مربع حوار الخروج عند الضغط على رجوع في الشاشة الرئيسية</string>
+    <string name="web_apps_title">تطبيقات الويب و PWA</string>
+    <string name="web_apps_desc">إدارة واستنساخ واكتشاف تطبيقات الويب التقدمية</string>
+    <string name="tool_web_apps">تطبيقات الويب</string>
 </resources>

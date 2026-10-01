@@ -92,6 +92,7 @@ fun SettingsScreen(
     onOpenOfflineAi: () -> Unit = {},
     onOpenSync: () -> Unit = {},
     onOpenBackup: () -> Unit = {},
+    onOpenWebApps: () -> Unit = {},
     onSettingsImported: () -> Unit = {}
 ) {
     var isSearchActive by remember { mutableStateOf(false) }
@@ -534,6 +535,7 @@ fun SettingsScreen(
                         SettingSearchResult(context.getString(R.string.accessibility_title), context.getString(R.string.accessibility_desc), "PERSONALIZATION", Icons.Rounded.AccessibilityNew, onOpenAccessibility),
                         SettingSearchResult(context.getString(R.string.tabs_settings_title), context.getString(R.string.tabs_settings_desc), "BROWSING", Icons.Rounded.Tab, onOpenTabs),
                         SettingSearchResult("Site Settings", "Manage site permissions, javascript, autoplay, popups", "BROWSING", Icons.Rounded.Language, onOpenSiteSettings),
+                        SettingSearchResult(context.getString(R.string.web_apps_title), context.getString(R.string.web_apps_desc), "BROWSING", Icons.Rounded.Apps, onOpenWebApps),
                         SettingSearchResult(context.getString(R.string.default_browser_title), "Set Omni Browser as system default browser", "BROWSING", Icons.Rounded.OpenInBrowser, {
                             if (!isDefaultBrowser) {
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -629,6 +631,8 @@ fun SettingsScreen(
                     NavRow(Icons.Rounded.Tab, stringResource(id = R.string.tabs_settings_title), stringResource(id = R.string.tabs_settings_desc), onOpenTabs)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                     NavRow(Icons.Rounded.Language, stringResource(id = R.string.site_settings_title), stringResource(id = R.string.site_settings_desc), onOpenSiteSettings)
+                    HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    NavRow(Icons.Rounded.Apps, stringResource(id = R.string.web_apps_title), stringResource(id = R.string.web_apps_desc), onOpenWebApps)
                     HorizontalDivider(color = dividerColor, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // Default Browser

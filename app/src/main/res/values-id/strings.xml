@@ -1884,4 +1884,7 @@
     <string name="sync_tabs_empty_title">Tidak ada tab yang disinkronkan</string>
     <string name="sync_tabs_empty_desc">Tab dari perangkat lain akan muncul di sini setelah sinkronisasi</string>
     <string name="sync_connected_fxa_toast">Terhubung ke Akun Firefox!</string>
+    <string name="web_apps_title">Aplikasi Web &amp; PWA</string>
+    <string name="web_apps_desc">Kelola, kloning, dan temukan Progressive Web Apps</string>
+    <string name="tool_web_apps">Aplikasi Web</string>
 </resources>

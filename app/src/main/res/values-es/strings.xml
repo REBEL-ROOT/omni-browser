@@ -1828,4 +1828,7 @@
     <string name="address_bar_clear">Borrar</string>
     <string name="confirm_exit_title">Confirmar antes de salir</string>
     <string name="confirm_exit_desc">Mostrar cuadro de diálogo de salida al presionar Atrás en la pantalla de inicio</string>
+    <string name="web_apps_title">Apps web y PWA</string>
+    <string name="web_apps_desc">Gestiona, clona y descubre Progressive Web Apps</string>
+    <string name="tool_web_apps">Apps web</string>
 </resources>

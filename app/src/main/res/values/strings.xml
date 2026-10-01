@@ -111,6 +111,9 @@
     <string name="edit_page_title">Edit Page</string>
     <string name="save_pdf_title">Save PDF</string>
     <string name="pin_web_app_title">Pin Web App</string>
+    <string name="web_apps_title">Web Apps &amp; PWAs</string>
+    <string name="web_apps_desc">Manage, clone, and discover Progressive Web Apps</string>
+    <string name="tool_web_apps">Web Apps</string>
     <string name="auto_scroll_title">Auto-Scroll</string>
     <string name="quick_tools_title">Quick Tools</string>
     <string name="quick_tools_desc">Access offline ML-powered scanner, translation utilities, secure encrypted locker, and system tools.</string>

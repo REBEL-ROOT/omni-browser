@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Build
@@ -173,6 +174,12 @@ object ChromeActionRegistry {
             icon = Icons.AutoMirrored.Rounded.OpenInNew,
             surfaces = setOf(ChromeSurface.QUICK_TOOLS),
             labelRes = R.string.tool_pin_web_app,
+        ),
+        ChromeAction(
+            id = "web_apps",
+            icon = Icons.Rounded.Apps,
+            surfaces = setOf(ChromeSurface.QUICK_TOOLS, ChromeSurface.ALL_IN_ONE),
+            labelRes = R.string.tool_web_apps,
         ),
         ChromeAction(
             id = "auto_scroll",

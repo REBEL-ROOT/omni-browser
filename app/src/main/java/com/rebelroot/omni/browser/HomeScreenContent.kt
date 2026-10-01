@@ -209,7 +209,8 @@ fun HomeScreenContent(
     onShowQuickTools: () -> Unit = {},
     onShowFeedbackDialog: () -> Unit = {},
     onShowPlayerSettings: () -> Unit = {},
-    onBurnData: () -> Unit = {}
+    onBurnData: () -> Unit = {},
+    onOpenWebApps: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -543,6 +544,7 @@ fun HomeScreenContent(
                             onOpenDownloads = { showHomeMenu = false; onOpenDownloads() },
                             onOpenBookmarks = { showHomeMenu = false; onOpenBookmarks() },
                             onOpenSettings = { showHomeMenu = false; onOpenSettings() },
+                            onOpenWebApps = { showHomeMenu = false; onOpenWebApps() },
                             onOpenPasswordManager = { showHomeMenu = false; onOpenPasswordManager() },
                             onShowThemeSheet = { showHomeMenu = false; onShowThemeSheet() },
                             onShowFeedbackDialog = { showHomeMenu = false; onShowFeedbackDialog() },
@@ -729,6 +731,7 @@ fun HomeScreenContent(
                                             "downloads" -> Triple(Icons.Rounded.Download, true, onOpenDownloads)
                                             "history"   -> Triple(Icons.Rounded.History,  false, onOpenHistory)
                                             "bookmarks" -> Triple(Icons.Rounded.Bookmark, false, onOpenBookmarks)
+                                            "web_apps", "webapps" -> Triple(Icons.Rounded.Apps, false, onOpenWebApps)
                                             "incognito" -> Triple(
                                                 if (viewModel.isIncognitoMode) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                                 false,
@@ -739,17 +742,20 @@ fun HomeScreenContent(
                                         val downloadsStr = stringResource(id = R.string.downloads_title)
                                         val historyStr   = stringResource(id = R.string.history_title)
                                         val bookmarksStr = stringResource(id = R.string.bookmarks_title)
+                                        val webAppsStr   = stringResource(id = R.string.tool_web_apps)
                                         val incognitoStr = stringResource(id = R.string.incognito_title)
 
                                         val displayTitle = when (shortcut.id.lowercase()) {
                                             "downloads" -> downloadsStr
                                             "history"   -> historyStr
                                             "bookmarks" -> bookmarksStr
+                                            "web_apps", "webapps" -> webAppsStr
                                             "incognito" -> incognitoStr
                                             else        -> when (shortcut.title) {
                                                 "Downloads" -> downloadsStr
                                                 "History"   -> historyStr
                                                 "Bookmarks" -> bookmarksStr
+                                                "Web Apps"  -> webAppsStr
                                                 "Incognito" -> incognitoStr
                                                 else        -> shortcut.title
                                             }
