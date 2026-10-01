@@ -1280,7 +1280,11 @@ fun BrowserScreen(
                                     hasActiveUserExtensions = hasActiveUserExtensions,
                                     onShowExtensions = { showExtensionsSheet = true },
                                     onShowTools = { showQuickToolsSheet = true },
-                                    onShowMenu = { showMenu = true },
+                                    onShowMenu = {
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                        showMenu = true
+                                    },
                                     menuDropdown = {
                                         omnimenuDropdown(
                                             expanded = showMenu,

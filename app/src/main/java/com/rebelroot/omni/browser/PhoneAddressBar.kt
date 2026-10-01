@@ -21,6 +21,7 @@ package com.rebelroot.omni.browser
 
 import android.app.Activity
 import android.net.Uri
+import android.os.Build
 import android.view.ViewGroup
 import android.widget.Toast
 import android.content.Intent
@@ -93,8 +94,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import com.rebelroot.omni.ui.theme.getUiSizeConfig
 import com.rebelroot.omni.ui.theme.UiSizeConfig
 import androidx.compose.ui.draw.blur
@@ -540,7 +549,7 @@ if (viewModel.chromeNavBarEnabled) {
                 modifier = Modifier.width(260.dp),
                 shape = RoundedCornerShape(18.dp),
                 containerColor = if (viewModel.isDarkThemeEnabled && viewModel.isAmoledMode) Color(0xFF0C0D10) else if (viewModel.isDarkThemeEnabled) Color(0xFF20222A) else Color(0xFFFFFFFF),
-                shadowElevation = 10.dp,
+                shadowElevation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) 8.dp else 4.dp,
                 border = BorderStroke(1.dp, if (viewModel.isDarkThemeEnabled) Color(0xFF2D303C) else Color(0xFFE5E7EB))
             ) {
                 val isBottom = viewModel.addressBarPosition == "Bottom"
@@ -1177,15 +1186,13 @@ fun omnimenuDropdownCard(
     onShowExtensions: () -> Unit = {},
     onShowPlayerSettings: () -> Unit = {},
     onShowSiteInfo: () -> Unit = {},
-    onFindInPage: () -> Unit = {},
-    availableHeight: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp.Unspecified
+    onFindInPage: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isDark = viewModel.isDarkThemeEnabled
     val activeTab = viewModel.tabs.find { it.id == viewModel.activeTabId }
     val isHome = viewModel.currentUrl == "about:blank" || activeTab == null
 
-    val cardBg = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
     val textPrimary = MaterialTheme.colorScheme.onSurface
     val textSecondary = MaterialTheme.colorScheme.onSurfaceVariant
     val iconTint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1199,434 +1206,411 @@ fun omnimenuDropdownCard(
     val isCompact = screenWidthDp < 360.dp || screenHeightDp < 680.dp
     val isVeryCompact = screenWidthDp < 320.dp || screenHeightDp < 560.dp
 
-    // Responsive width: dynamically scales with screen width on smaller devices
-    val menuWidth = when {
-        screenWidthDp < 320.dp -> (screenWidthDp - 16.dp).coerceAtLeast(200.dp)
-        screenWidthDp < 360.dp -> (screenWidthDp - 24.dp).coerceAtLeast(230.dp)
-        screenWidthDp < 400.dp -> (screenWidthDp * 0.74f).coerceIn(240.dp, 280.dp)
-        else -> 300.dp
-    }
-    // The card floats BELOW its anchor (status bar + top bar), so its height
-    // budget must be the space under that anchor — otherwise the bottom rows
-    // clip past the screen edge. Callers that know the anchor pass it; the
-    // legacy estimate stays as a conservative fallback.
-    val maxHeight = (availableHeight.takeIf { it != androidx.compose.ui.unit.Dp.Unspecified }
-        ?: (screenHeightDp - if (isCompact) 80.dp else 130.dp)).coerceAtLeast(220.dp)
 
-    Surface(
+    Column(
         modifier = Modifier
-            .width(menuWidth)
-            .heightIn(max = maxHeight),
-        shape = RoundedCornerShape(if (isCompact) 18.dp else 24.dp),
-        color = cardBg,
-        shadowElevation = 14.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(
+                vertical = if (isCompact) 6.dp else 10.dp,
+                horizontal = if (isCompact) 8.dp else 12.dp
+            )
     ) {
+        // ── Top Circular Quick Navigation Row ──────────────────
+        val canBack = activeTab?.canGoBack == true && !isHome
+        val canForward = activeTab?.canGoForward == true
+        val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
+        val quickNavBtnSize = if (isCompact) 32.dp else 40.dp
+        val quickNavIconSize = if (isCompact) 16.dp else 20.dp
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (isCompact) 2.dp else 4.dp, vertical = if (isCompact) 1.dp else 2.dp)
+                .background(
+                    color = if (viewModel.isAmoledMode) Color(0xFF111114) else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
+                )
+                .padding(vertical = if (isCompact) 2.dp else 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Back
+            IconButton(
+                onClick = { onDismissRequest(); viewModel.goBack() },
+                enabled = canBack,
+                modifier = Modifier.size(quickNavBtnSize)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = if (canBack) iconTint else iconTint.copy(alpha = 0.3f),
+                    modifier = Modifier.size(quickNavIconSize)
+                )
+            }
+            // Forward
+            IconButton(
+                onClick = { onDismissRequest(); viewModel.goForward() },
+                enabled = canForward,
+                modifier = Modifier.size(quickNavBtnSize)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                    contentDescription = "Forward",
+                    tint = if (canForward) iconTint else iconTint.copy(alpha = 0.3f),
+                    modifier = Modifier.size(quickNavIconSize)
+                )
+            }
+            // Save / Bookmark
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            Box(
+                modifier = Modifier
+                    .size(quickNavBtnSize)
+                    .clip(CircleShape)
+                    .combinedClickable(
+                        enabled = !isHome,
+                        onLongClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onDismissRequest()
+                            onOpenBookmarks()
+                        },
+                        onClick = {
+                            onDismissRequest()
+                            if (!isHome) {
+                                if (isBookmarked) viewModel.removeBookmark(viewModel.currentUrl)
+                                else viewModel.addToBookmarks(activeTab?.title ?: "Webpage", viewModel.currentUrl)
+                            }
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                    contentDescription = "Bookmark",
+                    tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else iconTint.copy(alpha = 0.3f),
+                    modifier = Modifier.size(quickNavIconSize)
+                )
+            }
+            // Share
+            IconButton(
+                onClick = {
+                    onDismissRequest()
+                    if (!isHome) {
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, viewModel.currentUrl)
+                            type = "text/plain"
+                        }
+                        val shareIntent = Intent.createChooser(sendIntent, "Share").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(shareIntent)
+                    }
+                },
+                enabled = !isHome,
+                modifier = Modifier.size(quickNavBtnSize)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.IosShare,
+                    contentDescription = "Share",
+                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
+                    modifier = Modifier.size(quickNavIconSize)
+                )
+            }
+            // Reload
+            IconButton(
+                onClick = { onDismissRequest(); if (!isHome) viewModel.reload() },
+                enabled = !isHome,
+                modifier = Modifier.size(quickNavBtnSize)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "Reload",
+                    tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
+                    modifier = Modifier.size(quickNavIconSize)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
+
+        // ── TOP NAVIGATION (GLOBAL ACTIONS) ────────────────────
+        MenuSectionLabel(text = stringResource(R.string.menu_section_top_navigation), textColor = textSecondary, isCompact = isCompact)
+
+        val gridSpacing = if (isCompact) 5.dp else 8.dp
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    vertical = if (isCompact) 6.dp else 10.dp,
-                    horizontal = if (isCompact) 8.dp else 12.dp
-                )
+                .padding(horizontal = if (isCompact) 2.dp else 4.dp),
+            verticalArrangement = Arrangement.spacedBy(gridSpacing)
         ) {
-            // ── Top Circular Quick Navigation Row ──────────────────
-            val canBack = activeTab?.canGoBack == true && !isHome
-            val canForward = activeTab?.canGoForward == true
-            val isBookmarked = !isHome && viewModel.isBookmarked(viewModel.currentUrl)
-            val quickNavBtnSize = if (isCompact) 32.dp else 40.dp
-            val quickNavIconSize = if (isCompact) 16.dp else 20.dp
-
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = if (isCompact) 2.dp else 4.dp, vertical = if (isCompact) 1.dp else 2.dp)
-                    .background(
-                        color = if (viewModel.isAmoledMode) Color(0xFF111114) else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
-                    )
-                    .border(
-                        width = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(if (isCompact) 12.dp else 16.dp)
-                    )
-                    .padding(vertical = if (isCompact) 2.dp else 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(gridSpacing)
             ) {
-                // Back
-                IconButton(
-                    onClick = { onDismissRequest(); viewModel.goBack() },
-                    enabled = canBack,
-                    modifier = Modifier.size(quickNavBtnSize)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back",
-                        tint = if (canBack) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(quickNavIconSize)
-                    )
-                }
-                // Forward
-                IconButton(
-                    onClick = { onDismissRequest(); viewModel.goForward() },
-                    enabled = canForward,
-                    modifier = Modifier.size(quickNavBtnSize)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = "Forward",
-                        tint = if (canForward) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(quickNavIconSize)
-                    )
-                }
-                // Save / Bookmark
-                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-                Box(
-                    modifier = Modifier
-                        .size(quickNavBtnSize)
-                        .clip(CircleShape)
-                        .combinedClickable(
-                            enabled = !isHome,
-                            onLongClick = {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                onDismissRequest()
-                                onOpenBookmarks()
-                            },
-                            onClick = {
-                                onDismissRequest()
-                                if (!isHome) {
-                                    if (isBookmarked) viewModel.removeBookmark(viewModel.currentUrl)
-                                    else viewModel.addToBookmarks(activeTab?.title ?: "Webpage", viewModel.currentUrl)
-                                }
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                        contentDescription = "Bookmark",
-                        tint = if (!isHome) (if (isBookmarked) accentColor else iconTint) else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(quickNavIconSize)
-                    )
-                }
-                // Share
-                IconButton(
-                    onClick = {
-                        onDismissRequest()
-                        if (!isHome) {
-                            val sendIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, viewModel.currentUrl)
-                                type = "text/plain"
-                            }
-                            val shareIntent = Intent.createChooser(sendIntent, "Share").apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(shareIntent)
-                        }
-                    },
-                    enabled = !isHome,
-                    modifier = Modifier.size(quickNavBtnSize)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.IosShare,
-                        contentDescription = "Share",
-                        tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(quickNavIconSize)
-                    )
-                }
-                // Reload
-                IconButton(
-                    onClick = { onDismissRequest(); if (!isHome) viewModel.reload() },
-                    enabled = !isHome,
-                    modifier = Modifier.size(quickNavBtnSize)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = "Reload",
-                        tint = if (!isHome) iconTint else iconTint.copy(alpha = 0.3f),
-                        modifier = Modifier.size(quickNavIconSize)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
-
-            // ── TOP NAVIGATION (GLOBAL ACTIONS) ────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_top_navigation), textColor = textSecondary, isCompact = isCompact)
-
-            val gridSpacing = if (isCompact) 5.dp else 8.dp
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = if (isCompact) 2.dp else 4.dp),
-                verticalArrangement = Arrangement.spacedBy(gridSpacing)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(gridSpacing)
-                ) {
-                    GlobalActionCard(
-                        icon = Icons.Rounded.Add,
-                        customIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(if (isCompact) 18.dp else 22.dp)
-                                    .border(1.5.dp, iconTint, RoundedCornerShape(if (isCompact) 4.dp else 6.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Add,
-                                    contentDescription = null,
-                                    tint = iconTint,
-                                    modifier = Modifier.size(if (isCompact) 10.dp else 13.dp)
-                                )
-                            }
-                        },
-                        label = stringResource(R.string.menu_new_tab),
-                        iconTint = iconTint,
-                        cardBg = gridCardBg,
-                        textColor = textPrimary,
-                        isCompact = isCompact,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onDismissRequest(); onNewTab() }
-                    )
-                    GlobalActionCard(
-                        icon = Icons.Rounded.VisibilityOff,
-                        customIcon = {
+                GlobalActionCard(
+                    icon = Icons.Rounded.Add,
+                    customIcon = {
+                        Box(
+                            modifier = Modifier
+                                .size(if (isCompact) 18.dp else 22.dp)
+                                .border(1.5.dp, iconTint, RoundedCornerShape(if (isCompact) 4.dp else 6.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
-                                imageVector = Icons.Rounded.VisibilityOff,
+                                imageVector = Icons.Rounded.Add,
                                 contentDescription = null,
                                 tint = iconTint,
-                                modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
+                                modifier = Modifier.size(if (isCompact) 10.dp else 13.dp)
                             )
-                        },
-                        label = stringResource(R.string.menu_new_incognito_tab),
-                        iconTint = iconTint,
-                        cardBg = gridCardBg,
-                        textColor = textPrimary,
-                        isCompact = isCompact,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onDismissRequest(); onNewIncognitoTab() }
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(gridSpacing)
-                ) {
-                    GlobalActionCard(
-                        icon = Icons.Rounded.History,
-                        label = stringResource(R.string.menu_history),
-                        iconTint = iconTint,
-                        cardBg = gridCardBg,
-                        textColor = textPrimary,
-                        isCompact = isCompact,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onDismissRequest(); onOpenHistory() }
-                    )
-                    GlobalActionCard(
-                        icon = Icons.Rounded.FileDownload,
-                        label = stringResource(R.string.menu_downloads),
-                        iconTint = iconTint,
-                        cardBg = gridCardBg,
-                        textColor = textPrimary,
-                        isCompact = isCompact,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onDismissRequest(); onOpenDownloads() }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(if (isCompact) 3.dp else 6.dp))
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
-
-            // ── PAGE & TABS ────────────────────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_page_tabs), textColor = textSecondary, isCompact = isCompact)
-
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_add_tab_to_new_group),
-                icon = Icons.Rounded.GridView,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); Toast.makeText(context, context.getString(R.string.toast_group_created), Toast.LENGTH_SHORT).show() }
-            )
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_bookmarks),
-                icon = Icons.Rounded.StarBorder,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onOpenBookmarks() }
-            )
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_recent_tabs),
-                icon = Icons.Rounded.Devices,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onOpenHistory() }
-            )
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_extensions),
-                icon = Icons.Rounded.Extension,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onShowExtensions() }
-            )
-
-            if (!isHome) {
-                val nativeHandler = remember(viewModel.currentUrl) {
-                    if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
-                        getNativeAppHandlers(context, viewModel.currentUrl).firstOrNull()
-                    } else null
-                }
-                if (nativeHandler != null) {
-                    val appName = remember(nativeHandler) {
-                        try {
-                            context.packageManager.getApplicationLabel(nativeHandler.activityInfo.applicationInfo).toString()
-                        } catch (_: Exception) { "App" }
-                    }
-                    MinimalMenuItem(
-                        text = "Open in $appName",
-                        icon = Icons.Rounded.OpenInNew,
-                        iconTint = accentColor,
-                        textColor = accentColor,
-                        isCompact = isCompact,
-                        onClick = {
-                            onDismissRequest()
-                            try {
-                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.currentUrl)).apply {
-                                    addCategory(Intent.CATEGORY_BROWSABLE)
-                                    setPackage(nativeHandler.activityInfo.packageName)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(appIntent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Could not open $appName", Toast.LENGTH_SHORT).show()
-                            }
                         }
-                    )
-                }
-
-                MinimalMenuItem(
-                    text = stringResource(R.string.menu_desktop_site_item),
-                    icon = Icons.Rounded.Computer,
+                    },
+                    label = stringResource(R.string.menu_new_tab),
                     iconTint = iconTint,
+                    cardBg = gridCardBg,
                     textColor = textPrimary,
                     isCompact = isCompact,
-                    onClick = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
-                    trailingContent = {
-                        Switch(
-                            checked = viewModel.isDesktopMode,
-                            onCheckedChange = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
-                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
-                            modifier = Modifier.scale(if (isCompact) 0.6f else 0.7f)
+                    modifier = Modifier.weight(1f),
+                    onClick = { onDismissRequest(); onNewTab() }
+                )
+                GlobalActionCard(
+                    icon = Icons.Rounded.VisibilityOff,
+                    customIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.VisibilityOff,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(if (isCompact) 18.dp else 22.dp)
                         )
+                    },
+                    label = stringResource(R.string.menu_new_incognito_tab),
+                    iconTint = iconTint,
+                    cardBg = gridCardBg,
+                    textColor = textPrimary,
+                    isCompact = isCompact,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onDismissRequest(); onNewIncognitoTab() }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(gridSpacing)
+            ) {
+                GlobalActionCard(
+                    icon = Icons.Rounded.History,
+                    label = stringResource(R.string.menu_history),
+                    iconTint = iconTint,
+                    cardBg = gridCardBg,
+                    textColor = textPrimary,
+                    isCompact = isCompact,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onDismissRequest(); onOpenHistory() }
+                )
+                GlobalActionCard(
+                    icon = Icons.Rounded.FileDownload,
+                    label = stringResource(R.string.menu_downloads),
+                    iconTint = iconTint,
+                    cardBg = gridCardBg,
+                    textColor = textPrimary,
+                    isCompact = isCompact,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onDismissRequest(); onOpenDownloads() }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(if (isCompact) 3.dp else 6.dp))
+        HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
+
+        // ── PAGE & TABS ────────────────────────────────────
+        MenuSectionLabel(text = stringResource(R.string.menu_section_page_tabs), textColor = textSecondary, isCompact = isCompact)
+
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_add_tab_to_new_group),
+            icon = Icons.Rounded.GridView,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); Toast.makeText(context, context.getString(R.string.toast_group_created), Toast.LENGTH_SHORT).show() }
+        )
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_bookmarks),
+            icon = Icons.Rounded.StarBorder,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onOpenBookmarks() }
+        )
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_recent_tabs),
+            icon = Icons.Rounded.Devices,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onOpenHistory() }
+        )
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_extensions),
+            icon = Icons.Rounded.Extension,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onShowExtensions() }
+        )
+
+        if (!isHome) {
+            val nativeHandler = remember(viewModel.currentUrl) {
+                if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
+                    getNativeAppHandlers(context, viewModel.currentUrl).firstOrNull()
+                } else null
+            }
+            if (nativeHandler != null) {
+                val appName = remember(nativeHandler) {
+                    try {
+                        context.packageManager.getApplicationLabel(nativeHandler.activityInfo.applicationInfo).toString()
+                    } catch (_: Exception) { "App" }
+                }
+                MinimalMenuItem(
+                    text = "Open in $appName",
+                    icon = Icons.Rounded.OpenInNew,
+                    iconTint = accentColor,
+                    textColor = accentColor,
+                    isCompact = isCompact,
+                    onClick = {
+                        onDismissRequest()
+                        try {
+                            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(viewModel.currentUrl)).apply {
+                                addCategory(Intent.CATEGORY_BROWSABLE)
+                                setPackage(nativeHandler.activityInfo.packageName)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(appIntent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Could not open $appName", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
-                MinimalMenuItem(
-                    text = stringResource(R.string.menu_find_in_page_item),
-                    icon = Icons.Rounded.Search,
-                    iconTint = iconTint,
-                    textColor = textPrimary,
-                    isCompact = isCompact,
-                    onClick = { onDismissRequest(); onFindInPage() }
-                )
-                if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
-                    MinimalMenuItem(
-                        text = stringResource(R.string.menu_add_to_shortcuts),
-                        icon = Icons.Rounded.AddCircle,
-                        iconTint = iconTint,
-                        textColor = textPrimary,
-                        isCompact = isCompact,
-                        onClick = {
-                            onDismissRequest()
-                            val currentUrl = viewModel.currentUrl
-                            val currentTitle = activeTab?.title ?: "Webpage"
-                            viewModel.addShortcut(currentTitle, currentUrl)
-                        }
+            }
+
+            MinimalMenuItem(
+                text = stringResource(R.string.menu_desktop_site_item),
+                icon = Icons.Rounded.Computer,
+                iconTint = iconTint,
+                textColor = textPrimary,
+                isCompact = isCompact,
+                onClick = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
+                trailingContent = {
+                    Switch(
+                        checked = viewModel.isDesktopMode,
+                        onCheckedChange = { onDismissRequest(); viewModel.toggleDesktopMode(context) },
+                        colors = SwitchDefaults.colors(checkedTrackColor = accentColor),
+                        modifier = Modifier.scale(if (isCompact) 0.6f else 0.7f)
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
-
-            // ── PRIVACY & UTILITIES ───────────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_privacy_utilities), textColor = textSecondary, isCompact = isCompact)
-
+            )
             MinimalMenuItem(
-                text = stringResource(R.string.menu_password_manager),
-                icon = Icons.Rounded.Lock,
+                text = stringResource(R.string.menu_find_in_page_item),
+                icon = Icons.Rounded.Search,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 isCompact = isCompact,
-                onClick = { onDismissRequest(); onOpenPasswordManager() }
+                onClick = { onDismissRequest(); onFindInPage() }
             )
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_clear_browsing_data),
-                icon = Icons.Rounded.DeleteOutline,
-                iconTint = Color(0xFFFF453A),
-                textColor = Color(0xFFFF453A),
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onBurnData() }
-            )
-
-            Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
-            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
-
-            // ── SETTINGS & DISPLAY ────────────────────────────
-            MenuSectionLabel(text = stringResource(R.string.menu_section_settings_display), textColor = textSecondary, isCompact = isCompact)
-
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_settings),
-                icon = Icons.Rounded.Settings,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onOpenSettings() }
-            )
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_theme),
-                icon = Icons.Rounded.Palette,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onShowThemeSheet() }
-            )
-            MinimalMenuItem(
-                text = stringResource(R.string.menu_player_settings),
-                icon = Icons.Rounded.PlayCircle,
-                iconTint = iconTint,
-                textColor = textPrimary,
-                isCompact = isCompact,
-                onClick = { onDismissRequest(); onShowPlayerSettings() }
-            )
-            if (isHome) {
+            if (viewModel.currentUrl.isNotBlank() && viewModel.currentUrl != "about:blank") {
                 MinimalMenuItem(
-                    text = if (viewModel.hideHomeBottomNav) stringResource(R.string.menu_show_home_nav_bar) else stringResource(R.string.menu_hide_home_nav_bar),
-                    icon = if (viewModel.hideHomeBottomNav) Icons.Rounded.TvOff else Icons.Rounded.HideSource,
+                    text = stringResource(R.string.menu_add_to_shortcuts),
+                    icon = Icons.Rounded.AddCircle,
                     iconTint = iconTint,
                     textColor = textPrimary,
                     isCompact = isCompact,
-                    onClick = { onDismissRequest(); viewModel.saveHideHomeBottomNav(context, !viewModel.hideHomeBottomNav) }
+                    onClick = {
+                        onDismissRequest()
+                        val currentUrl = viewModel.currentUrl
+                        val currentTitle = activeTab?.title ?: "Webpage"
+                        viewModel.addShortcut(currentTitle, currentUrl)
+                    }
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
+        HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
+
+        // ── PRIVACY & UTILITIES ───────────────────────────
+        MenuSectionLabel(text = stringResource(R.string.menu_section_privacy_utilities), textColor = textSecondary, isCompact = isCompact)
+
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_password_manager),
+            icon = Icons.Rounded.Lock,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onOpenPasswordManager() }
+        )
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_clear_browsing_data),
+            icon = Icons.Rounded.DeleteOutline,
+            iconTint = Color(0xFFFF453A),
+            textColor = Color(0xFFFF453A),
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onBurnData() }
+        )
+
+        Spacer(modifier = Modifier.height(if (isCompact) 2.dp else 4.dp))
+        HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = if (isCompact) 2.dp else 4.dp, horizontal = 4.dp))
+
+        // ── SETTINGS & DISPLAY ────────────────────────────
+        MenuSectionLabel(text = stringResource(R.string.menu_section_settings_display), textColor = textSecondary, isCompact = isCompact)
+
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_settings),
+            icon = Icons.Rounded.Settings,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onOpenSettings() }
+        )
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_theme),
+            icon = Icons.Rounded.Palette,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onShowThemeSheet() }
+        )
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_player_settings),
+            icon = Icons.Rounded.PlayCircle,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onShowPlayerSettings() }
+        )
+        if (isHome) {
             MinimalMenuItem(
-                text = stringResource(R.string.menu_help_feedback),
-                icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                text = if (viewModel.hideHomeBottomNav) stringResource(R.string.menu_show_home_nav_bar) else stringResource(R.string.menu_hide_home_nav_bar),
+                icon = if (viewModel.hideHomeBottomNav) Icons.Rounded.TvOff else Icons.Rounded.HideSource,
                 iconTint = iconTint,
                 textColor = textPrimary,
                 isCompact = isCompact,
-                onClick = { onDismissRequest(); onShowFeedbackDialog() }
+                onClick = { onDismissRequest(); viewModel.saveHideHomeBottomNav(context, !viewModel.hideHomeBottomNav) }
             )
-
-            Spacer(modifier = Modifier.height(2.dp))
         }
+        MinimalMenuItem(
+            text = stringResource(R.string.menu_help_feedback),
+            icon = Icons.AutoMirrored.Rounded.HelpOutline,
+            iconTint = iconTint,
+            textColor = textPrimary,
+            isCompact = isCompact,
+            onClick = { onDismissRequest(); onShowFeedbackDialog() }
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
     }
 }
 
@@ -1653,42 +1637,108 @@ fun omnimenuDropdown(
     onShowSiteInfo: () -> Unit = {},
     onFindInPage: () -> Unit = {}
 ) {
+    if (!expanded) return
+
     val configurationHint = androidx.compose.ui.platform.LocalConfiguration.current
-    // DropdownMenu anchors below the calling button (~status bar + one bar row);
-    // reserve that plus bottom system area so the card never gets window-clipped.
-    val screenHeightHint = with(androidx.compose.ui.platform.LocalDensity.current) {
-        (configurationHint.screenHeightDp - 190).dp
+    val density = LocalDensity.current
+    val screenWidthDp = configurationHint.screenWidthDp.dp
+    val screenHeightDp = configurationHint.screenHeightDp.dp
+    val isCompact = screenWidthDp < 360.dp || screenHeightDp < 680.dp
+
+    // Responsive width: dynamically scales with screen width on smaller devices
+    val menuWidth = when {
+        screenWidthDp < 320.dp -> (screenWidthDp - 16.dp).coerceAtLeast(200.dp)
+        screenWidthDp < 360.dp -> (screenWidthDp - 24.dp).coerceAtLeast(230.dp)
+        screenWidthDp < 400.dp -> (screenWidthDp * 0.74f).coerceIn(240.dp, 280.dp)
+        else -> 300.dp
     }
-    DropdownMenu(
-        expanded = expanded,
+    // Height budget: ensure popup leaves margin from screen edges while remaining scrollable
+    val maxHeight = (screenHeightDp - 120.dp).coerceAtLeast(240.dp)
+
+    val popupPositionProvider = remember(density) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize
+            ): IntOffset {
+                val marginPx = with(density) { 8.dp.roundToPx() }
+                val gapPx = with(density) { 4.dp.roundToPx() }
+
+                // Horizontal: align popup right to anchor right for LTR (or left to anchor left for RTL)
+                val x = if (layoutDirection == LayoutDirection.Rtl) {
+                    anchorBounds.left
+                } else {
+                    anchorBounds.right - popupContentSize.width
+                }
+                val minX = marginPx
+                val maxX = (windowSize.width - popupContentSize.width - marginPx).coerceAtLeast(minX)
+                val clampedX = x.coerceIn(minX, maxX)
+
+                // Vertical: position below anchor if space permits, otherwise above
+                val spaceBelow = windowSize.height - anchorBounds.bottom - marginPx
+                val spaceAbove = anchorBounds.top - marginPx
+
+                val y = if (spaceBelow >= popupContentSize.height || spaceBelow >= spaceAbove) {
+                    anchorBounds.bottom + gapPx
+                } else {
+                    anchorBounds.top - popupContentSize.height - gapPx
+                }
+                val minY = marginPx
+                val maxY = (windowSize.height - popupContentSize.height - marginPx).coerceAtLeast(minY)
+                val clampedY = y.coerceIn(minY, maxY)
+
+                return IntOffset(clampedX, clampedY)
+            }
+        }
+    }
+
+    val shadowElevation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) 8.dp else 4.dp
+    val containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+
+    Popup(
+        popupPositionProvider = popupPositionProvider,
         onDismissRequest = onDismissRequest,
-        modifier = Modifier.background(Color.Transparent),
-        containerColor = Color.Transparent,
-        shadowElevation = 0.dp,
-        border = null
-    ) {
-        omnimenuDropdownCard(
-            expanded = expanded,
-            onDismissRequest = onDismissRequest,
-            availableHeight = screenHeightHint,
-            viewModel = viewModel,
-            onNewTab = onNewTab,
-            onNewIncognitoTab = onNewIncognitoTab,
-            onOpenHistory = onOpenHistory,
-            onBurnData = onBurnData,
-            onOpenDownloads = onOpenDownloads,
-            onOpenBookmarks = onOpenBookmarks,
-            onOpenSettings = onOpenSettings,
-            onOpenPasswordManager = onOpenPasswordManager,
-            onShowThemeSheet = onShowThemeSheet,
-            onShowQuickTools = onShowQuickTools,
-            onShowFeedbackDialog = onShowFeedbackDialog,
-            onShowCustomizationSheet = onShowCustomizationSheet,
-            onShowExtensions = onShowExtensions,
-            onShowPlayerSettings = onShowPlayerSettings,
-            onShowSiteInfo = onShowSiteInfo,
-            onFindInPage = onFindInPage
+        properties = PopupProperties(
+            focusable = true,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
         )
+    ) {
+        Surface(
+            modifier = Modifier
+                .width(menuWidth)
+                .heightIn(max = maxHeight),
+            shape = RoundedCornerShape(if (isCompact) 18.dp else 24.dp),
+            color = containerColor,
+            tonalElevation = 0.dp,
+            shadowElevation = shadowElevation,
+            border = BorderStroke(1.dp, borderColor)
+        ) {
+            omnimenuDropdownCard(
+                expanded = expanded,
+                onDismissRequest = onDismissRequest,
+                viewModel = viewModel,
+                onNewTab = onNewTab,
+                onNewIncognitoTab = onNewIncognitoTab,
+                onOpenHistory = onOpenHistory,
+                onBurnData = onBurnData,
+                onOpenDownloads = onOpenDownloads,
+                onOpenBookmarks = onOpenBookmarks,
+                onOpenSettings = onOpenSettings,
+                onOpenPasswordManager = onOpenPasswordManager,
+                onShowThemeSheet = onShowThemeSheet,
+                onShowQuickTools = onShowQuickTools,
+                onShowFeedbackDialog = onShowFeedbackDialog,
+                onShowCustomizationSheet = onShowCustomizationSheet,
+                onShowExtensions = onShowExtensions,
+                onShowPlayerSettings = onShowPlayerSettings,
+                onShowSiteInfo = onShowSiteInfo,
+                onFindInPage = onFindInPage
+            )
+        }
     }
 }
 

@@ -512,7 +512,11 @@ fun HomeScreenContent(
 
                     Box {
                         IconButton(
-                            onClick = { showHomeMenu = true },
+                            onClick = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                showHomeMenu = true
+                            },
                             modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
@@ -2255,8 +2259,11 @@ fun HomeScreenContent(
                             )
                         }
                         Switch(
-                            checked = viewModel.showPrivacyStatsWidget,
-                            onCheckedChange = { viewModel.saveShowPrivacyStatsWidget(context, it) },
+                            checked = "section_privacy" in viewModel.homeSectionsLayout,
+                            onCheckedChange = { on ->
+                                val l = viewModel.homeSectionsLayout
+                                viewModel.saveHomeSectionsLayout(context, if (on) (l + "section_privacy").distinct() else l - "section_privacy")
+                            },
                             colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }
@@ -2373,7 +2380,9 @@ private fun HomeSearchField(
                 DropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
-                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp
                 ) {
                     val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom")
                     engines.forEach { engine ->
