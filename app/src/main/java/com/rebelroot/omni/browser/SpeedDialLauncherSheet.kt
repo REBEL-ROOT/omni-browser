@@ -33,12 +33,88 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 
+/** Where a speed-dial tile came from — decides how it is deleted and ranked. */
+enum class LauncherSource { SHORTCUT, BOOKMARK, HISTORY }
+
+/** Top-level filters shown as chips across the top of the speed dial. */
+enum class LauncherCategory(val label: String) {
+    ALL("All"),
+    OPTIMAL("Optimal"),
+    BOOKMARKS("Bookmarks"),
+    SHORTCUTS("Shortcuts"),
+    RECENTS("Recents")
+}
+
 data class ShortcutLauncherItem(
     val id: String,
     val title: String,
     val url: String,
-    val isBookmark: Boolean
+    val source: LauncherSource,
+    val timestamp: Long = 0L
 )
+
+/** Normalized host for site matching: lowercase, `www.` stripped, null if unusable. */
+private fun hostOf(url: String): String? =
+    runCatching { java.net.URI(url).host?.lowercase()?.removePrefix("www.") }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+
+/**
+ * True when two hosts belong to the same site. Handles parent/child hosts so a
+ * page on `docs.github.com` still matches a bookmark saved on `github.com`.
+ */
+private fun isSameSite(a: String?, b: String?): Boolean {
+    if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+    return a == b || a.endsWith(".$b") || b.endsWith(".$a")
+}
+
+/**
+ * Key used to collapse duplicate entries across sources. Ignores scheme, a
+ * leading `www.` and a trailing slash so `http://www.x.com/` and `https://x.com`
+ * are treated as the same destination.
+ */
+private fun dedupeKey(url: String): String {
+    val trimmed = url.trim().trimEnd('/')
+    return runCatching {
+        val uri = java.net.URI(trimmed)
+        val host = uri.host?.lowercase()?.removePrefix("www.")
+        if (host.isNullOrBlank()) trimmed.lowercase()
+        else host + (uri.path ?: "") + (uri.query?.let { "?$it" } ?: "")
+    }.getOrDefault(trimmed.lowercase())
+}
+
+/** Common search-engine hosts, including ccTLD variants (google.co.uk, yahoo.co.jp). */
+private val SEARCH_ENGINE_SUFFIXES = listOf(
+    "bing.com", "duckduckgo.com", "baidu.com", "ecosia.org", "startpage.com",
+    "qwant.com", "mojeek.com", "brave.com", "ask.com", "aol.com", "naver.com",
+    "seznam.cz", "sogou.com", "yandex.com", "yandex.ru", "yandex.com.tr"
+)
+private val GOOGLE_HOST = Regex("^google\\.[a-z]{2,3}(\\.[a-z]{2})?$")
+private val YAHOO_HOST = Regex("^yahoo\\.[a-z]{2,3}(\\.[a-z]{2})?$")
+
+/**
+ * True for a search results page. There we show "All" — the query URL carries no
+ * site of its own, so site-scoped "Optimal" suggestions would be meaningless.
+ */
+private fun isSearchEngine(host: String?): Boolean {
+    if (host.isNullOrBlank()) return false
+    if (GOOGLE_HOST.matches(host) || YAHOO_HOST.matches(host)) return true
+    if (host.contains("searx")) return true
+    return SEARCH_ENGINE_SUFFIXES.any { host == it || host.endsWith(".$it") }
+}
+
+/**
+ * Where the sheet should land when it opens: site-scoped "Optimal" when browsing
+ * a real site that has related saved pages, otherwise "All".
+ */
+private fun defaultCategoryFor(url: String, hasOptimalResults: Boolean): LauncherCategory {
+    val host = hostOf(url)
+    return if (!host.isNullOrBlank() && !isSearchEngine(host) && hasOptimalResults) {
+        LauncherCategory.OPTIMAL
+    } else {
+        LauncherCategory.ALL
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -65,19 +141,69 @@ fun SpeedDialLauncherSheet(
     val screenWidthDp = configuration.screenWidthDp
     val gridColumns = if (screenWidthDp >= 600) GridCells.Adaptive(76.dp) else GridCells.Fixed(5)
 
-    val allItems = remember(viewModel.shortcutsList.toList(), viewModel.bookmarksList.toList()) {
-        val shortcutsMapped = viewModel.shortcutsList
+    // ── Sources ──────────────────────────────────────────────────────────────
+    val shortcutItems = remember(viewModel.shortcutsList.toList()) {
+        viewModel.shortcutsList
             .filter { !it.isFeature && it.url != "add" }
-            .map { ShortcutLauncherItem(id = it.id, title = it.title, url = it.url, isBookmark = false) }
-
-        val bookmarksMapped = viewModel.bookmarksList
-            .map { ShortcutLauncherItem(id = "bm_${it.url.hashCode()}", title = it.title, url = it.url, isBookmark = true) }
-
-        (shortcutsMapped + bookmarksMapped).distinctBy { it.url }
+            .distinctBy { dedupeKey(it.url) }
+            .map { ShortcutLauncherItem(it.id, it.title, it.url, LauncherSource.SHORTCUT) }
     }
 
-    val filteredItems = remember(allItems, searchQuery, selectedLetter) {
-        allItems.filter { item ->
+    val bookmarkItems = remember(viewModel.bookmarksList.toList()) {
+        viewModel.bookmarksList
+            .distinctBy { dedupeKey(it.url) }
+            .map { ShortcutLauncherItem("bm_${it.url.hashCode()}", it.title, it.url, LauncherSource.BOOKMARK) }
+    }
+
+    val recentItems = remember(viewModel.historyList.toList()) {
+        viewModel.historyList
+            .distinctBy { dedupeKey(it.url) }
+            .take(150)
+            .map { ShortcutLauncherItem("hist_${it.url.hashCode()}", it.title, it.url, LauncherSource.HISTORY, it.timestamp) }
+    }
+
+    // "All" = saved shortcuts first, then bookmarks, then anything else you visited.
+    // Collapses any destination that appears in more than one source.
+    val allItems = remember(shortcutItems, bookmarkItems, recentItems) {
+        (shortcutItems + bookmarkItems + recentItems).distinctBy { dedupeKey(it.url) }
+    }
+
+    // "Optimal" = whatever is already saved/visited on the site you are on right
+    // now, so you can jump straight to a related page without searching.
+    val currentHost = remember(viewModel.currentUrl) { hostOf(viewModel.currentUrl) }
+    val optimalItems = remember(allItems, currentHost) {
+        val related = allItems
+            .filter { isSameSite(hostOf(it.url), currentHost) }
+            .distinctBy { dedupeKey(it.url) }
+        related.filter { it.source != LauncherSource.HISTORY }.sortedBy { it.title.lowercase() } +
+            related.filter { it.source == LauncherSource.HISTORY }.sortedByDescending { it.timestamp }
+    }
+
+    // Open on the tab that matches where the user is: "Optimal" for a site with
+    // related saved pages, "All" on search results / blank pages. Evaluated once
+    // per sheet open so the user's own tab choice is never overridden.
+    var selectedCategory by remember {
+        mutableStateOf(defaultCategoryFor(viewModel.currentUrl, optimalItems.isNotEmpty()))
+    }
+
+    val categoryItems = when (selectedCategory) {
+        LauncherCategory.ALL -> allItems
+        LauncherCategory.OPTIMAL -> optimalItems
+        LauncherCategory.BOOKMARKS -> bookmarkItems
+        LauncherCategory.SHORTCUTS -> shortcutItems
+        LauncherCategory.RECENTS -> recentItems
+    }
+
+    val alphabetList = remember { listOf("ALL", "#") + ('A'..'Z').map { it.toString() } }
+
+    // Recents are time-ordered, so the A–Z strip would fight that ordering.
+    val showAlphabetStrip = selectedCategory != LauncherCategory.RECENTS
+    val sortByName = selectedCategory in setOf(
+        LauncherCategory.ALL, LauncherCategory.BOOKMARKS, LauncherCategory.SHORTCUTS
+    )
+
+    val filteredItems = remember(categoryItems, searchQuery, selectedLetter, sortByName) {
+        val matched = categoryItems.filter { item ->
             val matchesSearch = searchQuery.isBlank() ||
                     item.title.contains(searchQuery, ignoreCase = true) ||
                     item.url.contains(searchQuery, ignoreCase = true)
@@ -90,47 +216,65 @@ fun SpeedDialLauncherSheet(
             }
 
             matchesSearch && matchesLetter
-        }.sortedBy { it.title.lowercase() }
+        }
+        if (sortByName) matched.sortedBy { it.title.lowercase() } else matched
     }
 
-    val alphabetList = remember { listOf("ALL", "#") + ('A'..'Z').map { it.toString() } }
+    val emptyMessage = when {
+        searchQuery.isNotBlank() -> "No results for \"$searchQuery\""
+        selectedCategory == LauncherCategory.OPTIMAL && currentHost.isNullOrBlank() ->
+            "Open a web page to see its saved pages here"
+        selectedCategory == LauncherCategory.OPTIMAL ->
+            "No saved pages for $currentHost yet"
+        selectedLetter != "ALL" -> "No shortcuts found for '$selectedLetter'"
+        else -> "Nothing here yet"
+    }
 
     // Delete confirmation dialog
     if (itemToDelete != null) {
         val item = itemToDelete!!
+        val isHistory = item.source == LauncherSource.HISTORY
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
             title = {
                 Text(
-                    text = "Delete from Speed Dial",
+                    text = if (isHistory) "Remove from Recents" else "Delete from Speed Dial",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
             },
             text = {
                 Text(
-                    text = "Are you sure you want to remove \"${item.title}\" from Speed Dial?",
+                    text = if (isHistory)
+                        "Remove \"${item.title}\" from your browsing recents?"
+                    else
+                        "Are you sure you want to remove \"${item.title}\" from Speed Dial?",
                     fontSize = 14.sp
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (item.isBookmark) {
-                            viewModel.removeBookmark(item.url)
-                        } else {
-                            val shortcut = viewModel.shortcutsList.find { it.id == item.id }
-                            if (shortcut != null) {
-                                viewModel.deleteShortcut(shortcut)
-                            }
+                        when (item.source) {
+                            LauncherSource.BOOKMARK -> viewModel.removeBookmark(item.url)
+                            LauncherSource.SHORTCUT -> viewModel.shortcutsList
+                                .find { it.id == item.id }
+                                ?.let { viewModel.deleteShortcut(it) }
+                            LauncherSource.HISTORY -> viewModel.historyList
+                                .find { it.url == item.url }
+                                ?.let { viewModel.deleteHistoryEntry(it) }
                         }
-                        Toast.makeText(context, "Removed from Speed Dial", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            if (isHistory) "Removed from Recents" else "Removed from Speed Dial",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         itemToDelete = null
                     },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete")
+                    Text(if (isHistory) "Remove" else "Delete")
                 }
             },
             dismissButton = {
@@ -222,27 +366,57 @@ fun SpeedDialLauncherSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // A-Z Alphabet Filter Strip (Fast Find)
+            // Category chips: All · Optimal · Bookmarks · Shortcuts · Recents
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(alphabetList) { letter ->
-                    val isSelected = selectedLetter == letter
+                items(LauncherCategory.entries) { category ->
+                    val isSelected = selectedCategory == category
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (isSelected) accentColor else cardColor)
-                            .clickable { selectedLetter = letter }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .clickable {
+                                selectedCategory = category
+                                selectedLetter = "ALL"
+                            }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = letter,
+                            text = category.label,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) Color.White else textPrimary
                         )
+                    }
+                }
+            }
+
+            // A-Z Alphabet Filter Strip (Fast Find)
+            if (showAlphabetStrip) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(alphabetList) { letter ->
+                        val isSelected = selectedLetter == letter
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) accentColor else cardColor)
+                                .clickable { selectedLetter = letter }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = letter,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else textPrimary
+                            )
+                        }
                     }
                 }
             }
@@ -266,9 +440,11 @@ fun SpeedDialLauncherSheet(
                             modifier = Modifier.size(48.dp)
                         )
                         Text(
-                            text = "No shortcuts found for '$selectedLetter'",
+                            text = emptyMessage,
                             fontSize = 14.sp,
-                            color = textSecondary
+                            color = textSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
                         )
                     }
                 }

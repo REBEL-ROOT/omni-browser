@@ -15,6 +15,7 @@
 package com.rebelroot.omni.backup
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -46,6 +47,7 @@ object BackupEngine {
 
     const val SCHEMA_VERSION = 2
     const val APP_TAG = "OmniBrowser"
+    private const val TAG = "BackupEngine"
 
     private const val HISTORY_FILE = "browser_history.json"
     private const val DEV_NOTES_FILE = "dev_notes.json"
@@ -61,11 +63,17 @@ object BackupEngine {
         "omni_manga_preferences"
     )
 
-    /** JSON files under filesDir holding user-facing settings. */
+    /**
+     * JSON files under filesDir holding user-facing settings. Speed-dial
+     * shortcuts live in [SHORTCUTS_FILE] and are exported through
+     * [BackupSection.SPEED_DIAL] instead; restore is driven by the file's own
+     * keys, so older backups that stored shortcuts here still come back.
+     */
     private val SETTINGS_JSON_FILES = listOf(
-        "browser_shortcuts.json",
         "browser_site_permissions.json"
     )
+
+    private const val SHORTCUTS_FILE = "browser_shortcuts.json"
 
     // ── Export ────────────────────────────────────────────────────────────────
 
@@ -78,6 +86,7 @@ object BackupEngine {
         val historySnapshot = viewModel.historyList.toList()
         val notesSnapshot = viewModel.devNotes.toList()
         val savedPasswordsSnapshot = viewModel.savedPasswords.toList()
+        val shortcutsSnapshot = viewModel.shortcutsList.toList()
         val vault = viewModel.passwordVaultManager
 
         return withContext(Dispatchers.IO) {
@@ -89,6 +98,7 @@ object BackupEngine {
 
             if (BackupSection.SETTINGS in sections) root.put("settings", buildSettings(context))
             if (BackupSection.BOOKMARKS in sections) root.put("bookmarks", buildBookmarks(context))
+            if (BackupSection.SPEED_DIAL in sections) root.put("speed_dial", buildSpeedDial(shortcutsSnapshot))
             if (BackupSection.HISTORY in sections) root.put("history", buildHistory(historySnapshot))
             if (BackupSection.TABS in sections) root.put("tabs", buildTabs(context))
             if (BackupSection.PASSWORDS in sections) root.put("passwords", buildPasswords(vault, savedPasswordsSnapshot))
@@ -177,6 +187,23 @@ object BackupEngine {
             put("count", collection.bookmarkCount())
             put("html", html)
         }
+    }
+
+    /** Serializes the speed-dial shortcut tiles (including feature/permanent flags). */
+    private fun buildSpeedDial(shortcuts: List<com.rebelroot.omni.browser.HomeShortcut>): JSONArray {
+        val arr = JSONArray()
+        shortcuts
+            .filter { !it.url.isBlank() && it.url != "about:blank" && !it.url.contains("about:blank") }
+            .forEach { s ->
+                arr.put(JSONObject().apply {
+                    put("id", s.id)
+                    put("title", s.title)
+                    put("url", s.url)
+                    put("isFeature", s.isFeature)
+                    put("isPermanent", s.isPermanent)
+                })
+            }
+        return arr
     }
 
     private fun buildHistory(history: List<com.rebelroot.omni.browser.HistoryEntry>): JSONArray {
@@ -270,6 +297,10 @@ object BackupEngine {
             available += BackupSection.BOOKMARKS
             counts[BackupSection.BOOKMARKS] = it.optInt("count", 0)
         }
+        root.optJSONArray("speed_dial")?.let {
+            available += BackupSection.SPEED_DIAL
+            counts[BackupSection.SPEED_DIAL] = it.length()
+        }
         root.optJSONArray("history")?.let {
             available += BackupSection.HISTORY
             counts[BackupSection.HISTORY] = it.length()
@@ -310,38 +341,75 @@ object BackupEngine {
         var restored = 0
         var skipped = 0
 
-        try {
-            if (BackupSection.SETTINGS in sections) {
+        // Each section is isolated: a failure in one (e.g. settings reload) must
+        // not prevent the others (bookmarks, history, tabs…) from restoring.
+        if (BackupSection.SETTINGS in sections) {
+            try {
                 val settingsObj = root.optJSONObject("settings") ?: root
                 val (r, s) = restoreSettings(context, settingsObj)
                 restored += r
                 skipped += s
                 reloadSettings(context, viewModel)
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: settings section failed", e)
+                skipped++
             }
+        }
 
-            if (BackupSection.BOOKMARKS in sections) {
+        if (BackupSection.BOOKMARKS in sections) {
+            try {
                 restored += restoreBookmarks(context, viewModel, root.optJSONObject("bookmarks"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: bookmarks section failed", e)
+                skipped++
             }
+        }
 
-            if (BackupSection.HISTORY in sections) {
+        if (BackupSection.SPEED_DIAL in sections) {
+            try {
+                restored += restoreSpeedDial(context, viewModel, root.optJSONArray("speed_dial"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: speed dial section failed", e)
+                skipped++
+            }
+        }
+
+        if (BackupSection.HISTORY in sections) {
+            try {
                 restored += restoreHistory(context, viewModel, root.optJSONArray("history"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: history section failed", e)
+                skipped++
             }
+        }
 
-            if (BackupSection.TABS in sections) {
+        if (BackupSection.TABS in sections) {
+            try {
                 restored += restoreTabs(context, viewModel, root.optJSONObject("tabs"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: tabs section failed", e)
+                skipped++
             }
+        }
 
-            if (BackupSection.PASSWORDS in sections) {
+        if (BackupSection.PASSWORDS in sections) {
+            try {
                 val (r, s) = restorePasswords(viewModel, root.optJSONArray("passwords"))
                 restored += r
                 skipped += s
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: passwords section failed", e)
+                skipped++
             }
+        }
 
-            if (BackupSection.NOTES in sections) {
+        if (BackupSection.NOTES in sections) {
+            try {
                 restored += restoreNotes(context, viewModel, root.optJSONArray("notes"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup restore: notes section failed", e)
+                skipped++
             }
-        } catch (e: Exception) {
-            return@withContext BackupImportResult.InvalidFile
         }
 
         BackupImportResult.Success(restored, skipped)
@@ -470,6 +538,35 @@ object BackupEngine {
         return result.addedBookmarks
     }
 
+    /**
+     * Writes the speed-dial shortcut list and reloads it. The on-disk shape
+     * matches [BrowserViewModel.saveShortcuts]; [BrowserViewModel.loadShortcuts]
+     * re-adds the built-in permanent/feature tiles if a restored file omits them.
+     */
+    private suspend fun restoreSpeedDial(
+        context: Context,
+        viewModel: BrowserViewModel,
+        arr: JSONArray?
+    ): Int {
+        if (arr == null) return 0
+        val out = JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val url = o.optString("url", "")
+            if (url.isBlank() || url == "about:blank" || url.contains("about:blank")) continue
+            out.put(JSONObject().apply {
+                put("id", o.optString("id", "").ifBlank { java.util.UUID.randomUUID().toString() })
+                put("title", o.optString("title", url))
+                put("url", url)
+                put("isFeature", o.optBoolean("isFeature", false))
+                put("isPermanent", o.optBoolean("isPermanent", false))
+            })
+        }
+        File(context.filesDir, SHORTCUTS_FILE).writeText(out.toString())
+        viewModel.loadShortcuts(context)
+        return out.length()
+    }
+
     private suspend fun restoreHistory(
         context: Context,
         viewModel: BrowserViewModel,
@@ -500,9 +597,11 @@ object BackupEngine {
                 n++
             }
         }
-        if (n > 0) {
-            viewModel.initTabs(context)
-            viewModel.loadTabGroups(context)
+        if (tabsObj.optString(TABS_FILE, "").isNotBlank()) {
+            // Guard the restored session until the next cold start loads it:
+            // saveTabs() is a no-op while this marker exists, so the current
+            // live session can't overwrite what we just restored.
+            File(context.filesDir, BrowserViewModel.PENDING_TAB_RESTORE_FILE).writeText("1")
         }
         return n
     }

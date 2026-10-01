@@ -55,7 +55,7 @@ import java.util.Locale
 fun BackupScreen(
     viewModel: BrowserViewModel,
     onNavigateBack: () -> Unit,
-    onRestored: () -> Unit
+    onRestored: (tabsRestored: Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -401,7 +401,7 @@ fun BackupScreen(
                                                 context.getString(R.string.backup_restore_success, r.restored, skippedSuffix),
                                                 Toast.LENGTH_LONG
                                             ).show()
-                                            onRestored()
+                                            onRestored(BackupSection.TABS in sections)
                                         }
                                     }
                                     else -> {
@@ -481,6 +481,7 @@ private fun DestinationRow(
 private fun sectionLabel(section: BackupSection): String = when (section) {
     BackupSection.SETTINGS -> stringResource(id = R.string.backup_section_settings)
     BackupSection.BOOKMARKS -> stringResource(id = R.string.backup_section_bookmarks)
+    BackupSection.SPEED_DIAL -> stringResource(id = R.string.backup_section_speed_dial)
     BackupSection.HISTORY -> stringResource(id = R.string.backup_section_history)
     BackupSection.TABS -> stringResource(id = R.string.backup_section_tabs)
     BackupSection.PASSWORDS -> stringResource(id = R.string.backup_section_passwords)
@@ -490,6 +491,7 @@ private fun sectionLabel(section: BackupSection): String = when (section) {
 @Composable
 private fun sectionDescription(section: BackupSection): String? = when (section) {
     BackupSection.SETTINGS -> stringResource(id = R.string.backup_section_settings_desc)
+    BackupSection.SPEED_DIAL -> stringResource(id = R.string.backup_section_speed_dial_desc)
     BackupSection.TABS -> stringResource(id = R.string.backup_section_tabs_desc)
     BackupSection.PASSWORDS -> stringResource(id = R.string.backup_section_passwords_desc)
     else -> null

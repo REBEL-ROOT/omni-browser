@@ -45,6 +45,26 @@ class BackupInspectTest {
     }
 
     @Test
+    fun `detects speed dial section`() {
+        val json = """
+            {
+              "app": "OmniBrowser",
+              "schema_version": 2,
+              "sections": ["speed_dial"],
+              "speed_dial": [
+                {"id":"a","title":"A","url":"https://a.example","isFeature":false,"isPermanent":false},
+                {"id":"b","title":"B","url":"https://b.example","isFeature":false,"isPermanent":false}
+              ]
+            }
+        """.trimIndent()
+
+        val inspection = BackupEngine.inspect(json)
+        requireNotNull(inspection)
+        assertTrue(BackupSection.SPEED_DIAL in inspection.available)
+        assertEquals(2, inspection.countFor(BackupSection.SPEED_DIAL))
+    }
+
+    @Test
     fun `detects legacy v1 settings-only file`() {
         val json = """
             {

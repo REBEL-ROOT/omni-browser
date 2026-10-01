@@ -18,6 +18,7 @@ package com.rebelroot.omni.backup
 enum class BackupSection(val key: String, val defaultEnabled: Boolean, val sensitive: Boolean) {
     SETTINGS("settings", defaultEnabled = true, sensitive = false),
     BOOKMARKS("bookmarks", defaultEnabled = true, sensitive = false),
+    SPEED_DIAL("speed_dial", defaultEnabled = true, sensitive = false),
     HISTORY("history", defaultEnabled = true, sensitive = false),
     TABS("tabs", defaultEnabled = true, sensitive = false),
     PASSWORDS("passwords", defaultEnabled = false, sensitive = true),

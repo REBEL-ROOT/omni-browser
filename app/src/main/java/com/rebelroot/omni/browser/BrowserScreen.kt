@@ -105,6 +105,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import org.mozilla.geckoview.GeckoView
 import com.rebelroot.omni.R
+import com.rebelroot.omni.browser.chrome.ChromeActionRegistry
 import com.rebelroot.omni.media.MediaInterceptor
 import com.rebelroot.omni.privacy.FireButton
 import com.rebelroot.omni.tools.qrcode.BarcodeGenerator
@@ -1590,7 +1591,7 @@ fun BrowserScreen(
                     }
                 }
 
-                if ((!viewModel.chromeNavBarEnabled || showHomeScreen) && viewModel.showBottomNavBar && !(showHomeScreen && viewModel.hideHomeBottomNav) && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused && !showBrowserRail) {
+                if ((!viewModel.chromeNavBarEnabled || showHomeScreen) && viewModel.showBottomNavBar && !(showHomeScreen && (viewModel.hideHomeBottomNav || viewModel.homeSearchBarAtBottom)) && !viewModel.isFullscreen && !isInputFocused && !isHomeSearchFocused && !showBrowserRail) {
                     // Flat minimal bottom bar: transparent and seamlessly blended on Home Screen, contoured on Webpages
                 val isDark = viewModel.isDarkThemeEnabled
                 // Adaptive: on medium+ widths the 5-button row is width-capped and
@@ -1637,8 +1638,147 @@ fun BrowserScreen(
                                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Square
                             )
                         }
+
+                        // Renders one navigation-bar slot from the action registry. Both
+                        // bars iterate their user-owned layout and call this, so button
+                        // membership, order and count are all data-driven.
+                        val renderNavAction: @Composable (String, androidx.compose.ui.unit.Dp) -> Unit = { actionId, touch ->
+                            when (actionId) {
+                                "back" -> {
+                                    val canBack = viewModel.canGoBack && !showHomeScreen
+                                    Box(
+                                        modifier = Modifier
+                                            .size(touch)
+                                            .clip(CircleShape)
+                                            .combinedClickable(
+                                                enabled = canBack,
+                                                onClick = { viewModel.goBack() },
+                                                onLongClick = {
+                                                    isBackHistorySheet = true
+                                                    showSessionHistorySheet = true
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = if (canBack) navContent else navContentMuted,
+                                            modifier = Modifier.size(config.innerIconSize)
+                                        )
+                                    }
+                                }
+                                "forward" -> {
+                                    val canForward = viewModel.canGoForward
+                                    Box(
+                                        modifier = Modifier
+                                            .size(touch)
+                                            .clip(CircleShape)
+                                            .combinedClickable(
+                                                enabled = canForward,
+                                                onClick = { viewModel.goForward() },
+                                                onLongClick = {
+                                                    isBackHistorySheet = false
+                                                    showSessionHistorySheet = true
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                            contentDescription = "Forward",
+                                            tint = if (canForward) navContent else navContentMuted,
+                                            modifier = Modifier.size(config.innerIconSize)
+                                        )
+                                    }
+                                }
+                                "reload" -> IconButton(onClick = { viewModel.reload() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Refresh, "Reload", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "home" -> IconButton(onClick = { viewModel.returnToHomeScreen() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Home, "Home", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "share" -> IconButton(onClick = {
+                                    val url = activeTab?.url
+                                    if (!url.isNullOrBlank() && url != "about:blank") {
+                                        try {
+                                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(android.content.Intent.EXTRA_TEXT, url)
+                                                putExtra(android.content.Intent.EXTRA_SUBJECT, activeTab?.title ?: "")
+                                            }
+                                            context.startActivity(
+                                                android.content.Intent.createChooser(send, "Share").apply {
+                                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                            )
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("OmniBrowser", "Share failed", e)
+                                        }
+                                    }
+                                }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Share, "Share", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "tools" -> IconButton(onClick = { showQuickToolsSheet = true }, modifier = Modifier.size(touch)) {
+                                    Icon(BlackholeIcon, "Tools", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "tabs" -> Box(
+                                    modifier = Modifier
+                                        .size(config.innerIconSize + 4.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .border(1.5.dp, navContent, RoundedCornerShape(5.dp))
+                                        .clickable { showTabGroupsSheet = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
+                                        color = navContent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                "menu" -> IconButton(onClick = { showAllInOneMenuSheet = true }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Menu, "Menu", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "quick_tools" -> IconButton(onClick = { showQuickToolsSheet = true }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.GridView, "Quick Tools", tint = navContent, modifier = Modifier.size(24.dp))
+                                }
+                                "customize_home" -> IconButton(onClick = { showCustomizationSheet = true }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Palette, stringResource(R.string.customize_home_cd), tint = navContent, modifier = Modifier.size(24.dp))
+                                }
+                                "news" -> IconButton(onClick = { onOpenNewsCenter() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.AutoMirrored.Rounded.Article, "News Center", tint = navContent, modifier = Modifier.size(24.dp))
+                                }
+                                "speed_dial" -> IconButton(onClick = { showSpeedDialSheet = true }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Apps, "Speed Dial", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "new_tab" -> IconButton(onClick = { viewModel.createNewTab(context, "about:blank") }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Add, "New Tab", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "bookmarks" -> IconButton(onClick = { onOpenBookmarks() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Bookmark, "Bookmarks", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "history" -> IconButton(onClick = { onOpenHistory() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.History, "History", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "downloads" -> IconButton(onClick = { onOpenDownloads() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Download, "Downloads", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "extensions" -> IconButton(onClick = { showExtensionsSheet = true }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Extension, "Extensions", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "settings" -> IconButton(onClick = { onOpenSettings() }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.Settings, "Settings", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                "incognito" -> IconButton(onClick = { viewModel.toggleIncognitoMode(context) }, modifier = Modifier.size(touch)) {
+                                    Icon(Icons.Rounded.VisibilityOff, "Incognito", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                }
+                                else -> {}
+                            }
+                        }
+
                         if (showHomeScreen) {
-                        // 4-Button Home Navigation Bar: Palette, News Center, Quick Tools, Menu
+                        // Home navigation bar — actions come from the user's nav_home_layout.
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center
@@ -1651,75 +1791,12 @@ fun BrowserScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            // 1. Palette Icon (Home Customization Sheet)
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                IconButton(
-                                    onClick = { showCustomizationSheet = true },
-                                    modifier = Modifier.size(adaptiveHomeNavTouch)
+                            viewModel.navHomeLayout.forEach { actionId ->
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Palette,
-                                        contentDescription = stringResource(R.string.customize_home_cd),
-                                        tint = navContent,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-
-                            // 2. News Center Icon (News Feed Screen)
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                IconButton(
-                                    onClick = { onOpenNewsCenter() },
-                                    modifier = Modifier.size(adaptiveHomeNavTouch)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.Article,
-                                        contentDescription = "News Center",
-                                        tint = navContent,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-
-                            // 3. Quick Tools Icon (Quick Tools Sheet)
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                IconButton(
-                                    onClick = { showQuickToolsSheet = true },
-                                    modifier = Modifier.size(adaptiveHomeNavTouch)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.GridView,
-                                        contentDescription = "Quick Tools",
-                                        tint = navContent,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-
-                            // 4. Menu Icon (Options / Tools Sheet)
-                            Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                IconButton(
-                                    onClick = { showAllInOneMenuSheet = true },
-                                    modifier = Modifier.size(adaptiveHomeNavTouch)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Menu,
-                                        contentDescription = "Menu",
-                                        tint = navContent,
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                    renderNavAction(actionId, adaptiveHomeNavTouch)
                                 }
                             }
                         }
@@ -1763,101 +1840,9 @@ fun BrowserScreen(
                                 },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Back
-                            val canBack = viewModel.canGoBack && !showHomeScreen
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(adaptiveNavTouch)
-                                        .clip(CircleShape)
-                                        .combinedClickable(
-                                            enabled = canBack,
-                                            onClick = { viewModel.goBack() },
-                                            onLongClick = {
-                                                isBackHistorySheet = true
-                                                showSessionHistorySheet = true
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = if (canBack) navContent else navContentMuted,
-                                        modifier = Modifier.size(config.innerIconSize)
-                                    )
-                                }
-                            }
-                            // Forward
-                            val canForward = viewModel.canGoForward
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(adaptiveNavTouch)
-                                        .clip(CircleShape)
-                                        .combinedClickable(
-                                            enabled = canForward,
-                                            onClick = { viewModel.goForward() },
-                                            onLongClick = {
-                                                isBackHistorySheet = false
-                                                showSessionHistorySheet = true
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                                        contentDescription = "Forward",
-                                        tint = if (canForward) navContent else navContentMuted,
-                                        modifier = Modifier.size(config.innerIconSize)
-                                    )
-                                }
-                            }
-                            // Tools
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                IconButton(
-                                    onClick = { showQuickToolsSheet = true },
-                                    modifier = Modifier.size(adaptiveNavTouch)
-                                ) {
-                                    Icon(
-                                        imageVector = BlackholeIcon,
-                                        contentDescription = "Tools",
-                                        tint = navContent,
-                                        modifier = Modifier.size(config.innerIconSize)
-                                    )
-                                }
-                            }
-                            // Tabs
-                            Box(
-                                modifier = Modifier.weight(1f).clickable { showTabGroupsSheet = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(config.innerIconSize + 4.dp)
-                                        .border(1.5.dp, navContent, RoundedCornerShape(5.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
-                                        color = navContent,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            // Menu
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                IconButton(
-                                    onClick = { showAllInOneMenuSheet = true },
-                                    modifier = Modifier.size(adaptiveNavTouch)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Menu,
-                                        contentDescription = "Menu",
-                                        tint = navContent,
-                                        modifier = Modifier.size(config.innerIconSize)
-                                    )
+                            viewModel.navPageLayout.forEach { actionId ->
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    renderNavAction(actionId, adaptiveNavTouch)
                                 }
                             }
                         }
@@ -1980,15 +1965,21 @@ fun BrowserScreen(
                                 // and resizing GeckoView causes Android SurfaceView destruction, dropping active MediaCodec decoders.
                                 val bannerHeight = 0.dp
 
-                                val geckoTopPad = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) {
-                                    (topBarMeasuredDp * (1f - topBarFraction)) + bannerHeight
+                                val geckoTopOffset = if (hasTopBar && !viewModel.isFullscreen && !(isKeyboardVisible && !isInputFocused && !isEditMode)) {
+                                    topBarMeasuredDp * (1f - topBarFraction)
                                 } else 0.dp
-                                val geckoBottomPad = if (!viewModel.isFullscreen) bottomNavBarHeight * (1f - bottomBarFraction) else 0.dp
+
+                                // Bottom chrome overlay mode: Keep GeckoView viewport stable during auto-hide scroll animations
+                                // so the bottom bar slides smoothly over the rendered webpage without SurfaceView buffer resizing
+                                // or exposing a blank gap between the descending bar and the web viewport.
+                                val geckoBottomPad = if (!viewModel.isFullscreen && !navHideBottomActive) bottomNavBarHeight else 0.dp
                                 
                                 BoxWithConstraints(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(top = geckoTopPad, bottom = geckoBottomPad)
+                                        .offset { IntOffset(0, geckoTopOffset.roundToPx()) }
+                                        .clipToBounds()
+                                        .padding(bottom = geckoBottomPad)
                                         // Issue #115: shrink the web viewport above the soft
                                         // keyboard whenever the IME is visible. With
                                         // edge-to-edge (decorFitsSystemWindows=false) the window
@@ -7664,6 +7655,7 @@ fun BrowserScreen(
                 val isDark = viewModel.isDarkThemeEnabled
                 val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
                 var lastSwapMs by remember { mutableStateOf(0L) }
+                var isEditingTools by remember { mutableStateOf(false) }
 
                 ModalBottomSheet(
                     onDismissRequest = { showQuickToolsSheet = false },
@@ -7695,12 +7687,25 @@ fun BrowserScreen(
                                 fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                text = stringResource(id = R.string.quick_tools_reorder_hint),
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                fontWeight = FontWeight.Medium
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!isEditingTools) {
+                                    Text(
+                                        text = stringResource(id = R.string.quick_tools_reorder_hint),
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                TextButton(onClick = { isEditingTools = !isEditingTools }) {
+                                    Text(
+                                        text = stringResource(
+                                            id = if (isEditingTools) R.string.quick_tools_done else R.string.quick_tools_edit
+                                        ),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
 
                         HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
@@ -7708,34 +7713,24 @@ fun BrowserScreen(
                         val cardModifier = Modifier.width(72.dp)
                         val isEditing = activeTab?.isEditModeEnabled ?: false
 
-                        // Stable ordered list that reacts to ViewModel state
+                        // The user-owned quick tools layout, resolved against the action registry.
+                        val allToolIds = ChromeActionRegistry.QUICK_TOOL_IDS
                         val toolOrderState = remember(viewModel.quickToolsOrder) {
                             mutableStateListOf<String>().also { list ->
-                                val vmOrder = viewModel.quickToolsOrder
-                                 val allTools = listOf(
-                                    "image_grabber", "page_inspector", "block_area", "spoof_identity", "force_zoom", "vpn",
-                                    "torrent_downloader", "omni_config",
-                                    "qr_scanner", "safe_locker", "translator", "edit_page",
-                                    "save_pdf", "pin_web_app", "auto_scroll", "qr_scan_page",
-                                    "qr_generator", "console_log", "dev_notes", "site_style"
-                                )
-                                list.addAll(vmOrder.filter { it in allTools } + allTools.filter { it !in vmOrder })
+                                val placed = viewModel.quickToolsOrder.filter { it in allToolIds }.distinct()
+                                list.addAll(if (placed.isEmpty()) allToolIds else placed)
                             }
                         }
+                        fun persistTools() = viewModel.saveQuickToolsOrder(context, toolOrderState.toList())
                         var draggedId by remember { mutableStateOf<String?>(null) }
                         val itemCenters = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Offset>() }
                         var gridTopLeft by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
-                        // Resolve tool display info
+                        // Resolve tool display info. Static label/icon come from the registry;
+                        // only state-dependent variants are resolved here.
                         fun toolTitle(id: String): String = when (id) {
-                            "image_grabber"       -> context.getString(R.string.tool_image_grabber)
-                            "page_inspector"      -> context.getString(R.string.tool_page_inspector)
-                            "block_area"          -> context.getString(R.string.tool_block_area)
-                            "spoof_identity"      -> "Spoof Identity"
-                            "torrent_downloader"  -> "Torrent & Magnet"
-                            "omni_config"         -> "omni:config"
-                            "force_zoom"          -> if (viewModel.accessibilityForceZoom) context.getString(R.string.tool_force_zoom_on) else context.getString(R.string.tool_force_zoom)
-                            "vpn"                 -> when (viewModel.proxyProvider) {
+                            "force_zoom" -> if (viewModel.accessibilityForceZoom) context.getString(R.string.tool_force_zoom_on) else context.getString(R.string.tool_force_zoom)
+                            "vpn" -> when (viewModel.proxyProvider) {
                                 "tor", "tor_builtin" -> {
                                     val state = viewModel.activeTorState().value
                                     if (state is com.rebelroot.omni.privacy.TorState.Connected) context.getString(R.string.tool_vpn_tor_on) else context.getString(R.string.tool_vpn_tor)
@@ -7746,48 +7741,21 @@ fun BrowserScreen(
                                 }
                                 else -> context.getString(R.string.tool_network)
                             }
-                            "qr_scanner"     -> context.getString(R.string.tool_qr_scanner)
-                            "safe_locker"    -> context.getString(R.string.tool_safe_locker)
-                            "translator"     -> context.getString(R.string.tool_translator)
-                            "edit_page"      -> if (isEditing) context.getString(R.string.tool_stop_edit) else context.getString(R.string.tool_edit_page)
-                            "save_pdf"       -> context.getString(R.string.tool_save_pdf)
-                            "pin_web_app"    -> context.getString(R.string.tool_pin_web_app)
-                            "auto_scroll"    -> context.getString(R.string.tool_auto_scroll)
-                            "qr_scan_page"   -> context.getString(R.string.tool_qr_scan_page)
-                            "qr_generator"   -> context.getString(R.string.tool_qr_generator)
-                            "console_log"    -> context.getString(R.string.tool_console_log)
-                            "dev_notes"      -> context.getString(R.string.tool_dev_notes)
-                            "site_style"     -> context.getString(R.string.tool_site_style)
-                            "omni_beam"      -> "Omni Beam"
-                            else -> id
+                            "edit_page" -> if (isEditing) context.getString(R.string.tool_stop_edit) else context.getString(R.string.tool_edit_page)
+                            else -> {
+                                val action = ChromeActionRegistry.find(id)
+                                action?.labelRes?.let { context.getString(it) }
+                                    ?: action?.labelLiteral
+                                    ?: id
+                            }
                         }
                         fun toolIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector = when (id) {
-                            "image_grabber"      -> Icons.Rounded.Collections
-                            "page_inspector"     -> Icons.Rounded.Code
-                            "block_area"          -> Icons.Rounded.LayersClear
-                            "spoof_identity"      -> Icons.Rounded.Devices
-                            "torrent_downloader"  -> Icons.Rounded.Download
-                            "omni_config"         -> Icons.Rounded.Tune
-                            "force_zoom"          -> Icons.Rounded.ZoomIn
-                            "vpn"                 -> when (viewModel.proxyProvider) {
+                            "vpn" -> when (viewModel.proxyProvider) {
                                 "tor" -> Icons.Rounded.Security
                                 "wireguard" -> Icons.Rounded.VpnKey
                                 else -> Icons.Rounded.Public
                             }
-                            "qr_scanner"     -> Icons.Rounded.QrCodeScanner
-                            "safe_locker"    -> Icons.Rounded.Lock
-                            "translator"     -> Icons.Rounded.Translate
-                            "edit_page"      -> Icons.Rounded.Edit
-                            "save_pdf"       -> Icons.Rounded.Print
-                            "pin_web_app"    -> Icons.AutoMirrored.Rounded.OpenInNew
-                            "auto_scroll"    -> Icons.Rounded.ArrowDownward
-                            "qr_scan_page"   -> Icons.Rounded.CenterFocusWeak
-                            "qr_generator"   -> Icons.Rounded.QrCode2
-                            "console_log"    -> Icons.Rounded.Terminal
-                            "dev_notes"      -> Icons.Rounded.Description
-                            "site_style"     -> Icons.Rounded.Palette
-                            "omni_beam"      -> Icons.Rounded.Devices
-                            else -> Icons.Rounded.Build
+                            else -> ChromeActionRegistry.iconFor(id)
                         }
                         fun toolAction(id: String): () -> Unit = when (id) {
                             "image_grabber" -> ({
@@ -8013,17 +7981,103 @@ fun BrowserScreen(
                                                     } else {
                                                         cardModifier
                                                     }
-                                                    ToolCard(
-                                                        title = toolTitle(toolId),
-                                                        icon = toolIcon(toolId),
-                                                        isDarkTheme = isDark,
-                                                        modifier = toolCardModifier,
-                                                        isCompact = true,
-                                                        onClick = if (isDragged) ({}) else toolAction(toolId)
-                                                    )
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        ToolCard(
+                                                            title = toolTitle(toolId),
+                                                            icon = toolIcon(toolId),
+                                                            isDarkTheme = isDark,
+                                                            modifier = toolCardModifier,
+                                                            isCompact = true,
+                                                            onClick = if (isDragged || isEditingTools) ({}) else toolAction(toolId)
+                                                        )
+                                                        if (isEditingTools && !isDragged) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .align(Alignment.TopEnd)
+                                                                    .size(20.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6))
+                                                                    .clickable {
+                                                                        if (toolOrderState.size <= 1) {
+                                                                            Toast.makeText(context, context.getString(R.string.quick_tools_min_one), Toast.LENGTH_SHORT).show()
+                                                                        } else {
+                                                                            toolOrderState.remove(toolId)
+                                                                            persistTools()
+                                                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                                                        }
+                                                                    },
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Rounded.Close,
+                                                                    contentDescription = stringResource(R.string.quick_tools_remove_tool, toolTitle(toolId)),
+                                                                    tint = if (isDark) Color(0xFFEAEAEA) else Color(0xFF3C3C43),
+                                                                    modifier = Modifier.size(13.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
+                                    }
+                                }
+                            }
+                        }
+
+                        val availableToolIds = allToolIds.filter { it !in toolOrderState }
+                        if (isEditingTools) {
+                            HorizontalDivider(color = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+                            Text(
+                                text = stringResource(R.string.quick_tools_add_title),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (availableToolIds.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.quick_tools_all_added),
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                availableToolIds.chunked(2).forEach { row ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        row.forEach { toolId ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+                                                    .clickable {
+                                                        toolOrderState.add(toolId)
+                                                        persistTools()
+                                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = toolIcon(toolId),
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = toolTitle(toolId),
+                                                    fontSize = 11.5.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                        repeat(2 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
                                     }
                                 }
                             }

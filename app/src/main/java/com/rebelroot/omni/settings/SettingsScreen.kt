@@ -703,10 +703,10 @@ fun SettingsScreen(
                         DropdownMenu(
                             expanded = showLanguageDropdown,
                             onDismissRequest = { showLanguageDropdown = false },
-                            modifier = Modifier
-                                .fillMaxWidth(0.9f)
-                                .background(cardColor)
-                                .border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(12.dp))
+                            modifier = Modifier.fillMaxWidth(0.9f),
+                            shape = RoundedCornerShape(12.dp),
+                            containerColor = cardColor,
+                            border = BorderStroke(0.5.dp, cardBorderColor)
                         ) {
                             languages.forEach { (code, name) ->
                                 DropdownMenuItem(
@@ -778,7 +778,10 @@ fun SettingsScreen(
                                 Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = textSecondaryColor, modifier = Modifier.size(16.dp))
                             }
                             DropdownMenu(expanded = pdfExpanded, onDismissRequest = { pdfExpanded = false },
-                                modifier = Modifier.width(150.dp).background(cardColor).border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))) {
+                                modifier = Modifier.width(150.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                containerColor = cardColor,
+                                border = BorderStroke(0.5.dp, cardBorderColor)) {
                                 pdfThemes.forEach { (value, label) ->
                                     DropdownMenuItem(
                                         text = { Text(label, color = textPrimaryColor, fontSize = 12.sp) },
@@ -939,7 +942,10 @@ fun SettingsScreen(
                                 Icon(if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = textSecondaryColor)
                             }
                             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false },
-                                modifier = Modifier.fillMaxWidth(0.9f).background(cardColor).border(BorderStroke(0.5.dp, cardBorderColor), RoundedCornerShape(8.dp))) {
+                                modifier = Modifier.fillMaxWidth(0.9f),
+                                shape = RoundedCornerShape(8.dp),
+                                containerColor = cardColor,
+                                border = BorderStroke(0.5.dp, cardBorderColor)) {
                                 engines.forEach { engine ->
                                     DropdownMenuItem(
                                         text = { Text(engine, color = textPrimaryColor) },

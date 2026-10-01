@@ -577,14 +577,17 @@ class MainActivity : FragmentActivity() {
                             com.rebelroot.omni.settings.BackupScreen(
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
-                                onRestored = {
-                                    // Many settings (layout, addresses bar, wallpaper…)
+                                onRestored = { tabsRestored ->
+                                    // Many settings (layout, address bar, wallpaper…)
                                     // are loaded once into the retained ViewModel, so a
-                                    // recreate() would not apply them. Persist the tab
-                                    // session, then relaunch the process so every restored
-                                    // value is read fresh.
-                                    browserViewModel.saveTabs()
-                                    browserViewModel.saveTabGroups()
+                                    // recreate() would not apply them. Relaunch the
+                                    // process so every restored value is read fresh.
+                                    // Do NOT overwrite the tab session when tabs were
+                                    // just restored, or the restored tabs are lost.
+                                    if (!tabsRestored) {
+                                        browserViewModel.saveTabs()
+                                        browserViewModel.saveTabGroups()
+                                    }
                                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                                         val relaunch = packageManager.getLaunchIntentForPackage(packageName)?.apply {
                                             addFlags(

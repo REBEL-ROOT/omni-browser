@@ -676,7 +676,8 @@ fun LanguageDropdownSelector(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
-            modifier = Modifier.heightIn(max = 240.dp).background(Color(0xFF16222F))
+            modifier = Modifier.heightIn(max = 240.dp),
+            containerColor = Color(0xFF16222F)
         ) {
             languages.forEach { lang ->
                 DropdownMenuItem(

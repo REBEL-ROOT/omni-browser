@@ -221,6 +221,7 @@ class BrowserViewModel : ViewModel() {
         val SHOW_DISCOVER_FEED_KEY = booleanPreferencesKey("show_discover_feed")
         val SHOW_BOTTOM_NAV_BAR_KEY = booleanPreferencesKey("show_bottom_nav_bar")
         val HIDE_HOME_BOTTOM_NAV_KEY = booleanPreferencesKey("hide_home_bottom_nav")
+        val HOME_SEARCH_BAR_AT_BOTTOM_KEY = booleanPreferencesKey("home_search_bar_at_bottom")
         val CHROME_NAV_BAR_KEY = booleanPreferencesKey("chrome_nav_bar_enabled")
         val SHOW_HOME_LOGO_KEY = booleanPreferencesKey("show_home_logo")
         val SHOW_HOME_SHORTCUTS_KEY = booleanPreferencesKey("show_home_shortcuts")
@@ -237,6 +238,12 @@ class BrowserViewModel : ViewModel() {
         val MINIMALIST_FOCUS_MODE_KEY = booleanPreferencesKey("minimalist_focus_mode")
         val TRACKERS_BLOCKED_COUNT_KEY = intPreferencesKey("trackers_blocked_count")
         val QUICK_TOOLS_ORDER_KEY = stringPreferencesKey("quick_tools_order")
+        val QUICK_TOOLS_LAYOUT_KEY = stringPreferencesKey("quick_tools_layout")
+        val NAV_HOME_LAYOUT_KEY = stringPreferencesKey("nav_home_layout")
+        val NAV_PAGE_LAYOUT_KEY = stringPreferencesKey("nav_page_layout")
+        val ADDRESSBAR_LEADING_LAYOUT_KEY = stringPreferencesKey("addressbar_leading_layout")
+        val ADDRESSBAR_TRAILING_LAYOUT_KEY = stringPreferencesKey("addressbar_trailing_layout")
+        val HOME_SECTIONS_LAYOUT_KEY = stringPreferencesKey("home_sections_layout")
         val MEDIA_SNIFFER_BLOCKLIST_KEY = stringSetPreferencesKey("media_sniffer_blocklist")
         val MEDIA_SNIFFER_MIN_DURATION_SEC_KEY = intPreferencesKey("media_sniffer_min_duration_sec")
         val NEVER_SAVE_PASSWORD_DOMAINS_KEY = stringSetPreferencesKey("never_save_password_domains")
@@ -278,6 +285,10 @@ class BrowserViewModel : ViewModel() {
         val ACCESSIBILITY_FORCE_ZOOM_KEY = booleanPreferencesKey("accessibility_force_zoom")
         val ACCESSIBILITY_HIGH_CONTRAST_KEY = booleanPreferencesKey("accessibility_high_contrast")
         val TAB_GROUPS_FILE = "browser_tab_groups.json"
+
+        /** Marker set when a backup restore writes a tab session that must be
+         *  loaded on the next cold start instead of being overwritten. */
+        const val PENDING_TAB_RESTORE_FILE = "pending_tab_restore"
         
         val DEFAULT_GEOLOCATION_KEY = stringPreferencesKey("default_geolocation")
         val DEFAULT_CAMERA_KEY = stringPreferencesKey("default_camera")
@@ -548,6 +559,27 @@ class BrowserViewModel : ViewModel() {
     )
     var quickToolsOrder by mutableStateOf(DEFAULT_QUICK_TOOLS_ORDER)
 
+    // User-owned layouts for the two bottom navigation bars. Defaults reproduce the
+    // historical fixed bars exactly, so existing users see no change until they edit.
+    val DEFAULT_NAV_HOME_LAYOUT = listOf("customize_home", "news", "quick_tools", "menu")
+    val DEFAULT_NAV_PAGE_LAYOUT = listOf("back", "forward", "tools", "tabs", "menu")
+    var navHomeLayout by mutableStateOf(DEFAULT_NAV_HOME_LAYOUT)
+    var navPageLayout by mutableStateOf(DEFAULT_NAV_PAGE_LAYOUT)
+
+    // All-in-one address bar is split into two clusters around the omnibox. Defaults
+    // reproduce the historical fixed bar exactly.
+    val DEFAULT_ADDRESSBAR_LEADING_LAYOUT = listOf("new_tab", "speed_dial", "tools")
+    val DEFAULT_ADDRESSBAR_TRAILING_LAYOUT = listOf("extensions", "tabs", "menu")
+    var addressBarLeadingLayout by mutableStateOf(DEFAULT_ADDRESSBAR_LEADING_LAYOUT)
+    var addressBarTrailingLayout by mutableStateOf(DEFAULT_ADDRESSBAR_TRAILING_LAYOUT)
+
+    // Order + membership of the home/new-tab sections, top to bottom. Authoritative:
+    // the legacy show_home_* toggles only seed this on first run.
+    val DEFAULT_HOME_SECTIONS_LAYOUT = listOf(
+        "section_logo", "section_search", "section_shortcuts", "section_recents", "section_privacy"
+    )
+    var homeSectionsLayout by mutableStateOf(DEFAULT_HOME_SECTIONS_LAYOUT)
+
     // UI States
     var currentUrl by mutableStateOf("about:blank")
     var isFullscreen by mutableStateOf(false)
@@ -785,6 +817,8 @@ class BrowserViewModel : ViewModel() {
     var showHomeRecents by mutableStateOf(true)
     var showBottomNavBar by mutableStateOf(true)
     var hideHomeBottomNav by mutableStateOf(false)
+    /** New home layout: search bar pinned above the keyboard instead of the top. */
+    var homeSearchBarAtBottom by mutableStateOf(false)
     var chromeNavBarEnabled by mutableStateOf(false)
     var uiScale by mutableStateOf(com.rebelroot.omni.UiStateHolder.uiScale)
     var wallpaperDim by mutableStateOf(com.rebelroot.omni.UiStateHolder.wallpaperDim)
@@ -1831,6 +1865,9 @@ class BrowserViewModel : ViewModel() {
     // --- Tab Management ---
     fun saveTabs() {
         val context = appContext ?: return
+        // A backup restore wrote a tab session that must survive until the next
+        // cold start loads it — don't clobber it with the current live session.
+        if (File(context.filesDir, PENDING_TAB_RESTORE_FILE).exists()) return
         // Do not persist incognito tabs to disk. This ensures they are automatically
         // closed when the browser is closed / process is terminated.
         val tabsSnapshot = tabs.filter { !it.isIncognito }
@@ -2385,6 +2422,10 @@ class BrowserViewModel : ViewModel() {
                 pendingIntentUrl = null
                 createNewTab(context, urlToLoad)
             }
+
+            // The restored tab session (if any) has now been consumed, so allow
+            // saveTabs() to persist the live session again.
+            File(context.filesDir, PENDING_TAB_RESTORE_FILE).delete()
         }
     }
 
@@ -3575,6 +3616,7 @@ class BrowserViewModel : ViewModel() {
                     showDiscoverFeed = prefs[SHOW_DISCOVER_FEED_KEY] ?: false
                     showBottomNavBar = prefs[SHOW_BOTTOM_NAV_BAR_KEY] ?: true
                     hideHomeBottomNav = prefs[HIDE_HOME_BOTTOM_NAV_KEY] ?: false
+                    homeSearchBarAtBottom = prefs[HOME_SEARCH_BAR_AT_BOTTOM_KEY] ?: false
                     chromeNavBarEnabled = prefs[CHROME_NAV_BAR_KEY] ?: false
                     showHomeLogo = prefs[SHOW_HOME_LOGO_KEY] ?: true
                     showHomeShortcuts = prefs[SHOW_HOME_SHORTCUTS_KEY] ?: true
@@ -3598,12 +3640,53 @@ class BrowserViewModel : ViewModel() {
                         try { ExtensionDownloadPolicy.valueOf(it) } catch (e: Exception) { ExtensionDownloadPolicy.ASK_EVERY_TIME }
                     } ?: ExtensionDownloadPolicy.ASK_EVERY_TIME
                     quickToolsOrder = run {
-                        val saved = prefs[QUICK_TOOLS_ORDER_KEY]
-                        val default = DEFAULT_QUICK_TOOLS_ORDER
-                        if (!saved.isNullOrBlank()) {
-                            val savedList = saved.split(",").map { if (it == "ad_blocker") "vpn" else it }.filter { it.isNotBlank() && it != "ad_blocker" }.distinct()
-                            savedList + default.filter { it !in savedList }
-                        } else default
+                        fun normalize(raw: String): List<String> = raw.split(",")
+                            .map { if (it == "ad_blocker") "vpn" else it }
+                            .filter { it.isNotBlank() && it != "ad_blocker" }
+                            .distinct()
+                        val layout = prefs[QUICK_TOOLS_LAYOUT_KEY]
+                        when {
+                            // The user's own layout wins verbatim: removing a tool must stick.
+                            !layout.isNullOrBlank() -> normalize(layout)
+                            else -> {
+                                // One-time migration from the legacy order-only key, which
+                                // used to be unioned with the defaults on every load.
+                                val saved = prefs[QUICK_TOOLS_ORDER_KEY]
+                                val default = DEFAULT_QUICK_TOOLS_ORDER
+                                if (!saved.isNullOrBlank()) {
+                                    val savedList = normalize(saved)
+                                    savedList + default.filter { it !in savedList }
+                                } else default
+                            }
+                        }
+                    }
+                    navHomeLayout = prefs[NAV_HOME_LAYOUT_KEY]?.split(",")
+                        ?.filter { it.isNotBlank() }?.distinct()?.takeIf { it.isNotEmpty() }
+                        ?: DEFAULT_NAV_HOME_LAYOUT
+                    navPageLayout = prefs[NAV_PAGE_LAYOUT_KEY]?.split(",")
+                        ?.filter { it.isNotBlank() }?.distinct()?.takeIf { it.isNotEmpty() }
+                        ?: DEFAULT_NAV_PAGE_LAYOUT
+                    // Address-bar clusters may legitimately be empty, so distinguish "absent"
+                    // (null -> default) from "present but empty" (empty list).
+                    addressBarLeadingLayout = prefs[ADDRESSBAR_LEADING_LAYOUT_KEY]
+                        ?.split(",")?.filter { it.isNotBlank() }?.distinct()
+                        ?: DEFAULT_ADDRESSBAR_LEADING_LAYOUT
+                    addressBarTrailingLayout = prefs[ADDRESSBAR_TRAILING_LAYOUT_KEY]
+                        ?.split(",")?.filter { it.isNotBlank() }?.distinct()
+                        ?: DEFAULT_ADDRESSBAR_TRAILING_LAYOUT
+                    homeSectionsLayout = run {
+                        val saved = prefs[HOME_SECTIONS_LAYOUT_KEY]
+                            ?.split(",")?.filter { it.isNotBlank() }?.distinct()
+                        if (!saved.isNullOrEmpty()) saved
+                        else buildList {
+                            // First run: seed order/membership from the legacy toggles so
+                            // an existing home screen is preserved exactly.
+                            if (showHomeLogo) add("section_logo")
+                            add("section_search")
+                            if (showHomeShortcuts) add("section_shortcuts")
+                            if (showHomeRecents) add("section_recents")
+                            if (showPrivacyStatsWidget) add("section_privacy")
+                        }
                     }
                 }
             }
@@ -4911,6 +4994,13 @@ class BrowserViewModel : ViewModel() {
         }
     }
 
+    fun saveHomeSearchBarAtBottom(context: Context, enabled: Boolean) {
+        viewModelScope.launch {
+            context.dataStore.edit { it[HOME_SEARCH_BAR_AT_BOTTOM_KEY] = enabled }
+            homeSearchBarAtBottom = enabled
+        }
+    }
+
     fun saveChromeNavBarEnabled(context: Context, enabled: Boolean) {
         viewModelScope.launch {
             context.dataStore.edit { it[CHROME_NAV_BAR_KEY] = enabled }
@@ -5106,10 +5196,51 @@ class BrowserViewModel : ViewModel() {
 
     fun saveQuickToolsOrder(context: Context, order: List<String>) {
         viewModelScope.launch {
+            val serialized = order.joinToString(",")
             context.dataStore.edit { prefs ->
-                prefs[QUICK_TOOLS_ORDER_KEY] = order.joinToString(",")
+                prefs[QUICK_TOOLS_LAYOUT_KEY] = serialized
+                prefs[QUICK_TOOLS_ORDER_KEY] = serialized
             }
             quickToolsOrder = order
+        }
+    }
+
+    /**
+     * Persist a bottom-navigation-bar layout. [isHome] selects the home-screen bar vs the
+     * webpage bar. The caller keeps at least one action in the list.
+     */
+    fun saveNavLayout(context: Context, isHome: Boolean, layout: List<String>) {
+        viewModelScope.launch {
+            val serialized = layout.joinToString(",")
+            context.dataStore.edit { prefs ->
+                if (isHome) prefs[NAV_HOME_LAYOUT_KEY] = serialized
+                else prefs[NAV_PAGE_LAYOUT_KEY] = serialized
+            }
+            if (isHome) navHomeLayout = layout else navPageLayout = layout
+        }
+    }
+
+    /**
+     * Persist one all-in-one address-bar cluster ([isLeading] = before the omnibox).
+     * Unlike the bottom bars these clusters are allowed to be empty.
+     */
+    fun saveAddressBarLayout(context: Context, isLeading: Boolean, layout: List<String>) {
+        viewModelScope.launch {
+            val serialized = layout.joinToString(",")
+            context.dataStore.edit { prefs ->
+                if (isLeading) prefs[ADDRESSBAR_LEADING_LAYOUT_KEY] = serialized
+                else prefs[ADDRESSBAR_TRAILING_LAYOUT_KEY] = serialized
+            }
+            if (isLeading) addressBarLeadingLayout = layout else addressBarTrailingLayout = layout
+        }
+    }
+
+    /** Persist the home-section order/membership (authoritative over the legacy toggles). */
+    fun saveHomeSectionsLayout(context: Context, layout: List<String>) {
+        viewModelScope.launch {
+            val serialized = layout.joinToString(",")
+            context.dataStore.edit { prefs -> prefs[HOME_SECTIONS_LAYOUT_KEY] = serialized }
+            homeSectionsLayout = layout
         }
     }
 
@@ -7653,37 +7784,36 @@ class BrowserViewModel : ViewModel() {
     var isImporting by mutableStateOf(false)
 
     val shortcutsList = mutableStateListOf<HomeShortcut>()
-    
+
+    /**
+     * Pre-loaded website shortcuts (social sites and torrent sites) that the app
+     * used to install automatically. They are stripped on load so an existing
+     * install keeps only the permanent RebelRoot tile and the built-in feature
+     * tiles below.
+     */
+    private val legacyDefaultShortcutIds = setOf(
+        "twitter", "spotify", "amazon", "pinterest",
+        "1337x", "piratebay", "yts", "torrentgalaxy", "eztv", "fitgirl",
+        "limetorrents", "nyaa", "rutracker", "academictorrents"
+    )
+
+    /** Built-in launcher tiles (Downloads/History/Bookmarks/Incognito), always present. */
+    private val builtInFeatureShortcuts = listOf(
+        HomeShortcut("downloads", "Downloads", "downloads", isFeature = true),
+        HomeShortcut("history", "History", "history", isFeature = true),
+        HomeShortcut("bookmarks", "Bookmarks", "bookmarks", isFeature = true),
+        HomeShortcut("incognito", "Incognito", "incognito", isFeature = true)
+    )
+
     fun loadShortcuts(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            val torrentShortcuts = listOf(
-                HomeShortcut("1337x", "1337x", "https://1337x.to"),
-                HomeShortcut("piratebay", "The Pirate Bay", "https://thepiratebay.org"),
-                HomeShortcut("yts", "YTS Movies", "https://yts.mx"),
-                HomeShortcut("torrentgalaxy", "TorrentGalaxy", "https://torrentgalaxy.mx"),
-                HomeShortcut("eztv", "EZTV Series", "https://eztv.re"),
-                HomeShortcut("fitgirl", "FitGirl Repacks", "https://fitgirl-repacks.site"),
-                HomeShortcut("limetorrents", "LimeTorrents", "https://www.limetorrents.lol"),
-                HomeShortcut("nyaa", "Nyaa Anime", "https://nyaa.si"),
-                HomeShortcut("rutracker", "RuTracker", "https://rutracker.org"),
-                HomeShortcut("academictorrents", "Academic Torrents", "https://academictorrents.com")
-            )
             val file = File(context.filesDir, "browser_shortcuts.json")
             if (!file.exists()) {
+                // RebelRoot plus the built-in feature tiles; everything else is user-added.
                 val defaultList = mutableListOf(
-                    HomeShortcut("rebelroot", "RebelRoot", "https://www.rebelroot.xyz/omnibrowser", isPermanent = true),
-                    HomeShortcut("twitter", "Twitter", "https://twitter.com"),
-                    HomeShortcut("spotify", "Spotify", "https://spotify.com"),
-                    HomeShortcut("amazon", "Amazon", "https://amazon.com"),
-                    HomeShortcut("pinterest", "Pinterest", "https://pinterest.com")
+                    HomeShortcut("rebelroot", "RebelRoot", "https://www.rebelroot.xyz/omnibrowser", isPermanent = true)
                 )
-                defaultList.addAll(torrentShortcuts)
-                defaultList.addAll(listOf(
-                    HomeShortcut("downloads", "Downloads", "downloads", isFeature = true),
-                    HomeShortcut("history", "History", "history", isFeature = true),
-                    HomeShortcut("bookmarks", "Bookmarks", "bookmarks", isFeature = true),
-                    HomeShortcut("incognito", "Incognito", "incognito", isFeature = true)
-                ))
+                defaultList.addAll(builtInFeatureShortcuts)
                 withContext(Dispatchers.Main) {
                     shortcutsList.clear()
                     shortcutsList.addAll(defaultList)
@@ -7697,15 +7827,18 @@ class BrowserViewModel : ViewModel() {
                 
                 // Always ensure the permanent RebelRoot shortcut is at the beginning
                 temp.add(HomeShortcut("rebelroot", "RebelRoot", "https://www.rebelroot.xyz/omnibrowser", isPermanent = true))
-                
+
+                var shortcutsChanged = false
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
                     val id = obj.optString("id", "")
                     val title = obj.optString("title", "")
                     val url = obj.optString("url", "")
                     
-                    // Skip duplicate/old RebelRoot entries and about:blank
-                    if (id == "rebelroot" || url == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true) || url.isBlank() || url == "about:blank" || url.contains("about:blank")) {
+                    // Skip duplicate/old RebelRoot entries, about:blank, and the pre-loaded
+                    // website shortcuts the app used to install automatically.
+                    if (id == "rebelroot" || url == "https://www.rebelroot.xyz/omnibrowser" || title.equals("RebelRoot", ignoreCase = true) || url.isBlank() || url == "about:blank" || url.contains("about:blank") || id in legacyDefaultShortcutIds) {
+                        shortcutsChanged = true
                         continue
                     }
                     
@@ -7735,21 +7868,12 @@ class BrowserViewModel : ViewModel() {
                     ))
                 }
 
-                // Ensure popular torrent shortcuts are present if missing and updated if outdated
-                for (ts in torrentShortcuts) {
-                    val existingIndex = temp.indexOfFirst { it.id == ts.id }
-                    if (existingIndex != -1) {
-                        val existing = temp[existingIndex]
-                        if (existing.url != ts.url) {
-                            temp[existingIndex] = existing.copy(url = ts.url)
-                        }
-                    } else if (temp.none { it.url == ts.url }) {
-                        val featureIndex = temp.indexOfFirst { it.isFeature }
-                        if (featureIndex != -1) {
-                            temp.add(featureIndex, ts)
-                        } else {
-                            temp.add(ts)
-                        }
+                // Restore the built-in launcher tiles if they are missing (e.g. pruned by an
+                // earlier version) so Downloads/History/Bookmarks/Incognito always show.
+                for (feature in builtInFeatureShortcuts) {
+                    if (temp.none { it.id == feature.id }) {
+                        temp.add(feature)
+                        shortcutsChanged = true
                     }
                 }
 
@@ -7758,6 +7882,8 @@ class BrowserViewModel : ViewModel() {
                     shortcutsList.clear()
                     shortcutsList.addAll(cleanTemp)
                 }
+                // Persist the cleanup/addition so the list stays stable next launch.
+                if (shortcutsChanged) saveShortcuts(context)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading shortcuts", e)
             }
@@ -10317,7 +10443,10 @@ class BrowserViewModel : ViewModel() {
         isDynamicColorEnabled = prefs[DYNAMIC_COLOR_KEY] ?: false
         ThemeStateHolder.dynamicColorEnabled = isDynamicColorEnabled
         isCreamyMode = prefs[CREAMY_MODE_KEY] ?: false
-        updateGeckoColorScheme()
+        // updateGeckoColorScheme() drives GeckoView (and the built-in extension
+        // manager), which must run on the Gecko handler/main thread. Restore runs
+        // on IO, so hop to Main and never let this break the restore.
+        runCatching { withContext(Dispatchers.Main.immediate) { updateGeckoColorScheme() } }
     }
 
     // -------------------------------------------------------------------------

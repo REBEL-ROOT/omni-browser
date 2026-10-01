@@ -173,6 +173,187 @@ fun PhoneAddressBar(
     var dragAmountAccumulated by remember { mutableFloatStateOf(0f) }
     val isBottom = viewModel.addressBarPosition == "Bottom"
 
+    /**
+     * The all-in-one bar's menu button. Kept position-adaptive on purpose: at the top it
+     * opens the inline dropdown, at the bottom it opens the All-In-One sheet.
+     */
+    @Composable
+    fun AddressBarMenu() {
+        val isTopBar = viewModel.addressBarPosition == "Top"
+        val isMenuVisible = isTopBar || (!isInputFocused && (!viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled))
+        AnimatedVisibility(visible = isMenuVisible) {
+            Box(
+                modifier = Modifier.size(config.barIconSize)
+            ) {
+                IconButton(
+                    onClick = {
+                        if (isTopBar) {
+                            if (isInputFocused) {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                            onShowMenuChange(!showMenu)
+                        } else {
+                            onShowAllInOneMenuSheet()
+                        }
+                    },
+                    modifier = Modifier.matchParentSize()
+                ) {
+                    Icon(
+                        imageVector = if (isTopBar) Icons.Rounded.MoreVert else Icons.Rounded.Menu,
+                        contentDescription = "Menu",
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(config.innerIconSize)
+                    )
+                }
+
+                if (isTopBar) {
+                    omnimenuDropdown(
+                        expanded = showMenu,
+                        onDismissRequest = { onShowMenuChange(false) },
+                        viewModel = viewModel,
+                        onNewTab = {
+                            onShowMenuChange(false)
+                            viewModel.createNewTab(context, "about:blank")
+                        },
+                        onNewIncognitoTab = {
+                            onShowMenuChange(false)
+                            if (!viewModel.isIncognitoMode) {
+                                viewModel.toggleIncognitoMode(context)
+                            }
+                            viewModel.createNewTab(context, "about:blank")
+                        },
+                        onOpenHistory = { onShowMenuChange(false); onOpenHistory() },
+                        onBurnData = {
+                            onShowMenuChange(false)
+                            onBurnData()
+                        },
+                        onOpenDownloads = { onShowMenuChange(false); onOpenDownloads() },
+                        onOpenBookmarks = { onShowMenuChange(false); onOpenBookmarks() },
+                        onOpenSettings = { onShowMenuChange(false); onOpenSettings() },
+                        onOpenPasswordManager = { onShowMenuChange(false); onOpenPasswordManager() },
+                        onShowThemeSheet = { onShowMenuChange(false); onShowThemeSheet() },
+                        onShowQuickTools = { onShowMenuChange(false); onShowQuickTools() },
+                        onShowFeedbackDialog = { onShowMenuChange(false); onShowFeedbackDialog() },
+                        onShowCustomizationSheet = { onShowMenuChange(false); onShowCustomizationSheet() },
+                        onShowExtensions = { onShowMenuChange(false); onShowExtensionsSheet() },
+                        onShowPlayerSettings = { onShowMenuChange(false); onShowPlayerSettings() },
+                        onShowSiteInfo = { onShowMenuChange(false); onShowSiteInfo() },
+                        onFindInPage = { onShowMenuChange(false); viewModel.openFindInPage() }
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Renders one all-in-one address-bar action from the registry. Both the leading and
+     * trailing clusters call this, so the bar's buttons are data-driven.
+     */
+    @Composable
+    fun AddressBarAction(actionId: String) {
+        when (actionId) {
+            "back" -> {
+                val canBack = viewModel.canGoBack
+                IconButton(onClick = { viewModel.goBack() }, enabled = canBack, modifier = Modifier.size(config.barIconSize)) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = if (canBack) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f), modifier = Modifier.size(config.innerIconSize))
+                }
+            }
+            "forward" -> {
+                val canForward = viewModel.canGoForward
+                IconButton(onClick = { viewModel.goForward() }, enabled = canForward, modifier = Modifier.size(config.barIconSize)) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Forward", tint = if (canForward) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f), modifier = Modifier.size(config.innerIconSize))
+                }
+            }
+            "reload" -> IconButton(onClick = { viewModel.reload() }, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Refresh, "Reload", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "home" -> IconButton(onClick = { viewModel.returnToHomeScreen() }, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Home, "Home", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "share" -> IconButton(onClick = {
+                val url = viewModel.currentUrl
+                if (url.isNotEmpty() && url != "about:blank") {
+                    try {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, url)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, viewModel.tabs.find { it.id == viewModel.activeTabId }?.title ?: "")
+                        }
+                        context.startActivity(android.content.Intent.createChooser(send, "Share").apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) })
+                    } catch (e: Exception) {
+                        android.util.Log.e("OmniBrowser", "Share failed", e)
+                    }
+                }
+            }, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Share, "Share", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "new_tab" -> IconButton(onClick = { viewModel.createNewTab(context, "about:blank") }, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Add, "New Tab", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "speed_dial" -> IconButton(onClick = onShowSpeedDialSheet, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Speed, "Speed Dial", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "tools", "quick_tools" -> IconButton(onClick = onShowToolsSheet, modifier = Modifier.size(config.barIconSize)) {
+                Icon(BlackholeIcon, "Quick Tools", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "tabs" -> IconButton(onClick = onShowTabGroups, modifier = Modifier.size(config.barIconSize)) {
+                Box(
+                    modifier = Modifier
+                        .size(config.innerIconSize + 4.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(5.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = viewModel.tabs.count { it.isIncognito == viewModel.isIncognitoMode }.toString(),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = (config.fontSize.value * 0.66f).sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            "extensions" -> IconButton(onClick = onShowExtensionsSheet, modifier = Modifier.size(config.barIconSize)) {
+                Box {
+                    Icon(
+                        imageVector = Icons.Rounded.Extension,
+                        contentDescription = stringResource(R.string.menu_extensions),
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(config.innerIconSize)
+                    )
+                    if (hasActiveUserExtensions) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFF8B5CF6), androidx.compose.foundation.shape.CircleShape)
+                                .align(Alignment.TopEnd)
+                                .offset(x = 2.dp, y = (-2).dp)
+                        )
+                    }
+                }
+            }
+            "bookmarks" -> IconButton(onClick = onOpenBookmarks, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Bookmark, "Bookmarks", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "history" -> IconButton(onClick = onOpenHistory, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.History, "History", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "downloads" -> IconButton(onClick = onOpenDownloads, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Download, "Downloads", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "settings" -> IconButton(onClick = onOpenSettings, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Settings, "Settings", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "incognito" -> IconButton(onClick = { viewModel.toggleIncognitoMode(context) }, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.VisibilityOff, "Incognito", tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "customize_home" -> IconButton(onClick = onShowCustomizationSheet, modifier = Modifier.size(config.barIconSize)) {
+                Icon(Icons.Rounded.Palette, stringResource(R.string.customize_home_cd), tint = MaterialTheme.colorScheme.onBackground, modifier = Modifier.size(config.innerIconSize))
+            }
+            "menu" -> AddressBarMenu()
+            else -> {}
+        }
+    }
+
     @Composable
     fun MainAddressBar() {
         Row(
@@ -215,6 +396,13 @@ fun PhoneAddressBar(
             .padding(horizontal = config.paddingHorizontal, vertical = config.paddingVertical),
         verticalAlignment = Alignment.CenterVertically
     ) {
+if (viewModel.chromeNavBarEnabled) {
+            // Leading cluster (before the omnibox) — driven by the user's layout.
+            viewModel.addressBarLeadingLayout.forEach { actionId ->
+                if (actionId == "menu") AddressBarAction(actionId)
+                else AnimatedVisibility(visible = !isInputFocused) { AddressBarAction(actionId) }
+            }
+        } else {
         AnimatedVisibility(visible = !isInputFocused) {
             IconButton(
                 onClick = { viewModel.createNewTab(context, "about:blank") },
@@ -244,7 +432,7 @@ fun PhoneAddressBar(
             }
         }
 
-        // Quick Tools (Toolbox) — visible on Left Hand Side in All-in-One mode
+        // Quick Tools (Toolbox) — visible on Left Hand Side in All-In-One mode
         AnimatedVisibility(visible = !isInputFocused && viewModel.chromeNavBarEnabled) {
             IconButton(
                 onClick = onShowToolsSheet,
@@ -257,6 +445,7 @@ fun PhoneAddressBar(
                     modifier = Modifier.size(config.innerIconSize)
                 )
             }
+        }
         }
 
         Box(
@@ -598,6 +787,13 @@ fun PhoneAddressBar(
             }
         }
 
+        if (viewModel.chromeNavBarEnabled) {
+            // Trailing cluster (after the omnibox) — driven by the user's layout.
+            viewModel.addressBarTrailingLayout.forEach { actionId ->
+                if (actionId == "menu") AddressBarAction(actionId)
+                else AnimatedVisibility(visible = !isInputFocused) { AddressBarAction(actionId) }
+            }
+        } else {
         AnimatedVisibility(visible = !isInputFocused && (viewModel.addressBarPosition == "Top" || viewModel.addressBarPosition == "Split" || !viewModel.showBottomNavBar || viewModel.chromeNavBarEnabled)) {
             IconButton(
                 onClick = onShowExtensionsSheet,
@@ -725,6 +921,7 @@ fun PhoneAddressBar(
                     )
                 }
             }
+        }
         }
     }
     }

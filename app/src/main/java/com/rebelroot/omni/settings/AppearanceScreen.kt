@@ -155,6 +155,88 @@ fun AppearanceScreen(
                 }
             }
 
+            // Home screen sections — reorderable top-to-bottom (drag and drop).
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(id = R.string.home_sections_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(stringResource(id = R.string.home_sections_hint), color = textSecondaryColor, fontSize = 12.sp)
+                    ChromeDragLayoutEditor(
+                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.HOME_SECTIONS,
+                        layout = viewModel.homeSectionsLayout,
+                        onLayoutChange = { viewModel.saveHomeSectionsLayout(context, it) },
+                        columns = 3,
+                        minItems = 0
+                    )
+                }
+            }
+
+            // Navigation bar buttons — user-owned layouts for both bottom bars.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(id = R.string.nav_buttons_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    ChromeDragLayoutEditor(
+                        title = stringResource(id = R.string.nav_home_bar),
+                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.HOME_BAR,
+                        layout = viewModel.navHomeLayout,
+                        onLayoutChange = { viewModel.saveNavLayout(context, true, it) }
+                    )
+                    HorizontalDivider(color = dividerColor)
+                    ChromeDragLayoutEditor(
+                        title = stringResource(id = R.string.nav_page_bar),
+                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.PAGE_BAR,
+                        layout = viewModel.navPageLayout,
+                        onLayoutChange = { viewModel.saveNavLayout(context, false, it) }
+                    )
+                }
+            }
+
+            // Address bar (all-in-one) buttons — leading/trailing clusters around the omnibox.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(id = R.string.addressbar_buttons_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardColor)
+                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    Text(stringResource(id = R.string.addressbar_hint), color = textSecondaryColor, fontSize = 12.sp)
+                    ChromeDragLayoutEditor(
+                        title = stringResource(id = R.string.addressbar_leading),
+                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.ADDRESS_BAR,
+                        layout = viewModel.addressBarLeadingLayout,
+                        onLayoutChange = { viewModel.saveAddressBarLayout(context, true, it) },
+                        minItems = 0
+                    )
+                    HorizontalDivider(color = dividerColor)
+                    ChromeDragLayoutEditor(
+                        title = stringResource(id = R.string.addressbar_trailing),
+                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.ADDRESS_BAR,
+                        layout = viewModel.addressBarTrailingLayout,
+                        onLayoutChange = { viewModel.saveAddressBarLayout(context, false, it) },
+                        minItems = 0
+                    )
+                }
+            }
+
             // Navigation Visibility Toggles (Moved to top)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(id = R.string.appearance_navigation), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
@@ -496,6 +578,20 @@ fun AppearanceScreen(
                         Switch(
                             checked = viewModel.showHomeRecents,
                             onCheckedChange = { viewModel.saveShowHomeRecents(context, it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
+                        )
+                    }
+                    HorizontalDivider(color = dividerColor)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(stringResource(id = R.string.home_search_bar_bottom), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = viewModel.homeSearchBarAtBottom,
+                            onCheckedChange = { viewModel.saveHomeSearchBarAtBottom(context, it) },
                             colors = SwitchDefaults.colors(checkedTrackColor = accentColor)
                         )
                     }

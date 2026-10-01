@@ -252,9 +252,76 @@ fun HomeScreenContent(
         }
     )
 
+    // Shared search actions, used by both the top field and the bottom-docked field.
+    val submitSearch: (String) -> Unit = { query ->
+        searchText = androidx.compose.ui.text.input.TextFieldValue("")
+        viewModel.searchSuggestions.clear()
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        onNavigateTo(query)
+    }
+    val clearSearch: () -> Unit = {
+        searchText = androidx.compose.ui.text.input.TextFieldValue("")
+        viewModel.searchSuggestions.clear()
+    }
+    val refineSearch: (String) -> Unit = { suggestion ->
+        searchText = androidx.compose.ui.text.input.TextFieldValue(
+            suggestion,
+            androidx.compose.ui.text.TextRange(suggestion.length)
+        )
+    }
+    val launchLens: () -> Unit = {
+        try {
+            val intent = Intent("com.google.lens.intent.action.LENS_INPUT").apply {
+                setPackage("com.google.android.googlequicksearchbox")
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Intent.ACTION_MAIN).apply {
+                    setClassName("com.google.ar.lens", "com.google.vr.apps.ornament.app.lens.LensLauncherActivity")
+                }
+                context.startActivity(intent)
+            } catch (ex: Exception) {
+                onOpenQrTools()
+            }
+        }
+    }
+    val launchVoice: () -> Unit = {
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toString())
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to search...")
+            }
+            speechRecognizerLauncher.launch(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Voice search is not supported on this device", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val baseDensity = androidx.compose.ui.platform.LocalDensity.current
     val screenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val isTablet = screenWidthDp >= 600
+    // Bottom-docked search layout: search pill floats above the keyboard, and the
+    // home bottom nav bar is hidden (its actions all live in the 3-dot menu).
+    val searchAtBottom = viewModel.homeSearchBarAtBottom
+    val navHidden = viewModel.hideHomeBottomNav || searchAtBottom
+
+    // Measured geometry used to vertically balance the bottom-search layout: the
+    // brand + tiles + widget are centred in the space between the top icon row and
+    // the docked search bar, instead of being packed against the top.
+    var homeViewportPx by remember { mutableStateOf(0) }
+    var homeHeaderPx by remember { mutableStateOf(0) }
+    var homeBodyPx by remember { mutableStateOf(0) }
+    val homeDensity = androidx.compose.ui.platform.LocalDensity.current
+    val homeCenterSpacer = if (!searchAtBottom) 0.dp else {
+        val statusTopPx = androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(homeDensity)
+        val barClearancePx = with(homeDensity) { 92.dp.toPx() }
+        val regionPx = homeViewportPx - statusTopPx - barClearancePx - homeHeaderPx
+        if (homeBodyPx <= 0 || regionPx <= homeBodyPx) 0.dp
+        else with(homeDensity) { ((regionPx - homeBodyPx) / 2f).toDp() }
+    }
     val responsiveWidthFactor = remember(screenWidthDp) {
         if (isTablet) 1.0f
         else (screenWidthDp / 390f).coerceIn(0.85f, 1.05f)
@@ -317,7 +384,8 @@ fun HomeScreenContent(
                             colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background)
                         )
                     }
-                ),
+                )
+                .onGloballyPositioned { homeViewportPx = it.size.height },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
         Column(
@@ -335,9 +403,12 @@ fun HomeScreenContent(
                 .padding(
                     start = 24.dp,
                     end = 24.dp,
-                    bottom = if (viewModel.showBottomNavBar && !viewModel.hideHomeBottomNav)
-                        24.dp + (52 * viewModel.bottomNavScale).dp
-                    else 24.dp,
+                    bottom = when {
+                        searchAtBottom -> 92.dp
+                        viewModel.showBottomNavBar && !viewModel.hideHomeBottomNav ->
+                            24.dp + (52 * viewModel.bottomNavScale).dp
+                        else -> 24.dp
+                    },
                     top = 0.dp
                 ),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -346,7 +417,8 @@ fun HomeScreenContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                    .padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                    .onGloballyPositioned { homeHeaderPx = it.size.height },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -357,7 +429,7 @@ fun HomeScreenContent(
                 if (isTablet) {
                     // Tablet home: extensions + always-visible palette shortcut.
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        if (!viewModel.hideHomeBottomNav) {
+                        if (!navHidden) {
                             IconButton(
                                 onClick = { onOpenExtensions() },
                                 modifier = Modifier.size(40.dp)
@@ -382,8 +454,8 @@ fun HomeScreenContent(
                             )
                         }
                     }
-                } else if (viewModel.hideHomeBottomNav) {
-                    // Phone: unchanged behavior (palette only when bottom nav hidden).
+                } else if (navHidden) {
+                    // Phone: palette only when the bottom nav is hidden.
                     IconButton(
                         onClick = { onShowCustomizationSheetChange(true) },
                         modifier = Modifier.size(40.dp)
@@ -480,6 +552,20 @@ fun HomeScreenContent(
                 }
             }
 
+        // Branding + tiles + widget, measured as one block so the bottom-search
+        // layout can centre it in the space above the docked bar.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = homeCenterSpacer)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { homeBodyPx = it.size.height },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(28.dp)
+            ) {
         if (viewModel.isIncognitoMode) {
             // Incognito Branding
             Column(
@@ -516,7 +602,20 @@ fun HomeScreenContent(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
             }
-        } else if (viewModel.showHomeLogo) {
+        }
+
+        val contentModifier = Modifier.fillMaxWidth()
+
+        Column(
+            modifier = contentModifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+        val historyList = viewModel.historyList
+        // Home sections are emitted in the user's order (home_sections_layout).
+        viewModel.homeSectionsLayout.forEach { sectionId ->
+        when (sectionId) {
+        "section_logo" -> if (!viewModel.isIncognitoMode) {
             // Center branding OMNI stylized logo Image or Custom Cropped Image
             if (viewModel.customIconPath != null) {
                 coil.compose.AsyncImage(
@@ -545,302 +644,34 @@ fun HomeScreenContent(
                 )
             }
         }
-
-        val contentModifier = Modifier.fillMaxWidth()
-
-        Column(
-            modifier = contentModifier,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            // Flat Slate search pill
-            OutlinedTextField(
-            value = searchText,
-            onValueChange = { searchText = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { onFocusChanged(it.isFocused) },
-            placeholder = { Text(stringResource(id = R.string.search_placeholder), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
-            leadingIcon = {
-                var expanded by remember { mutableStateOf(false) }
-                val currentEngine = viewModel.selectedSearchEngine
-                val currentIconUrl = when (currentEngine) {
-                    "Google" -> "https://icons.duckduckgo.com/ip3/google.com.ico"
-                    "Yahoo" -> "https://icons.duckduckgo.com/ip3/yahoo.com.ico"
-                    "Yandex" -> "https://icons.duckduckgo.com/ip3/yandex.com.ico"
-                    "DuckDuckGo" -> "https://icons.duckduckgo.com/ip3/duckduckgo.com.ico"
-                    "Brave" -> "https://icons.duckduckgo.com/ip3/brave.com.ico"
-                    "Bing" -> "https://icons.duckduckgo.com/ip3/bing.com.ico"
-                    "Ecosia" -> "https://icons.duckduckgo.com/ip3/ecosia.org.ico"
-                    "Startpage" -> "https://icons.duckduckgo.com/ip3/startpage.com.ico"
-                    "Qwant" -> "https://icons.duckduckgo.com/ip3/qwant.com.ico"
-                    else -> null
-                }
-
-                Box {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable { expanded = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (currentIconUrl != null) {
-                            coil.compose.AsyncImage(
-                                model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                    .data(currentIconUrl)
-                                    .size(48, 48)
-                                    .crossfade(true)
-                                    .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                                    .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                                    .build(),
-                                contentDescription = currentEngine,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clip(CircleShape),
-                                error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_search)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = currentEngine,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier
-                            .background(if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface)
-                    ) {
-                        val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom")
-                        engines.forEach { engine ->
-                            val itemIconUrl = when (engine) {
-                                "Google" -> "https://icons.duckduckgo.com/ip3/google.com.ico"
-                                "Yahoo" -> "https://icons.duckduckgo.com/ip3/yahoo.com.ico"
-                                "Yandex" -> "https://icons.duckduckgo.com/ip3/yandex.com.ico"
-                                "DuckDuckGo" -> "https://icons.duckduckgo.com/ip3/duckduckgo.com.ico"
-                                "Brave" -> "https://icons.duckduckgo.com/ip3/brave.com.ico"
-                                "Bing" -> "https://icons.duckduckgo.com/ip3/bing.com.ico"
-                                "Ecosia" -> "https://icons.duckduckgo.com/ip3/ecosia.org.ico"
-                                "Startpage" -> "https://icons.duckduckgo.com/ip3/startpage.com.ico"
-                                "Qwant" -> "https://icons.duckduckgo.com/ip3/qwant.com.ico"
-                                else -> null
-                            }
-
-                            DropdownMenuItem(
-                                leadingIcon = {
-                                    if (itemIconUrl != null) {
-                                        coil.compose.AsyncImage(
-                                            model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                                .data(itemIconUrl)
-                                                .size(48, 48)
-                                                .crossfade(true)
-                                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                                                .build(),
-                                            contentDescription = engine,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clip(CircleShape),
-                                            error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_search)
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Search,
-                                            contentDescription = engine,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                },
-                                text = { Text(engine, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
-                                onClick = {
-                                    viewModel.saveSearchEngine(context, engine)
-                                    expanded = false
-                                },
-                                colors = MenuDefaults.itemColors(
-                                    textColor = MaterialTheme.colorScheme.onSurface,
-                                    trailingIconColor = MaterialTheme.colorScheme.primary
-                                ),
-                                trailingIcon = {
-                                    if (currentEngine == engine) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            },
-            trailingIcon = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
-                    if (searchText.text.isNotEmpty()) {
-                        IconButton(
-                            onClick = {
-                                searchText = androidx.compose.ui.text.input.TextFieldValue("")
-                                viewModel.searchSuggestions.clear()
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Clear search",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = {
-                            try {
-                                val intent = Intent("com.google.lens.intent.action.LENS_INPUT").apply {
-                                    setPackage("com.google.android.googlequicksearchbox")
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                try {
-                                    val intent = Intent(Intent.ACTION_MAIN).apply {
-                                        setClassName("com.google.ar.lens", "com.google.vr.apps.ornament.app.lens.LensLauncherActivity")
-                                    }
-                                    context.startActivity(intent)
-                                } catch (ex: Exception) {
-                                    onOpenQrTools()
-                                }
-                            }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.CameraAlt,
-                            contentDescription = "Google Lens",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            try {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toString())
-                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to search...")
-                                }
-                                speechRecognizerLauncher.launch(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Voice search is not supported on this device", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Mic,
-                            contentDescription = "Voice Search",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            keyboardOptions = KeyboardOptions(
-                imeAction = androidx.compose.ui.text.input.ImeAction.Go
-            ),
-            keyboardActions = KeyboardActions(
-                onGo = {
-                    if (searchText.text.isNotEmpty()) {
-                        val query = searchText.text
-                        searchText = androidx.compose.ui.text.input.TextFieldValue("")
-                        viewModel.searchSuggestions.clear()
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                        onNavigateTo(query)
-                    }
-                }
-            ),
-            shape = RoundedCornerShape(24.dp),
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedContainerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4),
-                unfocusedContainerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4)
+        "section_search" -> {
+        if (!searchAtBottom) {
+            // Flat Slate search pill (top layout)
+            HomeSearchField(
+                viewModel = viewModel,
+                searchText = searchText,
+                onSearchTextChange = { searchText = it },
+                onFocusChanged = onFocusChanged,
+                onClear = clearSearch,
+                onLens = launchLens,
+                onVoice = launchVoice,
+                onSubmit = { if (searchText.text.isNotEmpty()) submitSearch(searchText.text) },
+                modifier = Modifier.fillMaxWidth()
             )
-        )
-
-        if (searchText.text.isNotEmpty() && viewModel.searchSuggestions.isNotEmpty()) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4),
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(vertical = 8.dp)
-                ) {
-                    viewModel.searchSuggestions.forEach { suggestion ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    val query = suggestion
-                                    searchText = androidx.compose.ui.text.input.TextFieldValue("")
-                                    viewModel.searchSuggestions.clear()
-                                    focusManager.clearFocus()
-                                    keyboardController?.hide()
-                                    onNavigateTo(query)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = suggestion,
-                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
-                                fontSize = 14.sp,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            IconButton(
-                                onClick = {
-                                    searchText = androidx.compose.ui.text.input.TextFieldValue(suggestion, androidx.compose.ui.text.TextRange(suggestion.length))
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.TrendingFlat,
-                                    contentDescription = "Refine search",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .graphicsLayer { rotationZ = -135f }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
 
-
-
-        if (viewModel.showHomeShortcuts && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
+        if (!searchAtBottom && searchText.text.isNotEmpty() && viewModel.searchSuggestions.isNotEmpty()) {
+            HomeSearchSuggestions(
+                viewModel = viewModel,
+                onSelectSuggestion = submitSearch,
+                onRefineSuggestion = refineSearch,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+            )
+        }
+        }
+        "section_shortcuts" -> if (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty()) {
             // Dynamic Grid of Shortcuts — 5 per row, icon-only, no border boxes
             // Shows up to 15 items collapsed; "More" expands to show all.
             val shortcuts = viewModel.shortcutsList
@@ -971,8 +802,7 @@ fun HomeScreenContent(
         }
 
         // Recently Visited Section matching screenshot
-        val historyList = viewModel.historyList
-        if (viewModel.showHomeRecents && historyList.isNotEmpty() && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
+        "section_recents" -> if (historyList.isNotEmpty() && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1088,7 +918,7 @@ fun HomeScreenContent(
         }
 
         // Privacy Shield Card — Premium redesign
-        if (viewModel.showPrivacyStatsWidget && !viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
+        "section_privacy" -> if (!viewModel.isMinimalistFocusMode && !viewModel.isIncognitoMode && (searchText.text.isEmpty() || viewModel.searchSuggestions.isEmpty())) {
             val isDark = viewModel.isDarkThemeEnabled
             val hasWallpaper = viewModel.browserWallpaperUri != null
             val cardBg = if (hasWallpaper) {
@@ -1241,6 +1071,8 @@ fun HomeScreenContent(
             }
         }
 
+        }
+        }
         }
 
         // Shortcut long-press Options Sheet
@@ -1533,12 +1365,57 @@ fun HomeScreenContent(
                 }
             }
         }
+            }
+        }
 
 
     }
-    } // end CompositionLocalProvider
+    }
 
-}
+        // ── Bottom-docked search layout ──────────────────────────────────────
+        // Pinned to the bottom of the content area and lifted above the IME, so
+        // the field is thumb-reachable and stays visible while typing.
+        if (searchAtBottom && "section_search" in viewModel.homeSectionsLayout) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (searchText.text.isNotEmpty() && viewModel.searchSuggestions.isNotEmpty()) {
+                        HomeSearchSuggestions(
+                            viewModel = viewModel,
+                            onSelectSuggestion = submitSearch,
+                            onRefineSuggestion = refineSearch,
+                            maxItems = 6,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .shadow(6.dp, RoundedCornerShape(18.dp))
+                        )
+                    }
+                    HomeSearchField(
+                        viewModel = viewModel,
+                        searchText = searchText,
+                        onSearchTextChange = { searchText = it },
+                        onFocusChanged = onFocusChanged,
+                        onClear = clearSearch,
+                        onLens = launchLens,
+                        onVoice = launchVoice,
+                        onSubmit = { if (searchText.text.isNotEmpty()) submitSearch(searchText.text) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(6.dp, RoundedCornerShape(24.dp))
+                    )
+                }
+            }
+        }
+    }
 
     // ── Premium Privacy Protection Report Sheet ─────────────────────────────────
     if (showPrivacyReportSheet) {
@@ -2249,8 +2126,11 @@ fun HomeScreenContent(
                             )
                         }
                         Switch(
-                            checked = viewModel.showHomeLogo,
-                            onCheckedChange = { viewModel.saveShowHomeLogo(context, it) },
+                            checked = "section_logo" in viewModel.homeSectionsLayout,
+                            onCheckedChange = { on ->
+                                val l = viewModel.homeSectionsLayout
+                                viewModel.saveHomeSectionsLayout(context, if (on) (l + "section_logo").distinct() else l - "section_logo")
+                            },
                             colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }
@@ -2279,8 +2159,11 @@ fun HomeScreenContent(
                             )
                         }
                         Switch(
-                            checked = viewModel.showHomeShortcuts,
-                            onCheckedChange = { viewModel.saveShowHomeShortcuts(context, it) },
+                            checked = "section_shortcuts" in viewModel.homeSectionsLayout,
+                            onCheckedChange = { on ->
+                                val l = viewModel.homeSectionsLayout
+                                viewModel.saveHomeSectionsLayout(context, if (on) (l + "section_shortcuts").distinct() else l - "section_shortcuts")
+                            },
                             colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }
@@ -2309,8 +2192,41 @@ fun HomeScreenContent(
                             )
                         }
                         Switch(
-                            checked = viewModel.showHomeRecents,
-                            onCheckedChange = { viewModel.saveShowHomeRecents(context, it) },
+                            checked = "section_recents" in viewModel.homeSectionsLayout,
+                            onCheckedChange = { on ->
+                                val l = viewModel.homeSectionsLayout
+                                viewModel.saveHomeSectionsLayout(context, if (on) (l + "section_recents").distinct() else l - "section_recents")
+                            },
+                            colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = if (viewModel.isDarkThemeEnabled) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+
+                    // Toggle: Search bar at bottom (new home layout)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.home_search_bar_bottom),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E)
+                            )
+                            Text(
+                                text = stringResource(R.string.home_search_bar_bottom_desc),
+                                fontSize = 12.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                        Switch(
+                            checked = viewModel.homeSearchBarAtBottom,
+                            onCheckedChange = { viewModel.saveHomeSearchBarAtBottom(context, it) },
                             colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary)
                         )
                     }
@@ -2385,6 +2301,250 @@ fun HomeScreenContent(
 // ── Compact shortcut item: icon-only pill, no visible border box ────────────
 // Mirrors Chrome/Aloha new-tab style — icon floats on a soft tinted circle,
 // label underneath, whole thing feels light and airy.
+// ── Home search field: shared by the top and bottom-docked layouts ──────────
+@Composable
+private fun HomeSearchField(
+    viewModel: BrowserViewModel,
+    searchText: androidx.compose.ui.text.input.TextFieldValue,
+    onSearchTextChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    onFocusChanged: (Boolean) -> Unit,
+    onClear: () -> Unit,
+    onLens: () -> Unit,
+    onVoice: () -> Unit,
+    onSubmit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    OutlinedTextField(
+        value = searchText,
+        onValueChange = onSearchTextChange,
+        modifier = modifier.onFocusChanged { onFocusChanged(it.isFocused) },
+        placeholder = { Text(stringResource(id = R.string.search_placeholder), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp) },
+        leadingIcon = {
+            var expanded by remember { mutableStateOf(false) }
+            val currentEngine = viewModel.selectedSearchEngine
+            val currentIconUrl = when (currentEngine) {
+                "Google" -> "https://icons.duckduckgo.com/ip3/google.com.ico"
+                "Yahoo" -> "https://icons.duckduckgo.com/ip3/yahoo.com.ico"
+                "Yandex" -> "https://icons.duckduckgo.com/ip3/yandex.com.ico"
+                "DuckDuckGo" -> "https://icons.duckduckgo.com/ip3/duckduckgo.com.ico"
+                "Brave" -> "https://icons.duckduckgo.com/ip3/brave.com.ico"
+                "Bing" -> "https://icons.duckduckgo.com/ip3/bing.com.ico"
+                "Ecosia" -> "https://icons.duckduckgo.com/ip3/ecosia.org.ico"
+                "Startpage" -> "https://icons.duckduckgo.com/ip3/startpage.com.ico"
+                "Qwant" -> "https://icons.duckduckgo.com/ip3/qwant.com.ico"
+                else -> null
+            }
+
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .clickable { expanded = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (currentIconUrl != null) {
+                        coil.compose.AsyncImage(
+                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                .data(currentIconUrl)
+                                .size(48, 48)
+                                .crossfade(true)
+                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = currentEngine,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape),
+                            error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_search)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = currentEngine,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
+                ) {
+                    val engines = listOf("Google", "Yahoo", "Yandex", "DuckDuckGo", "Brave", "Bing", "Ecosia", "Startpage", "Qwant", "Custom")
+                    engines.forEach { engine ->
+                        val itemIconUrl = when (engine) {
+                            "Google" -> "https://icons.duckduckgo.com/ip3/google.com.ico"
+                            "Yahoo" -> "https://icons.duckduckgo.com/ip3/yahoo.com.ico"
+                            "Yandex" -> "https://icons.duckduckgo.com/ip3/yandex.com.ico"
+                            "DuckDuckGo" -> "https://icons.duckduckgo.com/ip3/duckduckgo.com.ico"
+                            "Brave" -> "https://icons.duckduckgo.com/ip3/brave.com.ico"
+                            "Bing" -> "https://icons.duckduckgo.com/ip3/bing.com.ico"
+                            "Ecosia" -> "https://icons.duckduckgo.com/ip3/ecosia.org.ico"
+                            "Startpage" -> "https://icons.duckduckgo.com/ip3/startpage.com.ico"
+                            "Qwant" -> "https://icons.duckduckgo.com/ip3/qwant.com.ico"
+                            else -> null
+                        }
+
+                        DropdownMenuItem(
+                            leadingIcon = {
+                                if (itemIconUrl != null) {
+                                    coil.compose.AsyncImage(
+                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                            .data(itemIconUrl)
+                                            .size(48, 48)
+                                            .crossfade(true)
+                                            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                            .build(),
+                                        contentDescription = engine,
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape),
+                                        error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_search)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = engine,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            text = { Text(engine, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+                            onClick = {
+                                viewModel.saveSearchEngine(context, engine)
+                                expanded = false
+                            },
+                            colors = MenuDefaults.itemColors(
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                                trailingIconColor = MaterialTheme.colorScheme.primary
+                            ),
+                            trailingIcon = {
+                                if (currentEngine == engine) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        trailingIcon = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+            ) {
+                if (searchText.text.isNotEmpty()) {
+                    IconButton(onClick = onClear) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Clear search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                IconButton(onClick = onLens) {
+                    Icon(
+                        imageVector = Icons.Rounded.CameraAlt,
+                        contentDescription = "Google Lens",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onVoice) {
+                    Icon(
+                        imageVector = Icons.Rounded.Mic,
+                        contentDescription = "Voice Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+        keyboardActions = KeyboardActions(onGo = { onSubmit() }),
+        shape = RoundedCornerShape(24.dp),
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+            unfocusedTextColor = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+            focusedBorderColor = Color.Transparent,
+            unfocusedBorderColor = Color.Transparent,
+            focusedContainerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4),
+            unfocusedContainerColor = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4)
+        )
+    )
+}
+
+/** Search suggestion list, shared by both home layouts. */
+@Composable
+private fun HomeSearchSuggestions(
+    viewModel: BrowserViewModel,
+    onSelectSuggestion: (String) -> Unit,
+    onRefineSuggestion: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    maxItems: Int = Int.MAX_VALUE
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = if (viewModel.isDarkThemeEnabled) Color(0xFF1C1C1E) else Color(0xFFF1F3F4),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp)
+        ) {
+            viewModel.searchSuggestions.take(maxItems).forEach { suggestion ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectSuggestion(suggestion) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = suggestion,
+                        color = if (viewModel.isDarkThemeEnabled) Color.White else Color(0xFF1C1C1E),
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    IconButton(
+                        onClick = { onRefineSuggestion(suggestion) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.TrendingFlat,
+                            contentDescription = "Refine search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .size(16.dp)
+                                .graphicsLayer { rotationZ = -135f }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun CompactShortcutItem(
     title: String,
