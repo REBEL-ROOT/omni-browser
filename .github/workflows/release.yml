@@ -82,7 +82,7 @@ jobs:
       - name: Rename APKs
         run: |
           export VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ]; then export VERSION="v1.3.3.3-beta"; fi
+          if [ -z "$VERSION" ]; then export VERSION="v1.3.4.1"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -115,35 +115,55 @@ jobs:
           files: |
             app/build/outputs/apk/omni-browser-*.apk
           body: |
-            ## Omni Browser ${{ github.ref_name }} (Pre-release)
+            ## Omni Browser ${{ github.ref_name }}
 
-            ⚡ **Optimized R8 Minification Version with Highly Compressed Libraries**
-            This build is optimized utilizing aggressive R8 compiler shrinking, optimization, and resource minification alongside highly compressed runtime libraries, delivering maximum performance, enhanced security, and the smallest possible installation footprint.
-
-            ---
-
-            ## 🚀 What's New in ${{ github.ref_name }}
-
-            ### 🧭 Navigation & Session History
-            - **Long-Press Session History Menu**: Long-pressing the Back or Forward navigation buttons now opens an interactive session history bottom sheet to jump directly to any previous or forward page in the tab's navigation stack (including the New Tab / Home Screen root).
-            - **Improved Back/Forward Navigation Stack**: Refined tab navigation stack tracking and state restoration across web pages and home screen transitions.
-
-            ### 🎛️ Address Bar & Scroll Controls
-            - **Side Scroll Bar Toggle Fix**: Properly disables the vertical fast-scroll side bar when the *Side Scroll Bar* toggle is turned off in Site Settings, and updated setting labels/descriptions for clarity.
-            - **Top Address Bar & Tablet Menu Enhancements**: Restored the 3-dot dropdown menu (`MoreVert`) in Top Address Bar and Adaptive Tablet Chrome modes with full quick-action wiring (New Tab, Incognito, Burn Data, Find in Page, Extensions, and Settings), and kept the menu accessible while the address bar input is focused.
-
-            ### 🛡️ Privacy & Content Blocking Refinements
-            - **Total Cookie Protection (dFPI) & Cookie Behavior**: Corrected GeckoView cookie behavior mappings and added *Isolate third-party cookies (Total Cookie Protection)* alongside tracker-blocking and strict cookie controls.
-            - **Stricter Social Tracker Filtering**: Removed social media root domains from the filter-list immunity set so third-party social tracking subdomains (e.g., `connect.facebook.net`, `platform.twitter.com`) are never exempted from filter rules.
-
-            ### ⚙️ Recent 1.3.3.x Improvements Included
-            - **`omni:config` Engine Flags & Small-Screen Layout**: Added curated Gecko engine flags and fixed responsive layout and status bar padding on compact devices.
-            - **AMOLED Theme & Speed Dial**: Fixed AMOLED theme leak (#118), updated Speed Dial to a 5-column layout, and added *"Open in [App]"* to the Omni menu sheet.
+            > ⚠️ **Customization Notice & Known Considerations**
+            > This release introduces extensive interface personalization through the new **Chrome Drag Layout Editor** (custom bottom navigation bars, address bar action clusters, and draggable home screen sections). Because this involves major UI architecture changes, it **may introduce new bugs or edge cases in the customization area**. If you encounter visual glitches or layout resets, please report them.
+            >
+            > 🛠️ **Previous Main Bugs Addressed**
+            > All previous main known bugs have been touched and reworked in this release in order to thoroughly resolve them (including server redirect handling, privacy fingerprint timezone leaks, bookmark state desyncs, AMOLED theme leaks, OAuth popup session restores, and extension popup action reliability).
 
             ---
 
-            ### Installation Requirements
+            ## 🚀 What's New in ${{ github.ref_name }} (since v1.3.3.3-beta)
+
+            ### 🎨 Chrome Drag Layout Editor & Customization Overhaul
+            - **Interactive Drag-and-Drop Chrome Editor**: Customize browser controls and UI layouts visually via Settings > Appearance.
+            - **Custom Navigation Bar Layouts**: Independently customize and reorder action buttons on both the Home Bar and the active Page Bar (Back, Forward, Home, Tabs, Menu, Extensions, Bookmarks, Downloads, Clear Data, Desktop Mode, Reader Mode, and more).
+            - **All-in-One Address Bar Clusters**: Customize leading and trailing button clusters flanking the omnibox address bar to suit your workflow.
+            - **Reorderable Home Screen Sections**: Drag and reorder sections (Speed Dial, Recent Tabs, Bookmarks, Highlights) directly on the New Tab / Home Screen.
+            - **Home Search Bar Positioning**: Added a setting toggle to place the Home Screen search bar at the bottom or top of the display.
+            - **Speed Dial Launcher Sheet**: Floating action quick-launcher sheet for fast navigation and instant access to top tools.
+
+            ### 💾 Native Backup & Restore Engine
+            - **Full Browser State Backup**: Export your complete Omni configuration into a timestamped, integrity-verified `.omni` package (`BackupEngine.kt`).
+            - **Comprehensive Scope**: Backs up and restores bookmarks, history, settings, user agent rules, visual element blocker rules, custom search engines, speed dial layouts, extensions state, and custom chrome button layouts.
+            - **Safe Import Preview**: Inspect backup archive contents and manifests before committing restores (`BackupScreen.kt`).
+
+            ### 📁 Hierarchical Bookmark Manager & Netscape Import/Export
+            - **Folder-Based Bookmark Manager**: Full tree hierarchy navigation with responsive breadcrumbs, cross-folder search, folder creation, editing, moving, and deletion (`BookmarksScreen.kt`).
+            - **Cache Invalidation Fix**: Fixed an issue where the "Clear all" action left the bookmark hierarchy tree in a stale UI state.
+            - **Netscape HTML Import & Export**: Import and export browser bookmarks using standard Netscape bookmark HTML format while retaining folder hierarchies.
+
+            ### 🔄 Two-Way Omni Sync (P2P / LAN) & Clean Architecture
+            - **Two-Way Sync Outbox**: Local bookmark and tab changes are recorded into an outbound sync queue and proactively transmitted to paired LAN devices, draining cleanly upon confirmation.
+            - **Thread-Safe Concurrent Storage**: Introduced `BookmarkStoreLock` across UI threads, sync workers, and LAN WebSocket servers to prevent database lock contention and race conditions.
+            - **Secure LAN Password Vault Transfer**: Transfer credentials between paired devices over local Wi-Fi via CSV, protected with a user-visible 6-digit verification code.
+            - **Mozilla Sync Stubs Removed**: Completely removed unused and mock Mozilla/Firefox Sync dependencies and stubs in favor of a clean, transparent, lightweight P2P/LAN Omni Sync architecture.
+
+            ### 🛡️ Privacy & Security Refinements
+            - **Resist Fingerprinting Timezone Spoofing (Fixes #137)**: `privacy.resistFingerprinting` now strictly honors the Fingerprint Protection toggle (in addition to Tor mode). Timezones are properly spoofed to UTC across both GeckoView runtime and generated config, preventing timezone leaks on sites like `deviceinfo.me` over VPN.
+
+            ### 🧭 Navigation & Server Redirect Fixes
+            - **Server Redirect Handling (Fixes #132)**: Server-side HTTP redirects (301, 302, 303, 307, 308) in `NavigationDelegate.onLoadRequest` now immediately return `ALLOW` and bypass subnavigation block rules, preventing redirect loops and stranded "Page has moved" screens. Non-renderable redirect targets cleanly proceed to download handlers via `onExternalResponse`.
+
+            ### 🧩 WebExtension Platform Stability
+            - **Extension Action Popups & Permissions**: Overhauled extension action menu patching, popup lifecycle management, and dynamic host/clipboard permission prompts (`browser.permissions.request()`) for password managers and curated extensions.
+
+            ---
+
+            ### 📦 Installation Requirements
             - Android 8.0+ (API 26) is required.
-            - If you are not sure which build to choose, download the **universal** APK.
+            - If you are not sure which build to choose, download the **universal** APK (`omni-browser-v1.3.4.1-universal.apk`).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
