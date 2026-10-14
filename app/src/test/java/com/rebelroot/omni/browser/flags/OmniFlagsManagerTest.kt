@@ -55,6 +55,18 @@ class OmniFlagsManagerTest {
         assertNotNull(gpcFlag)
         assertEquals(FlagCategory.BRAVE_SHIELDS, gpcFlag?.category)
         assertEquals(true, gpcFlag?.enginePrefs?.get("privacy.globalprivacycontrol.enabled"))
+
+        val referrerFlag = OmniFlagsRegistry.getFlagById("brave_shields_strict_referrer")
+        assertNotNull(referrerFlag)
+        assertEquals(FlagCategory.BRAVE_SHIELDS, referrerFlag?.category)
+        assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.referer.defaultPolicy"))
+        assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.referer.defaultPolicy.pbmode"))
+        assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.referer.defaultPolicy.trackers"))
+        assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.referer.defaultPolicy.trackers.pbmode"))
+        assertEquals(0, referrerFlag?.enginePrefs?.get("network.http.referer.trimmingPolicy"))
+        assertEquals(0, referrerFlag?.enginePrefs?.get("network.http.referer.XOriginPolicy"))
+        assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.referer.XOriginTrimmingPolicy"))
+        assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.sendRefererHeader"))
     }
 
     @Test

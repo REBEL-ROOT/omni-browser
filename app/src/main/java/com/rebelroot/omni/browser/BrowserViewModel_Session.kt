@@ -123,6 +123,67 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             try { adBlockManager.incrementBlockedCount(1) } catch (_: Exception) {}
         }
     }
+    tab.session.printDelegate = object : GeckoSession.PrintDelegate {
+        override fun onPrint(session: GeckoSession) {
+            session.saveAsPdf().accept(
+                { inputStream ->
+                    if (inputStream != null) {
+                        onPrint(inputStream)
+                    } else {
+                        Log.e(TAG, "PrintDelegate: saveAsPdf returned null stream")
+                    }
+                },
+                { error ->
+                    Log.e(TAG, "PrintDelegate: saveAsPdf error", error)
+                }
+            )
+        }
+
+        override fun onPrint(inputStream: java.io.InputStream) {
+            onPrintWithStatus(inputStream)
+        }
+
+        override fun onPrintWithStatus(inputStream: java.io.InputStream): GeckoResult<Boolean> {
+            val activity = com.rebelroot.omni.MainActivity.getActiveActivity() ?: (context as? android.app.Activity)
+            val printContext = activity ?: context
+            val result = GeckoResult<Boolean>()
+            Thread {
+                var tempFile: java.io.File? = null
+                try {
+                    val file = java.io.File.createTempFile("print_", ".pdf", printContext.cacheDir)
+                    tempFile = file
+                    file.outputStream().use { out ->
+                        inputStream.copyTo(out)
+                        out.flush()
+                    }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            val printManager = printContext.getSystemService(Context.PRINT_SERVICE) as? android.print.PrintManager
+                            if (printManager != null) {
+                                val jobName = tab.title.takeIf { it.isNotBlank() && it != "New Tab" } ?: "Omni Browser Document"
+                                val printAdapter = PdfPrintDocumentAdapter(file, jobName, printContext, result)
+                                printManager.print(jobName, printAdapter, null)
+                                Log.i(TAG, "PrintDelegate: PrintManager.print started for tab ${tab.id}")
+                            } else {
+                                Log.w(TAG, "PrintDelegate: PrintManager is null")
+                                file.delete()
+                                result.complete(false)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "PrintDelegate: error invoking PrintManager", e)
+                            file.delete()
+                            result.completeExceptionally(e)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "PrintDelegate: error copying print stream to temp file", e)
+                    tempFile?.delete()
+                    result.completeExceptionally(e)
+                }
+            }.start()
+            return result
+        }
+    }
     tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
         override fun onAndroidPermissionsRequest(
             session: GeckoSession,
@@ -701,7 +762,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
         }
 
         override fun onExternalResponse(session: GeckoSession, response: org.mozilla.geckoview.WebResponse) {
-            handleExternalDownloadResponse(response, context)
+            handleExternalDownloadResponse(response, context, tab)
         }
 
         override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
@@ -1023,8 +1084,13 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             val uri = request.uri
             val lowerUri = uri.lowercase().trim()
 
-            // Always allow extension-internal resources (moz-extension://) immediately
-            if (lowerUri.startsWith("moz-extension://")) {
+            // Always allow extension-internal and Gecko-internal resources immediately
+            if (lowerUri.startsWith("moz-extension://") || lowerUri.startsWith("resource://") || lowerUri.startsWith("chrome://")) {
+                return GeckoResult.fromValue(AllowOrDeny.ALLOW)
+            }
+
+            // Always allow blank / about:blank navigations (e.g. window.open("", "_blank") popups)
+            if (uri.isBlank() || lowerUri == "about:blank") {
                 return GeckoResult.fromValue(AllowOrDeny.ALLOW)
             }
 
@@ -1116,18 +1182,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
-            if (isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
-                Log.i(TAG, "📥 Intercepted file download URL: $uri (tabId=${tab.id}, parentId=${tab.parentId})")
-                viewModelScope.launch(Dispatchers.Main) {
-                    if (tab.parentId != null) {
-                        closeTab(tab.id, context)
-                    }
-                    val filename = guessDownloadFilename(uri, null)
-                    handleGenericDownload(uri, filename, null, context)
-                }
-                return GeckoResult.fromValue(AllowOrDeny.DENY)
-            }
-
             if (lowerUri.startsWith("magnet:")) {
                 Log.i(TAG, "🧲 Intercepted magnet link: $uri (tabId=${tab.id}, parentId=${tab.parentId})")
                 viewModelScope.launch(Dispatchers.Main) {
@@ -1164,12 +1218,18 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             // "allow" only applies to explicit external-app requests (intent:,
             // market:, custom schemes) handled below through the permission flow.
 
-            if (!lowerUri.startsWith("http://") && 
-                !lowerUri.startsWith("https://") && 
-                !lowerUri.startsWith("about:") && 
-                !lowerUri.startsWith("javascript:") && 
-                !lowerUri.startsWith("data:")
-            ) {
+            val isInternalBrowserScheme = lowerUri.startsWith("http://") ||
+                                          lowerUri.startsWith("https://") ||
+                                          lowerUri.startsWith("about:") ||
+                                          lowerUri.startsWith("javascript:") ||
+                                          lowerUri.startsWith("data:") ||
+                                          lowerUri.startsWith("blob:") ||
+                                          lowerUri.startsWith("moz-extension:") ||
+                                          lowerUri.startsWith("resource:") ||
+                                          lowerUri.startsWith("chrome:") ||
+                                          uri.isBlank()
+
+            if (!isInternalBrowserScheme) {
                 val sourceHost = try { 
                     val h = Uri.parse(liveTabUrl()).host?.lowercase()?.removePrefix("www.")
                     if (!h.isNullOrBlank() && h != "blank") h else Uri.parse(uri).host?.lowercase()?.removePrefix("www.") ?: ""
@@ -1423,14 +1483,6 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 val lowerUri = uri.lowercase().trim()
                 val isYouTube = OriginVerifier.isSubdomainOf(uri, "youtube.com") || OriginVerifier.isSubdomainOf(uri, "youtu.be")
 
-                if (isGenericDownloadUrl(uri) && (!isYouTube || isYouTubeEnabled)) {
-                    Log.i(TAG, "📥 Intercepted new-window file download URL: $uri")
-                    viewModelScope.launch(Dispatchers.Main) {
-                        val filename = guessDownloadFilename(uri, null)
-                        handleGenericDownload(uri, filename, null, context)
-                    }
-                    return null
-                }
 
                 if (lowerUri.startsWith("magnet:")) {
                     Log.i(TAG, "🧲 Intercepted new-window magnet link: $uri")
@@ -1564,7 +1616,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 // Calling newSession.open() here causes:
                 // "java.lang.AssertionError: Must use an unopened GeckoSession instance" and crashes the app.
                 val isBlankPopup = uri.isBlank() || uri == "about:blank"
-                val shouldSelectImmediately = isAuthUri
+                val shouldSelectImmediately = isAuthUri || !openTabsInBackground || isBlankPopup
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     if (shouldSelectImmediately) {
                         selectTab(newTab.id)

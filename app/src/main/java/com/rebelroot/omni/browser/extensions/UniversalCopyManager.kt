@@ -27,10 +27,13 @@ class UniversalCopyManager(private val runtime: GeckoRuntime) {
 
     companion object {
         private const val TAG = "UniversalCopyManager"
-        private const val EXTENSION_ID = "omni-universal-copy@omnibrowser.app"
+        internal const val EXTENSION_ID = "omni-universal-copy@omnibrowser.app"
     }
 
     private var extension: WebExtension? = null
+
+    /** The installed WebExtension, or null before the first successful install. */
+    val installedExtension: WebExtension? get() = extension
 
     fun installAndSync(enabled: Boolean, onComplete: (() -> Unit)? = null) {
         runtime.webExtensionController.ensureBuiltIn(

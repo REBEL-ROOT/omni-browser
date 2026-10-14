@@ -133,7 +133,8 @@ fun ExtensionItemCard(
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
     onOpenClick: (() -> Unit)? = null,
-    onUninstallClick: (() -> Unit)? = null
+    onUninstallClick: (() -> Unit)? = null,
+    onPinToHomeScreen: (() -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -207,7 +208,7 @@ fun ExtensionItemCard(
                         modifier = Modifier.scale(0.8f)
                     )
 
-                    if (onUninstallClick != null || onOpenClick != null) {
+                    if (onUninstallClick != null || onOpenClick != null || onPinToHomeScreen != null) {
                         Box {
                             IconButton(
                                 onClick = { showMenu = true },
@@ -234,6 +235,22 @@ fun ExtensionItemCard(
                                         leadingIcon = {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                                if (onPinToHomeScreen != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.ext_pin_to_home), fontSize = 12.sp) },
+                                        onClick = {
+                                            showMenu = false
+                                            onPinToHomeScreen()
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Rounded.PushPin,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(14.dp)
                                             )
@@ -288,6 +305,7 @@ fun UserExtensionItemCard(
     onUninstall: () -> Unit,
     onOptionsClick: (() -> Unit)? = null,
     onPopupClick: (() -> Unit)? = null,
+    onPinToHomeScreen: (() -> Unit)? = null,
     iconBitmap: android.graphics.Bitmap? = null
 ) {
     val extId = try { extension.id ?: "unknown-extension" } catch (e: Exception) { "unknown-extension" }
@@ -478,6 +496,22 @@ fun UserExtensionItemCard(
                                     }
                                 )
                             }
+                            if (onPinToHomeScreen != null) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.ext_pin_to_home), fontSize = 12.sp) },
+                                    onClick = {
+                                        showMenu = false
+                                        onPinToHomeScreen()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PushPin,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.ext_delete_uninstall), fontSize = 12.sp) },
                                 onClick = {
@@ -520,7 +554,8 @@ fun ExtensionGridCard(
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
     onOpenClick: (() -> Unit)? = null,
-    onUninstallClick: (() -> Unit)? = null
+    onUninstallClick: (() -> Unit)? = null,
+    onPinToHomeScreen: (() -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -539,7 +574,7 @@ fun ExtensionGridCard(
                 .padding(8.dp)
         ) {
             // 3-dot options button at top right
-            if (onUninstallClick != null || onOpenClick != null) {
+            if (onUninstallClick != null || onOpenClick != null || onPinToHomeScreen != null) {
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
                     IconButton(
                         onClick = { showMenu = true },
@@ -566,6 +601,22 @@ fun ExtensionGridCard(
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+                        }
+                        if (onPinToHomeScreen != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ext_pin_to_home), fontSize = 12.sp) },
+                                onClick = {
+                                    showMenu = false
+                                    onPinToHomeScreen()
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.PushPin,
                                         contentDescription = null,
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -654,6 +705,7 @@ fun UserExtensionGridCard(
     onUninstall: () -> Unit,
     onOptionsClick: (() -> Unit)? = null,
     onPopupClick: (() -> Unit)? = null,
+    onPinToHomeScreen: (() -> Unit)? = null,
     iconBitmap: android.graphics.Bitmap? = null
 ) {
     val extId = try { extension.id ?: "unknown-extension" } catch (e: Exception) { "unknown-extension" }
@@ -721,6 +773,22 @@ fun UserExtensionGridCard(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+                    if (onPinToHomeScreen != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ext_pin_to_home), fontSize = 12.sp) },
+                            onClick = {
+                                showMenu = false
+                                onPinToHomeScreen()
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.PushPin,
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp)
                                 )

@@ -43,6 +43,9 @@ object IntentUrlParser {
 
     private const val TAG = "IntentUrlParser"
 
+    /** Marker extra set by extension home-screen shortcuts (see BrowserViewModel_Extensions). */
+    internal const val EXTRA_EXTENSION_SHORTCUT = "extra_extension_shortcut"
+
     private val HTTP_URL_REGEX = Regex(
         """https?://[^\s<>"{}|\\^`]+""",
         RegexOption.IGNORE_CASE
@@ -76,6 +79,15 @@ object IntentUrlParser {
     fun parseIntent(intent: Intent?, context: Context? = null): String? {
         if (intent == null) return null
         val action = intent.action
+
+        // Extension home-screen shortcuts carry an explicit marker extra so they can be
+        // distinguished from ordinary moz-extension:// data URIs arriving from other apps.
+        if (action == Intent.ACTION_VIEW &&
+            intent.getBooleanExtra(EXTRA_EXTENSION_SHORTCUT, false) &&
+            SecurityPolicy.validateIntentUri(intent.dataString)
+        ) {
+            return intent.dataString
+        }
 
         val rawText: String? = when (action) {
             Intent.ACTION_SEND -> {

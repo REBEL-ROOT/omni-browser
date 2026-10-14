@@ -233,6 +233,10 @@ class MainActivity : FragmentActivity() {
         if (!intentUrl.isNullOrEmpty()) {
             if (isDirectVideo && browserViewModel.isNativePlayerEnabled) {
                 browserViewModel.pendingVideoUrl = intentUrl
+            } else if (intent?.getBooleanExtra(com.rebelroot.omni.browser.IntentUrlParser.EXTRA_EXTENSION_SHORTCUT, false) == true) {
+                // Extension shortcut: open in a fresh tab instead of replacing the active tab.
+                android.util.Log.i("MainActivity", "🎬 onCreate extension shortcut URL detected: $intentUrl")
+                browserViewModel.pendingExtensionShortcutUrl = intentUrl
             } else {
                 android.util.Log.i("MainActivity", "🎬 onCreate intent URL detected: $intentUrl")
                 browserViewModel.pendingIntentUrl = intentUrl
@@ -243,6 +247,13 @@ class MainActivity : FragmentActivity() {
             intentAction == "com.rebelroot.omni.ACTION_OPEN_DOWNLOADS"
         if (openDownloadsExtra) {
             browserViewModel.triggerOpenDownloadsScreen()
+        }
+
+        // Extension home-screen shortcut launch: ensure the extension is enabled and open the browser.
+        val extensionShortcutId = intent?.getStringExtra("extra_extension_id")
+        if (!extensionShortcutId.isNullOrBlank()) {
+            android.util.Log.i("MainActivity", "📌 Extension shortcut launch: $extensionShortcutId")
+            browserViewModel.handleExtensionShortcutLaunch(extensionShortcutId, this)
         }
 
         setContent {
@@ -857,6 +868,12 @@ class MainActivity : FragmentActivity() {
             browserViewModel.triggerOpenDownloadsScreen()
         }
 
+        val extensionShortcutId = intent.getStringExtra("extra_extension_id")
+        if (!extensionShortcutId.isNullOrBlank()) {
+            android.util.Log.i("MainActivity", "📌 Extension shortcut launch: $extensionShortcutId")
+            browserViewModel.handleExtensionShortcutLaunch(extensionShortcutId, this)
+        }
+
         val intentUrl = IntentUrlParser.parseIntent(intent, this)
 
         val isExternal = intentAction == android.content.Intent.ACTION_VIEW ||
@@ -879,6 +896,10 @@ class MainActivity : FragmentActivity() {
                 } else {
                     browserViewModel.pendingVideoUrl = intentUrl
                 }
+            } else if (intent.getBooleanExtra(com.rebelroot.omni.browser.IntentUrlParser.EXTRA_EXTENSION_SHORTCUT, false)) {
+                // Extension shortcut: always open its page in a fresh tab.
+                browserViewModel.createNewTab(this, intentUrl)
+                browserViewModel.triggerOpenBrowserScreen()
             } else {
                 val activeTab = browserViewModel.tabs.find { it.id == browserViewModel.activeTabId }
                 val isHomeOrEmpty = activeTab == null || activeTab.url == "about:blank" || activeTab.url.isEmpty() || activeTab.url.startsWith("file:///android_asset/home")

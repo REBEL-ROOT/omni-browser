@@ -182,9 +182,14 @@ object OmniFlagsRegistry {
             tag = "#brave-referrer-trimming",
             category = FlagCategory.BRAVE_SHIELDS,
             enginePrefs = mapOf(
-                "network.http.referer.trimmingPolicy" to 2,
-                "network.http.referer.XOriginPolicy" to 2,
-                "network.http.referer.XOriginTrimmingPolicy" to 2
+                "network.http.referer.defaultPolicy" to 2,
+                "network.http.referer.defaultPolicy.pbmode" to 2,
+                "network.http.referer.defaultPolicy.trackers" to 2,
+                "network.http.referer.defaultPolicy.trackers.pbmode" to 2,
+                "network.http.referer.trimmingPolicy" to 0,
+                "network.http.referer.XOriginPolicy" to 0,
+                "network.http.referer.XOriginTrimmingPolicy" to 2,
+                "network.http.sendRefererHeader" to 2
             ),
             defaultEnabled = true
         ),

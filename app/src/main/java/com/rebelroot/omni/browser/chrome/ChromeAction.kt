@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LayersClear
 import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Public
@@ -45,6 +44,7 @@ import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.BlackholeIcon
+import com.rebelroot.omni.browser.MenuBurgerIcon
 
 /**
  * The surfaces that can host a [ChromeAction]. A surface is any location in the
@@ -113,7 +113,7 @@ object ChromeActionRegistry {
             id = "spoof_identity",
             icon = Icons.Rounded.Devices,
             surfaces = setOf(ChromeSurface.QUICK_TOOLS),
-            labelLiteral = "Spoof Identity",
+            labelRes = R.string.tool_spoof_identity,
         ),
         ChromeAction(
             id = "force_zoom",
@@ -131,7 +131,7 @@ object ChromeActionRegistry {
             id = "torrent_downloader",
             icon = Icons.Rounded.Download,
             surfaces = setOf(ChromeSurface.QUICK_TOOLS),
-            labelLiteral = "Torrent & Magnet",
+            labelRes = R.string.tool_torrent_magnet,
         ),
         ChromeAction(
             id = "omni_config",
@@ -222,30 +222,30 @@ object ChromeActionRegistry {
             id = "omni_beam",
             icon = Icons.Rounded.Devices,
             surfaces = setOf(ChromeSurface.ALL_IN_ONE),
-            labelLiteral = "Omni Beam",
+            labelRes = R.string.tool_omni_beam,
         ),
 
         // ── Navigation-bar actions ────────────────────────────────────────────
         // Ids are stable and persist inside the user's layouts. HOME_BAR/PAGE_BAR are the
         // two bottom bars; ADDRESS_BAR is the all-in-one bar, split into a leading cluster
         // (before the omnibox) and a trailing cluster (after it).
-        ChromeAction("back", Icons.AutoMirrored.Rounded.ArrowBack, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Back"),
-        ChromeAction("forward", Icons.AutoMirrored.Rounded.ArrowForward, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Forward"),
-        ChromeAction("reload", Icons.Rounded.Refresh, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Reload"),
-        ChromeAction("home", Icons.Rounded.Home, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Home"),
-        ChromeAction("share", Icons.Rounded.Share, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Share"),
+        ChromeAction("back", Icons.AutoMirrored.Rounded.ArrowBack, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.tool_omni_beam),
+        ChromeAction("forward", Icons.AutoMirrored.Rounded.ArrowForward, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.tool_omni_beam),
+        ChromeAction("reload", Icons.Rounded.Refresh, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.tool_omni_beam),
+        ChromeAction("home", Icons.Rounded.Home, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.tool_omni_beam),
+        ChromeAction("share", Icons.Rounded.Share, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.tool_omni_beam),
         ChromeAction(
             id = "tools",
             icon = BlackholeIcon,
             surfaces = ALL_BARS,
-            labelLiteral = "Tools",
+            labelRes = R.string.nav_action_tools,
         ),
-        ChromeAction("tabs", Icons.Rounded.Tab, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Tabs"),
+        ChromeAction("tabs", Icons.Rounded.Tab, setOf(ChromeSurface.PAGE_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.nav_action_tools),
         ChromeAction(
             id = "menu",
-            icon = Icons.Rounded.Menu,
+            icon = MenuBurgerIcon,
             surfaces = ALL_BARS,
-            labelLiteral = "Menu",
+            labelRes = R.string.nav_action_menu,
         ),
         ChromeAction(
             id = "quick_tools",
@@ -259,24 +259,24 @@ object ChromeActionRegistry {
             surfaces = setOf(ChromeSurface.HOME_BAR),
             labelRes = R.string.customize_home_cd,
         ),
-        ChromeAction("news", Icons.AutoMirrored.Rounded.Article, setOf(ChromeSurface.HOME_BAR), labelLiteral = "News Center"),
-        ChromeAction("speed_dial", Icons.Rounded.Speed, setOf(ChromeSurface.HOME_BAR, ChromeSurface.ADDRESS_BAR), labelLiteral = "Speed Dial"),
-        ChromeAction("new_tab", Icons.Rounded.Add, ALL_BARS, labelLiteral = "New Tab"),
-        ChromeAction("bookmarks", Icons.Rounded.Bookmark, ALL_BARS, labelLiteral = "Bookmarks"),
-        ChromeAction("history", Icons.Rounded.History, ALL_BARS, labelLiteral = "History"),
-        ChromeAction("downloads", Icons.Rounded.Download, ALL_BARS, labelLiteral = "Downloads"),
-        ChromeAction("extensions", Icons.Rounded.Extension, ALL_BARS, labelLiteral = "Extensions"),
-        ChromeAction("settings", Icons.Rounded.Settings, ALL_BARS, labelLiteral = "Settings"),
-        ChromeAction("incognito", Icons.Rounded.VisibilityOff, ALL_BARS, labelLiteral = "Incognito"),
+        ChromeAction("news", Icons.AutoMirrored.Rounded.Article, setOf(ChromeSurface.HOME_BAR), labelRes = R.string.nav_action_news),
+        ChromeAction("speed_dial", Icons.Rounded.Speed, setOf(ChromeSurface.HOME_BAR, ChromeSurface.ADDRESS_BAR), labelRes = R.string.nav_action_speed_dial),
+        ChromeAction("new_tab", Icons.Rounded.Add, ALL_BARS, labelRes = R.string.nav_action_new_tab),
+        ChromeAction("bookmarks", Icons.Rounded.Bookmark, ALL_BARS, labelRes = R.string.nav_action_bookmarks),
+        ChromeAction("history", Icons.Rounded.History, ALL_BARS, labelRes = R.string.nav_action_history),
+        ChromeAction("downloads", Icons.Rounded.Download, ALL_BARS, labelRes = R.string.nav_action_downloads),
+        ChromeAction("extensions", Icons.Rounded.Extension, ALL_BARS, labelRes = R.string.menu_extensions),
+        ChromeAction("settings", Icons.Rounded.Settings, ALL_BARS, labelRes = R.string.nav_action_settings),
+        ChromeAction("incognito", Icons.Rounded.VisibilityOff, ALL_BARS, labelRes = R.string.nav_action_incognito),
 
         // ── Home-screen sections ──────────────────────────────────────────────
         // Reorderable top-to-bottom blocks of the new-tab page. "section_" prefix keeps
         // their ids from colliding with the nav-bar actions above.
-        ChromeAction("section_logo", Icons.Rounded.Wallpaper, setOf(ChromeSurface.HOME_SECTIONS), labelLiteral = "Logo"),
-        ChromeAction("section_search", Icons.Rounded.Search, setOf(ChromeSurface.HOME_SECTIONS), labelLiteral = "Search Bar"),
-        ChromeAction("section_shortcuts", Icons.Rounded.GridView, setOf(ChromeSurface.HOME_SECTIONS), labelLiteral = "Shortcuts"),
-        ChromeAction("section_recents", Icons.Rounded.History, setOf(ChromeSurface.HOME_SECTIONS), labelLiteral = "Recently Visited"),
-        ChromeAction("section_privacy", Icons.Rounded.Shield, setOf(ChromeSurface.HOME_SECTIONS), labelLiteral = "Privacy Stats"),
+        ChromeAction("section_logo", Icons.Rounded.Wallpaper, setOf(ChromeSurface.HOME_SECTIONS), labelRes = R.string.home_section_logo),
+        ChromeAction("section_search", Icons.Rounded.Search, setOf(ChromeSurface.HOME_SECTIONS), labelRes = R.string.home_section_search),
+        ChromeAction("section_shortcuts", Icons.Rounded.GridView, setOf(ChromeSurface.HOME_SECTIONS), labelRes = R.string.home_section_shortcuts),
+        ChromeAction("section_recents", Icons.Rounded.History, setOf(ChromeSurface.HOME_SECTIONS), labelRes = R.string.home_recently_visited),
+        ChromeAction("section_privacy", Icons.Rounded.Shield, setOf(ChromeSurface.HOME_SECTIONS), labelRes = R.string.home_section_privacy),
     )
 
     private val byId: Map<String, ChromeAction> = ALL.associateBy { it.id }

@@ -62,7 +62,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Search
@@ -806,7 +805,7 @@ fun BrowserNavigationRail(
 
             RailActionButton(onClick = onShowMenu) {
                 Icon(
-                    imageVector = Icons.Rounded.Menu,
+                    imageVector = MenuBurgerIcon,
                     contentDescription = "Menu",
                     tint = content,
                     modifier = Modifier.size(24.dp)

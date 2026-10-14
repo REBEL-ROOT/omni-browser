@@ -1390,6 +1390,10 @@ fun BrowserScreen(
                                                 Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                                             }
                                         },
+                                        onShowQrGenerator = { url ->
+                                            qrGeneratorUrl = url
+                                            showQrGeneratorDialog = true
+                                        },
                                     )
                                 }
                             }
@@ -1593,6 +1597,10 @@ fun BrowserScreen(
                                     viewModel.burnAllData(context)
                                     Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                                 }
+                            },
+                            onShowQrGenerator = { url ->
+                                qrGeneratorUrl = url
+                                showQrGeneratorDialog = true
                             }
                         )
                     }
@@ -1651,6 +1659,7 @@ fun BrowserScreen(
                         // bars iterate their user-owned layout and call this, so button
                         // membership, order and count are all data-driven.
                         val renderNavAction: @Composable (String, androidx.compose.ui.unit.Dp) -> Unit = { actionId, touch ->
+                            val navIconSize = if (showHomeScreen) 24.dp else config.innerIconSize
                             when (actionId) {
                                 "back" -> {
                                     val canBack = viewModel.canGoBack && !showHomeScreen
@@ -1672,7 +1681,7 @@ fun BrowserScreen(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                             contentDescription = "Back",
                                             tint = if (canBack) navContent else navContentMuted,
-                                            modifier = Modifier.size(config.innerIconSize)
+                                            modifier = Modifier.size(navIconSize)
                                         )
                                     }
                                 }
@@ -1696,15 +1705,15 @@ fun BrowserScreen(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                             contentDescription = "Forward",
                                             tint = if (canForward) navContent else navContentMuted,
-                                            modifier = Modifier.size(config.innerIconSize)
+                                            modifier = Modifier.size(navIconSize)
                                         )
                                     }
                                 }
                                 "reload" -> IconButton(onClick = { viewModel.reload() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Refresh, "Reload", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Refresh, "Reload", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "home" -> IconButton(onClick = { viewModel.returnToHomeScreen() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Home, "Home", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Home, "Home", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "share" -> IconButton(onClick = {
                                     val url = activeTab?.url
@@ -1725,14 +1734,14 @@ fun BrowserScreen(
                                         }
                                     }
                                 }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Share, "Share", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Share, "Share", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "tools" -> IconButton(onClick = { showQuickToolsSheet = true }, modifier = Modifier.size(touch)) {
-                                    Icon(BlackholeIcon, "Tools", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(BlackholeIcon, "Tools", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "tabs" -> Box(
                                     modifier = Modifier
-                                        .size(config.innerIconSize + 4.dp)
+                                        .size(navIconSize + 4.dp)
                                         .clip(RoundedCornerShape(5.dp))
                                         .border(1.5.dp, navContent, RoundedCornerShape(5.dp))
                                         .clickable { showTabGroupsSheet = true },
@@ -1746,40 +1755,43 @@ fun BrowserScreen(
                                     )
                                 }
                                 "menu" -> IconButton(onClick = { showAllInOneMenuSheet = true }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Menu, "Menu", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    // MenuBurgerIcon is a bold three-bar glyph whose ink weight
+                                    // matches the solid rounded icons beside it, so it renders at
+                                    // the same nominal size instead of reading lighter.
+                                    Icon(MenuBurgerIcon, "Menu", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "quick_tools" -> IconButton(onClick = { showQuickToolsSheet = true }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.GridView, "Quick Tools", tint = navContent, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Rounded.GridView, "Quick Tools", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "customize_home" -> IconButton(onClick = { showCustomizationSheet = true }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Palette, stringResource(R.string.customize_home_cd), tint = navContent, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Rounded.Palette, stringResource(R.string.customize_home_cd), tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "news" -> IconButton(onClick = { onOpenNewsCenter() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.AutoMirrored.Rounded.Article, "News Center", tint = navContent, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.AutoMirrored.Rounded.Article, "News Center", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "speed_dial" -> IconButton(onClick = { showSpeedDialSheet = true }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Apps, "Speed Dial", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Apps, "Speed Dial", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "new_tab" -> IconButton(onClick = { viewModel.createNewTab(context, "about:blank") }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Add, "New Tab", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Add, "New Tab", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "bookmarks" -> IconButton(onClick = { onOpenBookmarks() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Bookmark, "Bookmarks", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Bookmark, "Bookmarks", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "history" -> IconButton(onClick = { onOpenHistory() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.History, "History", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.History, "History", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "downloads" -> IconButton(onClick = { onOpenDownloads() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Download, "Downloads", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Download, "Downloads", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "extensions" -> IconButton(onClick = { showExtensionsSheet = true }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Extension, "Extensions", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Extension, "Extensions", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "settings" -> IconButton(onClick = { onOpenSettings() }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.Settings, "Settings", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.Settings, "Settings", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 "incognito" -> IconButton(onClick = { viewModel.toggleIncognitoMode(context) }, modifier = Modifier.size(touch)) {
-                                    Icon(Icons.Rounded.VisibilityOff, "Incognito", tint = navContent, modifier = Modifier.size(config.innerIconSize))
+                                    Icon(Icons.Rounded.VisibilityOff, "Incognito", tint = navContent, modifier = Modifier.size(navIconSize))
                                 }
                                 else -> {}
                             }
@@ -2031,6 +2043,9 @@ fun BrowserScreen(
                                             }
                                             val thresholdPx = with(density) { 80.dp.toPx() }
                                             object : GeckoView(activityCtx) {
+                                                 init {
+                                                     activityContextDelegate = GeckoView.ActivityContextDelegate { activityCtx }
+                                                 }
                                                  private var startX = 0f
                                                  private var startY = 0f
                                                  private var isPulling = false
@@ -3682,7 +3697,7 @@ fun BrowserScreen(
             // Generic file download destination dialog (Root level)
             viewModel.pendingGenericDownload?.let { pending ->
                 ModalBottomSheet(
-                    onDismissRequest = { viewModel.pendingGenericDownload = null },
+                    onDismissRequest = { viewModel.dismissPendingGenericDownload() },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                     containerColor = if (viewModel.isAmoledMode) Color(0xFF000000) else MaterialTheme.colorScheme.surface
                 ) {
@@ -3698,12 +3713,14 @@ fun BrowserScreen(
                         val ext = pending.filename.substringAfterLast('.').lowercase()
                         val (fileIcon, fileColor) = when {
                             ext == "pdf" -> Icons.Rounded.PictureAsPdf to Color(0xFFE53935)
-                            ext == "apk" -> Icons.Rounded.Android to Color(0xFF43A047)
-                            ext in setOf("zip", "rar", "7z", "tar", "gz") -> Icons.Rounded.FolderZip to Color(0xFFFF8F00)
-                            ext in setOf("mp3", "wav", "flac", "m4a", "ogg", "aac") -> Icons.Rounded.MusicNote to Color(0xFF8E24AA)
-                            ext in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> Icons.Rounded.Image to Color(0xFF039BE5)
-                            ext in setOf("doc", "docx", "txt", "rtf") -> Icons.Rounded.Description to Color(0xFF1E88E5)
-                            ext in setOf("xls", "xlsx", "csv") -> Icons.Rounded.TableChart to Color(0xFF43A047)
+                            ext == "apk" || ext in setOf("apks", "xapk") -> Icons.Rounded.Android to Color(0xFF43A047)
+                            ext in setOf("zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "dmg") -> Icons.Rounded.FolderZip to Color(0xFFFF8F00)
+                            ext in setOf("mp3", "wav", "flac", "m4a", "ogg", "aac", "opus", "wma") -> Icons.Rounded.MusicNote to Color(0xFF8E24AA)
+                            ext in setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico") -> Icons.Rounded.Image to Color(0xFF039BE5)
+                            ext in setOf("doc", "docx", "txt", "rtf", "odt", "pages", "tex", "md", "log") -> Icons.Rounded.Description to Color(0xFF1E88E5)
+                            ext in setOf("xls", "xlsx", "csv", "tsv", "ods", "numbers") -> Icons.Rounded.TableChart to Color(0xFF43A047)
+                            ext in setOf("ppt", "pptx", "odp", "key") -> Icons.Rounded.Description to Color(0xFFFF6D00)
+                            ext in setOf("epub", "mobi", "azw", "azw3", "djvu", "cbr", "cbz") -> Icons.AutoMirrored.Rounded.MenuBook to Color(0xFF00897B)
                             else -> Icons.AutoMirrored.Rounded.InsertDriveFile to MaterialTheme.colorScheme.onSurfaceVariant
                         }
                         Row(
@@ -3809,7 +3826,7 @@ fun BrowserScreen(
                         }
 
                         TextButton(
-                            onClick = { viewModel.pendingGenericDownload = null },
+                            onClick = { viewModel.dismissPendingGenericDownload() },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(stringResource(R.string.cancel_text), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
@@ -6953,6 +6970,10 @@ fun BrowserScreen(
                                                             showExtensionsSheet = false
                                                             viewModel.openUserExtension(ext, context)
                                                         },
+                                                        onPinToHomeScreen = {
+                                                            showExtensionsSheet = false
+                                                            viewModel.pinUserExtensionToHomeScreen(ext, context)
+                                                        },
                                                         iconBitmap = iconBitmap
                                                     )
                                                 }
@@ -7032,6 +7053,10 @@ fun BrowserScreen(
                                                     showExtensionsSheet = false
                                                     viewModel.openUserExtension(ext, context)
                                                 },
+                                                onPinToHomeScreen = {
+                                                    showExtensionsSheet = false
+                                                    viewModel.pinUserExtensionToHomeScreen(ext, context)
+                                                },
                                                 iconBitmap = iconBitmap
                                             )
                                         }
@@ -7081,21 +7106,24 @@ fun BrowserScreen(
                                 BuiltInExt(Icons.Rounded.FileCopy, extUniversalCopy, extTeamAuthor,
                                     extUniversalCopyDesc,
                                     viewModel.isUniversalCopyEnabled, !viewModel.isUniversalCopyToggling,
-                                    { viewModel.toggleUniversalCopy(context) }),
+                                    { viewModel.toggleUniversalCopy(context) },
+                                    extensionId = com.rebelroot.omni.browser.extensions.UniversalCopyManager.EXTENSION_ID),
                                 BuiltInExt(Icons.Rounded.Download, extMediaSniffer, extTeamAuthor,
                                     extMediaSnifferDesc,
                                     viewModel.isMediaGrabberEnabled, !viewModel.isMediaGrabberToggling,
                                     { viewModel.toggleMediaGrabber(context) },
-                                    { showSnifferSettingsDialogState.value = true }),
+                                    onSettingsClick = { showSnifferSettingsDialogState.value = true },
+                                    extensionId = BrowserViewModel.GRABBER_ID),
                                 BuiltInExt(Icons.Rounded.Translate, extOmniTranslate, extTeamAuthor,
                                     extOmniTranslateDesc,
                                     true, false,
                                     { /* always-on bridge: not user-togglable */ },
-                                    { showTranslationDialog = true }),
+                                    onSettingsClick = { showTranslationDialog = true }),
                                 BuiltInExt(Icons.Rounded.Block, extAiBlocker, extTeamAuthor,
                                     extAiBlockerDesc,
                                     viewModel.isAiBlockerEnabled, !viewModel.isAiBlockerToggling,
-                                    { viewModel.toggleAiBlocker(context) }),
+                                    { viewModel.toggleAiBlocker(context) },
+                                    extensionId = BrowserViewModel.AI_BLOCKER_ID),
                                 BuiltInExt(Icons.Rounded.DarkMode, extForceDark, extTeamAuthor,
                                     extForceDarkDesc,
                                     viewModel.forceDarkWebsites, true,
@@ -7109,7 +7137,21 @@ fun BrowserScreen(
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         row.forEach { ext ->
                                             Box(modifier = Modifier.weight(1f)) {
-                                                ExtensionGridCard(ext.icon, ext.name, ext.checked, ext.enabled, ext.onCheckedChange, ext.onUninstallClick)
+                                                ExtensionGridCard(
+                                                    icon = ext.icon,
+                                                    name = ext.name,
+                                                    checked = ext.checked,
+                                                    enabled = ext.enabled,
+                                                    onCheckedChange = ext.onCheckedChange,
+                                                    onOpenClick = ext.onSettingsClick,
+                                                    onUninstallClick = ext.onUninstallClick,
+                                                    onPinToHomeScreen = ext.extensionId?.let { id ->
+                                                        {
+                                                            showExtensionsSheet = false
+                                                            viewModel.pinBuiltInExtensionToHomeScreen(context, id, ext.name)
+                                                        }
+                                                    }
+                                                )
                                             }
                                         }
                                         repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -7118,7 +7160,23 @@ fun BrowserScreen(
                             }
                         } else {
                             builtInExts.forEach { ext ->
-                                ExtensionItemCard(ext.icon, ext.name, ext.author, ext.description, ext.checked, ext.enabled, ext.onCheckedChange, ext.onUninstallClick)
+                                ExtensionItemCard(
+                                    icon = ext.icon,
+                                    name = ext.name,
+                                    author = ext.author,
+                                    description = ext.description,
+                                    checked = ext.checked,
+                                    enabled = ext.enabled,
+                                    onCheckedChange = ext.onCheckedChange,
+                                    onOpenClick = ext.onSettingsClick,
+                                    onUninstallClick = ext.onUninstallClick,
+                                    onPinToHomeScreen = ext.extensionId?.let { id ->
+                                        {
+                                            showExtensionsSheet = false
+                                            viewModel.pinBuiltInExtensionToHomeScreen(context, id, ext.name)
+                                        }
+                                    }
+                                )
                             }
                         }
 
@@ -8697,7 +8755,9 @@ data class BuiltInExt(
     val checked: Boolean,
     val enabled: Boolean,
     val onCheckedChange: (Boolean) -> Unit,
-    val onUninstallClick: (() -> Unit)? = null
+    val onUninstallClick: (() -> Unit)? = null,
+    val onSettingsClick: (() -> Unit)? = null,
+    val extensionId: String? = null
 )
 
 

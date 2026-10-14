@@ -58,9 +58,15 @@ open class BuiltInExtensionManager(
 ) {
     private val tag = "BuiltIn[$label]"
 
+    /** The GeckoView id this manager installs (e.g. for home-screen shortcut pinning). */
+    val id: String get() = extensionId
+
     // Holds the installed WebExtension reference after ensureBuiltIn resolves.
     // Null until the first successful installAndSync call.
     private var extension: WebExtension? = null
+
+    /** The installed WebExtension, or null before the first successful install. */
+    val installedExtension: WebExtension? get() = extension
 
     /**
      * Ensures the extension is installed (or already installed) and immediately

@@ -775,6 +775,11 @@
     <string name="ext_open_settings">Buka pengaturan</string>
     <string name="ext_open_dashboard">Buka Dasbor / Pengaturan</string>
     <string name="ext_delete_uninstall">Hapus / Copot Pemasangan</string>
+    <string name="ext_pin_to_home">Sematkan ke Layar Utama</string>
+    <string name="ext_pin_added">Menambahkan \'%1$s\' ke layar utama...</string>
+    <string name="ext_pin_no_target">Ekstensi ini tidak memiliki halaman yang bisa disematkan</string>
+    <string name="ext_pin_reinstalling">Memasang ulang ekstensi yang disematkan…</string>
+    <string name="ext_pin_not_installed">Ekstensi yang disematkan sudah tidak terpasang</string>
     <string name="ext_drag_to_reorder">Seret untuk mengatur ulang</string>
     <string name="ext_drag_handle">Gagang geser</string>
     <string name="ext_syncing">MENYINKRONKAN</string>
@@ -1736,6 +1741,7 @@
 
     <!-- Address Bar Actions -->
     <string name="address_bar_paste_go">Tempel &amp; Buka</string>
+    <string name="address_bar_qr_generator">Pembuat QR</string>
     <string name="address_bar_copy">Salin</string>
     <string name="address_bar_share">Bagikan</string>
     <string name="address_bar_clear">Hapus</string>
@@ -1887,4 +1893,47 @@
     <string name="web_apps_title">Aplikasi Web &amp; PWA</string>
     <string name="web_apps_desc">Kelola, kloning, dan temukan Progressive Web Apps</string>
     <string name="tool_web_apps">Aplikasi Web</string>
+    <string name="quick_tools_edit">Edit</string>
+    <string name="quick_tools_done">Selesai</string>
+    <string name="quick_tools_add_title">Tambah alat</string>
+    <string name="quick_tools_all_added">Semua alat yang tersedia sudah ditambahkan</string>
+    <string name="quick_tools_remove_tool">Hapus %1$s</string>
+    <string name="quick_tools_min_one">Simpan setidaknya satu alat</string>
+    <string name="nav_buttons_title">Tombol bilah navigasi</string>
+    <string name="nav_home_bar">Bilah layar beranda</string>
+    <string name="nav_page_bar">Bilah halaman web</string>
+    <string name="nav_add_button">Tambah tombol</string>
+    <string name="nav_move_up">Naikkan</string>
+    <string name="nav_move_down">Turunkan</string>
+    <string name="nav_remove_button">Hapus %1$s</string>
+    <string name="nav_all_added">Semua tombol yang tersedia sudah ditambahkan</string>
+    <string name="nav_min_one">Simpan setidaknya satu tombol</string>
+    <string name="addressbar_buttons_title">Tombol bilah alamat</string>
+    <string name="addressbar_hint">Berlaku untuk bilah alamat all-in-one (kolom alamat dan tombol navigasi digabungkan). Tombol sebelum dan sesudah kolom alamat dikonfigurasi terpisah.</string>
+    <string name="addressbar_leading">Sebelum kolom alamat</string>
+    <string name="addressbar_trailing">Setelah kolom alamat</string>
+    <string name="home_sections_title">Bagian layar beranda</string>
+    <string name="home_sections_hint">Tahan lama dan seret untuk menyusun ulang, ketuk untuk menghapus, dan tambahkan bagian dari daftar di bawah. Urutan dari atas ke bawah.</string>
+    <string name="dnd_reorder_hint">Tahan lama petak dan seret untuk menyusun ulang</string>
+    <string name="nav_action_reload">Muat ulang</string>
+    <string name="nav_action_share">Bagikan</string>
+    <string name="nav_action_new_tab">Tab baru</string>
+    <string name="nav_action_bookmarks">Bookmark</string>
+    <string name="nav_action_history">Riwayat</string>
+    <string name="nav_action_downloads">Unduhan</string>
+    <string name="nav_action_settings">Setelan</string>
+    <string name="nav_action_incognito">Inkognito</string>
+    <string name="nav_action_speed_dial">Speed Dial</string>
+    <string name="nav_action_menu">Menu</string>
+    <string name="nav_action_tabs">Tab</string>
+    <string name="nav_action_home">Beranda</string>
+    <string name="nav_action_tools">Alat</string>
+    <string name="nav_action_news">Berita</string>
+    <string name="home_section_logo">Logo</string>
+    <string name="home_section_search">Bilah pencarian</string>
+    <string name="home_section_shortcuts">Pintasan</string>
+    <string name="home_section_privacy">Statistik privasi</string>
+    <string name="tool_spoof_identity">Menyamarkan identitas</string>
+    <string name="tool_torrent_magnet">Torrent &amp; Magnet</string>
+    <string name="tool_omni_beam">Omni Beam</string>
 </resources>

@@ -206,7 +206,7 @@ class BrowserViewModel : ViewModel() {
         val EDIT_PAGE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("edit_page_overview_seen")
         val CONSOLE_OVERVIEW_SEEN_KEY = booleanPreferencesKey("console_overview_seen")
         val FORCE_DARK_WEBSITES_KEY = booleanPreferencesKey("force_dark_websites")
-        private const val FORCE_DARK_EXTENSION_ID = "omni-force-dark@omnibrowser.app"
+        internal const val FORCE_DARK_EXTENSION_ID = "omni-force-dark@omnibrowser.app"
         val SHOW_SCROLL_BUTTONS_KEY = booleanPreferencesKey("show_scroll_buttons")
         val NAV_BAR_HIDE_TOP_KEY = booleanPreferencesKey("nav_bar_hide_top")
         val NAV_BAR_HIDE_BOTTOM_KEY = booleanPreferencesKey("nav_bar_hide_bottom")
@@ -334,6 +334,10 @@ class BrowserViewModel : ViewModel() {
     var activeExtensionPopupContentHeightDp by mutableStateOf<Int?>(null)
 
     var pendingIntentUrl: String? = null
+
+    // URL from an extension home-screen shortcut received during cold start; loaded in a
+    // fresh tab once the session has restored (see BrowserViewModel_Extensions).
+    var pendingExtensionShortcutUrl: String? = null
     var isVideoPlayerScreenActive by mutableStateOf(false)
     var isInPictureInPictureMode by mutableStateOf(false)
 
@@ -966,7 +970,9 @@ class BrowserViewModel : ViewModel() {
         val url: String,
         val filename: String,
         val contentType: String?,
-        val sizeBytes: Long? = null
+        val sizeBytes: Long? = null,
+        val tempFilePath: String? = null,
+        val bodyStream: java.io.InputStream? = null
     )
     var pendingGenericDownload by mutableStateOf<PendingGenericDownload?>(null)
     var pendingTorrentUrl by mutableStateOf<String?>(null)
@@ -982,27 +988,41 @@ class BrowserViewModel : ViewModel() {
         val sizeBytes: Long? = null
     )
 
+    fun dismissPendingGenericDownload() {
+        pendingGenericDownload?.bodyStream?.let { stream ->
+            try { stream.close() } catch (_: Exception) {}
+        }
+        pendingGenericDownload?.tempFilePath?.let { path ->
+            try { File(path).delete() } catch (_: Exception) {}
+        }
+        pendingGenericDownload = null
+    }
+
     fun handleGenericDownload(
         url: String,
         filename: String,
         contentType: String?,
         context: Context,
-        contentLength: Long? = null
+        contentLength: Long? = null,
+        tempFilePath: String? = null,
+        bodyStream: java.io.InputStream? = null
     ) {
         val safeFilename = SecurityPolicy.sanitizeFilename(filename).ifBlank { "download.bin" }
         val pending = PendingGenericDownload(
             url = url,
             filename = safeFilename,
             contentType = contentType,
-            sizeBytes = contentLength?.takeIf { it > 0 }
+            sizeBytes = contentLength?.takeIf { it > 0 },
+            tempFilePath = tempFilePath,
+            bodyStream = bodyStream
         )
 
-        Log.i(TAG, "🚀 [DownloadSheet] Opening generic download sheet: filename=$safeFilename, url=$url, size=$contentLength")
+        Log.i(TAG, "🚀 [DownloadSheet] Opening generic download sheet: filename=$safeFilename, url=$url, size=$contentLength, cached=$tempFilePath, hasStream=${bodyStream != null}")
         viewModelScope.launch(Dispatchers.Main) {
             pendingGenericDownload = pending
         }
 
-        if (contentLength == null || contentLength <= 0) {
+        if (bodyStream == null && tempFilePath == null && (contentLength == null || contentLength <= 0) && (url.startsWith("http://") || url.startsWith("https://"))) {
             viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val conn = (java.net.URL(url).openConnection() as? java.net.HttpURLConnection) ?: return@launch
@@ -1011,7 +1031,9 @@ class BrowserViewModel : ViewModel() {
                     conn.readTimeout = 5000
                     activeVideoCookies?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Cookie", it) }
                     currentUrl.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Referer", it) }
-                    conn.setRequestProperty("User-Agent", CHROME_UA)
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")
+                    conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,application/octet-stream,*/*;q=0.8")
+                    conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                     conn.connect()
                     val len = conn.contentLengthLong.takeIf { it > 0 }
                     conn.disconnect()
@@ -1029,7 +1051,9 @@ class BrowserViewModel : ViewModel() {
                         getConn.readTimeout = 5000
                         activeVideoCookies?.takeIf { it.isNotBlank() }?.let { getConn.setRequestProperty("Cookie", it) }
                         currentUrl.takeIf { it.isNotBlank() }?.let { getConn.setRequestProperty("Referer", it) }
-                        getConn.setRequestProperty("User-Agent", CHROME_UA)
+                        getConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")
+                        getConn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,application/octet-stream,*/*;q=0.8")
+                        getConn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                         getConn.connect()
                         val contentRange = getConn.getHeaderField("Content-Range")
                         val total = contentRange?.substringAfterLast("/", "")?.toLongOrNull()?.takeIf { it > 0 }
@@ -1091,6 +1115,36 @@ class BrowserViewModel : ViewModel() {
     ) {
         pendingGenericDownload = null
         val safeFilename = SecurityPolicy.sanitizeFilename(download.filename).ifBlank { "download.bin" }
+
+        if (download.bodyStream != null) {
+            streamDownloadEngine.startGenericFileDownloadFromStream(
+                stream = download.bodyStream,
+                filename = safeFilename,
+                contentType = download.contentType,
+                saveToLocker = saveToLocker,
+                contentLength = download.sizeBytes,
+                sourceUrl = download.url
+            )
+            val toastMsg = if (saveToLocker) R.string.download_toast_locker else R.string.download_toast_started
+            Toast.makeText(context, context.getString(toastMsg), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (download.tempFilePath != null) {
+            val cachedFile = File(download.tempFilePath)
+            if (cachedFile.exists()) {
+                streamDownloadEngine.startGenericFileDownloadFromCachedFile(
+                    cachedFile = cachedFile,
+                    filename = safeFilename,
+                    contentType = download.contentType,
+                    saveToLocker = saveToLocker
+                )
+                val toastMsg = if (saveToLocker) R.string.download_toast_locker else R.string.download_toast_started
+                Toast.makeText(context, context.getString(toastMsg), Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+
         if (saveToLocker) {
             streamDownloadEngine.startGenericFileDownload(
                 url = download.url,
@@ -1491,7 +1545,11 @@ class BrowserViewModel : ViewModel() {
         return true
     }
 
-    internal fun handleExternalDownloadResponse(response: org.mozilla.geckoview.WebResponse, context: Context) {
+    internal fun handleExternalDownloadResponse(
+        response: org.mozilla.geckoview.WebResponse,
+        context: Context,
+        sourceTab: TabState? = null
+    ) {
         val headers = response.headers
         val disposition = headers["Content-Disposition"] ?: headers["content-disposition"]
         val contentType = headers["Content-Type"] ?: headers["content-type"]
@@ -1507,12 +1565,25 @@ class BrowserViewModel : ViewModel() {
         val filename = parseFilenameFromContentDisposition(disposition)
             ?: guessDownloadFilename(response.uri, contentType)
         val contentLength = headers["Content-Length"]?.toLongOrNull() ?: headers["content-length"]?.toLongOrNull()
+
         viewModelScope.launch(Dispatchers.Main) {
-            val activeTab = tabs.find { it.id == activeTabId }
-            if (activeTab != null && activeTab.parentId != null && (activeTab.url.isBlank() || activeTab.url == "about:blank" || activeTab.url == response.uri)) {
-                closeTab(activeTab.id, context)
+            if (sourceTab != null && sourceTab.parentId != null) {
+                closeTab(sourceTab.id, context)
+            } else {
+                val activeTab = tabs.find { it.id == activeTabId }
+                if (activeTab != null && activeTab.parentId != null && (activeTab.url.isBlank() || activeTab.url == "about:blank" || activeTab.url == response.uri)) {
+                    closeTab(activeTab.id, context)
+                }
             }
-            handleGenericDownload(response.uri, filename, contentType, context, contentLength)
+            handleGenericDownload(
+                url = response.uri,
+                filename = filename,
+                contentType = contentType,
+                context = context,
+                contentLength = contentLength,
+                tempFilePath = null,
+                bodyStream = response.body
+            )
         }
     }
 
@@ -2417,9 +2488,16 @@ class BrowserViewModel : ViewModel() {
                         createNewTab(context, urlToLoad)
                     }
                 }
+                val shortcutUrl = pendingExtensionShortcutUrl
+                if (shortcutUrl != null) {
+                    pendingExtensionShortcutUrl = null
+                    createNewTab(context, shortcutUrl)
+                }
             } else {
-                val urlToLoad = pendingIntentUrl ?: "about:blank"
+                val shortcutUrl = pendingExtensionShortcutUrl
+                val urlToLoad = pendingIntentUrl ?: shortcutUrl ?: "about:blank"
                 pendingIntentUrl = null
+                pendingExtensionShortcutUrl = null
                 createNewTab(context, urlToLoad)
             }
 
@@ -3078,11 +3156,7 @@ class BrowserViewModel : ViewModel() {
 
             val cbSettings = org.mozilla.geckoview.ContentBlocking.Settings.Builder()
                 .antiTracking(
-                    org.mozilla.geckoview.ContentBlocking.AntiTracking.AD or
-                    org.mozilla.geckoview.ContentBlocking.AntiTracking.SOCIAL or
-                    org.mozilla.geckoview.ContentBlocking.AntiTracking.ANALYTIC or
-                    org.mozilla.geckoview.ContentBlocking.AntiTracking.FINGERPRINTING or
-                    org.mozilla.geckoview.ContentBlocking.AntiTracking.CRYPTOMINING
+                    org.mozilla.geckoview.ContentBlocking.AntiTracking.NONE
                 )
                 .cookieBehavior(cookieBeh)
                 .safeBrowsing(if (sbLevel > 0) org.mozilla.geckoview.ContentBlocking.SafeBrowsing.DEFAULT else 0)
@@ -6224,6 +6298,18 @@ class BrowserViewModel : ViewModel() {
                 { e -> Log.e(TAG, "  FAILED privacy.firstparty.isolate=$isTorSession", e) }
             )
 
+        // Referrer policy: enforce strict-origin-when-cross-origin.
+        // XOriginPolicy: 0 ensures cross-origin referrers are allowed (trimmed to origin via XOriginTrimmingPolicy: 2),
+        // preventing anti-hotlinking image CDNs on manga/manwha websites (e.g. MangaFire) from rejecting requests with 403.
+        GeckoPreferenceController.setGeckoPref("network.http.referer.defaultPolicy", 2, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.referer.defaultPolicy.pbmode", 2, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.referer.defaultPolicy.trackers", 2, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.referer.defaultPolicy.trackers.pbmode", 2, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.referer.trimmingPolicy", 0, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.referer.XOriginPolicy", 0, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.referer.XOriginTrimmingPolicy", 2, branch)
+        GeckoPreferenceController.setGeckoPref("network.http.sendRefererHeader", 2, branch)
+
         // PROOF: read back what necko actually received. This turns "does it work?"
         // from a guess into a log fact. If these show type=1/socks=127.0.0.1/9150
         // yet ipify still returns the real IP, we're in the documented F2 case
@@ -6333,7 +6419,14 @@ class BrowserViewModel : ViewModel() {
             sb.append("  layout.frame_rate: 0\n")
         }
         sb.append("  browser.cache.memory.capacity: 32768\n")
-        sb.append("  image.mem.decodeondraw: true\n")
+        sb.append("  network.http.referer.defaultPolicy: 2\n")
+        sb.append("  network.http.referer.defaultPolicy.pbmode: 2\n")
+        sb.append("  network.http.referer.defaultPolicy.trackers: 2\n")
+        sb.append("  network.http.referer.defaultPolicy.trackers.pbmode: 2\n")
+        sb.append("  network.http.referer.trimmingPolicy: 0\n")
+        sb.append("  network.http.referer.XOriginPolicy: 0\n")
+        sb.append("  network.http.referer.XOriginTrimmingPolicy: 2\n")
+        sb.append("  network.http.sendRefererHeader: 2\n")
         sb.append("  privacy.donottrackheader.enabled: $doNotTrack\n")
         sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2 || httpsOnlyMode}\n")
         sb.append("  dom.security.https_first: true\n")
@@ -8632,6 +8725,137 @@ class BrowserViewModel : ViewModel() {
                 } else {
                     Toast.makeText(appCtx, "Pinning shortcuts is not supported by your launcher", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+    }
+
+    /**
+     * Handle an extension home-screen shortcut launch (see BrowserViewModel_Extensions).
+     */
+    fun handleExtensionShortcutLaunch(extensionId: String, context: Context) {
+        val ext = userExtensions.find { it.safeId == extensionId }
+            ?: aiBlockerManager?.takeIf { extensionId == AI_BLOCKER_ID }?.installedExtension
+            ?: forceDarkManager?.takeIf { extensionId == FORCE_DARK_EXTENSION_ID }?.installedExtension
+            ?: copyManager?.installedExtension?.takeIf { extensionId == "omni-universal-copy@omnibrowser.app" }
+        if (ext != null) {
+            triggerOpenBrowserScreen()
+            if (ext.safeMetaData?.enabled != true && !togglingUserExtensionIds.contains(extensionId)) {
+                toggleUserExtension(ext, context)
+            }
+            return
+        }
+
+        // The shortcut may point at an options page whose moz-extension host encodes a
+        // different install uid than the id we pinned. Recover the real extension by
+        // matching the moz-extension host against installed extensions.
+        val recovered = try {
+            val tab = tabs.find { it.id == activeTabId }
+            val host = tab?.url?.takeIf { it.startsWith("moz-extension://") }
+                ?.let { android.net.Uri.parse(it).host }
+            userExtensions.firstOrNull { e ->
+                val base = e.safeMetaData?.baseUrl
+                base != null && base.isNotEmpty() && android.net.Uri.parse(base).host == host
+            }
+        } catch (_: Throwable) {
+            null
+        }
+        if (recovered != null && recovered.safeId != extensionId) {
+            handleExtensionShortcutLaunch(recovered.safeId ?: return, context)
+            return
+        }
+
+        // Not in the synced list yet — ask GeckoView's profile database directly; the
+        // sync may not have run since this launch. Enable + open the browser when found.
+        val runtime = geckoRuntime ?: return
+        triggerOpenBrowserScreen()
+        runtime.webExtensionController.list().accept(
+            { list ->
+                val dbExt = list?.find { it.safeId == extensionId }
+                viewModelScope.launch(Dispatchers.Main) {
+                    if (dbExt != null) {
+                        setupWebExtensionDelegates(dbExt)
+                        attachSessionDelegates(dbExt, context)
+                        if (dbExt.safeMetaData?.enabled != true && !togglingUserExtensionIds.contains(extensionId)) {
+                            runtime.webExtensionController.enable(
+                                dbExt,
+                                org.mozilla.geckoview.WebExtensionController.EnableSource.USER
+                            ).accept({ }, { err -> Log.w(TAG, "Failed enabling pinned extension $extensionId", err) })
+                        }
+                        syncUserExtensions()
+                    } else {
+                        autoInstallFromShortcut(extensionId, context)
+                    }
+                }
+            },
+            { err ->
+                Log.w(TAG, "Failed listing extensions for shortcut launch", err)
+                viewModelScope.launch(Dispatchers.Main) { autoInstallFromShortcut(extensionId, context) }
+            }
+        )
+    }
+
+    /**
+     * Last-resort recovery for a pinned extension whose id no longer resolves (e.g. uninstalled):
+     * reinstall from its AMO URL and auto-approve only the permission prompt that this shortcut
+     * launch itself triggered — any other install prompt still goes through the in-app dialog,
+     * so this never grants permissions the user hasn't confirmed.
+     */
+    private fun autoInstallFromShortcut(extensionId: String, context: Context) {
+        val runtime = geckoRuntime ?: return
+        val appCtx = context.applicationContext
+        val installUrl = "https://addons.mozilla.org/android/download/$extensionId/"
+        Log.i(TAG, "Pinned extension $extensionId not installed; attempting AMO reinstall")
+        Toast.makeText(appCtx, com.rebelroot.omni.R.string.ext_pin_reinstalling, Toast.LENGTH_SHORT).show()
+
+        viewModelScope.launch(Dispatchers.Main) {
+            // If a different install prompt is already pending, don't hijack it.
+            if (pendingExtensionInstallPrompt != null) {
+                Toast.makeText(appCtx, com.rebelroot.omni.R.string.ext_pin_not_installed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            try {
+                runtime.webExtensionController.install(installUrl).accept(
+                    { ext: WebExtension? ->
+                        viewModelScope.launch(Dispatchers.Main) {
+                            val p = pendingExtensionInstallPrompt
+                            if (p != null && p.extensionId == extensionId) {
+                                respondToInstallPrompt(true)
+                            }
+                            try {
+                                if (ext != null) {
+                                    setupWebExtensionDelegates(ext)
+                                    if (ext.safeMetaData?.allowedInPrivateBrowsing != true) {
+                                        runtime.webExtensionController.setAllowedInPrivateBrowsing(ext, true)
+                                    }
+                                    runtime.webExtensionController.enable(
+                                        ext,
+                                        org.mozilla.geckoview.WebExtensionController.EnableSource.USER
+                                    ).accept({ enabledExt -> ensureExtensionAutofillReady(enabledExt ?: ext) }, { })
+                                    syncUserExtensions()
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed finalizing shortcut reinstall for $extensionId", e)
+                            }
+                        }
+                    },
+                    { error: Throwable? ->
+                        Log.w(TAG, "AMO reinstall failed for pinned extension $extensionId: ${error?.message}")
+                        viewModelScope.launch(Dispatchers.Main) {
+                            Toast.makeText(appCtx, com.rebelroot.omni.R.string.ext_pin_not_installed, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Synchronous failure installing pinned extension $extensionId", e)
+                Toast.makeText(appCtx, com.rebelroot.omni.R.string.ext_pin_not_installed, Toast.LENGTH_SHORT).show()
+            }
+
+            // Fallback: if the install callback hasn't fired yet but this shortcut's permission
+            // prompt is already waiting, approve it so the installation can proceed.
+            kotlinx.coroutines.delay(1500)
+            val pending = pendingExtensionInstallPrompt
+            if (pending != null && pending.extensionId == extensionId) {
+                respondToInstallPrompt(true)
             }
         }
     }

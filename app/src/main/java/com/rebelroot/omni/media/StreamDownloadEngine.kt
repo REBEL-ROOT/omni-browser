@@ -614,6 +614,145 @@ class StreamDownloadEngine(
         return jobId
     }
 
+    fun startGenericFileDownloadFromCachedFile(
+        cachedFile: File,
+        filename: String,
+        contentType: String?,
+        saveToLocker: Boolean
+    ): String {
+        val jobId = UUID.randomUUID().toString()
+        val totalBytes = cachedFile.length()
+        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(100, totalBytes))
+
+        val job = DownloadJob(
+            id = jobId,
+            filename = filename,
+            url = cachedFile.name,
+            saveToLocker = saveToLocker,
+            progress = progressFlow,
+            isGeneric = true,
+            contentType = contentType,
+            bytesDownloaded = totalBytes
+        )
+
+        _jobs.update { it + job }
+        saveDownloadHistory()
+        setupNotificationObserver(jobId, filename, progressFlow)
+
+        val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                if (saveToLocker) {
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
+                    val mime = contentType ?: getMimeTypeForFile(filename)
+                    val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(cachedFile), filename, mime)
+                    cachedFile.delete()
+                    val category = getCategoryForFile(filename)
+                    val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
+                    progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
+                } else {
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_downloads_folder))
+                    val (savedFile, savedUri) = saveGenericToPublicDownloads(cachedFile, filename, contentType)
+                    cachedFile.delete()
+                    progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes, savedUri)
+                }
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Failed to save cached file download", e)
+                progressFlow.value = DownloadProgress.Error(e.message ?: context.getString(R.string.download_unknown_error))
+            } finally {
+                runningJobs.remove(jobId)
+                if (cachedFile.exists()) {
+                    try { cachedFile.delete() } catch (_: Exception) {}
+                }
+            }
+        }
+        runningJobs[jobId] = jobCoroutine
+
+        return jobId
+    }
+
+    fun startGenericFileDownloadFromStream(
+        stream: java.io.InputStream,
+        filename: String,
+        contentType: String?,
+        saveToLocker: Boolean,
+        contentLength: Long? = null,
+        sourceUrl: String? = null
+    ): String {
+        val jobId = UUID.randomUUID().toString()
+        val safeFilename = SecurityPolicy.sanitizeFilename(filename).ifBlank { "download.bin" }
+        val progressFlow = MutableStateFlow<DownloadProgress>(DownloadProgress.Downloading(0, 0L))
+
+        val job = DownloadJob(
+            id = jobId,
+            filename = safeFilename,
+            url = sourceUrl ?: safeFilename,
+            saveToLocker = saveToLocker,
+            progress = progressFlow,
+            isGeneric = true,
+            contentType = contentType
+        )
+
+        _jobs.update { it + job }
+        saveDownloadHistory()
+        setupNotificationObserver(jobId, safeFilename, progressFlow)
+
+        val jobCoroutine = kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            val targetDir = File(context.filesDir, "temp_downloads").apply { mkdirs() }
+            val tempFile = File(targetDir, "${jobId}_$safeFilename")
+            try {
+                val input = BufferedInputStream(stream, 65536)
+                val output = FileOutputStream(tempFile)
+                val buffer = ByteArray(65536)
+                var count = 0
+                var totalBytes = 0L
+
+                while (isActive && input.read(buffer).also { count = it } != -1) {
+                    totalBytes += count
+                    output.write(buffer, 0, count)
+                    val percent = if (contentLength != null && contentLength > 0L) {
+                        ((totalBytes * 100) / contentLength).toInt().coerceIn(0, 99)
+                    } else -1
+                    progressFlow.value = DownloadProgress.Downloading(percent, totalBytes)
+                    _jobs.update { list ->
+                        list.map { if (it.id == jobId) it.copy(bytesDownloaded = totalBytes) else it }
+                    }
+                }
+                output.flush()
+                output.close()
+                input.close()
+
+                if (!isActive) return@launch
+
+                if (saveToLocker) {
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_encrypting_locker))
+                    val mime = contentType ?: getMimeTypeForFile(safeFilename)
+                    val secureId = privateLockerManager.saveUriToLocker(Uri.fromFile(tempFile), safeFilename, mime)
+                    tempFile.delete()
+                    val category = getCategoryForFile(safeFilename)
+                    val finalLockerFile = File(context.filesDir, "locker/$category/$secureId")
+                    progressFlow.value = DownloadProgress.Complete(finalLockerFile, totalBytes)
+                } else {
+                    progressFlow.value = DownloadProgress.Muxing(context.getString(R.string.download_progress_saving_downloads_folder))
+                    val (savedFile, savedUri) = saveGenericToPublicDownloads(tempFile, safeFilename, contentType)
+                    tempFile.delete()
+                    progressFlow.value = DownloadProgress.Complete(savedFile, totalBytes, savedUri)
+                }
+            } catch (e: Exception) {
+                Log.e("DownloadEngine", "Streaming download failed for job $jobId", e)
+                progressFlow.value = DownloadProgress.Error(e.message ?: context.getString(R.string.download_unknown_error))
+            } finally {
+                runningJobs.remove(jobId)
+                if (tempFile.exists()) {
+                    try { tempFile.delete() } catch (_: Exception) {}
+                }
+                try { stream.close() } catch (_: Exception) {}
+            }
+        }
+        runningJobs[jobId] = jobCoroutine
+
+        return jobId
+    }
+
     fun startTorrentDownload(
         magnetOrTorrentUrl: String,
         suggestedName: String,
@@ -747,7 +886,13 @@ class StreamDownloadEngine(
             if (!referrerUrl.isNullOrEmpty()) {
                 headers["Referer"] = referrerUrl
             }
-            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            headers["User-Agent"] = "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"
+            headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,application/octet-stream,*/*;q=0.8"
+            headers["Accept-Language"] = "en-US,en;q=0.9"
+            headers["Sec-Fetch-Dest"] = "document"
+            headers["Sec-Fetch-Mode"] = "navigate"
+            headers["Sec-Fetch-Site"] = "cross-site"
+            headers["Upgrade-Insecure-Requests"] = "1"
             if (!cookies.isNullOrEmpty()) {
                 headers["Cookie"] = cookies
             }
@@ -915,7 +1060,13 @@ class StreamDownloadEngine(
             if (!referrerUrl.isNullOrEmpty()) {
                 headers["Referer"] = referrerUrl
             }
-            headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            headers["User-Agent"] = "Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0"
+            headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,application/octet-stream,*/*;q=0.8"
+            headers["Accept-Language"] = "en-US,en;q=0.9"
+            headers["Sec-Fetch-Dest"] = "document"
+            headers["Sec-Fetch-Mode"] = "navigate"
+            headers["Sec-Fetch-Site"] = "cross-site"
+            headers["Upgrade-Insecure-Requests"] = "1"
             if (!cookies.isNullOrEmpty()) {
                 headers["Cookie"] = cookies
             }
@@ -1484,6 +1635,7 @@ class StreamDownloadEngine(
         var currentUrl = urlStr
         var redirects = 0
         var conn: HttpURLConnection? = null
+        val currentHeaders = headers.toMutableMap()
         while (redirects < maxRedirects) {
             val url = URL(currentUrl)
             val currentConn = url.openConnection() as HttpURLConnection
@@ -1492,7 +1644,7 @@ class StreamDownloadEngine(
             currentConn.readTimeout = 30000
             
             // Set headers
-            headers.forEach { (key, value) ->
+            currentHeaders.forEach { (key, value) ->
                 currentConn.setRequestProperty(key, value)
             }
             
@@ -1504,6 +1656,13 @@ class StreamDownloadEngine(
                 status == HttpURLConnection.HTTP_SEE_OTHER ||
                 status == 307 || status == 308
             ) {
+                val setCookie = currentConn.getHeaderField("Set-Cookie")
+                val cookieVal = setCookie?.substringBefore(";")?.trim()
+                if (!cookieVal.isNullOrBlank()) {
+                    val existing = currentHeaders["Cookie"]
+                    currentHeaders["Cookie"] = if (existing.isNullOrBlank()) cookieVal else "$existing; $cookieVal"
+                }
+
                 var newUrl = currentConn.getHeaderField("Location")
                 currentConn.disconnect()
                 if (newUrl != null) {
@@ -1527,7 +1686,7 @@ class StreamDownloadEngine(
         if (conn == null) {
             val url = URL(currentUrl)
             val finalConn = url.openConnection() as HttpURLConnection
-            headers.forEach { (key, value) ->
+            currentHeaders.forEach { (key, value) ->
                 finalConn.setRequestProperty(key, value)
             }
             finalConn.connect()

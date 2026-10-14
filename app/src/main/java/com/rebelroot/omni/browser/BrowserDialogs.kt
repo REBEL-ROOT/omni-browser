@@ -1264,6 +1264,45 @@ val BlackholeIcon: ImageVector by lazy {
     }.build()
 }
 
+/**
+ * Bold three-bar burger menu that matches the visual weight of the solid rounded
+ * Material glyphs used beside it (Palette, Article, GridView). The stock
+ * `Icons.Rounded.Menu` is three hairlines, so at the same nominal size it reads
+ * noticeably smaller and lighter than its neighbours.
+ */
+val MenuBurgerIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "BoldMenu",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        // Three rounded bars spanning 3.5..20.5 horizontally, matching the ink extent
+        // of the grid/palette glyphs.
+        fun bar(top: Float, bottom: Float) {
+            val left = 3.5f
+            val right = 20.5f
+            val r = (bottom - top) / 2f
+            path(fill = SolidColor(Color.White)) {
+                moveTo(left + r, top)
+                lineTo(right - r, top)
+                quadTo(right, top, right, top + r)
+                lineTo(right, bottom - r)
+                quadTo(right, bottom, right - r, bottom)
+                lineTo(left + r, bottom)
+                quadTo(left, bottom, left, bottom - r)
+                lineTo(left, top + r)
+                quadTo(left, top, left + r, top)
+                close()
+            }
+        }
+        bar(5.0f, 8.2f)
+        bar(10.4f, 13.6f)
+        bar(15.8f, 19.0f)
+    }.build()
+}
+
 @Composable
 fun RainbowScanBorder(
     isScanning: Boolean,

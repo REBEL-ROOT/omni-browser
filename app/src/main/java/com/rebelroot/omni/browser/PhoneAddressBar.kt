@@ -170,7 +170,8 @@ fun PhoneAddressBar(
     onOpenMediaSheet: () -> Unit = {},
     onShowSpeedDialSheet: () -> Unit = {},
     onOpenWebApps: () -> Unit = {},
-    onBurnData: () -> Unit = {}
+    onBurnData: () -> Unit = {},
+    onShowQrGenerator: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -210,7 +211,7 @@ fun PhoneAddressBar(
                     modifier = Modifier.matchParentSize()
                 ) {
                     Icon(
-                        imageVector = if (isTopBar) Icons.Rounded.MoreVert else Icons.Rounded.Menu,
+                        imageVector = if (isTopBar) Icons.Rounded.MoreVert else MenuBurgerIcon,
                         contentDescription = "Menu",
                         tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(config.innerIconSize)
@@ -889,7 +890,7 @@ if (viewModel.chromeNavBarEnabled) {
                     modifier = Modifier.matchParentSize()
                 ) {
                     Icon(
-                        imageVector = if (isTopBar) Icons.Rounded.MoreVert else Icons.Rounded.Menu,
+                        imageVector = if (isTopBar) Icons.Rounded.MoreVert else MenuBurgerIcon,
                         contentDescription = "Menu",
                         tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(config.innerIconSize)
@@ -1004,6 +1005,34 @@ if (viewModel.chromeNavBarEnabled) {
                 }
 
                 if (!currentText.isNullOrBlank()) {
+                    AssistChip(
+                        onClick = {
+                            onShowQrGenerator(currentText)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.QrCode2,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.address_bar_qr_generator),
+                                fontSize = 12.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = null
+                    )
+
                     AssistChip(
                         onClick = {
                             val clip = ClipData.newPlainText("URL", currentText)

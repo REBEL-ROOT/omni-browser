@@ -78,6 +78,7 @@ build_deliverables/
 
 # AI / editor tool directories
 .zcode/
+.zcodeignore
 .kilo/
 .kotlin/
 .gemini/

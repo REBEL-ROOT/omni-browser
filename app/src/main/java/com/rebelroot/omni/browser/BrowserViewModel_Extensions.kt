@@ -1,3 +1,5 @@
+@file:JvmName("ExtensionShortcut")
+
 package com.rebelroot.omni.browser
 
 import android.content.Context
@@ -26,6 +28,10 @@ import com.rebelroot.omni.media.handoff.WebVideoSessionState
 import com.rebelroot.omni.media.handoff.WebVideoSourceResolver
 
 import android.content.Intent
+import android.net.Uri
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.rebelroot.omni.media.StreamDownloadEngine
 
 val WebExtension?.safeId: String?
@@ -129,6 +135,214 @@ fun BrowserViewModel.openUserExtension(extension: WebExtension, context: Context
         createNewTab(context, targetUrl)
     } else {
         Toast.makeText(context, "${meta?.name ?: extId} is active", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Best URL a home-screen shortcut for this extension can open: its options page when declared,
+ * otherwise the popup/action URL of its registered browser action, otherwise its base URL.
+ */
+fun WebExtension.resolveShortcutTargetUrl(): String? {
+    val meta = safeMetaData ?: return null
+    val rawOptions = meta.optionsPageUrl
+    val baseUrl = meta.baseUrl ?: ""
+    val optionsUrl = when {
+        rawOptions.isNullOrBlank() -> null
+        rawOptions.startsWith("moz-extension://") || rawOptions.startsWith("http://") || rawOptions.startsWith("https://") -> rawOptions
+        else -> "${baseUrl.removeSuffix("/")}/${rawOptions.removePrefix("/")}"
+    }
+    if (optionsUrl != null) return optionsUrl
+    return baseUrl.ifBlank { null }
+}
+
+/** Popup URLs observed for an extension id via its browser action, used to pin shortcuts. */
+internal val extensionPopupUrlsByExtensionId = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+/**
+ * Load a WebExtension icon into a 96px Bitmap asynchronously (GeckoView Image.getBitmap
+ * returns a GeckoResult, not a Bitmap). Returns null on any failure.
+ */
+private suspend fun loadExtensionIconBitmap(image: org.mozilla.geckoview.Image?): android.graphics.Bitmap? {
+    if (image == null) return null
+    return try {
+        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            image.getBitmap(96).accept(
+                { bitmap -> cont.resume(bitmap) {} },
+                { _ -> cont.resume(null) {} }
+            )
+        }
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+/**
+ * Pin a launcher shortcut that opens this extension's settings/popup page on the Home screen,
+ * reusing the same ShortcutManagerCompat flow as web apps and bookmarks.
+ */
+fun BrowserViewModel.pinUserExtensionToHomeScreen(extension: WebExtension, context: Context) {
+    val extId = extension.safeId ?: return
+    val currentExtension = userExtensions.find { it.safeId == extId } ?: extension
+    val displayName = currentExtension.safeMetaData?.name?.takeIf { it.isNotBlank() }
+        ?: extId.substringBefore("@").replace("-", " ")
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
+    // Prefer a popup URL observed from the browser action; the options page otherwise.
+    val targetUrl = extensionPopupUrlsByExtensionId[extId] ?: currentExtension.resolveShortcutTargetUrl()
+
+    viewModelScope.launch(Dispatchers.Main) {
+        val iconBitmap = extensionIcons[extId] ?: loadExtensionIconBitmap(currentExtension.safeMetaData?.icon)
+        // Extensions without any openable page (no options, no popup, no base URL) can still be
+        // pinned: launching their shortcut just ensures they are enabled in the browser.
+        if (targetUrl == null) {
+            pinExtensionLaunchShortcut(
+                context = context,
+                shortcutId = "ext_$extId",
+                displayName = displayName,
+                extensionId = extId,
+                iconBitmap = iconBitmap
+            )
+        } else {
+            pinExtensionToHomeScreen(
+                context = context,
+                shortcutId = "ext_$extId",
+                displayName = displayName,
+                targetUrl = targetUrl,
+                iconBitmap = iconBitmap
+            )
+        }
+    }
+}
+
+/**
+ * Pin a built-in (bundled) extension to the Home screen. Built-ins like AI Blocker have no
+ * options or popup page, so the caller supplies an explicit settings target (e.g. the in-app
+ * settings screen). Falls back to opening the extension itself when targetUrl is null.
+ */
+fun BrowserViewModel.pinBuiltInExtensionToHomeScreen(
+    context: Context,
+    extensionId: String,
+    displayName: String,
+    targetUrl: String? = null
+) {
+    val ext = userExtensions.find { it.safeId == extensionId }
+        ?: aiBlockerManager?.takeIf { extensionId == BrowserViewModel.AI_BLOCKER_ID }?.installedExtension
+        ?: forceDarkManager?.takeIf { extensionId == BrowserViewModel.FORCE_DARK_EXTENSION_ID }?.installedExtension
+        ?: copyManager?.installedExtension?.takeIf { extensionId == com.rebelroot.omni.browser.extensions.UniversalCopyManager.EXTENSION_ID }
+
+    viewModelScope.launch(Dispatchers.Main) {
+        val iconBitmap = extensionIcons[extensionId] ?: loadExtensionIconBitmap(ext?.safeMetaData?.icon)
+        val shortcutTargetUrl = targetUrl ?: ext?.resolveShortcutTargetUrl()
+        if (shortcutTargetUrl == null) {
+            pinExtensionLaunchShortcut(
+                context = context,
+                shortcutId = "ext_$extensionId",
+                displayName = displayName,
+                extensionId = extensionId,
+                iconBitmap = iconBitmap
+            )
+        } else {
+            pinExtensionToHomeScreen(
+                context = context,
+                shortcutId = "ext_$extensionId",
+                displayName = displayName,
+                targetUrl = shortcutTargetUrl,
+                iconBitmap = iconBitmap
+            )
+        }
+    }
+}
+
+/**
+ * Pin a launcher shortcut for an extension that has no openable page (no options, popup, or
+ * base URL). The shortcut carries the extension id marker; when launched, MainActivity enables
+ * the extension and opens the browser.
+ */
+private fun BrowserViewModel.pinExtensionLaunchShortcut(
+    context: Context,
+    shortcutId: String,
+    displayName: String,
+    extensionId: String,
+    iconBitmap: android.graphics.Bitmap?
+) {
+    val appCtx = context.applicationContext
+
+    viewModelScope.launch(Dispatchers.Main) {
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(appCtx)) {
+            Toast.makeText(appCtx, com.rebelroot.omni.R.string.vm_pin_not_supported, Toast.LENGTH_SHORT).show()
+            return@launch
+        }
+
+        val intent = Intent(appCtx, com.rebelroot.omni.MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            data = Uri.parse("about:blank")
+            putExtra(IntentUrlParser.EXTRA_EXTENSION_SHORTCUT, true)
+            putExtra("extra_extension_id", extensionId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+
+        val icon = if (iconBitmap != null) {
+            IconCompat.createWithBitmap(iconBitmap)
+        } else {
+            IconCompat.createWithResource(appCtx, com.rebelroot.omni.R.mipmap.ic_launcher)
+        }
+
+        val shortcutInfo = ShortcutInfoCompat.Builder(appCtx, shortcutId)
+            .setShortLabel(displayName)
+            .setLongLabel(displayName)
+            .setIcon(icon)
+            .setIntent(intent)
+            .build()
+
+        ShortcutManagerCompat.requestPinShortcut(appCtx, shortcutInfo, null)
+        Toast.makeText(appCtx, appCtx.getString(com.rebelroot.omni.R.string.ext_pin_added, displayName), Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun BrowserViewModel.pinExtensionToHomeScreen(
+    context: Context,
+    shortcutId: String,
+    displayName: String,
+    targetUrl: String?,
+    iconBitmap: android.graphics.Bitmap?
+) {
+    val appCtx = context.applicationContext
+
+    if (targetUrl == null) {
+        Toast.makeText(appCtx, appCtx.getString(com.rebelroot.omni.R.string.ext_pin_no_target), Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    viewModelScope.launch(Dispatchers.IO) {
+        val bitmap = iconBitmap
+
+        launch(Dispatchers.Main) {
+            if (!ShortcutManagerCompat.isRequestPinShortcutSupported(appCtx)) {
+                Toast.makeText(appCtx, com.rebelroot.omni.R.string.vm_pin_not_supported, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            val intent = Intent(appCtx, com.rebelroot.omni.MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = Uri.parse(targetUrl)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+
+            val icon = if (bitmap != null) {
+                IconCompat.createWithBitmap(bitmap)
+            } else {
+                IconCompat.createWithResource(appCtx, com.rebelroot.omni.R.mipmap.ic_launcher)
+            }
+
+            val shortcutInfo = ShortcutInfoCompat.Builder(appCtx, shortcutId)
+                .setShortLabel(displayName)
+                .setLongLabel(displayName)
+                .setIcon(icon)
+                .setIntent(intent)
+                .build()
+
+            ShortcutManagerCompat.requestPinShortcut(appCtx, shortcutInfo, null)
+            Toast.makeText(appCtx, appCtx.getString(com.rebelroot.omni.R.string.ext_pin_added, displayName), Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
@@ -256,6 +470,19 @@ fun BrowserViewModel.handleExtensionOpenPopup(extension: WebExtension, action: W
     val run = runtime
     if (run != null && !session.isOpen) {
         session.open(run)
+    }
+
+    // Remember the popup page URL so home-screen shortcuts can open it directly.
+    try {
+        val extIdForPopup = extension.safeId
+        val popupUri = action.javaClass.getDeclaredMethod("getURI").apply { isAccessible = true }
+            .invoke(action) as? android.net.Uri
+        val popupUrlStr = popupUri?.toString()
+        if (extIdForPopup != null && !popupUrlStr.isNullOrBlank()) {
+            extensionPopupUrlsByExtensionId[extIdForPopup] = popupUrlStr
+        }
+    } catch (_: Throwable) {
+        // getURI is not part of the stable GeckoView API surface; options-page fallback applies.
     }
 
     android.os.Handler(android.os.Looper.getMainLooper()).post {

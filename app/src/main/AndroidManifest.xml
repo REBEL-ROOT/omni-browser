@@ -29,6 +29,9 @@
     <!-- Haptic feedback vibration permission -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- WakeLock for keeping print and media engine alive during background processing -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Read Google accounts from AccountManager for the native OAuth account picker.
          This is a NORMAL permission (not dangerous) — no runtime dialog needed. -->
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />

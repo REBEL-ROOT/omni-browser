@@ -411,6 +411,8 @@ object SecurityPolicy {
             "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "dmg", "bin", "exe", "msi", "apk", "apks", "xapk", "jar", "deb", "rpm", "torrent",
             // Documents & Data
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "epub", "mobi", "json", "xml", "log", "md",
+            "odt", "ods", "odp", "odg", "odf", "docm", "dotx", "dotm", "xlsm", "xlsb", "xltx", "pptm", "potx", "ppsx",
+            "pages", "numbers", "key", "azw", "azw3", "fb2", "djvu", "cbr", "cbz", "tsv", "tex", "sql", "db", "sqlite",
             // Audio
             "mp3", "wav", "flac", "m4a", "ogg", "aac", "opus", "wma",
             // Video
@@ -607,9 +609,15 @@ object SecurityPolicy {
             cleanContentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
             cleanContentType == "application/vnd.ms-powerpoint" -> "ppt"
             cleanContentType == "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "pptx"
+            cleanContentType == "application/vnd.oasis.opendocument.text" -> "odt"
+            cleanContentType == "application/vnd.oasis.opendocument.spreadsheet" -> "ods"
+            cleanContentType == "application/vnd.oasis.opendocument.presentation" -> "odp"
+            cleanContentType == "application/rtf" || cleanContentType == "application/x-rtf" || cleanContentType == "text/rtf" -> "rtf"
             cleanContentType == "application/epub+zip" -> "epub"
+            cleanContentType == "application/x-mobipocket-ebook" -> "mobi"
             cleanContentType == "text/plain" -> "txt"
             cleanContentType == "text/csv" -> "csv"
+            cleanContentType == "text/tab-separated-values" -> "tsv"
             cleanContentType == "application/json" -> "json"
             cleanContentType == "application/xml" || cleanContentType == "text/xml" -> "xml"
             cleanContentType == "application/vnd.debian.binary-package" -> "deb"
