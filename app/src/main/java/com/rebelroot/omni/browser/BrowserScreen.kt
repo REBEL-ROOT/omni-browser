@@ -107,7 +107,6 @@ import org.mozilla.geckoview.GeckoView
 import com.rebelroot.omni.R
 import com.rebelroot.omni.browser.chrome.ChromeActionRegistry
 import com.rebelroot.omni.media.MediaInterceptor
-import com.rebelroot.omni.privacy.FireButton
 import com.rebelroot.omni.tools.qrcode.BarcodeGenerator
 import android.graphics.Bitmap
 import androidx.compose.ui.draw.rotate
@@ -1014,8 +1013,6 @@ fun BrowserScreen(
                             viewModel.saveDefaultExitAction(context, "BURN_ALL")
                         }
                         coroutineScope.launch {
-                            val runtime = viewModel.getGeckoRuntime(context)
-                            FireButton(runtime, context).burn()
                             viewModel.burnAllData(context)
                             onExitBrowser()
                         }
@@ -1306,8 +1303,6 @@ fun BrowserScreen(
                                             onBurnData = {
                                                 showMenu = false
                                                 coroutineScope.launch {
-                                                    val runtime = viewModel.getGeckoRuntime(context)
-                                                    FireButton(runtime, context).burn()
                                                     viewModel.burnAllData(context)
                                                     Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                                                 }
@@ -1384,8 +1379,6 @@ fun BrowserScreen(
                                         onOpenWebApps = onOpenWebApps,
                                         onBurnData = {
                                             coroutineScope.launch {
-                                                val runtime = viewModel.getGeckoRuntime(context)
-                                                FireButton(runtime, context).burn()
                                                 viewModel.burnAllData(context)
                                                 Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                                             }
@@ -1592,8 +1585,6 @@ fun BrowserScreen(
                             onOpenWebApps = onOpenWebApps,
                             onBurnData = {
                                 coroutineScope.launch {
-                                    val runtime = viewModel.getGeckoRuntime(context)
-                                    FireButton(runtime, context).burn()
                                     viewModel.burnAllData(context)
                                     Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                                 }
@@ -7633,8 +7624,6 @@ fun BrowserScreen(
                 onOpenHistory = onOpenHistory,
                 onBurnData = {
                     coroutineScope.launch {
-                        val runtime = viewModel.getGeckoRuntime(context)
-                        FireButton(runtime, context).burn()
                         viewModel.burnAllData(context)
                         Toast.makeText(context, context.getString(R.string.toast_burn_all), Toast.LENGTH_SHORT).show()
                     }

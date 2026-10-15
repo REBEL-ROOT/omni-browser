@@ -2152,6 +2152,7 @@ class BrowserViewModel : ViewModel() {
                         put("notifications", perm.notifications)
                         put("javascript", perm.javascript)
                         put("autoplay", perm.autoplay)
+                        put("externalApp", perm.externalApp)
                     }
                     jsonArray.put(obj)
                 }
@@ -2180,7 +2181,8 @@ class BrowserViewModel : ViewModel() {
                             microphone = obj.optString("microphone", "ask"),
                             notifications = obj.optString("notifications", "ask"),
                             javascript = obj.optString("javascript", "allow"),
-                            autoplay = obj.optString("autoplay", "allow")
+                            autoplay = obj.optString("autoplay", "allow"),
+                            externalApp = obj.optString("externalApp", "ask")
                         )
                     )
                 }
@@ -2246,6 +2248,17 @@ class BrowserViewModel : ViewModel() {
 
     fun clearAllSitePermissions() {
         sitePermissions.clear()
+        val context = appContext
+        if (context != null) {
+            try {
+                val file = File(context.filesDir, SITE_PERMISSIONS_FILE)
+                if (file.exists()) {
+                    file.delete()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error deleting site permissions file", e)
+            }
+        }
         saveSitePermissions()
     }
 
@@ -2940,27 +2953,26 @@ class BrowserViewModel : ViewModel() {
 
 
     /**
-     * "Burn Data" — wipes everything:
-     *  1. Clears in-memory + persisted browsing history.
-     *  2. Closes every open tab (both normal and incognito).
-     *  3. Opens a single fresh "about:blank" normal tab so the browser is usable.
-     *  4. Exits incognito mode if active.
-     *
-     * The GeckoView-side purge (cookies, cache, DOM storage, etc.) is handled by
-     * [com.rebelroot.omni.privacy.FireButton.burn], which the call site runs first.
+     * "Burn Data" — completely incinerates all browsing data:
+     *  1. Closes every open tab session first to halt network/storage activity.
+     *  2. Wipes in-memory + persisted browsing history.
+     *  3. Wipes all site settings and custom permissions.
+     *  4. Wipes session state persistence.
+     *  5. Purges GeckoView storage (ClearFlags.ALL) and incinerates all disk caches
+     *     (cacheDir, codeCacheDir, externalCacheDir, mozilla cache2/startupCache).
+     *  6. Opens a single fresh "about:blank" normal tab.
      */
-    fun burnAllData(context: Context) {
+    suspend fun burnAllData(context: Context) {
         // 0. Cancel any pending prompts so their GeckoResult is not left hanging.
         cancelAllPendingPrompts()
         // 0b. Stop and restore any active page translations (all tabs).
         stopAllPageTranslations()
 
-        // 1. Wipe history list and its persisted JSON file
-        historyList.clear()
-        val ctx = appContext ?: context
-        saveHistory(ctx)
+        val ctx = appContext ?: context.applicationContext
 
-        // 2. Close every GeckoSession without going through the normal "last tab" guard
+        // 1. Close every GeckoSession FIRST without going through the normal "last tab" guard.
+        // Closing sessions first stops all network activity, JS execution, and cache writes
+        // so that the subsequent cache and data purge cannot be tainted by active tabs.
         val allTabs = tabs.toList()
         for (tab in allTabs) {
             try { tab.session.close() } catch (e: Exception) {
@@ -2969,7 +2981,14 @@ class BrowserViewModel : ViewModel() {
         }
         tabs.clear()
 
-        // 3. Reset all tab-tracking state
+        // 2. Wipe history list and its persisted JSON file
+        historyList.clear()
+        saveHistory(ctx)
+
+        // 3. Wipe site settings & custom site permissions (both in-memory state and persisted file)
+        clearAllSitePermissions()
+
+        // 4. Reset all tab-tracking state
         activeTabId = null
         activeNormalTabId = null
         activeIncognitoTabId = null
@@ -2978,10 +2997,10 @@ class BrowserViewModel : ViewModel() {
         canGoBack = false
         canGoForward = false
 
-        // 4. Persist the now-empty tab list so it survives a relaunch
+        // 5. Persist the now-empty tab list so it survives a relaunch
         saveTabs()
 
-        // 4b. Wipe durable per-tab SessionState blobs — otherwise the pre-burn
+        // 6. Wipe durable per-tab SessionState blobs — otherwise the pre-burn
         // session file survives on disk and can resurrect burned pages if a
         // crash ever leaves the old tab list behind (privacy + issue #117).
         try {
@@ -2990,10 +3009,18 @@ class BrowserViewModel : ViewModel() {
             Log.e(TAG, "burnAllData: error clearing session state persistence", e)
         }
 
-        // 5. Open one clean normal tab — browser must always have at least one tab
+        // 7. Full GeckoView storage purge and disk cache incineration
+        try {
+            val runtime = getGeckoRuntime(ctx)
+            FireButton(runtime, ctx).burn()
+        } catch (e: Exception) {
+            Log.e(TAG, "burnAllData: error during FireButton burn", e)
+        }
+
+        // 8. Open one clean normal tab — browser must always have at least one tab
         createNewTab(ctx, "about:blank")
 
-        Log.i(TAG, "🔥 burnAllData: history wiped, all ${allTabs.size} tab(s) closed, fresh tab opened.")
+        Log.i(TAG, "🔥 burnAllData: history wiped, site settings cleared, cache incinerated, all ${allTabs.size} tab(s) closed, fresh tab opened.")
     }
 
     fun clearCacheAndSiteData(context: Context) {
@@ -3023,7 +3050,38 @@ class BrowserViewModel : ViewModel() {
                         cacheDir.mkdirs()
                     }
 
-                    // 3. Clear temporary downloads
+                    // 2b. Clear codeCacheDir
+                    try {
+                        val codeCacheDir = context.codeCacheDir
+                        if (codeCacheDir != null && codeCacheDir.exists()) {
+                            codeCacheDir.deleteRecursively()
+                            codeCacheDir.mkdirs()
+                        }
+                    } catch (_: Exception) {}
+
+                    // 2c. Clear external cache directories
+                    try {
+                        context.externalCacheDir?.deleteRecursively()
+                        context.externalCacheDirs?.forEach { it?.deleteRecursively() }
+                    } catch (_: Exception) {}
+
+                    // 3. Clear Gecko profile cache directory
+                    val geckoProfileDir = File(context.filesDir, "mozilla")
+                    if (geckoProfileDir.exists()) {
+                        geckoProfileDir.walkTopDown().forEach { file ->
+                            if (file.isDirectory && (
+                                file.name == "cache2" ||
+                                file.name == "startupCache" ||
+                                file.name == "jumpListCache" ||
+                                file.name == "shader-cache" ||
+                                file.name == "thumbnails"
+                            )) {
+                                file.deleteRecursively()
+                            }
+                        }
+                    }
+
+                    // 4. Clear temporary downloads
                     val tempDownloadsDir = File(context.filesDir, "temp_downloads")
                     if (tempDownloadsDir.exists()) {
                         tempDownloadsDir.deleteRecursively()
@@ -4506,8 +4564,6 @@ class BrowserViewModel : ViewModel() {
                     onExitBrowser()
                 }
                 "BURN_ALL" -> {
-                    val runtime = getGeckoRuntime(context)
-                    FireButton(runtime, context).burn()
                     burnAllData(context)
                     onExitBrowser()
                 }

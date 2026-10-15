@@ -20,6 +20,7 @@ package com.rebelroot.omni.privacy
 
 import android.content.Context
 import android.util.Log
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.mozilla.geckoview.GeckoRuntime
@@ -50,10 +51,12 @@ class FireButton(
         try {
             // 1. Clear ALL GeckoView storage — cookies, cache, DOM storage, history,
             //    auth sessions, permissions, and site settings in one pass.
-            //    Await completion: poll() blocks this IO thread while the purge runs
-            //    on Gecko's own thread, so there is no deadlock risk.
+            //    Dispatched to Main thread for safe GeckoRuntime interaction, then
+            //    awaited on this IO thread via poll() so there is no deadlock risk.
             val purgeResult: org.mozilla.geckoview.GeckoResult<Void> =
-                runtime.storageController.clearData(StorageController.ClearFlags.ALL)
+                withContext(Dispatchers.Main) {
+                    runtime.storageController.clearData(StorageController.ClearFlags.ALL)
+                }
             try {
                 purgeResult.poll(30_000L)
                 Log.d(TAG, "GeckoView storageController clear completed successfully.")
@@ -61,17 +64,62 @@ class FireButton(
                 Log.e(TAG, "GeckoView storageController clear error", e)
             }
 
-            // 2. Wipes standard HTTP WebView caches and temp cacheDir files recursively
+            // 2. Wipe standard HTTP cache and temp cacheDir files
             val cacheDir = context.cacheDir
             if (cacheDir.exists()) {
                 cacheDir.deleteRecursively()
                 cacheDir.mkdirs()
             }
 
-            // 3. Wipes temporary download folders
+            // 3. Wipe code cache directory
+            try {
+                val codeCacheDir = context.codeCacheDir
+                if (codeCacheDir != null && codeCacheDir.exists()) {
+                    codeCacheDir.deleteRecursively()
+                    codeCacheDir.mkdirs()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear codeCacheDir", e)
+            }
+
+            // 4. Wipe external cache directories
+            try {
+                context.externalCacheDir?.deleteRecursively()
+                context.externalCacheDirs?.forEach { it?.deleteRecursively() }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear externalCacheDir", e)
+            }
+
+            // 5. Wipe Gecko profile disk cache directories (cache2, startupCache, jumpListCache, etc.)
+            try {
+                val geckoProfileDir = File(context.filesDir, "mozilla")
+                if (geckoProfileDir.exists()) {
+                    geckoProfileDir.walkTopDown().forEach { file ->
+                        if (file.isDirectory && (
+                            file.name == "cache2" ||
+                            file.name == "startupCache" ||
+                            file.name == "jumpListCache" ||
+                            file.name == "shader-cache" ||
+                            file.name == "thumbnails"
+                        )) {
+                            file.deleteRecursively()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear gecko profile cache", e)
+            }
+
+            // 6. Wipe temporary download folders
             val tempDownloadsDir = File(context.filesDir, "temp_downloads")
             if (tempDownloadsDir.exists()) {
                 tempDownloadsDir.deleteRecursively()
+            }
+
+            // 7. Wipe persisted site permissions and settings file
+            val sitePermissionsFile = File(context.filesDir, "browser_site_permissions.json")
+            if (sitePermissionsFile.exists()) {
+                sitePermissionsFile.delete()
             }
 
             Log.i(TAG, "🔥 All temporary data successfully incinerated. No traces left.")
@@ -81,6 +129,3 @@ class FireButton(
         }
     }
 }
-
-// Inline File import definition for safety
-private typealias File = java.io.File
