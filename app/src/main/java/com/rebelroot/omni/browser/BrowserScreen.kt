@@ -3721,6 +3721,7 @@ fun BrowserScreen(
                             ext in setOf("xls", "xlsx", "csv", "tsv", "ods", "numbers") -> Icons.Rounded.TableChart to Color(0xFF43A047)
                             ext in setOf("ppt", "pptx", "odp", "key") -> Icons.Rounded.Description to Color(0xFFFF6D00)
                             ext in setOf("epub", "mobi", "azw", "azw3", "djvu", "cbr", "cbz") -> Icons.AutoMirrored.Rounded.MenuBook to Color(0xFF00897B)
+                            ext in setOf("ics", "ical", "ifb") -> Icons.Rounded.DateRange to Color(0xFF1E88E5)
                             else -> Icons.AutoMirrored.Rounded.InsertDriveFile to MaterialTheme.colorScheme.onSurfaceVariant
                         }
                         Row(

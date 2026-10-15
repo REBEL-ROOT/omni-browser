@@ -1150,15 +1150,18 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
-            if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:") ||
-                lowerUri.startsWith("calendar:") || lowerUri.endsWith(".ics") ||
-                lowerUri.contains(".ics?") || lowerUri.contains("calendar.google.com") ||
-                (lowerUri.startsWith("intent:") && (lowerUri.contains("calendar") || lowerUri.contains(".ics") || lowerUri.contains("webcal")))
-            ) {
-                Log.w(TAG, "🚫 Intercepted and blocked potential spam calendar request: $uri")
-                viewModelScope.launch(Dispatchers.Main) {
-                    Toast.makeText(context, "Blocked calendar spam attempt", Toast.LENGTH_SHORT).show()
+            if (lowerUri.startsWith("webcal://") || lowerUri.startsWith("webcal:")) {
+                val rawTarget = if (lowerUri.startsWith("webcal://")) {
+                    uri.substring(9)
+                } else {
+                    uri.substring(7)
                 }
+                val cleanUrl = when {
+                    rawTarget.startsWith("https://", ignoreCase = true) || rawTarget.startsWith("http://", ignoreCase = true) -> rawTarget
+                    else -> "https://$rawTarget"
+                }
+                Log.i(TAG, "📅 Converted webcal URI to HTTP(S): $cleanUrl")
+                session.loadUri(cleanUrl)
                 return GeckoResult.fromValue(AllowOrDeny.DENY)
             }
 
@@ -1264,16 +1267,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                             Uri.parse(uri).getQueryParameter("id")
                         }
 
-                        // Calendar-spam guard (must run before any launch)
-                        val isCalendarSpam = intentPackage?.contains("calendar") == true || intentPackage?.contains("cal") == true ||
-                                intent.dataString?.contains("calendar") == true || intent.dataString?.contains("webcal") == true || intent.dataString?.contains(".ics") == true
-
-                        if (isCalendarSpam) {
-                            Log.w(TAG, "🚫 Blocked calendar/adware intent: package=$intentPackage, data=${intent.dataString}")
-                            viewModelScope.launch(Dispatchers.Main) {
-                                Toast.makeText(context, "Blocked calendar spam intent", Toast.LENGTH_SHORT).show()
-                            }
-                        } else if (sitePerm == "allow") {
+                        if (sitePerm == "allow") {
                             // Per-site always-allow: launch directly
                             Log.i(TAG, "✅ onLoadRequest: Launching intent (sitePerm=allow): package=$intentPackage uri=$uri")
                             viewModelScope.launch(Dispatchers.Main) {
@@ -1442,7 +1436,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
             }
             
             // Check if this error is an ERROR_UNKNOWN (17) caused by us returning DENY
-            // in onLoadRequest for direct videos, spam calendars, or external app links.
+            // in onLoadRequest for direct videos, custom scheme redirects, or external app links.
             val deniedExtUrl = lastDeniedExternalAppUrl
             val isDeniedByCustomIntercept = error.code == org.mozilla.geckoview.WebRequestError.ERROR_UNKNOWN && (
                 (isNativePlayerEnabled && isDirectVideoUrl(uri ?: "")) ||

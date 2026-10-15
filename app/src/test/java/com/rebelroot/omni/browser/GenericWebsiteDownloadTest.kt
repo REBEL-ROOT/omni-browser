@@ -24,6 +24,10 @@ class GenericWebsiteDownloadTest {
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/data/export.csv"))
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/data/schema.json"))
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/notes.txt"))
+        // Calendar files (Issue #141)
+        assertTrue(SecurityPolicy.isGenericDownloadUrl("https://book.squareup.com/appointments/buyer/booking/123/appointment.ics"))
+        assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/events/meeting.ical"))
+        assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/schedule/freebusy.ifb"))
 
         // Media direct file links
         assertTrue(SecurityPolicy.isGenericDownloadUrl("https://example.com/audio/podcast.mp3"))
@@ -127,6 +131,10 @@ class GenericWebsiteDownloadTest {
         // ZIP MIME type
         val zipFilename = SecurityPolicy.guessDownloadFilename("https://example.com/api/get-archive", "application/zip")
         assertEquals("get-archive.zip", zipFilename)
+
+        // Calendar MIME type (Issue #141)
+        val icsFilename = SecurityPolicy.guessDownloadFilename("https://example.com/api/export-event", "text/calendar")
+        assertEquals("export-event.ics", icsFilename)
     }
 
     @Test

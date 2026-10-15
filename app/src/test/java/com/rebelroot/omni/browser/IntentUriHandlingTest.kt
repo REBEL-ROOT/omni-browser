@@ -179,29 +179,28 @@ class IntentUriHandlingTest {
         assertEquals("https://pay.google.com/gp/w/home/signup", decoded)
     }
 
-    // ── Calendar Spam Blocking ───────────────────────────────────────────────
+    // ── Calendar & Webcal Handling (Issue #141) ──────────────────────────────
 
     @Test
-    fun calendarSpam_intentWithCalendarPackage_isDetected() {
-        val intentPackage = "com.calendar.adware"
-        val isCalendarSpam = intentPackage.contains("calendar") || intentPackage.contains("cal")
-        assertTrue("Calendar package should be detected as spam", isCalendarSpam)
+    fun webcalUri_convertsToHttps() {
+        val uri1 = "webcal://book.squareup.com/appointments/123/event.ics"
+        val rawTarget1 = if (uri1.lowercase().startsWith("webcal://")) uri1.substring(9) else uri1.substring(7)
+        val clean1 = if (rawTarget1.startsWith("https://", ignoreCase = true) || rawTarget1.startsWith("http://", ignoreCase = true)) rawTarget1 else "https://$rawTarget1"
+        assertEquals("https://book.squareup.com/appointments/123/event.ics", clean1)
+
+        val uri2 = "webcal:example.com/calendar.ics"
+        val rawTarget2 = if (uri2.lowercase().startsWith("webcal://")) uri2.substring(9) else uri2.substring(7)
+        val clean2 = if (rawTarget2.startsWith("https://", ignoreCase = true) || rawTarget2.startsWith("http://", ignoreCase = true)) rawTarget2 else "https://$rawTarget2"
+        assertEquals("https://example.com/calendar.ics", clean2)
     }
 
     @Test
-    fun calendarSpam_intentWithWebcalData_isDetected() {
-        val dataString = "webcal://evil.com/spam.ics"
-        val isCalendarSpam = dataString.contains("calendar") ||
-                dataString.contains("webcal") ||
-                dataString.contains(".ics")
-        assertTrue("Webcal data should be detected as spam", isCalendarSpam)
-    }
-
-    @Test
-    fun calendarSpam_normalAppPackage_isNotDetected() {
-        val intentPackage = "com.example.eid"
-        val isCalendarSpam = intentPackage.contains("calendar") || intentPackage.contains("cal")
-        assertFalse("Normal package should not be flagged as calendar spam", isCalendarSpam)
+    fun calendarIntent_isParsedAsStandardExternalAppPackage() {
+        val intentUri = "intent://#Intent;action=android.intent.action.VIEW;type=text/calendar;package=com.google.android.calendar;end"
+        val packageRegex = Regex("package=([^;&#]+)", RegexOption.IGNORE_CASE)
+        val match = packageRegex.find(intentUri)
+        assertNotNull("package= must be found in intent URI", match)
+        assertEquals("com.google.android.calendar", match!!.groupValues[1])
     }
 
     // ── SecurityPolicy.validateIntentUri ──────────────────────────────────────

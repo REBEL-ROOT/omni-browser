@@ -413,6 +413,7 @@ object SecurityPolicy {
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "epub", "mobi", "json", "xml", "log", "md",
             "odt", "ods", "odp", "odg", "odf", "docm", "dotx", "dotm", "xlsm", "xlsb", "xltx", "pptm", "potx", "ppsx",
             "pages", "numbers", "key", "azw", "azw3", "fb2", "djvu", "cbr", "cbz", "tsv", "tex", "sql", "db", "sqlite",
+            "ics", "ical", "ifb",
             // Audio
             "mp3", "wav", "flac", "m4a", "ogg", "aac", "opus", "wma",
             // Video
@@ -623,6 +624,7 @@ object SecurityPolicy {
             cleanContentType == "application/vnd.debian.binary-package" -> "deb"
             cleanContentType == "application/x-redhat-package-manager" -> "rpm"
             cleanContentType == "application/java-archive" -> "jar"
+            cleanContentType == "text/calendar" || cleanContentType == "application/ics" -> "ics"
             cleanContentType.startsWith("image/") -> cleanContentType.substringAfter("image/").takeIf { it.isNotBlank() }
             cleanContentType.startsWith("audio/") -> cleanContentType.substringAfter("audio/").takeIf { it.isNotBlank() }
             cleanContentType.startsWith("video/") -> cleanContentType.substringAfter("video/").takeIf { it.isNotBlank() }

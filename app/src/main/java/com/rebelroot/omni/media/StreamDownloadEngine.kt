@@ -1828,6 +1828,7 @@ class StreamDownloadEngine(
             "txt" -> "text/plain"
             "json" -> "application/json"
             "xml" -> "application/xml"
+            "ics", "ical", "ifb" -> "text/calendar"
             else -> try {
                 MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
             } catch (_: Exception) {

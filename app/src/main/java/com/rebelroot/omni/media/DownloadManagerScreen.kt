@@ -863,6 +863,7 @@ private fun getMimeType(extension: String): String {
         "webp" -> "image/webp"
         "bmp" -> "image/bmp"
         "svg" -> "image/svg+xml"
+        "ics", "ical", "ifb" -> "text/calendar"
         else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase())
             ?: "application/octet-stream"
     }
