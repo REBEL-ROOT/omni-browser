@@ -70,6 +70,7 @@ import com.rebelroot.omni.media.DownloadManagerScreen
 import com.rebelroot.omni.media.player.VideoPlayerScreen
 import com.rebelroot.omni.settings.SettingsScreen
 import com.rebelroot.omni.settings.AppearanceScreen
+import com.rebelroot.omni.settings.ButtonsLayoutScreen
 import com.rebelroot.omni.settings.ThemeScreen
 import com.rebelroot.omni.settings.WallpaperScreen
 import com.rebelroot.omni.settings.PrivacyHubScreen
@@ -87,6 +88,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 class MainActivity : FragmentActivity() {
 
@@ -289,9 +292,21 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
+            val currentDensity = LocalDensity.current
+            val appFontScale = remember(currentDensity.fontScale, browserViewModel.accessibilityTextScale) {
+                (currentDensity.fontScale * browserViewModel.accessibilityTextScale).coerceIn(0.6f, 2.0f)
+            }
+            val appDensity = remember(currentDensity.density, appFontScale) {
+                Density(
+                    density = currentDensity.density,
+                    fontScale = appFontScale
+                )
+            }
+
             CompositionLocalProvider(
                 LocalContext provides localizedContext,
                 LocalConfiguration provides localizedContext.resources.configuration,
+                LocalDensity provides appDensity,
                 androidx.activity.compose.LocalActivity provides this@MainActivity,
                 androidx.activity.compose.LocalActivityResultRegistryOwner provides this@MainActivity,
                 androidx.activity.compose.LocalOnBackPressedDispatcherOwner provides this@MainActivity
@@ -541,6 +556,9 @@ class MainActivity : FragmentActivity() {
                                 onOpenAppearance = {
                                     navController.navigate("appearance")
                                 },
+                                onOpenButtonsLayout = {
+                                    navController.navigate("buttons_layout")
+                                },
                                 onOpenTheme = {
                                     navController.navigate("theme")
                                 },
@@ -708,12 +726,21 @@ class MainActivity : FragmentActivity() {
                             )
                         }
 
-                        // Appearance & Layout Settings Screen
+                        // Preferences Settings Screen
                         composable("appearance") {
                             AppearanceScreen(
                                 viewModel = browserViewModel,
                                 onNavigateBack = { navController.popBackStack() },
-                                onOpenWallpapers = { navController.navigate("wallpapers") }
+                                onOpenWallpapers = { navController.navigate("wallpapers") },
+                                onOpenButtonsLayout = { navController.navigate("buttons_layout") }
+                            )
+                        }
+
+                        // Buttons & Layout Settings Screen
+                        composable("buttons_layout") {
+                            ButtonsLayoutScreen(
+                                viewModel = browserViewModel,
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 

@@ -139,8 +139,11 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                 }
 
                 /* High-contrast crisp links */
-                a, a:visited {
+                a {
                     color: #8ab4f8 !important;
+                }
+                a:visited {
+                    color: #c084fc !important;
                 }
 
                 img, video, canvas, svg, picture, iframe,
@@ -214,8 +217,11 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                 small, blockquote, q, cite, code, pre, figcaption {
                     color: #f1f5f9 !important;
                 }
-                a, a:visited {
+                a {
                     color: #8ab4f8 !important;
+                }
+                a:visited {
+                    color: #c084fc !important;
                 }
                 input, textarea, select, [contenteditable="true"], [role="searchbox"] {
                     background-color: #1e2024 !important;
@@ -262,6 +268,7 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                     color: #5f4b32 !important;
                 }
                 a { color: #8c4303 !important; }
+                a:visited { color: #80397b !important; }
                 ::selection { background: #e2c290 !important; color: #332211 !important; }
             """.trimIndent()
         }
@@ -279,6 +286,7 @@ fun BrowserViewModel.applySiteStyleToTab(targetTab: TabState? = null) {
                     color: #d0e4d7 !important;
                 }
                 a { color: #52c486 !important; }
+                a:visited { color: #c084fc !important; }
                 input, textarea, select, button { color-scheme: dark !important; }
                 ::selection { background: #1f422e !important; color: #ffffff !important; }
             """.trimIndent()

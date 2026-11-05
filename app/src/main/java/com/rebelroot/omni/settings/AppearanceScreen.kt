@@ -56,7 +56,8 @@ import java.io.File
 fun AppearanceScreen(
     viewModel: BrowserViewModel,
     onNavigateBack: () -> Unit,
-    onOpenWallpapers: () -> Unit = {}
+    onOpenWallpapers: () -> Unit = {},
+    onOpenButtonsLayout: () -> Unit = {}
 ) {
     BackHandler {
         onNavigateBack()
@@ -76,7 +77,7 @@ fun AppearanceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(id = R.string.preferences_layout_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
+                title = { Text(stringResource(id = R.string.preferences_title), fontWeight = FontWeight.Bold, color = textPrimaryColor) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -104,9 +105,15 @@ fun AppearanceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Address Bar position (Moved to top)
+            // Address Bar position
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(id = R.string.appearance_address_bar), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                Text(
+                    stringResource(id = R.string.appearance_address_bar),
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -121,7 +128,12 @@ fun AppearanceScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(stringResource(id = R.string.appearance_top), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            stringResource(id = R.string.appearance_top),
+                            color = textPrimaryColor,
+                            fontSize = 16.sp,
+                            modifier = Modifier.weight(1f)
+                        )
                         if (viewModel.addressBarPosition == "Top") {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
@@ -134,7 +146,12 @@ fun AppearanceScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(stringResource(id = R.string.appearance_bottom), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            stringResource(id = R.string.appearance_bottom),
+                            color = textPrimaryColor,
+                            fontSize = 16.sp,
+                            modifier = Modifier.weight(1f)
+                        )
                         if (viewModel.addressBarPosition == "Bottom") {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
@@ -147,7 +164,12 @@ fun AppearanceScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(stringResource(id = R.string.appearance_split), color = textPrimaryColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            stringResource(id = R.string.appearance_split),
+                            color = textPrimaryColor,
+                            fontSize = 16.sp,
+                            modifier = Modifier.weight(1f)
+                        )
                         if (viewModel.addressBarPosition == "Split") {
                             Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = accentColor)
                         }
@@ -155,84 +177,54 @@ fun AppearanceScreen(
                 }
             }
 
-            // Home screen sections — reorderable top-to-bottom (drag and drop).
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(id = R.string.home_sections_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
-                Column(
+            // Buttons & Layout quick link card
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onOpenButtonsLayout() },
+                color = cardColor,
+                border = BorderStroke(1.dp, cardBorderColor)
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cardColor)
-                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text(stringResource(id = R.string.home_sections_hint), color = textSecondaryColor, fontSize = 12.sp)
-                    ChromeDragLayoutEditor(
-                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.HOME_SECTIONS,
-                        layout = viewModel.homeSectionsLayout,
-                        onLayoutChange = { viewModel.saveHomeSectionsLayout(context, it) },
-                        columns = 3,
-                        minItems = 0
-                    )
-                }
-            }
-
-            // Navigation bar buttons — user-owned layouts for both bottom bars.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(id = R.string.nav_buttons_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cardColor)
-                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)
-                ) {
-                    ChromeDragLayoutEditor(
-                        title = stringResource(id = R.string.nav_home_bar),
-                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.HOME_BAR,
-                        layout = viewModel.navHomeLayout,
-                        onLayoutChange = { viewModel.saveNavLayout(context, true, it) }
-                    )
-                    HorizontalDivider(color = dividerColor)
-                    ChromeDragLayoutEditor(
-                        title = stringResource(id = R.string.nav_page_bar),
-                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.PAGE_BAR,
-                        layout = viewModel.navPageLayout,
-                        onLayoutChange = { viewModel.saveNavLayout(context, false, it) }
-                    )
-                }
-            }
-
-            // Address bar (all-in-one) buttons — leading/trailing clusters around the omnibox.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(id = R.string.addressbar_buttons_title), color = accentColor, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(cardColor)
-                        .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)
-                ) {
-                    Text(stringResource(id = R.string.addressbar_hint), color = textSecondaryColor, fontSize = 12.sp)
-                    ChromeDragLayoutEditor(
-                        title = stringResource(id = R.string.addressbar_leading),
-                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.ADDRESS_BAR,
-                        layout = viewModel.addressBarLeadingLayout,
-                        onLayoutChange = { viewModel.saveAddressBarLayout(context, true, it) },
-                        minItems = 0
-                    )
-                    HorizontalDivider(color = dividerColor)
-                    ChromeDragLayoutEditor(
-                        title = stringResource(id = R.string.addressbar_trailing),
-                        surface = com.rebelroot.omni.browser.chrome.ChromeSurface.ADDRESS_BAR,
-                        layout = viewModel.addressBarTrailingLayout,
-                        onLayoutChange = { viewModel.saveAddressBarLayout(context, false, it) },
-                        minItems = 0
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(accentColor.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.GridView,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(id = R.string.buttons_layout_title),
+                            color = textPrimaryColor,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = stringResource(id = R.string.buttons_layout_desc),
+                            color = textSecondaryColor,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = textSecondaryColor,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -472,6 +464,60 @@ fun AppearanceScreen(
                             colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+
+                    HorizontalDivider(color = dividerColor)
+
+                    // App Text Scaler
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(stringResource(id = R.string.acc_text_scaling), color = textPrimaryColor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "${(viewModel.accessibilityTextScale * 100).toInt()}%",
+                                color = accentColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 1.0f) }
+                            )
+                        }
+                        Slider(
+                            value = viewModel.accessibilityTextScale,
+                            onValueChange = { newValue ->
+                                val steppedValue = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                                viewModel.saveAccessibilityTextScale(context, steppedValue.coerceIn(0.70f, 1.60f))
+                            },
+                            valueRange = 0.70f..1.60f,
+                            colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.scale_smaller),
+                                color = textSecondaryColor,
+                                fontSize = 11.sp,
+                                modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 0.70f) }
+                            )
+                            Text(
+                                text = stringResource(id = R.string.scale_default),
+                                color = if ((viewModel.accessibilityTextScale * 100).toInt() == 100) accentColor else textSecondaryColor,
+                                fontSize = 11.sp,
+                                fontWeight = if ((viewModel.accessibilityTextScale * 100).toInt() == 100) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 1.0f) }
+                            )
+                            Text(
+                                text = stringResource(id = R.string.scale_larger),
+                                color = textSecondaryColor,
+                                fontSize = 11.sp,
+                                modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 1.60f) }
+                            )
+                        }
                     }
                 }
             }

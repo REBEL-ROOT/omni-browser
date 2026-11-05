@@ -977,6 +977,33 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                 activeHistoryIndex = currentIdx
             }
         }
+
+        override fun getVisited(
+            session: GeckoSession,
+            urls: Array<String>
+        ): GeckoResult<BooleanArray>? {
+            val isTabIncognito = tabs.find { it.id == tab.id }?.isIncognito ?: tab.isIncognito
+            if (isTabIncognito || isIncognitoMode) {
+                return GeckoResult.fromValue(BooleanArray(urls.size) { false })
+            }
+            val results = BooleanArray(urls.size) { i ->
+                isUrlVisited(urls[i])
+            }
+            return GeckoResult.fromValue(results)
+        }
+
+        override fun onVisited(
+            session: GeckoSession,
+            url: String,
+            lastVisitedURL: String?,
+            flags: Int
+        ): GeckoResult<Boolean>? {
+            val isTabIncognito = tabs.find { it.id == tab.id }?.isIncognito ?: tab.isIncognito
+            if (!isTabIncognito && !isIncognitoMode) {
+                markUrlVisitedInMemory(url)
+            }
+            return GeckoResult.fromValue(true)
+        }
     }
 
     tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
@@ -1658,6 +1685,7 @@ internal fun BrowserViewModel.setupTabSessionListeners(tab: TabState, context: C
                     injectForceDarkCssIfNeeded(currentLiveTab)
                 }
                 injectExtensionOverlayMobileFix(currentLiveTab)
+                injectVisitedLinkStyle(currentLiveTab)
                 if (currentLiveUrl.startsWith("moz-extension://")) {
                     injectExtensionPopupResponsiveFix(currentLiveTab)
                 }
@@ -1961,6 +1989,28 @@ fun BrowserViewModel.injectExtensionPopupResponsiveFix(tab: TabState) {
                     window.__omniPopupScrollObserver.observe(document.documentElement || document.body, { childList: true, subtree: true });
                 }
             } catch (e) {}
+        })();
+    """.trimIndent().replace("\n", " ")
+
+    tab.session.loadUri("javascript:$js")
+}
+
+// ── 6. Visited Links Color Styling ──────────────────────────────────────────
+// Injects a high-clarity visited links CSS rule on loaded pages so previously
+// visited links render distinctly in purple (#7b1fa2 on light scheme, #c084fc on dark)
+// even on sites that don't explicitly declare an a:visited color.
+fun BrowserViewModel.injectVisitedLinkStyle(tab: TabState) {
+    val isTabIncognito = tabs.find { it.id == tab.id }?.isIncognito ?: tab.isIncognito
+    if (isTabIncognito || isIncognitoMode) return
+    val js = """
+        (function() {
+            try {
+                if (document.getElementById('omni-visited-link-style')) return;
+                var s = document.createElement('style');
+                s.id = 'omni-visited-link-style';
+                s.textContent = 'a:visited:not([role="button"]):not(.btn):not([class*="btn" i]):not([class*="chip" i]):not([class*="pill" i]) { color: #7b1fa2; } @media (prefers-color-scheme: dark) { a:visited:not([role="button"]):not(.btn):not([class*="btn" i]):not([class*="chip" i]):not([class*="pill" i]) { color: #c084fc; } }';
+                (document.head || document.documentElement).appendChild(s);
+            } catch(e) {}
         })();
     """.trimIndent().replace("\n", " ")
 

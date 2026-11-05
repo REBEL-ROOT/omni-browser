@@ -4732,7 +4732,7 @@ fun AllInOneMenuSheet(
                     val enabledUserExtensions = remember(viewModel.userExtensions.toList()) {
                         viewModel.userExtensions.filter { !it.safeId.isNullOrEmpty() && it.safeMetaData?.enabled == true }
                     }
-                    var isExtensionsExpanded by remember { mutableStateOf(true) }
+                    var isExtensionsExpanded by remember { mutableStateOf(false) }
 
                     if (enabledUserExtensions.isEmpty()) {
                         Row(
@@ -4839,7 +4839,7 @@ fun AllInOneMenuSheet(
                         }
 
                         // Extended list of enabled extensions
-                        if (isExtensionsExpanded) {
+                        AnimatedVisibility(visible = isExtensionsExpanded) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -4910,60 +4910,6 @@ fun AllInOneMenuSheet(
                             }
                         }
                     }
-                }
-            }
-
-            // --- Web Apps (PWA) Entry ---
-            Surface(
-                color = cardBg,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        onDismissRequest()
-                        onOpenWebApps()
-                    }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(6.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Apps,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(id = R.string.web_apps_title),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textColor
-                        )
-                        Text(
-                            text = stringResource(id = R.string.web_apps_desc),
-                            fontSize = 11.sp,
-                            color = secondaryText
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = secondaryText.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
-                    )
                 }
             }
 

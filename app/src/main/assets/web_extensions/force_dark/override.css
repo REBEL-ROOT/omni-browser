@@ -115,9 +115,11 @@ html.omni-force-dark-active figcaption {
 }
 
 /* High-contrast crisp links */
-html.omni-force-dark-active a,
-html.omni-force-dark-active a:visited {
+html.omni-force-dark-active a {
     color: #8ab4f8 !important;
+}
+html.omni-force-dark-active a:visited {
+    color: #c084fc !important;
 }
 
 html.omni-force-dark-active input,

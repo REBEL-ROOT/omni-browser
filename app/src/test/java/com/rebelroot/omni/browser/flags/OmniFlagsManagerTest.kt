@@ -67,6 +67,13 @@ class OmniFlagsManagerTest {
         assertEquals(0, referrerFlag?.enginePrefs?.get("network.http.referer.XOriginPolicy"))
         assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.referer.XOriginTrimmingPolicy"))
         assertEquals(2, referrerFlag?.enginePrefs?.get("network.http.sendRefererHeader"))
+
+        val crliteFlag = OmniFlagsRegistry.getFlagById("firefox_crlite_enforcement")
+        assertNotNull(crliteFlag)
+        assertEquals(FlagCategory.SECURITY, crliteFlag?.category)
+        assertEquals(FlagOrigin.FIREFOX, crliteFlag?.origin)
+        assertEquals(2, crliteFlag?.enginePrefs?.get("security.pki.crlite_mode"))
+        assertEquals(1, crliteFlag?.enginePrefs?.get("security.OCSP.enabled"))
     }
 
     @Test

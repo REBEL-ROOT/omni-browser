@@ -33,6 +33,10 @@ internal fun BrowserViewModel.loadHistory(context: Context) {
             withContext(Dispatchers.Main) {
                 historyList.clear()
                 historyList.addAll(temp)
+                visitedUrlsCache.clear()
+                temp.forEach { entry ->
+                    markUrlVisitedInMemory(entry.url)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading history", e)
@@ -74,24 +78,30 @@ fun BrowserViewModel.addToHistory(title: String, url: String) {
         historyList.removeAt(historyList.lastIndex)
     }
     
+    markUrlVisitedInMemory(url)
     saveHistory(context)
 }
 
 fun BrowserViewModel.deleteHistoryEntry(entry: HistoryEntry) {
     val context = appContext ?: return
     historyList.remove(entry)
+    rebuildVisitedUrlsCache()
     saveHistory(context)
 }
 
 fun BrowserViewModel.clearAllHistory() {
     val context = appContext ?: return
     historyList.clear()
+    visitedUrlsCache.clear()
+    tabs.forEach { it.session?.purgeHistory() }
     saveHistory(context)
 }
 
 fun BrowserViewModel.clearHistorySince(cutoffTime: Long) {
     val context = appContext ?: return
     historyList.removeAll { it.timestamp >= cutoffTime }
+    rebuildVisitedUrlsCache()
+    tabs.forEach { it.session?.purgeHistory() }
     saveHistory(context)
 }
 
@@ -126,5 +136,70 @@ fun BrowserViewModel.clearHistoryForDomain(domain: String) {
         }
         entryHost == normalizedDomain || entryHost.endsWith(".$normalizedDomain")
     }
+    rebuildVisitedUrlsCache()
+    tabs.forEach { it.session?.purgeHistory() }
     saveHistory(context)
 }
+
+/**
+ * Record a URL into the fast in-memory visited cache with normalized variants
+ * (trailing slash variations and base URLs without hash fragments).
+ */
+fun BrowserViewModel.markUrlVisitedInMemory(url: String) {
+    val trimmed = url.trim()
+    if (trimmed.isEmpty() || trimmed == "about:blank") return
+    visitedUrlsCache.add(trimmed)
+    
+    if (trimmed.endsWith('/')) {
+        visitedUrlsCache.add(trimmed.dropLast(1))
+    } else {
+        visitedUrlsCache.add("$trimmed/")
+    }
+    
+    val hashIdx = trimmed.indexOf('#')
+    if (hashIdx != -1) {
+        val withoutHash = trimmed.substring(0, hashIdx)
+        if (withoutHash.isNotEmpty()) {
+            visitedUrlsCache.add(withoutHash)
+            if (withoutHash.endsWith('/')) {
+                visitedUrlsCache.add(withoutHash.dropLast(1))
+            } else {
+                visitedUrlsCache.add("$withoutHash/")
+            }
+        }
+    }
+}
+
+/**
+ * Rebuild the fast in-memory cache of visited URLs from current historyList.
+ */
+fun BrowserViewModel.rebuildVisitedUrlsCache() {
+    visitedUrlsCache.clear()
+    historyList.forEach { entry ->
+        markUrlVisitedInMemory(entry.url)
+    }
+}
+
+/**
+ * Determine in O(1) time whether a URL has been previously visited.
+ * Checks the URL, hash fragment variations, and trailing-slash variants.
+ */
+fun BrowserViewModel.isUrlVisited(url: String): Boolean {
+    if (url.isBlank() || url == "about:blank") return false
+    val trimmed = url.trim()
+    if (visitedUrlsCache.contains(trimmed)) return true
+    
+    val hashIdx = trimmed.indexOf('#')
+    if (hashIdx != -1) {
+        val withoutHash = trimmed.substring(0, hashIdx)
+        if (withoutHash.isNotEmpty()) {
+            if (visitedUrlsCache.contains(withoutHash)) return true
+            val altHashSlash = if (withoutHash.endsWith('/')) withoutHash.dropLast(1) else "$withoutHash/"
+            if (visitedUrlsCache.contains(altHashSlash)) return true
+        }
+    }
+    
+    val altSlash = if (trimmed.endsWith('/')) trimmed.dropLast(1) else "$trimmed/"
+    return visitedUrlsCache.contains(altSlash)
+}
+

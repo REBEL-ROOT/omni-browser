@@ -92,3 +92,10 @@ scratch/
 # Loose marketing assets (keep in images/ or fastlane/ only)
 app_icon_from_project.png
 feature_graphic_1024.png
+
+# Graphify artifacts
+graphify-out/
+graph.html
+GRAPH_REPORT.md
+graph.json
+

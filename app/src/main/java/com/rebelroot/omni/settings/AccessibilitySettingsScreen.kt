@@ -110,19 +110,48 @@ fun AccessibilitySettingsScreen(
                             text = "${(viewModel.accessibilityTextScale * 100).toInt()}%",
                             color = accentColor,
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 1.0f) }
                         )
                     }
                     Slider(
                         value = viewModel.accessibilityTextScale,
-                        onValueChange = { viewModel.saveAccessibilityTextScale(context, it) },
-                        valueRange = 0.5f..2.0f,
+                        onValueChange = { newValue ->
+                            val steppedValue = ((newValue / 0.05f) + 0.5f).toInt() * 0.05f
+                            viewModel.saveAccessibilityTextScale(context, steppedValue.coerceIn(0.70f, 1.60f))
+                        },
+                        valueRange = 0.70f..1.60f,
                         colors = SliderDefaults.colors(
                             thumbColor = accentColor,
-                            activeTrackColor = accentColor
+                            activeTrackColor = accentColor,
+                            inactiveTrackColor = if (viewModel.isDarkThemeEnabled) Color(0xFF23374A) else Color(0xFFE0E0E0)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.scale_smaller),
+                            color = textSecondaryColor,
+                            fontSize = 11.sp,
+                            modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 0.70f) }
+                        )
+                        Text(
+                            text = stringResource(id = R.string.scale_default),
+                            color = if ((viewModel.accessibilityTextScale * 100).toInt() == 100) accentColor else textSecondaryColor,
+                            fontSize = 11.sp,
+                            fontWeight = if ((viewModel.accessibilityTextScale * 100).toInt() == 100) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 1.0f) }
+                        )
+                        Text(
+                            text = stringResource(id = R.string.scale_larger),
+                            color = textSecondaryColor,
+                            fontSize = 11.sp,
+                            modifier = Modifier.clickable { viewModel.saveAccessibilityTextScale(context, 1.60f) }
+                        )
+                    }
                 }
             }
 

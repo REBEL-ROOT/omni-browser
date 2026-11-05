@@ -572,7 +572,7 @@
     <string name="wallpaper_none">None</string>
     <string name="acc_text_and_zoom">Text and Zoom</string>
     <string name="acc_text_scaling">Text scaling</string>
-    <string name="acc_text_scaling_desc">Adjust website text size</string>
+    <string name="acc_text_scaling_desc">Adjust app font and text size</string>
     <string name="acc_page_accessibility">Page Accessibility</string>
     <string name="acc_force_zoom">Force enable zoom</string>
     <string name="acc_force_zoom_desc">Override a website’s request to prevent zooming</string>
@@ -844,6 +844,10 @@
     <string name="backup_menu_row_desc">Export or restore settings, bookmarks, history, passwords and notes</string>
     <string name="theme_settings_title">Theme</string>
     <string name="theme_settings_desc">Light &amp; dark mode, accent colors, app icons</string>
+    <string name="preferences_title">Preferences</string>
+    <string name="preferences_desc">Address bar, UI scalers, and navigation</string>
+    <string name="buttons_layout_title">Buttons &amp; Layout</string>
+    <string name="buttons_layout_desc">Home screen sections, navigation bars, and buttons</string>
     <string name="preferences_layout_title">Preferences &amp; Layout</string>
     <string name="preferences_layout_desc">Address bar position, navigation bars, UI scaling</string>
 

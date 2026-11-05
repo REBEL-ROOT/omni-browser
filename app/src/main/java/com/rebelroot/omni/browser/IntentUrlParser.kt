@@ -94,7 +94,9 @@ object IntentUrlParser {
                 intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
                     ?: intent.getStringExtra(Intent.EXTRA_TEXT)
                     ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.let { item ->
-                        context?.let { ctx -> item.coerceToText(ctx)?.toString() } ?: item.text?.toString()
+                        context?.let { ctx -> item.coerceToText(ctx)?.toString() }
+                            ?: item.text?.toString()
+                            ?: item.uri?.toString()
                     }
                     ?: intent.getStringExtra(Intent.EXTRA_SUBJECT)
                     ?: intent.dataString
@@ -110,6 +112,11 @@ object IntentUrlParser {
             }
             else -> {
                 intent.dataString
+                    ?: intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.let { item ->
+                        context?.let { ctx -> item.coerceToText(ctx)?.toString() }
+                            ?: item.text?.toString()
+                            ?: item.uri?.toString()
+                    }
                     ?: intent.getStringExtra(Intent.EXTRA_TEXT)
             }
         }

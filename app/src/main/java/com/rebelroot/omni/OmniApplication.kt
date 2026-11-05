@@ -190,6 +190,7 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
                 UiStateHolder.uiScale            = prefs[UI_SCALE_KEY]            ?: 1.0f
                 UiStateHolder.homeUiScale        = prefs[HOME_UI_SCALE_KEY]       ?: 0.90f
                 UiStateHolder.bottomNavScale     = prefs[BOTTOM_NAV_SCALE_KEY]    ?: 1.0f
+                UiStateHolder.accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
                 UiStateHolder.browserWallpaperUri = prefs[BROWSER_WALLPAPER_URI_KEY]
                 UiStateHolder.wallpaperDim       = prefs[WALLPAPER_DIM_KEY]       ?: -1f
                 UiStateHolder.wallpaperBlur      = prefs[WALLPAPER_BLUR_KEY]      ?: 0f
@@ -256,6 +257,7 @@ class OmniApplication : Application(), coil.ImageLoaderFactory {
         val UI_SCALE_KEY            = floatPreferencesKey("ui_scale")
         val HOME_UI_SCALE_KEY       = floatPreferencesKey("home_ui_scale")
         val BOTTOM_NAV_SCALE_KEY    = floatPreferencesKey("bottom_nav_scale")
+        val ACCESSIBILITY_TEXT_SCALE_KEY = floatPreferencesKey("accessibility_text_scale")
         val BROWSER_WALLPAPER_URI_KEY = stringPreferencesKey("browser_wallpaper_uri")
         val WALLPAPER_DIM_KEY       = floatPreferencesKey("wallpaper_dim")
         val WALLPAPER_BLUR_KEY      = floatPreferencesKey("wallpaper_blur")
@@ -283,6 +285,7 @@ object UiStateHolder {
     @Volatile var uiScale: Float = 1.0f
     @Volatile var homeUiScale: Float = 0.90f
     @Volatile var bottomNavScale: Float = 1.0f
+    @Volatile var accessibilityTextScale: Float = 1.0f
     @Volatile var browserWallpaperUri: String? = null
     @Volatile var wallpaperDim: Float = -1f
     @Volatile var wallpaperBlur: Float = 0f

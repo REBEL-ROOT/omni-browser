@@ -395,6 +395,7 @@ class BrowserViewModel : ViewModel() {
 
     // Browser History System
     val historyList = mutableStateListOf<HistoryEntry>()
+    val visitedUrlsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     // Feature Modules
     val mediaInterceptor = MediaInterceptor()
@@ -766,7 +767,7 @@ class BrowserViewModel : ViewModel() {
             showBackgroundTabNotification = false
         }
     }
-    var accessibilityTextScale by mutableStateOf(1.0f)
+    var accessibilityTextScale by mutableStateOf(com.rebelroot.omni.UiStateHolder.accessibilityTextScale)
     var accessibilityForceZoom by mutableStateOf(false)
     var accessibilityHighContrast by mutableStateOf(false)
     
@@ -2983,6 +2984,7 @@ class BrowserViewModel : ViewModel() {
 
         // 2. Wipe history list and its persisted JSON file
         historyList.clear()
+        visitedUrlsCache.clear()
         saveHistory(ctx)
 
         // 3. Wipe site settings & custom site permissions (both in-memory state and persisted file)
@@ -3668,7 +3670,7 @@ class BrowserViewModel : ViewModel() {
                 openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
                 confirmExit = prefs[CONFIRM_EXIT_KEY] ?: true
                 defaultExitAction = prefs[DEFAULT_EXIT_ACTION_KEY] ?: if (confirmExit) "ASK" else "QUIT"
-                accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
+                accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: com.rebelroot.omni.UiStateHolder.accessibilityTextScale
                 accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
                 accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
                 
@@ -6487,6 +6489,8 @@ class BrowserViewModel : ViewModel() {
         sb.append("  dom.security.https_only_mode: ${safeBrowsingLevel == 2 || httpsOnlyMode}\n")
         sb.append("  dom.security.https_first: true\n")
         sb.append("  security.fileuri.strict_origin_policy: true\n")
+        sb.append("  security.pki.crlite_mode: 2\n")
+        sb.append("  security.OCSP.enabled: 1\n")
         sb.append("  privacy.partition.network_state: true\n")
         sb.append("  network.cookie.cookieBehavior: $cookieBehavior\n")
         sb.append("  ui.useAccessibilityTheme: ${if (accessibilityHighContrast) 1 else 0}\n")
@@ -9723,14 +9727,13 @@ class BrowserViewModel : ViewModel() {
     }
 
     fun saveAccessibilityTextScale(context: Context, scale: Float) {
-        accessibilityTextScale = scale
+        val stepped = ((scale / 0.05f) + 0.5f).toInt() * 0.05f
+        val bounded = (kotlin.math.round(stepped * 100f) / 100f).coerceIn(0.70f, 1.60f)
+        accessibilityTextScale = bounded
+        com.rebelroot.omni.UiStateHolder.accessibilityTextScale = bounded
         viewModelScope.launch(Dispatchers.IO) {
             context.applicationContext.dataStore.edit { preferences ->
-                preferences[ACCESSIBILITY_TEXT_SCALE_KEY] = scale
-            }
-            writeGeckoConfigFile(context.applicationContext)
-            viewModelScope.launch(Dispatchers.Main) {
-                reload()
+                preferences[ACCESSIBILITY_TEXT_SCALE_KEY] = bounded
             }
         }
     }
@@ -10681,7 +10684,7 @@ class BrowserViewModel : ViewModel() {
         autoCloseTabsDays = prefs[AUTO_CLOSE_TABS_DAYS_KEY] ?: 0
         openTabsInBackground = prefs[OPEN_TABS_IN_BACKGROUND_KEY] ?: false
         hideRefreshIndicator = prefs[HIDE_REFRESH_INDICATOR_KEY] ?: true
-        accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: 1.0f
+        accessibilityTextScale = prefs[ACCESSIBILITY_TEXT_SCALE_KEY] ?: com.rebelroot.omni.UiStateHolder.accessibilityTextScale
         accessibilityForceZoom = prefs[ACCESSIBILITY_FORCE_ZOOM_KEY] ?: false
         accessibilityHighContrast = prefs[ACCESSIBILITY_HIGH_CONTRAST_KEY] ?: false
 

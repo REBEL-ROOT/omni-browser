@@ -249,6 +249,19 @@ object OmniFlagsRegistry {
 
         // ── Group 3: Security & Protocol Hardening ────────────────────────────
         OmniEngineFlag(
+            id = "firefox_crlite_enforcement",
+            title = "Strict Certificate Revocation (CRLite Mode 2)",
+            description = "Enforces local fail-closed CRLite certificate revocation checking. Actively blocks navigation to websites presenting revoked or compromised TLS/SSL intermediate certificates.",
+            origin = FlagOrigin.FIREFOX,
+            tag = "#enable-crlite-enforcement",
+            category = FlagCategory.SECURITY,
+            enginePrefs = mapOf(
+                "security.pki.crlite_mode" to 2,
+                "security.OCSP.enabled" to 1
+            ),
+            defaultEnabled = true
+        ),
+        OmniEngineFlag(
             id = "chrome_encrypted_client_hello",
             title = "Encrypted Client Hello (ECH / TLS SNI Encryption)",
             description = "Encrypts the Server Name Indication (SNI) metadata inside TLS handshakes, stopping ISPs, firewalls, and Wi-Fi operators from spying on your destination domain.",
