@@ -82,7 +82,7 @@ jobs:
       - name: Rename APKs
         run: |
           export VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ]; then export VERSION="v1.3.5.1"; fi
+          if [ -z "$VERSION" ]; then export VERSION="v1.3.6.1"; fi
           find app/build/outputs/apk/ -name "*.apk" -exec bash -c '
             file="$1"
             filename=$(basename "$file")
@@ -118,40 +118,29 @@ jobs:
             ## Omni Browser ${{ github.ref_name }}
 
             > 🚀 **Highlights in this release**
-            > - **Manga & Manwha Reader Fixes**: Strict referrer policies and ContentBlocking anti-tracking fixes to restore image loading on sites like MangaFire.
-            > - **Universal Document Downloads**: Full support for downloading and streaming documents, PDFs, spreadsheets, presentations, and eBooks, with authenticated Necko handling for Google Drive and cloud storage.
-            > - **Native PDF Printing**: Native Android print adapter integration (`saveAsPdf` and system PrintManager) with preview lifecycle stability and wake-lock management.
-            > - **Web Apps & PWAs Hub**: Complete Web Apps catalog, repository, sharing intents, and floating text action support (#133).
-            > - **Home Screen Extension Pinning**: Pin your favorite extensions directly to your device launcher home screen.
+            > - **UI & Buttons Layout Customization**: Separated appearance settings and introduced a dedicated Buttons Layout customization screen for tailoring toolbar actions.
+            > - **Enhanced Privacy & Deep Burn**: Fire button & "Burn all data" now atomic and thorough—wiping site permissions, all Gecko profile disk caches, shader/thumbnail caches, and background session states (#140).
+            > - **Calendar (.ics) & Webcal Downloads**: Native handling and download support for `.ics`, `.ical`, `.ifb` calendar files and `webcal://` links without blanket spam blocks (#141).
+            > - **Text Scaling & Accessibility Fixes**: Improved layout robustness and text scaling across preferences and bottom menu sheets.
 
             ---
 
-            ## 🛠️ What's New in ${{ github.ref_name }} (since v1.3.4.1)
+            ## 🛠️ What's New in ${{ github.ref_name }} (since v1.3.5.1)
 
-            ### 🖼️ Manga & Manwha Image Loading
-            - **Strict Referrer & Origin Policies**: Configured `network.http.referer.defaultPolicy = 2` (`strict-origin-when-cross-origin`), `trimmingPolicy = 0`, `XOriginPolicy = 0`, `XOriginTrimmingPolicy = 2`, and `sendRefererHeader = 2`.
-            - **Anti-Tracking CDN Bypass**: Adjusted GeckoView ContentBlocking anti-tracking policy to allow anti-hotlink image CDNs on MangaFire and similar sites to receive valid referrer origins without being blocked.
+            ### 🎨 UI & Customization
+            - **Dedicated Buttons Layout Screen**: Configurable toolbar action placements and cleaner separation between theme appearance and toolbar buttons.
+            - **Menu Sheet Polish**: Cleaned up bottom menu sheet layout for faster navigation and smoother interaction.
+            - **Accessibility & Font Scaling**: Fixed text scaling issues across settings, appearance, and dialog sheets.
 
-            ### 📥 Universal Document & Stream Download Engine
-            - **Exhaustive Document MIME & Extension Mappings**: Support for `pdf`, `doc`, `docx`, `odt`, `rtf`, `pages`, `xls`, `xlsx`, `ods`, `csv`, `tsv`, `numbers`, `ppt`, `pptx`, `odp`, `key`, `epub`, `mobi`, `azw`, `azw3`, `cbr`, `cbz`, `apk`, `xapk`, `apks`, archives, and media.
-            - **Direct Stream Downloads**: New streaming download handler (`startGenericFileDownloadFromStream`) with modern browser headers (`User-Agent`, `Accept`, `Sec-Fetch-*`) and cookie preservation across redirects.
-            - **Necko Engine Passthrough**: Authenticated downloads (Google Drive, cloud storage) are initiated directly through GeckoView's Necko stack with full session cookies; dangling popup tabs are cleanly closed.
-            - **Download Modal Updates**: Modern file type icon mappings and clean dismiss/cancellation handling.
+            ### 🔒 Privacy & Data Clearing (#140)
+            - **Atomic Burn All Data**: Immediately terminates active Gecko sessions prior to wiping to prevent background tabs from rewriting cache.
+            - **Comprehensive Cache Purge**: Clears Gecko profile disk caches (`cache2`, `startupCache`, `jumpListCache`, `shader-cache`, `thumbnails`), `codeCacheDir`, and external cache directories.
+            - **Site Permissions Reset**: Guarantees `browser_site_permissions.json` and in-memory permissions state are fully erased upon burning data.
 
-            ### 🖨️ Native PDF Print Support
-            - **PdfPrintDocumentAdapter**: Custom print document adapter preventing print preview cancellation freezes and managing wake-locks.
-            - **GeckoView Print Delegate**: Connected `tab.session.printDelegate` with native Android `PrintManager` and added `android.permission.WAKE_LOCK`.
-
-            ### 📱 Web Apps & PWAs Hub (#133)
-            - **Web Apps & PWAs Hub**: Dedicated catalog, database, repository, and management screen for progressive web apps.
-            - **System Share Menu Integration**: Added Omni Browser to Android system link sharing menu (`ACTION_SEND` with `text/plain`).
-            - **Floating Selection Menu**: Support for `ACTION_PROCESS_TEXT` and enhanced link parsing via `IntentUrlParser`.
-
-            ### 🧩 UI & Extension Polish
-            - **Launcher Shortcut Pinning**: Pin WebExtensions directly to the device launcher home screen (`EXTRA_EXTENSION_SHORTCUT`).
-            - **Nav Bar Icon Sizing**: Unified navigation action icons to dynamic `navIconSize`.
-            - **API 28 Compatibility**: Fixed dropdown menu white splash and layout failure on Android 9 by using API-safe Popup.
-            - **Localization**: Added missing navigation and tool strings across all 13 supported languages.
+            ### 📅 Calendar & Download Engine (#141)
+            - **iCalendar (.ics / .ical / .ifb) Support**: Legitimate calendar files and `webcal://` subscriptions download seamlessly via browser download manager.
+            - **Smart Spam Filtering**: Eliminated blanket calendar blocking while retaining strict safety checks.
+            - **Calendar Download Dialog**: Visual DateRange icon and dedicated MIME type recognition in `StreamDownloadEngine` and `DownloadManagerScreen`.
 
             ---
 
